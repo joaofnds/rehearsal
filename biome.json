@@ -1,0 +1,13 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+	"formatter": {
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"rules": {
+			"nursery": {
+				"noFloatingPromises": "error"
+			}
+		}
+	}
+}
