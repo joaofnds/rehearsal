@@ -255,7 +255,7 @@ IDs are parsed at runtime, so adding a newly discovered requirement does not req
 
 The independent process-quality contracts for Discuss, Grill, Plan, and Build. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
 
-### `run_benchmark.ts`
+### `run-benchmark.ts`
 
 The CLI entry point. It validates the Bun version, parses arguments, creates the terminal question interface, and delegates the run.
 
@@ -263,7 +263,7 @@ The CLI entry point. It validates the Bun version, parses arguments, creates the
 
 The harness implementation, separated by responsibility: Backlog state, calibration, checks, command execution, configuration, validated contracts, final judging, orchestration, stage grading, target Git lifecycle, and workflow sessions. Expensive Claude calls live in `workflow.ts`, `stage-grading.ts`, and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
 
-### `run_benchmark.test.ts`
+### `run-benchmark.test.ts`
 
 Unit and filesystem integration tests for configuration parsing, stage and final rubric validation, non-compensating grade derivation, native-skill invocation, stage order, artifact resolution, direct-target restoration, preserved workflow state, commit rules, check integrity, and Judge evidence.
 
