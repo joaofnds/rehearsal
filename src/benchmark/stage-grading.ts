@@ -210,12 +210,20 @@ function citationMatchesPath(
 	citation: string,
 	availablePaths: readonly string[],
 ) {
-	try {
-		const glob = new Bun.Glob(citation);
-		return availablePaths.some((path) => path === citation || glob.match(path));
-	} catch {
-		return false;
+	for (const candidate of new Set([citation, citation.split("#", 1)[0]])) {
+		if (!candidate) continue;
+
+		try {
+			const glob = new Bun.Glob(candidate);
+			if (
+				availablePaths.some((path) => path === candidate || glob.match(path))
+			) {
+				return true;
+			}
+		} catch {}
 	}
+
+	return false;
 }
 
 function assertExactIds(

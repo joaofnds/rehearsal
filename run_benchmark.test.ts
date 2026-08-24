@@ -700,6 +700,42 @@ describe(captureStageJudgeInput, () => {
 });
 
 describe(validateStageJudgeEvidence, () => {
+	it("accepts a fragment within a frozen JSON source", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				stage: "discuss",
+				hardBlockers: [
+					{
+						id: "invalid-stage-delivery",
+						description: "Valid delivery",
+					},
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+			"discuss",
+		);
+		const output = passingStageOutput(rubric);
+		output.requirements[0] = {
+			id: "scope",
+			status: "PASS",
+			evidence: [
+				stageEvidence("transcript", "discuss.transcript.json#exchanges"),
+			],
+		};
+
+		expect(() =>
+			validateStageJudgeEvidence(output, stageJudgeInput("discuss")),
+		).not.toThrow();
+	});
+
 	it("rejects citations outside the frozen stage input", () => {
 		const rubric = parseStageRubric(
 			JSON.stringify({
