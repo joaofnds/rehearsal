@@ -2,27 +2,31 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { assertStageArtifactState } from "./src/benchmark/backlog";
 import {
-	applyHarnessResults,
-	assertConventionalCommitSubjects,
-	assertSourceReady,
+	parseHumanReview,
+	validateCalibration,
+} from "./src/benchmark/calibration";
+import {
 	captureCheckIntegrity,
 	captureFileHashes,
-	captureWorkflowBackup,
-	createWorkflowCommand,
-	type HumanReview,
-	type JudgeGrade,
-	parseArgs,
-	parseHumanReview,
+} from "./src/benchmark/checks";
+import { runCommand } from "./src/benchmark/command";
+import { parseArgs, RUBRIC_IDS, WORKFLOW_STAGES } from "./src/benchmark/config";
+import type { HumanReview, JudgeGrade } from "./src/benchmark/contracts";
+import {
+	applyHarnessResults,
 	parseJudgeOutput,
 	parseRubricIds,
-	RUBRIC_IDS,
-	restoreTarget,
-	runCommand,
-	validateCalibration,
 	validateJudgeEvidence,
-	WORKFLOW_STAGES,
-} from "./run_benchmark";
+} from "./src/benchmark/judge";
+import {
+	assertConventionalCommitSubjects,
+	assertSourceReady,
+	captureWorkflowBackup,
+	restoreTarget,
+} from "./src/benchmark/target";
+import { createWorkflowCommand } from "./src/benchmark/workflow";
 
 const temporaryDirectories: string[] = [];
 
@@ -371,6 +375,31 @@ describe(validateJudgeEvidence, () => {
 				["src/app.module.ts"],
 			),
 		).toThrow("cited unavailable evidence");
+	});
+});
+
+describe(assertStageArtifactState, () => {
+	const view = {
+		task: {
+			acceptanceCriteria: [{}],
+			documentation: ["doc-1", "doc-2", "doc-3"],
+		},
+	};
+
+	it("resolves attached document IDs to titled artifact files", () => {
+		expect(() =>
+			assertStageArtifactState("plan", view, [
+				"doc-1 - Asynchronous-audit-log-module-spec.md",
+				"doc-2 - Asynchronous-audit-log-module-grilled.md",
+				"doc-3 - Asynchronous-audit-log-module-plan.md",
+			]),
+		).not.toThrow();
+	});
+
+	it("rejects an unattached document with the expected suffix", () => {
+		expect(() =>
+			assertStageArtifactState("plan", view, ["doc-4 - Unattached-plan.md"]),
+		).toThrow("without its durable plan document");
 	});
 });
 

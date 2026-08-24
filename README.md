@@ -225,7 +225,11 @@ IDs are parsed at runtime, so adding a newly discovered requirement does not req
 
 ### `run_benchmark.ts`
 
-The orchestration program. It owns preflight, target restoration, Backlog.md setup, fresh skill sessions, PO mediation, checks, grading, artifacts, and the human-review pause.
+The CLI entry point. It validates the Bun version, parses arguments, creates the terminal question interface, and delegates the run.
+
+### `src/benchmark/`
+
+The harness implementation, separated by responsibility: Backlog state, calibration, checks, command execution, configuration, validated contracts, judging, orchestration, target Git lifecycle, and workflow sessions. Expensive Claude calls live in `workflow.ts` and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
 
 ### `run_benchmark.test.ts`
 
