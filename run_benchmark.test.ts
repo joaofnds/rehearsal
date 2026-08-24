@@ -10,13 +10,16 @@ import {
 	captureFileHashes,
 	captureWorkflowBackup,
 	createWorkflowCommand,
+	type HumanReview,
 	type JudgeGrade,
 	parseArgs,
+	parseHumanReview,
 	parseJudgeOutput,
 	parseRubricIds,
 	RUBRIC_IDS,
 	restoreTarget,
 	runCommand,
+	validateCalibration,
 	validateJudgeEvidence,
 	WORKFLOW_STAGES,
 } from "./run_benchmark";
@@ -127,6 +130,100 @@ describe(parseRubricIds, () => {
 		expect(() =>
 			parseRubricIds("1. `same`: First.\n2. `same`: Duplicate.\n"),
 		).toThrow("unique requirement IDs");
+	});
+});
+
+describe(parseHumanReview, () => {
+	it("parses a structured human review", () => {
+		const review = parseHumanReview(
+			JSON.stringify({
+				verdict: "REJECT",
+				summary: "The worker loses metadata.",
+				findings: [
+					{
+						description: "The worker drops request metadata.",
+						paths: ["src/audit/worker.ts"],
+						judgeAssessment: "MISSED",
+						rubricId: "worker-metadata",
+					},
+				],
+			}),
+		);
+
+		expect(review.verdict).toBe("REJECT");
+		expect(review.findings[0]?.rubricId).toBe("worker-metadata");
+	});
+
+	it("requires a rubric ID for Judge-related findings", () => {
+		expect(() =>
+			parseHumanReview(
+				JSON.stringify({
+					verdict: "REJECT",
+					summary: "The Judge missed a defect.",
+					findings: [
+						{
+							description: "Missing worker behavior.",
+							paths: [],
+							judgeAssessment: "MISSED",
+							rubricId: null,
+						},
+					],
+				}),
+			),
+		).toThrow();
+	});
+});
+
+describe(validateCalibration, () => {
+	it("accepts a missed defect caught by the revised rubric", () => {
+		const original = completeGrade("PASS");
+		const revised = completeGrade("PASS");
+		revised.requirements.push(requirement("worker-metadata", "FAIL"));
+		revised.verdict = "FAIL";
+		const review = humanReview("REJECT", "MISSED", "worker-metadata");
+
+		expect(() => validateCalibration(review, original, revised)).not.toThrow();
+	});
+
+	it("rejects a missed defect that the revised rubric still passes", () => {
+		const original = completeGrade("PASS");
+		const revised = completeGrade("PASS");
+		revised.requirements.push(requirement("worker-metadata", "PASS"));
+		const review = humanReview("REJECT", "MISSED", "worker-metadata");
+
+		expect(() => validateCalibration(review, original, revised)).toThrow(
+			"does not catch",
+		);
+	});
+
+	it("rejects a missed classification for a defect already caught", () => {
+		const original = completeGrade("PASS");
+		original.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
+		original.verdict = "FAIL";
+		const revised = completeGrade("FAIL");
+		const review = humanReview("REJECT", "MISSED", RUBRIC_IDS[0]);
+
+		expect(() => validateCalibration(review, original, revised)).toThrow(
+			"already caught",
+		);
+	});
+
+	it("accepts a corrected false positive", () => {
+		const original = completeGrade("PASS");
+		original.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
+		original.verdict = "FAIL";
+		const revised = completeGrade("PASS");
+		const review = humanReview("ACCEPT", "FALSE_POSITIVE", RUBRIC_IDS[0]);
+
+		expect(() => validateCalibration(review, original, revised)).not.toThrow();
+	});
+
+	it("rejects acceptance when a real defect was found", () => {
+		const review = humanReview("ACCEPT", "CAUGHT", RUBRIC_IDS[0]);
+
+		expect(() => validateCalibration(review, completeGrade("FAIL"))).toThrow(
+			"cannot accept",
+		);
 	});
 });
 
@@ -342,6 +439,25 @@ function harnessResult(status: "PASS" | "FAIL", claim: string) {
 				source: "local-checks" as const,
 				path: "harness",
 				claim,
+			},
+		],
+	};
+}
+
+function humanReview(
+	verdict: HumanReview["verdict"],
+	judgeAssessment: HumanReview["findings"][number]["judgeAssessment"],
+	rubricId: string,
+): HumanReview {
+	return {
+		verdict,
+		summary: "Human review",
+		findings: [
+			{
+				description: "Finding",
+				paths: ["src/audit/example.ts"],
+				judgeAssessment,
+				rubricId,
 			},
 		],
 	};

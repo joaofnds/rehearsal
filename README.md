@@ -54,7 +54,16 @@ verify commits, clean worktree, checks, and check integrity
 independent Judge applies the external rubric
         |
         v
-write run artifact and pause for human review
+write preliminary artifact and human-review template
+        |
+        v
+human review updates CLAUDE.md and/or rubric.md
+        |
+        v
+rejudge the same candidate when rubric.md changed
+        |
+        v
+validate and record calibration
         |
         v
 reset main to the original SHA and restore workflow artifacts
@@ -133,11 +142,46 @@ Human acceptance remains the final calibration standard. A Judge PASS does not o
 
 ## Human Calibration
 
-After grading, the implementation remains in the real target repository. The harness prints the artifact path and waits.
+After grading, the implementation remains in the real target repository. The harness writes a preliminary run artifact with status `AWAITING_HUMAN_REVIEW`, creates a neighboring `<timestamp>.review.json`, prints both paths, and waits.
 
-Use this pause to inspect commits, code, tests, architecture, and the structured grade. If the work reveals a behavioral problem, edit `CLAUDE.md`. If human review catches a requirement the Judge missed, edit `rubric.md` as well. Press Enter only after the review and tuning changes are complete.
+Use this pause to inspect commits, code, tests, architecture, and the structured grade. Record the human verdict and findings in the review file:
 
-The harness then restores the target. Changes made to this control repository during review are retained and must be committed before the next run.
+```json
+{
+  "verdict": "REJECT",
+  "summary": "The worker drops request metadata.",
+  "findings": [
+    {
+      "description": "The persisted row omits request metadata.",
+      "paths": ["src/audit/worker/audit.worker.ts"],
+      "judgeAssessment": "MISSED",
+      "rubricId": "worker-metadata"
+    }
+  ]
+}
+```
+
+Each finding has one Judge assessment:
+
+- `CAUGHT`: the original Judge already failed the cited rubric ID.
+- `MISSED`: the candidate has a real defect the original Judge passed or did not cover.
+- `FALSE_POSITIVE`: the original Judge failed a correct implementation because the rubric was wrong or ambiguous.
+- `NOT_PROMOTED`: record the observation, but do not turn it into a reusable Judge rule.
+
+`CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
+
+If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a `MISSED` or `FALSE_POSITIVE` finding, edit `rubric.md` before continuing. Press Enter when the review and control-file edits are ready.
+
+When `rubric.md` changed, the harness runs Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
+
+- every `CAUGHT` finding maps to an original failing requirement
+- every `MISSED` finding maps to a revised failing requirement
+- every `FALSE_POSITIVE` maps from an original failure to a revised pass
+- you confirm that the revised result reaches those conclusions for the right reasons
+
+Invalid review JSON, inconsistent findings, malformed rubric IDs, an ineffective rubric revision, or a rejected rejudge result leaves the target in place and returns to the review prompt. This makes the flawed candidate the regression fixture for the new Judge rule instead of waiting for another implementation run.
+
+After successful calibration, the harness updates the run artifact to `COMPLETE` with the human review, changed instruction or rubric content, and revised Judge result. It then restores the target. Changes made to this control repository during review are retained and must be committed before the next run.
 
 ## Restoration
 
@@ -196,7 +240,7 @@ Unit and filesystem integration tests for configuration parsing, rubric validati
 - target dependencies already installed
 - clean, committed control repository
 - clean target repository on `main`
-- enough budget for six independent allocations: four engineering stages, one shared PO session, and one Judge session
+- enough budget for six independent allocations, plus a seventh Judge allocation when calibration changes the rubric
 
 Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
 
@@ -246,20 +290,26 @@ The directory is ignored by Git. Each artifact records:
 - baseline context supplied to Judge
 - complete implementation diff
 - measured checks and check integrity
-- Judge prompt and structured final grade
+- original Judge prompt and structured grade
+- human verdict and classified findings
+- changed instruction and rubric contents
+- revised Judge prompt and grade when the rubric changed
+- human confirmation of the revised Judge reasoning
 
-Artifacts are written after a valid Judge result and before human review. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
+The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
 
 ## Tuning Loop
 
 1. Commit a clean control state.
 2. Run the benchmark against the same target SHA and model IDs.
 3. Inspect the actual target implementation during the review pause.
-4. Compare human findings with the Judge result.
+4. Record the human verdict and classify every finding against the original Judge result.
 5. Update `CLAUDE.md` for behavior failures.
-6. Update `rubric.md` for evaluation blind spots.
-7. Press Enter to restore the target.
-8. Commit control changes.
-9. Run again and compare artifacts.
+6. Update `rubric.md` for missed defects or false positives.
+7. Press Enter to rejudge the same candidate and validate the revised rubric.
+8. Correct ineffective rubric changes until calibration passes.
+9. Let the harness record calibration and restore the target.
+10. Commit control changes.
+11. Run again and compare completed artifacts.
 
 The benchmark is ready for unattended end-to-end use only after repeated runs produce work that satisfies both the external rubric and human production standards.

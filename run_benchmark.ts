@@ -87,6 +87,36 @@ const productAnswerSchema = z.object({
 	answer: z.string().min(1),
 });
 
+const humanFindingSchema = z
+	.object({
+		description: z.string().min(1),
+		paths: z.array(z.string().min(1)),
+		judgeAssessment: z.enum([
+			"CAUGHT",
+			"MISSED",
+			"FALSE_POSITIVE",
+			"NOT_PROMOTED",
+		]),
+		rubricId: z.string().min(1).nullable(),
+	})
+	.superRefine((finding, context) => {
+		if (finding.judgeAssessment === "NOT_PROMOTED" || finding.rubricId) {
+			return;
+		}
+
+		context.addIssue({
+			code: "custom",
+			message: "Judge-related findings require a rubric ID",
+			path: ["rubricId"],
+		});
+	});
+
+const humanReviewSchema = z.object({
+	verdict: z.enum(["ACCEPT", "REJECT"]),
+	summary: z.string().min(1),
+	findings: z.array(humanFindingSchema),
+});
+
 const claudeEnvelopeSchema = z
 	.object({
 		session_id: z.string().min(1),
@@ -105,6 +135,7 @@ const judgeEnvelopeSchema = z
 	.passthrough();
 
 export type JudgeGrade = z.infer<typeof judgeGradeSchema>;
+export type HumanReview = z.infer<typeof humanReviewSchema>;
 
 export interface BenchmarkConfig {
 	readonly sourceDir: string;
@@ -134,7 +165,20 @@ interface LocalCheckResult {
 	readonly evidence: z.infer<typeof evidenceSchema>[];
 }
 
+interface CalibrationResult {
+	readonly humanReview: HumanReview;
+	readonly instructionsChanged: boolean;
+	readonly updatedInstructions?: string;
+	readonly rubricChanged: boolean;
+	readonly updatedRubric?: string;
+	readonly revisedRubricIds?: readonly string[];
+	readonly revisedJudgePrompt?: string;
+	readonly revisedGrade?: JudgeGrade;
+	readonly rejudgeConfirmedByHuman?: boolean;
+}
+
 interface RunArtifact {
+	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE";
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly sourceRoot: string;
@@ -163,6 +207,8 @@ interface RunArtifact {
 	readonly checkIntegrity: LocalCheckResult;
 	readonly localChecks: LocalCheckResult;
 	readonly grade: JudgeGrade;
+	readonly reviewFile: string;
+	readonly calibration?: CalibrationResult;
 }
 
 interface StageExchange {
@@ -181,6 +227,22 @@ interface ProductOwnerSession {
 	sessionId: string;
 	spentUsd: number;
 	started: boolean;
+}
+
+interface CalibrationContext {
+	readonly rl: Questioner;
+	readonly reviewFile: string;
+	readonly targetDir: string;
+	readonly originalInstructions: string;
+	readonly originalRubric: string;
+	readonly originalGrade: JudgeGrade;
+	readonly judgeModel: string;
+	readonly sessionBudgetUsd: number;
+	readonly baselineContext: readonly ContextFile[];
+	readonly diff: string;
+	readonly changedPaths: readonly string[];
+	readonly checkIntegrity: LocalCheckResult;
+	readonly localChecks: LocalCheckResult;
 }
 
 interface CommandOptions {
@@ -303,6 +365,85 @@ export function parseRubricIds(rubric: string): string[] {
 	}
 
 	return ids;
+}
+
+export function parseHumanReview(review: string): HumanReview {
+	return humanReviewSchema.parse(JSON.parse(review));
+}
+
+function validateRubricDefinition(rubric: string) {
+	const rubricIds = parseRubricIds(rubric);
+	const missingHarnessIds = HARNESS_RUBRIC_IDS.filter(
+		(id) => !rubricIds.includes(id),
+	);
+
+	if (missingHarnessIds.length > 0) {
+		throw new Error(
+			`Rubric must retain harness requirements: ${missingHarnessIds.join(", ")}`,
+		);
+	}
+
+	return rubricIds;
+}
+
+export function validateCalibration(
+	review: HumanReview,
+	originalGrade: JudgeGrade,
+	revisedGrade?: JudgeGrade,
+) {
+	const realDefects = review.findings.filter(({ judgeAssessment }) =>
+		["CAUGHT", "MISSED"].includes(judgeAssessment),
+	);
+
+	if (review.verdict === "ACCEPT" && realDefects.length > 0) {
+		throw new Error("Human review cannot accept a candidate with real defects");
+	}
+
+	for (const finding of review.findings) {
+		if (finding.judgeAssessment === "NOT_PROMOTED") continue;
+
+		const rubricId = finding.rubricId ?? "";
+		const originalRequirement = originalGrade.requirements.find(
+			({ id }) => id === rubricId,
+		);
+
+		if (finding.judgeAssessment === "CAUGHT") {
+			if (originalRequirement?.status !== "FAIL") {
+				throw new Error(`Original Judge did not catch ${rubricId}`);
+			}
+
+			continue;
+		}
+
+		if (!revisedGrade) {
+			throw new Error(`${finding.judgeAssessment} requires a revised grade`);
+		}
+
+		if (
+			finding.judgeAssessment === "MISSED" &&
+			originalRequirement?.status === "FAIL"
+		) {
+			throw new Error(`Original Judge already caught ${rubricId}`);
+		}
+
+		const revisedRequirement = revisedGrade.requirements.find(
+			({ id }) => id === rubricId,
+		);
+		if (
+			finding.judgeAssessment === "MISSED" &&
+			revisedRequirement?.status !== "FAIL"
+		) {
+			throw new Error(`Revised rubric does not catch ${rubricId}`);
+		}
+
+		if (
+			finding.judgeAssessment === "FALSE_POSITIVE" &&
+			(originalRequirement?.status !== "FAIL" ||
+				revisedRequirement?.status !== "PASS")
+		) {
+			throw new Error(`Revised rubric does not correct ${rubricId}`);
+		}
+	}
 }
 
 export function parseJudgeOutput(
@@ -1103,17 +1244,123 @@ async function assertStageArtifact(
 	}
 }
 
-async function writeArtifact(artifact: RunArtifact) {
+async function createRunFiles(timestamp: string) {
 	const directory = join(CONTROL_DIR, ".benchmark-runs");
-	const fileName = `${artifact.timestamp.replaceAll(":", "-")}.json`;
+	const name = timestamp.replaceAll(":", "-");
 
 	await mkdir(directory, { recursive: true });
-	await Bun.write(
-		join(directory, fileName),
-		`${JSON.stringify(artifact, null, 2)}\n`,
-	);
 
-	return join(directory, fileName);
+	return {
+		artifact: join(directory, `${name}.json`),
+		review: join(directory, `${name}.review.json`),
+	};
+}
+
+async function writeArtifact(path: string, artifact: RunArtifact) {
+	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
+}
+
+async function writeHumanReviewTemplate(path: string) {
+	await Bun.write(
+		path,
+		`${JSON.stringify(
+			{
+				verdict: "REPLACE_WITH_ACCEPT_OR_REJECT",
+				summary: "",
+				findings: [],
+			},
+			null,
+			2,
+		)}\n`,
+	);
+}
+
+async function collectCalibration(
+	context: CalibrationContext,
+): Promise<CalibrationResult> {
+	await writeHumanReviewTemplate(context.reviewFile);
+
+	while (true) {
+		await context.rl.question(
+			`Review the implementation in ${context.targetDir}. Record your verdict and findings in ${context.reviewFile}. Update ${join(CONTROL_DIR, "CLAUDE.md")} and/or ${join(CONTROL_DIR, "rubric.md")} where justified, then press Enter to validate the calibration.`,
+		);
+
+		try {
+			const humanReview = parseHumanReview(
+				await Bun.file(context.reviewFile).text(),
+			);
+			const [updatedInstructions, updatedRubric] = await Promise.all([
+				Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+				Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
+			]);
+			const instructionsChanged =
+				updatedInstructions !== context.originalInstructions;
+			const rubricChanged = updatedRubric !== context.originalRubric;
+			const requiresRevisedRubric = humanReview.findings.some(
+				({ judgeAssessment }) =>
+					["MISSED", "FALSE_POSITIVE"].includes(judgeAssessment),
+			);
+
+			if (requiresRevisedRubric && !rubricChanged) {
+				throw new Error(
+					"MISSED and FALSE_POSITIVE findings require a rubric change",
+				);
+			}
+
+			let revisedRubricIds: readonly string[] | undefined;
+			let revisedJudgePrompt: string | undefined;
+			let revisedGrade: JudgeGrade | undefined;
+			if (rubricChanged) {
+				revisedRubricIds = validateRubricDefinition(updatedRubric);
+				console.log("\nRejudging the same candidate with the revised rubric");
+				const revisedJudge = await runJudge(
+					context.judgeModel,
+					context.sessionBudgetUsd,
+					updatedRubric,
+					context.baselineContext,
+					context.diff,
+					context.changedPaths,
+					context.checkIntegrity,
+					context.localChecks,
+				);
+				revisedJudgePrompt = revisedJudge.prompt;
+				revisedGrade = revisedJudge.grade;
+				console.log(JSON.stringify(revisedGrade, null, 2));
+			}
+
+			validateCalibration(humanReview, context.originalGrade, revisedGrade);
+			let rejudgeConfirmedByHuman: boolean | undefined;
+			if (revisedGrade) {
+				const confirmation = await context.rl.question(
+					"Confirm that the revised Judge result catches or corrects each finding for the right reason. Type yes to finalize, or anything else to revise the rubric: ",
+				);
+				rejudgeConfirmedByHuman = confirmation.trim().toLowerCase() === "yes";
+				if (!rejudgeConfirmedByHuman) {
+					throw new Error("Revised Judge result was not confirmed");
+				}
+			}
+
+			return {
+				humanReview,
+				instructionsChanged,
+				updatedInstructions: instructionsChanged
+					? updatedInstructions
+					: undefined,
+				rubricChanged,
+				updatedRubric: rubricChanged ? updatedRubric : undefined,
+				revisedRubricIds,
+				revisedJudgePrompt,
+				revisedGrade,
+				rejudgeConfirmedByHuman,
+			};
+		} catch (error) {
+			if (error instanceof CommandError) throw error;
+
+			console.error(
+				`Calibration incomplete: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 }
 
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
@@ -1138,15 +1385,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
 				runCommand(["claude", "--version"], CONTROL_DIR),
 			]);
-		const rubricIds = parseRubricIds(rubric);
-		const missingHarnessIds = HARNESS_RUBRIC_IDS.filter(
-			(id) => !rubricIds.includes(id),
-		);
-		if (missingHarnessIds.length > 0) {
-			throw new Error(
-				`Rubric must retain harness requirements: ${missingHarnessIds.join(", ")}`,
-			);
-		}
+		const rubricIds = validateRubricDefinition(rubric);
 		const { taskId, taskSha } = await createTaskCommit(
 			source.root,
 			task,
@@ -1210,7 +1449,9 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		const { grade } = judge;
 		console.log(JSON.stringify(grade, null, 2));
 		const timestamp = new Date().toISOString();
-		const artifactPath = await writeArtifact({
+		const runFiles = await createRunFiles(timestamp);
+		const artifact: RunArtifact = {
+			status: "AWAITING_HUMAN_REVIEW",
 			timestamp,
 			controlSha,
 			sourceRoot: source.root,
@@ -1239,12 +1480,33 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			checkIntegrity,
 			localChecks,
 			grade,
-		});
-		console.log(`Run artifact: ${artifactPath}`);
+			reviewFile: runFiles.review,
+		};
+		await writeArtifact(runFiles.artifact, artifact);
+		console.log(`Run artifact: ${runFiles.artifact}`);
+		console.log(`Human review: ${runFiles.review}`);
 
-		await rl.question(
-			`Review the implementation in ${source.root}. Update ${join(CONTROL_DIR, "CLAUDE.md")} and/or ${join(CONTROL_DIR, "rubric.md")} if needed, then press Enter to restore the target.`,
-		);
+		const calibration = await collectCalibration({
+			rl,
+			reviewFile: runFiles.review,
+			targetDir: source.root,
+			originalInstructions: instructions,
+			originalRubric: rubric,
+			originalGrade: grade,
+			judgeModel: config.judgeModel,
+			sessionBudgetUsd: config.sessionBudgetUsd,
+			baselineContext,
+			diff,
+			changedPaths,
+			checkIntegrity,
+			localChecks,
+		});
+		await writeArtifact(runFiles.artifact, {
+			...artifact,
+			status: "COMPLETE",
+			calibration,
+		});
+		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
 		await rl.question(
 			`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
