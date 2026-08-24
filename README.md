@@ -14,6 +14,7 @@ One run uses:
 template-ops/CLAUDE.md       project instructions under evaluation
 template-ops/backlog-seed.md known feature request
 template-ops/product-brief.md stable product facts available to the PO
+template-ops/rubrics/*.json  stage-specific process-quality rubrics
 template-ops/rubric.md       external binary acceptance rubric
 target repository            real application and real main branch
 installed Claude skills      discuss, grill, plan, and build
@@ -39,10 +40,19 @@ create a real Backlog.md card and install CLAUDE.md
 fresh /discuss session <-> dynamic Product Owner
         |
         v
+independent Discuss Judge; stop below B
+        |
+        v
 fresh /grill session   <-> same Product Owner
         |
         v
+independent Grill Judge; stop below B
+        |
+        v
 fresh /plan session    <-> same Product Owner
+        |
+        v
+independent Plan Judge; stop below B
         |
         v
 fresh /build session   <-> same Product Owner
@@ -51,7 +61,10 @@ fresh /build session   <-> same Product Owner
 verify commits, clean worktree, checks, and check integrity
         |
         v
-independent Judge applies the external rubric
+independent Build Judge; stop below B
+        |
+        v
+independent final Judge applies the external product rubric
         |
         v
 write preliminary artifact and human-review template
@@ -71,7 +84,7 @@ reset main to the original SHA and restore workflow artifacts
 
 The installed skills currently require Grill before Plan: Grill hardens the approach, Plan writes that ratified approach for a cold Build session, and Build consumes the plan. Running Plan before Grill would leave Build with a stale plan.
 
-Each engineering stage starts a distinct Claude session. A stage may take multiple turns when it needs product input, but no stage inherits another stage's conversation. Durable Backlog.md documents carry the work forward instead.
+Each engineering stage starts a distinct Claude session. A stage may take multiple turns when it needs product input, but no stage inherits another stage's conversation. Durable Backlog.md documents carry the work forward instead. A separate fresh Judge grades each completed stage before its output can become the next stage's input.
 
 ## Dynamic Product Owner
 
@@ -116,7 +129,21 @@ After Discuss, Grill, and Plan, the harness verifies that application Git histor
 
 Build must create at least one conventional commit directly on `main`, leave a clean worktree, and preserve descendant history from the task setup commit.
 
-## Grading
+## Stage Grading
+
+Discuss, Grill, Plan, and Build each have a rubric under `rubrics/`. Executing agents never receive these rubrics. Each rubric defines:
+
+- hard blockers whose presence makes the stage grade `F`
+- binary requirements that cap the grade at `C` when any are missing
+- quality dimensions graded `A` through `F`
+
+When no blocker or requirement fails, the worst quality-dimension grade becomes the stage grade. The harness never averages dimensions: excellence in one area cannot compensate for a material weakness in another. Only `A` and `B` continue the workflow.
+
+Planning-stage Judges receive the task, product brief, project instructions, frozen tracked repository files except `bun.lock`, the stage's structured questions, decisions, and completion summary, Backlog task state, current stage artifact, and all previously accepted artifacts. The Build Judge receives those inputs plus the implementation diff and authoritative local checks. Harness-detected delivery and Build-check failures force a hard blocker regardless of the model's assessment. This records where quality first degraded instead of discovering only that the final implementation failed.
+
+Every stage scorecard stores the frozen input, full rubric, structured source citations, derived grade, Judge prompt, and Judge cost. Citations must resolve to the frozen input. A failed grade stops subsequent workflow stages and enters human calibration against that exact stage input. A malformed stage delivery follows the same scorecard and calibration path instead of bypassing grading.
+
+## Final Grading
 
 After Build, the harness reruns:
 
@@ -128,17 +155,17 @@ CONFIG_PATH=src/config/test.yaml bun run test:unit
 
 It also compares hashes for `package.json`, `tsconfig.json`, and `biome.json`. The candidate cannot obtain a passing result by weakening the configured checks.
 
-The Judge runs separately in safe mode with no tools. It receives only:
+After every stage has passed, the final Judge runs separately in safe mode with no tools. It receives only:
 
 - the external rubric
-- selected baseline files showing existing project patterns
+- frozen tracked baseline files except `bun.lock`
 - the complete implementation diff
 - measured check results
 - measured check-integrity results
 
 Judge output is schema-validated. Every rubric ID must appear exactly once, evidence must cite supplied material, and PASS requires every requirement to pass. The harness replaces the Judge's `check-integrity` and `local-checks` conclusions with authoritative local results.
 
-Human acceptance remains the final calibration standard. A Judge PASS does not overrule a problem found during review.
+Human acceptance remains the final calibration standard. Passing stage grades and a final Judge PASS do not overrule a problem found during review.
 
 ## Human Calibration
 
@@ -154,6 +181,7 @@ Use this pause to inspect commits, code, tests, architecture, and the structured
     {
       "description": "The persisted row omits request metadata.",
       "paths": ["src/audit/worker/audit.worker.ts"],
+      "stage": "build",
       "judgeAssessment": "MISSED",
       "rubricId": "worker-metadata"
     }
@@ -168,11 +196,11 @@ Each finding has one Judge assessment:
 - `FALSE_POSITIVE`: the original Judge failed a correct implementation because the rubric was wrong or ambiguous.
 - `NOT_PROMOTED`: record the observation, but do not turn it into a reusable Judge rule.
 
-`CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
+`stage` identifies `discuss`, `grill`, `plan`, `build`, or `final`; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
 
-If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a `MISSED` or `FALSE_POSITIVE` finding, edit `rubric.md` before continuing. Press Enter when the review and control-file edits are ready.
+If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under `rubrics/`; for a final finding, edit `rubric.md`. Press Enter when the review and control-file edits are ready.
 
-When `rubric.md` changed, the harness runs Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
+When a stage rubric changes, the harness regrades the exact same transcript and frozen stage artifacts. When `rubric.md` changes, it runs the final Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
 
 - every `CAUGHT` finding maps to an original failing requirement
 - every `MISSED` finding maps to a revised failing requirement
@@ -223,17 +251,21 @@ The independent acceptance criteria. Requirements use this format:
 
 IDs are parsed at runtime, so adding a newly discovered requirement does not require a TypeScript change. IDs must be unique. The rubric must retain `check-integrity` and `local-checks` because those are owned by measured harness results.
 
+### `rubrics/*.json`
+
+The independent process-quality contracts for Discuss, Grill, Plan, and Build. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
+
 ### `run_benchmark.ts`
 
 The CLI entry point. It validates the Bun version, parses arguments, creates the terminal question interface, and delegates the run.
 
 ### `src/benchmark/`
 
-The harness implementation, separated by responsibility: Backlog state, calibration, checks, command execution, configuration, validated contracts, judging, orchestration, target Git lifecycle, and workflow sessions. Expensive Claude calls live in `workflow.ts` and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
+The harness implementation, separated by responsibility: Backlog state, calibration, checks, command execution, configuration, validated contracts, final judging, orchestration, stage grading, target Git lifecycle, and workflow sessions. Expensive Claude calls live in `workflow.ts`, `stage-grading.ts`, and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
 
 ### `run_benchmark.test.ts`
 
-Unit and filesystem integration tests for configuration parsing, rubric validation, native-skill invocation, stage order, direct-target restoration, preserved workflow state, commit rules, check integrity, and Judge evidence.
+Unit and filesystem integration tests for configuration parsing, stage and final rubric validation, non-compensating grade derivation, native-skill invocation, stage order, artifact resolution, direct-target restoration, preserved workflow state, commit rules, check integrity, and Judge evidence.
 
 ## Prerequisites
 
@@ -244,7 +276,7 @@ Unit and filesystem integration tests for configuration parsing, rubric validati
 - target dependencies already installed
 - clean, committed control repository
 - clean target repository on `main`
-- enough budget for six independent allocations, plus a seventh Judge allocation when calibration changes the rubric
+- enough budget for four engineering sessions, the shared PO, four stage Judges, the final Judge, and any calibration rejudges
 
 Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
 
@@ -285,7 +317,10 @@ Completed runs are written to:
 
 ```text
 .benchmark-runs/<ISO timestamp>.json
+.benchmark-runs/<ISO timestamp>.<stage>.json
 ```
+
+Each stage file first records the frozen Judge input, so a Judge timeout or invalid response does not erase the stage evidence. A successful Judge replaces that preliminary record with the scorecard, including when the grade stops the workflow. Successful end-to-end runs also include all stage scorecards in the main artifact.
 
 The directory is ignored by Git. Each artifact records:
 
@@ -294,6 +329,7 @@ The directory is ignored by Git. Each artifact records:
 - requested models, effort levels, budgets, Bun version, and Claude version
 - task, product brief, instructions, rubric, and parsed rubric IDs
 - each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
+- each stage rubric, frozen Judge input, prompt, evidence, grade, and stop decision
 - final Backlog.md task state
 - baseline context supplied to Judge
 - complete implementation diff
@@ -313,7 +349,7 @@ The preliminary artifact is written after a valid original Judge result and befo
 3. Inspect the actual target implementation during the review pause.
 4. Record the human verdict and classify every finding against the original Judge result.
 5. Update `CLAUDE.md` for behavior failures.
-6. Update `rubric.md` for missed defects or false positives.
+6. Update the responsible stage rubric, or `rubric.md` for final-product findings, when the Judge missed a defect or produced a false positive.
 7. Press Enter to rejudge the same candidate and validate the revised rubric.
 8. Correct ineffective rubric changes until calibration passes.
 9. Let the harness record calibration and restore the target.

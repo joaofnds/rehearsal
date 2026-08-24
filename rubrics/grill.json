@@ -1,0 +1,67 @@
+{
+	"stage": "grill",
+	"hardBlockers": [
+		{
+			"id": "invalid-stage-delivery",
+			"description": "FAIL when harness validation shows that the stage did not leave the required durable artifact or valid repository state."
+		},
+		{
+			"id": "critical-ambiguity-open",
+			"description": "FAIL when a material ambiguity or contested decision remains unresolved while the stage claims completion."
+		},
+		{
+			"id": "unsupported-assumption",
+			"description": "FAIL when a load-bearing technical or product assumption is accepted without evidence or an explicit owner decision."
+		},
+		{
+			"id": "scope-drift",
+			"description": "FAIL when the hardened design widens or narrows the approved specification without explicit authorization."
+		},
+		{
+			"id": "spec-contradiction",
+			"description": "FAIL when the hardened design contradicts an accepted requirement without recording and resolving the conflict."
+		}
+	],
+	"requirements": [
+		{
+			"id": "assumptions-challenged",
+			"description": "Identify and test the assumptions that determine the design or its feasibility."
+		},
+		{
+			"id": "edge-and-failure-cases",
+			"description": "Cover material edge cases, failure modes, retries, consistency boundaries, and operational behavior relevant to the feature."
+		},
+		{
+			"id": "decisions-resolved",
+			"description": "Resolve or explicitly defer every open decision with an owner and scope consequence."
+		},
+		{
+			"id": "risks-recorded",
+			"description": "Record accepted risks, rejected alternatives, and the evidence supporting the chosen design."
+		},
+		{
+			"id": "spec-traceability",
+			"description": "Trace the hardened design back to the specification without dropping or inventing requirements."
+		}
+	],
+	"dimensions": [
+		{
+			"id": "challenge-depth",
+			"description": "How effectively the stage attacks weak assumptions and finds consequential omissions.",
+			"good": "B requires the important happy-path, edge-case, and failure assumptions to be challenged.",
+			"excellent": "A requires focused adversarial analysis that finds non-obvious risks without manufacturing irrelevant complexity."
+		},
+		{
+			"id": "evidence-quality",
+			"description": "How well factual claims and decisions are grounded in repository or product evidence.",
+			"good": "B requires every load-bearing claim to have relevant evidence or an explicit decision.",
+			"excellent": "A requires precise evidence that directly distinguishes the chosen design from viable alternatives."
+		},
+		{
+			"id": "design-coherence",
+			"description": "How consistently the resolved decisions form one implementable design.",
+			"good": "B requires no material contradictions or unexplained gaps between decisions.",
+			"excellent": "A requires a minimal, internally consistent design with clearly bounded accepted risks."
+		}
+	]
+}

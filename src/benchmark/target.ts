@@ -1,8 +1,9 @@
 import { cp, mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "./command";
+import { CommandError, runCommand } from "./command";
 import { CONTROL_DIR, WORKFLOW_PATHS } from "./config";
+import { StageValidationError } from "./contracts";
 
 export interface SourceBaseline {
 	readonly root: string;
@@ -157,13 +158,48 @@ export async function assertWorkspaceCleanAt(
 	);
 
 	if (branch !== "main" || sha !== expectedSha || status) {
-		throw new Error("Target baseline changed unexpectedly");
+		throw new StageValidationError("Target baseline changed unexpectedly");
 	}
+}
+
+export async function captureBuildCandidate(
+	targetDir: string,
+	taskSha: string,
+) {
+	const resultSha = await git(targetDir, "rev-parse", "HEAD");
+	const trackedDiff = await runCommand(
+		["git", "diff", "--no-ext-diff", "--binary", taskSha],
+		targetDir,
+	);
+	const trackedPaths = (await git(targetDir, "diff", "--name-only", taskSha))
+		.split("\n")
+		.filter(Boolean);
+	const untrackedPaths = (
+		await runCommand(
+			["git", "ls-files", "--others", "--exclude-standard", "-z"],
+			targetDir,
+		)
+	)
+		.split("\0")
+		.filter(Boolean);
+	const untrackedDiffs = await Promise.all(
+		untrackedPaths.map(async (path) => {
+			const content = await Bun.file(join(targetDir, path)).text();
+			return `diff --git a/${path} b/${path}\nnew untracked file\n--- /dev/null\n+++ b/${path}\n@@ untracked file @@\n${content}`;
+		}),
+	);
+
+	return {
+		resultSha,
+		diff: [trackedDiff, ...untrackedDiffs].filter(Boolean).join("\n"),
+		changedPaths: [...new Set([...trackedPaths, ...untrackedPaths])],
+	};
 }
 
 export async function assertBuildCommitted(targetDir: string, taskSha: string) {
 	const branch = await git(targetDir, "branch", "--show-current");
-	if (branch !== "main") throw new Error("Build phase left main");
+	if (branch !== "main")
+		throw new StageValidationError("Build phase left main");
 
 	const status = await git(
 		targetDir,
@@ -171,19 +207,35 @@ export async function assertBuildCommitted(targetDir: string, taskSha: string) {
 		"--porcelain=v1",
 		"--untracked-files=all",
 	);
-	if (status) throw new Error("Build phase left uncommitted changes");
+	if (status) {
+		throw new StageValidationError(
+			`Build phase left uncommitted changes:\n${status}`,
+		);
+	}
 
 	const resultSha = await git(targetDir, "rev-parse", "HEAD");
 	if (resultSha === taskSha) {
-		throw new Error("Build phase did not create a commit");
+		throw new StageValidationError("Build phase did not create a commit");
 	}
 
-	await git(targetDir, "merge-base", "--is-ancestor", taskSha, resultSha);
+	try {
+		await git(targetDir, "merge-base", "--is-ancestor", taskSha, resultSha);
+	} catch (error) {
+		if (error instanceof CommandError && error.exitCode === 1) {
+			throw new StageValidationError(
+				"Build phase rewrote or discarded task history",
+			);
+		}
+
+		throw error;
+	}
 	const diff = await runCommand(
 		["git", "diff", "--no-ext-diff", "--binary", `${taskSha}..${resultSha}`],
 		targetDir,
 	);
-	if (!diff.trim()) throw new Error("Build commit contains no changes");
+	if (!diff.trim()) {
+		throw new StageValidationError("Build commit contains no changes");
+	}
 
 	const subjects = await git(
 		targetDir,
@@ -202,7 +254,7 @@ export function assertConventionalCommitSubjects(subjects: readonly string[]) {
 	);
 
 	if (invalidSubjects.length > 0) {
-		throw new Error(
+		throw new StageValidationError(
 			`Build used non-conventional commit subjects: ${invalidSubjects.join(", ")}`,
 		);
 	}

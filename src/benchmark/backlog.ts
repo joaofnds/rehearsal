@@ -1,8 +1,9 @@
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { z } from "zod";
 import { runCommand } from "./command";
 import type { WorkflowStage } from "./config";
+import { StageValidationError } from "./contracts";
 import { assertWorkspaceCleanAt, git } from "./target";
 
 const taskViewSchema = z
@@ -108,13 +109,20 @@ export async function createTaskCommit(
 	};
 }
 
-export async function readTaskState(targetDir: string, taskId: string) {
-	const output = await runCommand(
-		["backlog", "task", taskId, "--json"],
-		targetDir,
-	);
+export async function readTaskOutput(targetDir: string, taskId: string) {
+	return await runCommand(["backlog", "task", taskId, "--json"], targetDir);
+}
 
-	return { output, view: taskViewSchema.parse(JSON.parse(output)) };
+export function parseTaskState(output: string) {
+	try {
+		return { output, view: taskViewSchema.parse(JSON.parse(output)) };
+	} catch {
+		throw new StageValidationError("Backlog returned invalid task state");
+	}
+}
+
+export async function readTaskState(targetDir: string, taskId: string) {
+	return parseTaskState(await readTaskOutput(targetDir, taskId));
 }
 
 export function assertStageArtifactState(
@@ -123,7 +131,9 @@ export function assertStageArtifactState(
 	documentFiles: readonly string[],
 ) {
 	if (stage === "discuss" && view.task.acceptanceCriteria.length === 0) {
-		throw new Error("Discuss completed without acceptance criteria");
+		throw new StageValidationError(
+			"Discuss completed without acceptance criteria",
+		);
 	}
 
 	const expectedDoc = {
@@ -131,21 +141,28 @@ export function assertStageArtifactState(
 		grill: "grilled",
 		plan: "plan",
 	}[stage];
-	const attachedIds = new Set(view.task.documentation);
-	const hasArtifact = documentFiles.some((file) => {
+	const attachedReferences = view.task.documentation.map((reference) =>
+		basename(reference),
+	);
+	const attachedIds = new Set(
+		attachedReferences.map((reference) => reference.split(" ", 1)[0]),
+	);
+	const artifactFile = documentFiles.find((file) => {
 		const documentId = file.split(" ", 1)[0];
 		return (
-			documentId !== undefined &&
-			attachedIds.has(documentId) &&
+			(attachedReferences.includes(file) ||
+				(documentId !== undefined && attachedIds.has(documentId))) &&
 			file.toLowerCase().endsWith(`-${expectedDoc}.md`)
 		);
 	});
 
-	if (!hasArtifact) {
-		throw new Error(
+	if (!artifactFile) {
+		throw new StageValidationError(
 			`${stage} completed without its durable ${expectedDoc} document`,
 		);
 	}
+
+	return artifactFile;
 }
 
 export async function assertPlanningStageCompleted(
@@ -153,9 +170,20 @@ export async function assertPlanningStageCompleted(
 	taskId: string,
 	taskSha: string,
 	stage: Exclude<WorkflowStage, "build">,
+	taskState?: { output: string; view: TaskView },
 ) {
 	await assertWorkspaceCleanAt(targetDir, taskSha);
-	const { view } = await readTaskState(targetDir, taskId);
+	const { output, view } =
+		taskState ?? (await readTaskState(targetDir, taskId));
 	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
-	assertStageArtifactState(stage, view, documentFiles);
+	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
+	const artifactPath = join("backlog", "docs", artifactFile);
+
+	return {
+		taskState: output,
+		artifact: {
+			path: artifactPath,
+			content: await Bun.file(join(targetDir, artifactPath)).text(),
+		},
+	};
 }

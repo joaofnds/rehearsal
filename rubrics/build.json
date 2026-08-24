@@ -1,0 +1,73 @@
+{
+	"stage": "build",
+	"hardBlockers": [
+		{
+			"id": "invalid-stage-delivery",
+			"description": "FAIL when harness validation shows that the stage did not leave the required committed repository state."
+		},
+		{
+			"id": "spec-or-plan-violation",
+			"description": "FAIL when the implementation contradicts an accepted requirement or material plan decision."
+		},
+		{
+			"id": "prohibited-technology",
+			"description": "FAIL when the change introduces a tool, dependency, or pattern prohibited by project instructions."
+		},
+		{
+			"id": "false-test-safety",
+			"description": "FAIL when tests pass independently of the behavior they claim to verify or required checks were weakened."
+		},
+		{
+			"id": "unfinished-delivery",
+			"description": "FAIL when required implementation is uncommitted, the worktree is dirty, or a required check is failing."
+		}
+	],
+	"requirements": [
+		{
+			"id": "requirements-implemented",
+			"description": "Implement every accepted requirement without unrelated scope."
+		},
+		{
+			"id": "plan-conformance",
+			"description": "Follow the approved design and task sequence, recording justified deviations."
+		},
+		{
+			"id": "behavior-tests",
+			"description": "Add tests that directly prove the required success, rejection, and failure behavior."
+		},
+		{
+			"id": "data-and-wiring",
+			"description": "Complete required persistence, migration, queue, worker, HTTP, and application wiring."
+		},
+		{
+			"id": "acceptance-evidence",
+			"description": "Provide objective passing evidence for every acceptance criterion and authoritative local check."
+		}
+	],
+	"dimensions": [
+		{
+			"id": "correctness",
+			"description": "How completely and accurately the implementation realizes the accepted behavior.",
+			"good": "B requires all specified behavior to work with no known material defect.",
+			"excellent": "A requires complete behavior with robust handling of the approved edge and failure cases."
+		},
+		{
+			"id": "maintainability",
+			"description": "How well the implementation fits project structure while keeping responsibilities and dependencies clear.",
+			"good": "B requires idiomatic, focused code with no unnecessary coupling or complexity.",
+			"excellent": "A requires a minimal design that narrows future defect space and is straightforward to change."
+		},
+		{
+			"id": "test-quality",
+			"description": "How directly and reliably the tests detect regressions in required behavior.",
+			"good": "B requires behavior-focused tests whose failures depend on the implemented behavior.",
+			"excellent": "A requires strong boundary and failure coverage without brittle implementation coupling."
+		},
+		{
+			"id": "repository-fit",
+			"description": "How consistently the change follows the repository's stack, conventions, and operational model.",
+			"good": "B requires full compliance with established patterns or explicitly justified deviations.",
+			"excellent": "A requires seamless integration that reuses stable project mechanisms without incidental complexity."
+		}
+	]
+}

@@ -37,10 +37,74 @@ export const productAnswerSchema = z.object({
 	answer: z.string().min(1),
 });
 
+export const stageLetterGradeSchema = z.enum(["A", "B", "C", "D", "F"]);
+
+const stageRubricItemSchema = z.object({
+	id: z.string().min(1),
+	description: z.string().min(1),
+});
+
+export const stageRubricSchema = z.object({
+	stage: z.enum(["discuss", "grill", "plan", "build"]),
+	hardBlockers: z.array(stageRubricItemSchema),
+	requirements: z.array(stageRubricItemSchema).min(1),
+	dimensions: z
+		.array(
+			stageRubricItemSchema.extend({
+				good: z.string().min(1),
+				excellent: z.string().min(1),
+			}),
+		)
+		.min(1),
+});
+
+const stagePassFailResultSchema = z.object({
+	id: z.string().min(1),
+	status: z.enum(["PASS", "FAIL"]),
+	evidence: z
+		.array(
+			z.object({
+				source: z.enum([
+					"task",
+					"product-brief",
+					"instructions",
+					"task-state",
+					"transcript",
+					"artifact",
+					"prior-artifact",
+					"baseline-context",
+					"diff",
+					"check-integrity",
+					"local-checks",
+					"harness-failure",
+				]),
+				path: z.string().min(1),
+				claim: z.string().min(1),
+			}),
+		)
+		.min(1),
+});
+
+export const stageJudgeOutputSchema = z.object({
+	hardBlockers: z.array(stagePassFailResultSchema),
+	requirements: z.array(stagePassFailResultSchema),
+	dimensions: z.array(
+		z.object({
+			id: z.string().min(1),
+			grade: stageLetterGradeSchema,
+			evidence: stagePassFailResultSchema.shape.evidence,
+		}),
+	),
+	summary: z.string().min(1),
+});
+
 export const humanFindingSchema = z
 	.object({
 		description: z.string().min(1),
 		paths: z.array(z.string().min(1)),
+		stage: z
+			.enum(["discuss", "grill", "plan", "build", "final"])
+			.default("final"),
 		judgeAssessment: z.enum([
 			"CAUGHT",
 			"MISSED",
@@ -86,6 +150,11 @@ export type JudgeGrade = z.infer<typeof judgeGradeSchema>;
 export type HumanReview = z.infer<typeof humanReviewSchema>;
 export type StageTurn = z.infer<typeof stageTurnSchema>;
 export type ClaudeEnvelope = z.infer<typeof claudeEnvelopeSchema>;
+export type StageLetterGrade = z.infer<typeof stageLetterGradeSchema>;
+export type StageRubric = z.infer<typeof stageRubricSchema>;
+export type StageJudgeOutput = z.infer<typeof stageJudgeOutputSchema>;
+
+export class StageValidationError extends Error {}
 
 export interface ContextFile {
 	readonly path: string;
@@ -109,6 +178,38 @@ export interface StageTranscript {
 	readonly exchanges: readonly StageExchange[];
 }
 
+export interface StageJudgeInput {
+	readonly stage: WorkflowStage;
+	readonly task: string;
+	readonly productBrief: string;
+	readonly instructions: string;
+	readonly baselineContext: readonly ContextFile[];
+	readonly taskState: string;
+	readonly transcript: StageTranscript;
+	readonly artifact?: ContextFile;
+	readonly priorArtifacts: readonly ContextFile[];
+	readonly diff?: string;
+	readonly changedPaths?: readonly string[];
+	readonly checkIntegrity?: LocalCheckResult;
+	readonly localChecks?: LocalCheckResult;
+	readonly harnessFailure?: string;
+}
+
+export interface StageGrade extends StageJudgeOutput {
+	readonly grade: StageLetterGrade;
+	readonly verdict: "CONTINUE" | "STOP";
+}
+
+export interface StageScorecard {
+	readonly stage: WorkflowStage;
+	readonly rubricPath: string;
+	readonly rubric: StageRubric;
+	readonly input: StageJudgeInput;
+	readonly prompt: string;
+	readonly costUsd: number;
+	readonly grade: StageGrade;
+}
+
 export interface CalibrationResult {
 	readonly humanReview: HumanReview;
 	readonly instructionsChanged: boolean;
@@ -119,6 +220,8 @@ export interface CalibrationResult {
 	readonly revisedJudgePrompt?: string;
 	readonly revisedGrade?: JudgeGrade;
 	readonly rejudgeConfirmedByHuman?: boolean;
+	readonly stageRubricsChanged: readonly WorkflowStage[];
+	readonly revisedStageScorecards?: readonly StageScorecard[];
 }
 
 export interface RunArtifact {
@@ -147,6 +250,7 @@ export interface RunArtifact {
 	readonly productOwnerSessionId: string;
 	readonly productOwnerCostUsd: number;
 	readonly workflow: readonly StageTranscript[];
+	readonly stageScorecards: readonly StageScorecard[];
 	readonly taskState: string;
 	readonly judgePrompt: string;
 	readonly diff: string;

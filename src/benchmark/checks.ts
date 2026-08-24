@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
-import { CHECK_PATHS, CONTEXT_PATHS, TEST_CONFIG_PATH } from "./config";
+import {
+	BASELINE_CONTEXT_EXCLUDED_PATHS,
+	CHECK_PATHS,
+	TEST_CONFIG_PATH,
+} from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 
 export async function runChecks(targetDir: string, label: string) {
@@ -91,8 +95,15 @@ export async function captureCheckIntegrity(
 
 export async function captureBaselineContext(directory: string) {
 	const context: ContextFile[] = [];
+	const trackedPaths = (await runCommand(["git", "ls-files"], directory))
+		.trim()
+		.split("\n")
+		.filter(Boolean)
+		.filter(
+			(path) => !BASELINE_CONTEXT_EXCLUDED_PATHS.includes(path as "bun.lock"),
+		);
 
-	for (const path of CONTEXT_PATHS) {
+	for (const path of trackedPaths) {
 		const file = Bun.file(join(directory, path));
 		if (await file.exists()) context.push({ path, content: await file.text() });
 	}

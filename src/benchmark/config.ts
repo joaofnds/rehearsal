@@ -14,20 +14,7 @@ export const CHECK_PATHS = [
 ] as const;
 export const WORKFLOW_PATHS = ["backlog", ".boris"] as const;
 export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
-export const CONTEXT_PATHS = [
-	"package.json",
-	"src/app.module.ts",
-	"src/database/module.ts",
-	"src/queue/queue.module.ts",
-	"src/user/http/controller.ts",
-	"src/user/http/module.ts",
-	"src/user/persistence/user.schema.ts",
-	"src/user/persistence/module.ts",
-	"src/user/queue/user-created.queue.ts",
-	"src/user/queue/module.ts",
-	"src/user/worker/user-created.worker.ts",
-	"src/user/worker/module.ts",
-] as const;
+export const BASELINE_CONTEXT_EXCLUDED_PATHS = ["bun.lock"] as const;
 
 export const RUBRIC_IDS = [
 	"tests",
