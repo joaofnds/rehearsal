@@ -273,6 +273,9 @@ describe(createWorkflowCommand, () => {
 		expect(command).toContain("--effort");
 		expect(command).toContain("high");
 		expect(command).toContain("/discuss TASK-1");
+		expect(command[command.indexOf("--json-schema") + 1]).not.toContain(
+			'"$schema"',
+		);
 	});
 });
 
