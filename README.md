@@ -254,22 +254,26 @@ bun test
 
 bun run benchmark \
   --target /Users/joaofnds/code/nest/template \
-  --model claude-opus-4-8 \
-  --judge-model claude-sonnet-4-6 \
-  --session-budget-usd 5
+  --model sonnet \
+  --effort high \
+  --session-budget-usd 10
 ```
 
 Equivalent environment variables are available:
 
 ```sh
 export BENCHMARK_TARGET_DIR=/Users/joaofnds/code/nest/template
-export BENCHMARK_MODEL=claude-opus-4-8
-export BENCHMARK_JUDGE_MODEL=claude-sonnet-4-6
-export BENCHMARK_SESSION_BUDGET_USD=5
+export BENCHMARK_MODEL=sonnet
+export BENCHMARK_EFFORT=high
+export BENCHMARK_SESSION_BUDGET_USD=10
 bun run benchmark
 ```
 
-Use full model IDs rather than moving aliases. The session budget is enforced independently for each engineering stage, across the shared PO session, and for Judge.
+`--model` and `--effort` apply to Discuss, Grill, Plan, Build, and the shared PO. Judge defaults to the same values. Override it with `--judge-model` and `--judge-effort`, or `BENCHMARK_JUDGE_MODEL` and `BENCHMARK_JUDGE_EFFORT`.
+
+Native Claude model aliases such as `sonnet` and `opus` are accepted. Use a full model ID only when a comparison must remain pinned to one exact model release. Supported effort values are `low`, `medium`, `high`, `xhigh`, and `max`.
+
+The session budget is enforced independently for each engineering stage, across the shared PO session, and for Judge.
 
 ## Run Artifacts
 
@@ -283,7 +287,7 @@ The directory is ignored by Git. Each artifact records:
 
 - control, source, setup, and result commit SHAs
 - source path and origin
-- model IDs, budgets, Bun version, and Claude version
+- requested models, effort levels, budgets, Bun version, and Claude version
 - task, product brief, instructions, rubric, and parsed rubric IDs
 - each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
 - final Backlog.md task state
@@ -301,7 +305,7 @@ The preliminary artifact is written after a valid original Judge result and befo
 ## Tuning Loop
 
 1. Commit a clean control state.
-2. Run the benchmark against the same target SHA and model IDs.
+2. Run the benchmark against the same target SHA, model selections, and effort levels.
 3. Inspect the actual target implementation during the review pause.
 4. Record the human verdict and classify every finding against the original Judge result.
 5. Update `CLAUDE.md` for behavior failures.

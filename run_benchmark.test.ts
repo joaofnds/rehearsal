@@ -40,32 +40,56 @@ describe(parseArgs, () => {
 			"--target",
 			"./target",
 			"--model",
-			"claude-opus-4-8",
+			"sonnet",
+			"--effort",
+			"high",
 			"--judge-model",
-			"claude-sonnet-4-6",
+			"sonnet",
+			"--judge-effort",
+			"high",
 			"--session-budget-usd",
 			"5",
 		]);
 
 		expect(config).toEqual({
 			sourceDir: join(process.cwd(), "target"),
-			model: "claude-opus-4-8",
-			judgeModel: "claude-sonnet-4-6",
+			model: "sonnet",
+			effort: "high",
+			judgeModel: "sonnet",
+			judgeEffort: "high",
 			sessionBudgetUsd: 5,
 		});
 	});
 
-	it("rejects moving model aliases", () => {
+	it("defaults Judge effort to workflow effort", () => {
+		const config = parseArgs([
+			"--target",
+			"./target",
+			"--model",
+			"sonnet",
+			"--effort",
+			"xhigh",
+			"--session-budget-usd",
+			"5",
+		]);
+
+		expect(config.judgeModel).toBe("sonnet");
+		expect(config.judgeEffort).toBe("xhigh");
+	});
+
+	it("rejects unsupported effort levels", () => {
 		expect(() =>
 			parseArgs([
 				"--target",
 				"./target",
 				"--model",
-				"opus",
+				"sonnet",
+				"--effort",
+				"extreme",
 				"--session-budget-usd",
 				"5",
 			]),
-		).toThrow("Use a full Claude model ID");
+		).toThrow("Unsupported effort");
 	});
 
 	it("rejects missing spend limits", () => {
@@ -236,15 +260,18 @@ describe("workflow stages", () => {
 describe(createWorkflowCommand, () => {
 	it("loads native project and user customizations", () => {
 		const command = createWorkflowCommand(
-			"claude-opus-4-8",
+			"sonnet",
 			5,
 			"/discuss TASK-1",
+			"high",
 		);
 
 		expect(command).not.toContain("--safe-mode");
 		expect(command).not.toContain("--disable-slash-commands");
 		expect(command).not.toContain("--strict-mcp-config");
 		expect(command).toContain("--dangerously-skip-permissions");
+		expect(command).toContain("--effort");
+		expect(command).toContain("high");
 		expect(command).toContain("/discuss TASK-1");
 	});
 });

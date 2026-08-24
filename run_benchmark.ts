@@ -87,6 +87,8 @@ const productAnswerSchema = z.object({
 	answer: z.string().min(1),
 });
 
+const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
+
 const humanFindingSchema = z
 	.object({
 		description: z.string().min(1),
@@ -136,11 +138,14 @@ const judgeEnvelopeSchema = z
 
 export type JudgeGrade = z.infer<typeof judgeGradeSchema>;
 export type HumanReview = z.infer<typeof humanReviewSchema>;
+export type Effort = z.infer<typeof effortSchema>;
 
 export interface BenchmarkConfig {
 	readonly sourceDir: string;
 	readonly model: string;
+	readonly effort?: Effort;
 	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
 	readonly sessionBudgetUsd: number;
 }
 
@@ -187,7 +192,9 @@ interface RunArtifact {
 	readonly taskSha: string;
 	readonly resultSha: string;
 	readonly model: string;
+	readonly effort?: Effort;
 	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
 	readonly sessionBudgetUsd: number;
 	readonly bunVersion: string;
 	readonly claudeVersion: string;
@@ -237,6 +244,7 @@ interface CalibrationContext {
 	readonly originalRubric: string;
 	readonly originalGrade: JudgeGrade;
 	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
 	readonly sessionBudgetUsd: number;
 	readonly baselineContext: readonly ContextFile[];
 	readonly diff: string;
@@ -333,9 +341,15 @@ export function parseArgs(
 
 	const judgeModel =
 		values.get("--judge-model") ?? env.BENCHMARK_JUDGE_MODEL ?? model;
+	const effort = parseEffort(
+		values.get("--effort") ?? env.BENCHMARK_EFFORT,
+		"workflow",
+	);
+	const judgeEffort = parseEffort(
+		values.get("--judge-effort") ?? env.BENCHMARK_JUDGE_EFFORT ?? effort,
+		"Judge",
+	);
 	const sessionBudgetUsd = Number(budgetText);
-	assertPinnedModel(model);
-	assertPinnedModel(judgeModel);
 
 	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
 		throw new Error("Session budget must be a positive number");
@@ -344,15 +358,24 @@ export function parseArgs(
 	return {
 		sourceDir: resolve(sourceDir),
 		model,
+		effort,
 		judgeModel,
+		judgeEffort,
 		sessionBudgetUsd,
 	};
 }
 
-function assertPinnedModel(model: string) {
-	if (!/^claude-[a-z0-9]+(?:-[a-z0-9]+)+$/.test(model)) {
-		throw new Error(`Use a full Claude model ID, received ${model}`);
+function parseEffort(value: string | undefined, role: string) {
+	if (value === undefined) return undefined;
+
+	const parsed = effortSchema.safeParse(value);
+	if (!parsed.success) {
+		throw new Error(
+			`Unsupported effort for ${role}: ${value}. Use low, medium, high, xhigh, or max`,
+		);
 	}
+
+	return parsed.data;
 }
 
 export function parseRubricIds(rubric: string): string[] {
@@ -927,6 +950,7 @@ export function createWorkflowCommand(
 	model: string,
 	remainingBudgetUsd: number,
 	prompt: string,
+	effort?: Effort,
 	sessionId: string = randomUUID(),
 	resume = false,
 ) {
@@ -935,6 +959,7 @@ export function createWorkflowCommand(
 		"-p",
 		"--model",
 		model,
+		...(effort ? ["--effort", effort] : []),
 		"--max-budget-usd",
 		String(remainingBudgetUsd),
 		"--output-format",
@@ -987,6 +1012,7 @@ function continueStagePrompt(stage: WorkflowStage, productOwnerAnswer: string) {
 
 function createProductOwnerCommand(
 	model: string,
+	effort: Effort | undefined,
 	remainingBudgetUsd: number,
 	prompt: string,
 	sessionId: string,
@@ -1000,6 +1026,7 @@ function createProductOwnerCommand(
 		"--strict-mcp-config",
 		"--model",
 		model,
+		...(effort ? ["--effort", effort] : []),
 		"--max-budget-usd",
 		String(remainingBudgetUsd),
 		"--output-format",
@@ -1019,6 +1046,7 @@ function createProductOwnerCommand(
 async function askProductOwner(
 	directory: string,
 	model: string,
+	effort: Effort | undefined,
 	sessionBudgetUsd: number,
 	session: ProductOwnerSession,
 	task: string,
@@ -1032,6 +1060,7 @@ async function askProductOwner(
 	const output = await runCommand(
 		createProductOwnerCommand(
 			model,
+			effort,
 			remainingBudget(sessionBudgetUsd, session.spentUsd),
 			prompt,
 			session.sessionId,
@@ -1053,6 +1082,7 @@ async function runWorkflowStage(
 	targetDir: string,
 	productOwnerDirectory: string,
 	model: string,
+	effort: Effort | undefined,
 	sessionBudgetUsd: number,
 	productOwner: ProductOwnerSession,
 	task: string,
@@ -1071,6 +1101,7 @@ async function runWorkflowStage(
 				model,
 				remainingBudget(sessionBudgetUsd, spentUsd),
 				prompt,
+				effort,
 				sessionId,
 				turn > 0,
 			),
@@ -1093,6 +1124,7 @@ async function runWorkflowStage(
 		const productOwnerAnswer = await askProductOwner(
 			productOwnerDirectory,
 			model,
+			effort,
 			sessionBudgetUsd,
 			productOwner,
 			task,
@@ -1110,6 +1142,7 @@ async function runWorkflowStage(
 
 async function runJudge(
 	model: string,
+	effort: Effort | undefined,
 	sessionBudgetUsd: number,
 	rubric: string,
 	baselineContext: readonly ContextFile[],
@@ -1139,6 +1172,7 @@ async function runJudge(
 				"--strict-mcp-config",
 				"--model",
 				model,
+				...(effort ? ["--effort", effort] : []),
 				"--max-budget-usd",
 				String(sessionBudgetUsd),
 				"--no-session-persistence",
@@ -1315,6 +1349,7 @@ async function collectCalibration(
 				console.log("\nRejudging the same candidate with the revised rubric");
 				const revisedJudge = await runJudge(
 					context.judgeModel,
+					context.judgeEffort,
 					context.sessionBudgetUsd,
 					updatedRubric,
 					context.baselineContext,
@@ -1404,6 +1439,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				source.root,
 				productOwnerDirectory,
 				config.model,
+				config.effort,
 				config.sessionBudgetUsd,
 				productOwner,
 				task,
@@ -1438,6 +1474,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		console.log("\nJudge session");
 		const judge = await runJudge(
 			config.judgeModel,
+			config.judgeEffort,
 			config.sessionBudgetUsd,
 			rubric,
 			baselineContext,
@@ -1460,7 +1497,9 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			taskSha,
 			resultSha,
 			model: config.model,
+			effort: config.effort,
 			judgeModel: config.judgeModel,
+			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 			bunVersion: Bun.version,
 			claudeVersion: claudeVersion.trim(),
@@ -1494,6 +1533,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			originalRubric: rubric,
 			originalGrade: grade,
 			judgeModel: config.judgeModel,
+			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 			baselineContext,
 			diff,
