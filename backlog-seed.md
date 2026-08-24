@@ -1,1 +1,3 @@
-- [ ] FEATURE: Implement Asynchronous Audit Log module. Create a MikroORM entity (id, action_type, resource_name, details JSON) and an endpoint to trigger it. Ensure the db insertion happens via a background queue worker. Write tests and migrations.
+# Implement asynchronous audit log module
+
+Create a MikroORM entity with an ID, action type, resource name, and JSON details. Add an endpoint that triggers audit logging, but ensure database insertion happens through a background queue worker. Include the required tests and migration.

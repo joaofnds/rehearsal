@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { cp, mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
@@ -11,7 +11,10 @@ const REQUIRED_BUN_VERSION = "1.4.0";
 const TEST_CONFIG_PATH = "src/config/test.yaml";
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1_000;
 const CLAUDE_TIMEOUT_MS = 30 * 60 * 1_000;
+const MAX_STAGE_TURNS = 20;
 const CHECK_PATHS = ["package.json", "tsconfig.json", "biome.json"] as const;
+const WORKFLOW_PATHS = ["backlog", ".boris"] as const;
+const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
 const CONTEXT_PATHS = [
 	"package.json",
 	"src/app.module.ts",
@@ -44,6 +47,10 @@ export const RUBRIC_IDS = [
 	"local-checks",
 ] as const;
 
+export const WORKFLOW_STAGES = ["discuss", "grill", "plan", "build"] as const;
+
+type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
+
 const evidenceSchema = z.object({
 	source: z.enum(["diff", "baseline-context", "local-checks"]),
 	path: z.string().min(1),
@@ -53,7 +60,7 @@ const evidenceSchema = z.object({
 const judgeGradeSchema = z.object({
 	requirements: z.array(
 		z.object({
-			id: z.enum(RUBRIC_IDS),
+			id: z.string().min(1),
 			status: z.enum(["PASS", "FAIL"]),
 			evidence: z.array(evidenceSchema).min(1),
 		}),
@@ -61,6 +68,34 @@ const judgeGradeSchema = z.object({
 	verdict: z.enum(["PASS", "FAIL"]),
 	summary: z.string().min(1),
 });
+
+const stageTurnSchema = z.object({
+	status: z
+		.enum(["QUESTION", "COMPLETE"])
+		.describe(
+			"QUESTION when product input is required; COMPLETE only after the native skill has finished and saved its durable artifact",
+		),
+	message: z
+		.string()
+		.min(1)
+		.describe(
+			"One question with its recommendation and context, or a concise completion summary",
+		),
+});
+
+const productAnswerSchema = z.object({
+	answer: z.string().min(1),
+});
+
+const claudeEnvelopeSchema = z
+	.object({
+		session_id: z.string().min(1),
+		total_cost_usd: z.number().nonnegative().optional(),
+		is_error: z.boolean().optional(),
+		result: z.string().optional(),
+		structured_output: z.unknown().optional(),
+	})
+	.passthrough();
 
 const judgeEnvelopeSchema = z
 	.object({
@@ -78,10 +113,15 @@ export interface BenchmarkConfig {
 	readonly sessionBudgetUsd: number;
 }
 
-interface SourceBaseline {
+export interface SourceBaseline {
 	readonly root: string;
 	readonly sha: string;
 	readonly origin?: string;
+}
+
+export interface WorkflowBackup {
+	readonly directory: string;
+	readonly presentPaths: readonly string[];
 }
 
 interface ContextFile {
@@ -108,18 +148,39 @@ interface RunArtifact {
 	readonly bunVersion: string;
 	readonly claudeVersion: string;
 	readonly task: string;
+	readonly productBrief: string;
 	readonly instructions: string;
 	readonly rubric: string;
+	readonly rubricIds: readonly string[];
 	readonly baselineContext: readonly ContextFile[];
-	readonly questions: string;
-	readonly discussPrompt: string;
-	readonly poAnswers: string;
-	readonly buildPrompt: string;
+	readonly taskId: string;
+	readonly productOwnerSessionId: string;
+	readonly productOwnerCostUsd: number;
+	readonly workflow: readonly StageTranscript[];
+	readonly taskState: string;
 	readonly judgePrompt: string;
 	readonly diff: string;
 	readonly checkIntegrity: LocalCheckResult;
 	readonly localChecks: LocalCheckResult;
 	readonly grade: JudgeGrade;
+}
+
+interface StageExchange {
+	readonly agent: z.infer<typeof stageTurnSchema>;
+	readonly productOwnerAnswer?: string;
+}
+
+interface StageTranscript {
+	readonly stage: WorkflowStage;
+	readonly sessionId: string;
+	readonly costUsd: number;
+	readonly exchanges: readonly StageExchange[];
+}
+
+interface ProductOwnerSession {
+	sessionId: string;
+	spentUsd: number;
+	started: boolean;
 }
 
 interface CommandOptions {
@@ -232,36 +293,63 @@ function assertPinnedModel(model: string) {
 	}
 }
 
-export function parseJudgeOutput(output: string): JudgeGrade {
+export function parseRubricIds(rubric: string): string[] {
+	const ids = [...rubric.matchAll(/^\d+\. `([^`]+)`:/gm)].map(
+		([, id]) => id ?? "",
+	);
+
+	if (ids.length === 0 || new Set(ids).size !== ids.length) {
+		throw new Error("Rubric must contain unique requirement IDs");
+	}
+
+	return ids;
+}
+
+export function parseJudgeOutput(
+	output: string,
+	expectedIds: readonly string[] = RUBRIC_IDS,
+): JudgeGrade {
 	const parsed: unknown = JSON.parse(output);
 	const direct = judgeGradeSchema.safeParse(parsed);
 
-	if (direct.success) return validateJudgeGrade(direct.data);
+	if (direct.success) return validateJudgeGrade(direct.data, expectedIds);
 
 	const envelope = judgeEnvelopeSchema.parse(parsed);
 	if (envelope.structured_output) {
-		return validateJudgeGrade(envelope.structured_output);
+		return validateJudgeGrade(envelope.structured_output, expectedIds);
 	}
 
 	if (envelope.result) {
 		return validateJudgeGrade(
 			judgeGradeSchema.parse(JSON.parse(envelope.result)),
+			expectedIds,
 		);
 	}
 
 	throw new Error("Judge response did not contain structured output");
 }
 
-function validateJudgeGrade(grade: JudgeGrade): JudgeGrade {
+function validateJudgeGrade(
+	grade: JudgeGrade,
+	expectedIds: readonly string[],
+): JudgeGrade {
 	const observedIds = new Set(grade.requirements.map(({ id }) => id));
-	const missingIds = RUBRIC_IDS.filter((id) => !observedIds.has(id));
+	const expectedIdSet = new Set(expectedIds);
+	const missingIds = expectedIds.filter((id) => !observedIds.has(id));
+	const unknownIds = grade.requirements.filter(
+		({ id }) => !expectedIdSet.has(id),
+	);
 	const duplicateIds = grade.requirements.filter(
 		({ id }, index) =>
 			grade.requirements.findIndex((requirement) => requirement.id === id) !==
 			index,
 	);
 
-	if (missingIds.length > 0 || duplicateIds.length > 0) {
+	if (
+		missingIds.length > 0 ||
+		unknownIds.length > 0 ||
+		duplicateIds.length > 0
+	) {
 		throw new Error("Judge must return every rubric requirement exactly once");
 	}
 
@@ -376,31 +464,64 @@ export async function assertControlReady() {
 	return await git(CONTROL_DIR, "rev-parse", "HEAD");
 }
 
-export async function createWorkspace(source: SourceBaseline): Promise<string> {
-	const workspace = await mkdtemp(join(tmpdir(), "template-run-"));
+export async function captureWorkflowBackup(
+	targetDir: string,
+): Promise<WorkflowBackup> {
+	const directory = await mkdtemp(join(tmpdir(), "template-workflow-backup-"));
+	const presentPaths: string[] = [];
 
-	try {
-		await runCommand(
-			["git", "clone", "--local", "--no-hardlinks", source.root, workspace],
-			CONTROL_DIR,
-		);
-		await git(workspace, "remote", "remove", "origin");
-		await git(workspace, "checkout", "-B", "main", source.sha);
-		await git(workspace, "config", "commit.gpgsign", "false");
-		await runCommand(["bun", "install", "--frozen-lockfile"], workspace);
+	for (const path of WORKFLOW_PATHS) {
+		try {
+			await stat(join(targetDir, path));
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				"code" in error &&
+				error.code === "ENOENT"
+			) {
+				continue;
+			}
 
-		return workspace;
-	} catch (error) {
-		await rm(workspace, { force: true, recursive: true });
-		throw error;
+			throw error;
+		}
+
+		await cp(join(targetDir, path), join(directory, path), { recursive: true });
+		presentPaths.push(path);
+	}
+
+	return { directory, presentPaths };
+}
+
+async function restoreWorkflowBackup(
+	targetDir: string,
+	backup: WorkflowBackup,
+) {
+	for (const path of WORKFLOW_PATHS) {
+		await rm(join(targetDir, path), { force: true, recursive: true });
+	}
+
+	for (const path of backup.presentPaths) {
+		await cp(join(backup.directory, path), join(targetDir, path), {
+			recursive: true,
+		});
 	}
 }
 
-async function verifySourceUnchanged(source: SourceBaseline) {
-	const current = await assertSourceReady(source.root);
+export async function restoreTarget(
+	source: SourceBaseline,
+	backup?: WorkflowBackup,
+) {
+	await git(source.root, "switch", "--force", "main");
+	await git(source.root, "reset", "--hard", source.sha);
+	await git(source.root, "clean", "-fd");
 
-	if (current.sha !== source.sha) {
-		throw new Error("Source repository changed during the run");
+	if (backup) await restoreWorkflowBackup(source.root, backup);
+
+	const restored = await assertSourceReady(source.root);
+	if (restored.sha !== source.sha) {
+		throw new Error(
+			"Target repository was not restored to its original commit",
+		);
 	}
 }
 
@@ -460,8 +581,51 @@ async function assertWorkspaceCleanAt(targetDir: string, expectedSha: string) {
 	);
 
 	if (branch !== "main" || sha !== expectedSha || status) {
-		throw new Error("Workspace baseline changed unexpectedly");
+		throw new Error("Target baseline changed unexpectedly");
 	}
+}
+
+function parseTaskSeed(task: string) {
+	const [heading, ...body] = task.trim().split("\n");
+	if (!heading?.startsWith("# ")) {
+		throw new Error("backlog-seed.md must start with a level-one heading");
+	}
+
+	const description = body.join("\n").trim();
+	if (!description) throw new Error("backlog-seed.md needs a task description");
+
+	return { title: heading.slice(2).trim(), description };
+}
+
+async function configureBacklog(targetDir: string) {
+	const configPath = join(targetDir, "backlog", "config.yml");
+	const configFile = Bun.file(configPath);
+
+	if (!(await configFile.exists())) {
+		await runCommand(
+			[
+				"backlog",
+				"init",
+				"Template",
+				"--defaults",
+				"--integration-mode",
+				"cli",
+				"--agent-instructions",
+				"none",
+			],
+			targetDir,
+		);
+	}
+
+	const config = await Bun.file(configPath).text();
+	const statuses =
+		'statuses: ["To Do", "Spec", "Grill", "Plan", "Build", "Done"]';
+	const configured = config.replace(/^statuses:.*$/m, statuses);
+	if (configured === config && !config.includes(statuses)) {
+		throw new Error("Backlog configuration does not declare statuses");
+	}
+
+	await Bun.write(configPath, configured);
 }
 
 async function createTaskCommit(
@@ -469,30 +633,52 @@ async function createTaskCommit(
 	task: string,
 	instructions: string,
 ) {
-	const backlogPath = join(targetDir, "backlog.md");
-	const existingBacklogFile = Bun.file(backlogPath);
-	const existingBacklog = (await existingBacklogFile.exists())
-		? (await existingBacklogFile.text()).trimStart()
-		: "";
-	const backlog = existingBacklog ? `${task.trim()}\n${existingBacklog}` : task;
-
-	await Bun.write(backlogPath, `${backlog.trimEnd()}\n`);
-	await Bun.write(join(targetDir, "CLAUDE.md"), instructions);
-	await git(targetDir, "add", "--", "backlog.md", "CLAUDE.md");
-	await git(
+	await configureBacklog(targetDir);
+	const { title, description } = parseTaskSeed(task);
+	const createdTask = await runCommand(
+		[
+			"backlog",
+			"task",
+			"create",
+			title,
+			"--description",
+			description,
+			"--type",
+			"feature",
+			"--status",
+			"To Do",
+			"--plain",
+		],
 		targetDir,
-		"commit",
-		"-m",
-		"chore: add audit log task",
-		"--",
-		"backlog.md",
-		"CLAUDE.md",
 	);
+	const taskId = /Task ([A-Z]+-\d+)/.exec(createdTask)?.[1];
+	if (!taskId) throw new Error("Backlog did not return the created task ID");
 
-	return await git(targetDir, "rev-parse", "HEAD");
+	await Bun.write(join(targetDir, "CLAUDE.md"), instructions);
+	await git(targetDir, "add", "--", "CLAUDE.md");
+	const stagedPaths = await git(targetDir, "diff", "--cached", "--name-only");
+
+	if (stagedPaths) {
+		await git(
+			targetDir,
+			"commit",
+			"-m",
+			"chore: configure project instructions",
+			"--",
+			"CLAUDE.md",
+		);
+	}
+
+	return {
+		taskId,
+		taskSha: await git(targetDir, "rev-parse", "HEAD"),
+	};
 }
 
-async function assertDiscussWasReadOnly(targetDir: string, taskSha: string) {
+async function assertPlanningStageWasReadOnly(
+	targetDir: string,
+	taskSha: string,
+) {
 	await assertWorkspaceCleanAt(targetDir, taskSha);
 }
 
@@ -596,71 +782,189 @@ async function captureBaselineContext(directory: string) {
 	return context;
 }
 
-function claudeEnvironment() {
-	const names = [
-		"HOME",
-		"PATH",
-		"SHELL",
-		"USER",
-		"LOGNAME",
-		"TMPDIR",
-		"TERM",
-		"LANG",
-		"LC_ALL",
-		"XDG_CONFIG_HOME",
-		"XDG_CACHE_HOME",
-	] as const;
-	const env: Record<string, string> = {};
-
-	for (const name of names) {
-		const value = Bun.env[name];
-		if (value) env[name] = value;
-	}
-
-	return env;
+export function createWorkflowCommand(
+	model: string,
+	remainingBudgetUsd: number,
+	prompt: string,
+	sessionId: string = randomUUID(),
+	resume = false,
+) {
+	return [
+		"claude",
+		"-p",
+		"--model",
+		model,
+		"--max-budget-usd",
+		String(remainingBudgetUsd),
+		"--output-format",
+		"json",
+		"--json-schema",
+		JSON.stringify(z.toJSONSchema(stageTurnSchema)),
+		"--dangerously-skip-permissions",
+		resume ? "--resume" : "--session-id",
+		sessionId,
+		prompt,
+	];
 }
 
-async function runClaude(
-	targetDir: string,
+function parseClaudeEnvelope(output: string) {
+	const envelope = claudeEnvelopeSchema.parse(JSON.parse(output));
+	if (envelope.is_error) {
+		throw new Error(envelope.result ?? "Claude session failed");
+	}
+
+	return envelope;
+}
+
+function parseStructuredOutput<T>(
+	envelope: z.infer<typeof claudeEnvelopeSchema>,
+	schema: z.ZodType<T>,
+) {
+	if (envelope.structured_output !== undefined) {
+		return schema.parse(envelope.structured_output);
+	}
+
+	if (envelope.result) return schema.parse(JSON.parse(envelope.result));
+
+	throw new Error("Claude response did not contain structured output");
+}
+
+function remainingBudget(limitUsd: number, spentUsd: number) {
+	const remaining = limitUsd - spentUsd;
+	if (remaining <= 0) throw new Error("Claude session exhausted its budget");
+
+	return remaining;
+}
+
+function stagePrompt(stage: WorkflowStage, taskId: string) {
+	return `/${stage} ${taskId}\n\nRun the native /${stage} skill to completion. A Product Owner is available between turns. Do not call AskUserQuestion. When product input is required, return QUESTION with exactly one question, its recommendation, and enough context to decide. Return COMPLETE only after the skill's durable artifact is saved. Never mention this mediation protocol in project artifacts.`;
+}
+
+function continueStagePrompt(stage: WorkflowStage, productOwnerAnswer: string) {
+	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${stage} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
+}
+
+function createProductOwnerCommand(
+	model: string,
+	remainingBudgetUsd: number,
+	prompt: string,
+	sessionId: string,
+	resume: boolean,
+) {
+	return [
+		"claude",
+		"-p",
+		"--safe-mode",
+		"--disable-slash-commands",
+		"--strict-mcp-config",
+		"--model",
+		model,
+		"--max-budget-usd",
+		String(remainingBudgetUsd),
+		"--output-format",
+		"json",
+		"--json-schema",
+		JSON.stringify(z.toJSONSchema(productAnswerSchema)),
+		"--tools",
+		"",
+		"--system-prompt",
+		"You are the Product Owner for one software feature. Answer the current question directly and make a concrete decision. Keep every answer consistent with prior answers in this session. Prefer the smallest coherent product scope, preserve the task's required behavior, and defer implementation mechanics to the engineering agent. Do not discuss evaluation, grading, or this protocol.",
+		resume ? "--resume" : "--session-id",
+		sessionId,
+		prompt,
+	];
+}
+
+async function askProductOwner(
+	directory: string,
 	model: string,
 	sessionBudgetUsd: number,
-	instructions: string,
-	prompt: string,
-	mode: "discuss" | "build",
+	session: ProductOwnerSession,
+	task: string,
+	productBrief: string,
+	stage: WorkflowStage,
+	question: string,
 ) {
-	const tools =
-		mode === "discuss" ? "Read,Glob,Grep" : "Read,Glob,Grep,Edit,Write,Bash";
-	const permissionMode = mode === "discuss" ? "plan" : "dontAsk";
-
-	return await runCommand(
-		[
-			"claude",
-			"-p",
-			"--safe-mode",
-			"--disable-slash-commands",
-			"--strict-mcp-config",
-			"--model",
+	const prompt = session.started
+		? `The ${stage} session asks:\n\n${question}`
+		: `Feature request:\n\n${task}\n\nProduct brief:\n\n${productBrief}\n\nThe ${stage} session asks:\n\n${question}`;
+	const output = await runCommand(
+		createProductOwnerCommand(
 			model,
-			"--max-budget-usd",
-			String(sessionBudgetUsd),
-			"--no-session-persistence",
-			"--append-system-prompt",
-			instructions,
-			"--tools",
-			tools,
-			"--allowedTools",
-			tools,
-			"--permission-mode",
-			permissionMode,
-		],
-		targetDir,
-		{
-			env: claudeEnvironment(),
-			inheritEnv: false,
-			input: prompt,
-			timeoutMs: CLAUDE_TIMEOUT_MS,
-		},
+			remainingBudget(sessionBudgetUsd, session.spentUsd),
+			prompt,
+			session.sessionId,
+			session.started,
+		),
+		directory,
+		{ timeoutMs: CLAUDE_TIMEOUT_MS },
 	);
+	const envelope = parseClaudeEnvelope(output);
+
+	session.sessionId = envelope.session_id;
+	session.spentUsd += envelope.total_cost_usd ?? 0;
+	session.started = true;
+
+	return parseStructuredOutput(envelope, productAnswerSchema).answer;
+}
+
+async function runWorkflowStage(
+	targetDir: string,
+	productOwnerDirectory: string,
+	model: string,
+	sessionBudgetUsd: number,
+	productOwner: ProductOwnerSession,
+	task: string,
+	productBrief: string,
+	taskId: string,
+	stage: WorkflowStage,
+): Promise<StageTranscript> {
+	let sessionId: string = randomUUID();
+	let spentUsd = 0;
+	let prompt = stagePrompt(stage, taskId);
+	const exchanges: StageExchange[] = [];
+
+	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
+		const output = await runCommand(
+			createWorkflowCommand(
+				model,
+				remainingBudget(sessionBudgetUsd, spentUsd),
+				prompt,
+				sessionId,
+				turn > 0,
+			),
+			targetDir,
+			{ timeoutMs: CLAUDE_TIMEOUT_MS },
+		);
+		const envelope = parseClaudeEnvelope(output);
+		const agent = parseStructuredOutput(envelope, stageTurnSchema);
+
+		sessionId = envelope.session_id;
+		spentUsd += envelope.total_cost_usd ?? 0;
+		console.log(agent.message);
+
+		if (agent.status === "COMPLETE") {
+			exchanges.push({ agent });
+
+			return { stage, sessionId, costUsd: spentUsd, exchanges };
+		}
+
+		const productOwnerAnswer = await askProductOwner(
+			productOwnerDirectory,
+			model,
+			sessionBudgetUsd,
+			productOwner,
+			task,
+			productBrief,
+			stage,
+			agent.message,
+		);
+		console.log(`Product Owner: ${productOwnerAnswer}`);
+		exchanges.push({ agent, productOwnerAnswer });
+		prompt = continueStagePrompt(stage, productOwnerAnswer);
+	}
+
+	throw new Error(`${stage} exceeded ${MAX_STAGE_TURNS} turns`);
 }
 
 async function runJudge(
@@ -675,6 +979,7 @@ async function runJudge(
 ): Promise<{ grade: JudgeGrade; prompt: string }> {
 	const judgeDirectory = await mkdtemp(join(tmpdir(), "template-judge-"));
 	const schema = z.toJSONSchema(judgeGradeSchema);
+	const rubricIds = parseRubricIds(rubric);
 	const evidence = JSON.stringify({
 		baselineContext,
 		checkIntegrity,
@@ -707,14 +1012,12 @@ async function runJudge(
 			],
 			judgeDirectory,
 			{
-				env: claudeEnvironment(),
-				inheritEnv: false,
 				input: prompt,
 				timeoutMs: CLAUDE_TIMEOUT_MS,
 			},
 		);
 
-		const parsedGrade = parseJudgeOutput(output);
+		const parsedGrade = parseJudgeOutput(output, rubricIds);
 		validateJudgeEvidence(
 			parsedGrade,
 			changedPaths,
@@ -753,6 +1056,53 @@ export function validateJudgeEvidence(
 	}
 }
 
+const taskViewSchema = z
+	.object({
+		task: z
+			.object({
+				acceptanceCriteria: z.array(z.unknown()),
+				documentation: z.array(z.string()),
+			})
+			.passthrough(),
+	})
+	.passthrough();
+
+async function readTaskState(targetDir: string, taskId: string) {
+	const output = await runCommand(
+		["backlog", "task", taskId, "--json"],
+		targetDir,
+	);
+
+	return { output, view: taskViewSchema.parse(JSON.parse(output)) };
+}
+
+async function assertStageArtifact(
+	targetDir: string,
+	taskId: string,
+	stage: Exclude<WorkflowStage, "build">,
+) {
+	const { view } = await readTaskState(targetDir, taskId);
+
+	if (stage === "discuss" && view.task.acceptanceCriteria.length === 0) {
+		throw new Error("Discuss completed without acceptance criteria");
+	}
+
+	const expectedDoc = {
+		discuss: "spec",
+		grill: "grilled",
+		plan: "plan",
+	}[stage];
+	const hasArtifact = view.task.documentation.some((path) =>
+		path.toLowerCase().includes(expectedDoc),
+	);
+
+	if (!hasArtifact) {
+		throw new Error(
+			`${stage} completed without its durable ${expectedDoc} document`,
+		);
+	}
+}
+
 async function writeArtifact(artifact: RunArtifact) {
 	const directory = join(CONTROL_DIR, ".benchmark-runs");
 	const fileName = `${artifact.timestamp.replaceAll(":", "-")}.json`;
@@ -769,63 +1119,82 @@ async function writeArtifact(artifact: RunArtifact) {
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
-	const workspace = await createWorkspace(source);
+	const workflowBackup = await captureWorkflowBackup(source.root);
+	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "template-po-"));
 
 	try {
-		await runChecks(workspace, "Baseline checks");
-		await assertWorkspaceCleanAt(workspace, source.sha);
-		const baselineHashes = await captureFileHashes(workspace);
-		const baselineContext = await captureBaselineContext(workspace);
-		const [task, instructions, poAnswers, rubric, claudeVersion] =
+		console.log(`Target: ${source.root}`);
+		console.log(`Original commit: ${source.sha}`);
+		console.log(`Workflow backup: ${workflowBackup.directory}`);
+		await runChecks(source.root, "Baseline checks");
+		await assertWorkspaceCleanAt(source.root, source.sha);
+		const baselineHashes = await captureFileHashes(source.root);
+		const baselineContext = await captureBaselineContext(source.root);
+		const [task, productBrief, instructions, rubric, claudeVersion] =
 			await Promise.all([
 				Bun.file(join(CONTROL_DIR, "backlog-seed.md")).text(),
+				Bun.file(join(CONTROL_DIR, "product-brief.md")).text(),
 				Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-				Bun.file(join(CONTROL_DIR, "po-answers.md")).text(),
 				Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
 				runCommand(["claude", "--version"], CONTROL_DIR),
 			]);
-		const taskSha = await createTaskCommit(workspace, task, instructions);
-		const discussPrompt =
-			"Read the top task in backlog.md. Produce only the architectural, design, and clarifying questions that must be answered before implementation. Do not write code, edit files, or commit.";
-
-		console.log("\nDiscuss session");
-		const questions = await runClaude(
-			workspace,
-			config.model,
-			config.sessionBudgetUsd,
-			instructions,
-			discussPrompt,
-			"discuss",
+		const rubricIds = parseRubricIds(rubric);
+		const missingHarnessIds = HARNESS_RUBRIC_IDS.filter(
+			(id) => !rubricIds.includes(id),
 		);
-		await assertDiscussWasReadOnly(workspace, taskSha);
-		console.log(questions);
-
-		console.log("\nProduct owner answers");
-		console.log(poAnswers);
-
-		console.log("\nBuild session");
-		const buildPrompt = `Execute the top task in backlog.md from start to finish using these fixed Product Owner answers:\n\n${poAnswers}\n\nFollow the injected project instructions. Write tests, run bun run typecheck and bun run check, then run the unit-test command from the project instructions and fix every failure. Commit all implementation changes directly to main with conventional commit messages. Do not ask for permission. Exit only after the commits succeed and the worktree is clean.`;
-		const buildOutput = await runClaude(
-			workspace,
-			config.model,
-			config.sessionBudgetUsd,
+		if (missingHarnessIds.length > 0) {
+			throw new Error(
+				`Rubric must retain harness requirements: ${missingHarnessIds.join(", ")}`,
+			);
+		}
+		const { taskId, taskSha } = await createTaskCommit(
+			source.root,
+			task,
 			instructions,
-			buildPrompt,
-			"build",
 		);
-		console.log(buildOutput);
+		const productOwner: ProductOwnerSession = {
+			sessionId: randomUUID(),
+			spentUsd: 0,
+			started: false,
+		};
+		const workflow: StageTranscript[] = [];
 
-		const { resultSha, diff } = await assertBuildCommitted(workspace, taskSha);
+		for (const stage of WORKFLOW_STAGES) {
+			console.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
+			const transcript = await runWorkflowStage(
+				source.root,
+				productOwnerDirectory,
+				config.model,
+				config.sessionBudgetUsd,
+				productOwner,
+				task,
+				productBrief,
+				taskId,
+				stage,
+			);
+			workflow.push(transcript);
+
+			if (stage !== "build") {
+				await assertPlanningStageWasReadOnly(source.root, taskSha);
+				await assertStageArtifact(source.root, taskId, stage);
+			}
+		}
+
+		const { resultSha, diff } = await assertBuildCommitted(
+			source.root,
+			taskSha,
+		);
 		const changedPaths = (
-			await git(workspace, "diff", "--name-only", `${taskSha}..${resultSha}`)
+			await git(source.root, "diff", "--name-only", `${taskSha}..${resultSha}`)
 		)
 			.split("\n")
 			.filter(Boolean);
 		const checkIntegrity = await captureCheckIntegrity(
-			workspace,
+			source.root,
 			baselineHashes,
 		);
-		const localChecks = await captureTreatmentChecks(workspace);
+		const localChecks = await captureTreatmentChecks(source.root);
+		const taskState = (await readTaskState(source.root, taskId)).output;
 
 		console.log("\nJudge session");
 		const judge = await runJudge(
@@ -855,13 +1224,16 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			bunVersion: Bun.version,
 			claudeVersion: claudeVersion.trim(),
 			task,
+			productBrief,
 			instructions,
 			rubric,
+			rubricIds,
 			baselineContext,
-			questions,
-			discussPrompt,
-			poAnswers,
-			buildPrompt,
+			taskId,
+			productOwnerSessionId: productOwner.sessionId,
+			productOwnerCostUsd: productOwner.spentUsd,
+			workflow,
+			taskState,
 			judgePrompt: judge.prompt,
 			diff,
 			checkIntegrity,
@@ -870,22 +1242,24 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		});
 		console.log(`Run artifact: ${artifactPath}`);
 
-		const updateInstructions = await rl.question(
-			"Update the control CLAUDE.md from this result? (y/n) ",
+		await rl.question(
+			`Review the implementation in ${source.root}. Update ${join(CONTROL_DIR, "CLAUDE.md")} and/or ${join(CONTROL_DIR, "rubric.md")} if needed, then press Enter to restore the target.`,
 		);
-		if (updateInstructions.trim().toLowerCase() === "y") {
-			await rl.question(
-				`Edit ${join(CONTROL_DIR, "CLAUDE.md")}, then press Enter to continue.`,
-			);
-		}
-
-		await rl.question("Press Enter to discard the temporary target clone.");
+	} catch (error) {
+		await rl.question(
+			`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
+		);
+		throw error;
 	} finally {
-		await rm(workspace, { force: true, recursive: true });
-		await verifySourceUnchanged(source);
-		console.log(
-			"Temporary target clone removed; source repository is unchanged.",
-		);
+		try {
+			await restoreTarget(source, workflowBackup);
+			console.log(`Target restored to ${source.sha}.`);
+		} finally {
+			await Promise.all([
+				rm(workflowBackup.directory, { force: true, recursive: true }),
+				rm(productOwnerDirectory, { force: true, recursive: true }),
+			]);
+		}
 	}
 }
 

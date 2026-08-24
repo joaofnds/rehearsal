@@ -8,13 +8,17 @@ import {
 	assertSourceReady,
 	captureCheckIntegrity,
 	captureFileHashes,
-	createWorkspace,
+	captureWorkflowBackup,
+	createWorkflowCommand,
 	type JudgeGrade,
 	parseArgs,
 	parseJudgeOutput,
+	parseRubricIds,
 	RUBRIC_IDS,
+	restoreTarget,
 	runCommand,
 	validateJudgeEvidence,
+	WORKFLOW_STAGES,
 } from "./run_benchmark";
 
 const temporaryDirectories: string[] = [];
@@ -95,6 +99,56 @@ describe(parseJudgeOutput, () => {
 		expect(() => parseJudgeOutput(JSON.stringify(grade))).toThrow(
 			"every rubric requirement exactly once",
 		);
+	});
+
+	it("accepts requirements added to the rubric without a code change", () => {
+		const grade = completeGrade("PASS");
+		grade.requirements.push(requirement("human-review", "PASS"));
+
+		const parsed = parseJudgeOutput(JSON.stringify(grade), [
+			...RUBRIC_IDS,
+			"human-review",
+		]);
+
+		expect(parsed).toEqual(grade);
+	});
+});
+
+describe(parseRubricIds, () => {
+	it("derives requirement IDs from the rubric", () => {
+		const ids = parseRubricIds(
+			"1. `first`: First requirement.\n2. `new-check`: New requirement.\n",
+		);
+
+		expect(ids).toEqual(["first", "new-check"]);
+	});
+
+	it("rejects duplicate requirement IDs", () => {
+		expect(() =>
+			parseRubricIds("1. `same`: First.\n2. `same`: Duplicate.\n"),
+		).toThrow("unique requirement IDs");
+	});
+});
+
+describe("workflow stages", () => {
+	it("hardens the design before planning and building", () => {
+		expect(WORKFLOW_STAGES).toEqual(["discuss", "grill", "plan", "build"]);
+	});
+});
+
+describe(createWorkflowCommand, () => {
+	it("loads native project and user customizations", () => {
+		const command = createWorkflowCommand(
+			"claude-opus-4-8",
+			5,
+			"/discuss TASK-1",
+		);
+
+		expect(command).not.toContain("--safe-mode");
+		expect(command).not.toContain("--disable-slash-commands");
+		expect(command).not.toContain("--strict-mcp-config");
+		expect(command).toContain("--dangerously-skip-permissions");
+		expect(command).toContain("/discuss TASK-1");
 	});
 });
 
@@ -187,17 +241,18 @@ describe(assertSourceReady, () => {
 	});
 });
 
-describe(createWorkspace, () => {
-	it("isolates generated commits from the source repository", async () => {
+describe(restoreTarget, () => {
+	it("restores main after generated commits and files", async () => {
 		const source = await createRepository();
 		const baseline = await assertSourceReady(source.directory);
-		const workspace = await createWorkspace(baseline);
-		temporaryDirectories.push(workspace);
 		await Bun.write(
-			join(workspace, "generated.ts"),
+			join(source.directory, "generated.ts"),
 			"export const value = 1;\n",
 		);
-		await commitAll(workspace, "feat: generate change");
+		await commitAll(source.directory, "feat: generate change");
+		await Bun.write(join(source.directory, "unfinished.ts"), "unfinished\n");
+
+		await restoreTarget(baseline);
 
 		expect(
 			await runCommand(["git", "rev-parse", "HEAD"], source.directory),
@@ -205,7 +260,33 @@ describe(createWorkspace, () => {
 		expect(
 			await runCommand(["git", "status", "--porcelain"], source.directory),
 		).toBe("");
-		expect(await runCommand(["git", "remote"], workspace)).toBe("");
+		expect(
+			await Bun.file(join(source.directory, "generated.ts")).exists(),
+		).toBe(false);
+		expect(
+			await Bun.file(join(source.directory, "unfinished.ts")).exists(),
+		).toBe(false);
+	});
+
+	it("preserves workflow artifacts that existed before the run", async () => {
+		const source = await createRepository();
+		const backlogDirectory = join(source.directory, "backlog");
+		await mkdir(backlogDirectory);
+		await Bun.write(join(backlogDirectory, "original.md"), "original\n");
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		temporaryDirectories.push(backup.directory);
+		await Bun.write(join(backlogDirectory, "original.md"), "changed\n");
+		await Bun.write(join(backlogDirectory, "generated.md"), "generated\n");
+
+		await restoreTarget(baseline, backup);
+
+		expect(await Bun.file(join(backlogDirectory, "original.md")).text()).toBe(
+			"original\n",
+		);
+		expect(
+			await Bun.file(join(backlogDirectory, "generated.md")).exists(),
+		).toBe(false);
 	});
 });
 
@@ -237,7 +318,7 @@ function completeGrade(verdict: "PASS" | "FAIL"): JudgeGrade {
 }
 
 function requirement(
-	id: (typeof RUBRIC_IDS)[number],
+	id: string,
 	status: "PASS" | "FAIL",
 ): JudgeGrade["requirements"][number] {
 	return {

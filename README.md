@@ -1,25 +1,265 @@
 # Template Agent Benchmark
 
-This control repository runs a three-session workflow against a disposable clone of a separate target repository. It temporarily commits the backlog task and instruction corpus to the clone, runs a read-only Discuss session, supplies fixed Product Owner answers, runs a fresh Build session, checks the result, and grades the complete implementation diff with a separate judge session.
+This repository controls an authentic rehearsal of the development workflow used in the NestJS template. It gives a known task to Claude Code, lets the installed workflow skills produce and execute the work, grades the committed result, pauses for human calibration, and restores the target repository.
 
-## Run
+The benchmark runs directly in the target repository on `main`. It does not use a clone, branch, or worktree. That is deliberate: the goal is to measure behavior in the same repository, path, instruction hierarchy, settings, skills, hooks, memories, and tool environment used for real work.
 
-Install dependencies:
+## What The Benchmark Measures
 
-```sh
-bun install
+The benchmark tests whether the current instruction corpus and workflow can turn a rough backlog item into production-quality committed code with almost no human intervention.
+
+One run uses:
+
+```text
+template-ops/CLAUDE.md       project instructions under evaluation
+template-ops/backlog-seed.md known feature request
+template-ops/product-brief.md stable product facts available to the PO
+template-ops/rubric.md       external binary acceptance rubric
+target repository            real application and real main branch
+installed Claude skills      discuss, grill, plan, and build
 ```
 
-Run with full model IDs so repeated iterations do not silently move to a newer model:
+The executing sessions never receive `rubric.md` and are not told that their work is being graded. Only normal project instructions, backlog artifacts, and Product Owner decisions enter the target workflow.
+
+## Workflow
+
+```text
+clean target repository on main
+        |
+        v
+record original SHA and back up backlog/ + .boris/
+        |
+        v
+run baseline typecheck, Biome, and unit tests
+        |
+        v
+create a real Backlog.md card and install CLAUDE.md
+        |
+        v
+fresh /discuss session <-> dynamic Product Owner
+        |
+        v
+fresh /grill session   <-> same Product Owner
+        |
+        v
+fresh /plan session    <-> same Product Owner
+        |
+        v
+fresh /build session   <-> same Product Owner
+        |
+        v
+verify commits, clean worktree, checks, and check integrity
+        |
+        v
+independent Judge applies the external rubric
+        |
+        v
+write run artifact and pause for human review
+        |
+        v
+reset main to the original SHA and restore workflow artifacts
+```
+
+The installed skills currently require Grill before Plan: Grill hardens the approach, Plan writes that ratified approach for a cold Build session, and Build consumes the plan. Running Plan before Grill would leave Build with a stale plan.
+
+Each engineering stage starts a distinct Claude session. A stage may take multiple turns when it needs product input, but no stage inherits another stage's conversation. Durable Backlog.md documents carry the work forward instead.
+
+## Dynamic Product Owner
+
+There is no predetermined answer file.
+
+When an engineering stage needs a decision, it returns one question and recommendation. A separate Product Owner agent answers the actual question. The same PO session handles every question in the run, so later answers retain earlier decisions and remain coherent across Discuss, Grill, Plan, and Build.
+
+The PO receives the feature request, `product-brief.md`, and the questions. It does not receive the rubric or candidate diff. The brief supplies stable product facts without predicting which questions will be asked or scripting their answers. The PO's standing policy is to preserve those facts, choose the smallest coherent product scope where the brief is silent, and leave implementation mechanics to engineering.
+
+Every question and answer is recorded in the run artifact.
+
+## Direct Target Operation
+
+The harness requires the target to be:
+
+- the repository root
+- on `main`
+- clean, including untracked files
+- different from this control repository
+
+Before mutation, it records the original commit and copies any existing `backlog/` and `.boris/` directories to a temporary backup. It then runs directly in the target.
+
+The engineering sessions load normal Claude Code customizations. The harness does not use `--safe-mode`, disable slash commands, restrict MCP configuration, replace the project system prompt, or reduce the environment. It invokes the native skills and uses `--dangerously-skip-permissions` so permission prompts cannot stall an autonomous run.
+
+This is intentionally less isolated than a disposable benchmark. Run it only against the designated template repository with a clean worktree.
+
+## Target Setup
+
+The harness initializes a Backlog.md board when the target does not have one. It creates a feature card from `backlog-seed.md` and configures these workflow columns:
+
+```text
+To Do, Spec, Grill, Plan, Build, Done
+```
+
+It writes the control repository's `CLAUDE.md` into the target and commits that tracked instruction change before the workflow starts. Backlog.md and Boris artifacts remain personal workflow state and are carried between fresh sessions.
+
+After Discuss, Grill, and Plan, the harness verifies that application Git history and tracked files are still unchanged. It also verifies that:
+
+- Discuss wrote acceptance criteria and attached a spec document.
+- Grill attached a grilled-design document.
+- Plan attached a plan document.
+
+Build must create at least one conventional commit directly on `main`, leave a clean worktree, and preserve descendant history from the task setup commit.
+
+## Grading
+
+After Build, the harness reruns:
 
 ```sh
-bun run benchmark -- \
-  --target /absolute/path/to/template \
+bun run typecheck
+bun run check
+CONFIG_PATH=src/config/test.yaml bun run test:unit
+```
+
+It also compares hashes for `package.json`, `tsconfig.json`, and `biome.json`. The candidate cannot obtain a passing result by weakening the configured checks.
+
+The Judge runs separately in safe mode with no tools. It receives only:
+
+- the external rubric
+- selected baseline files showing existing project patterns
+- the complete implementation diff
+- measured check results
+- measured check-integrity results
+
+Judge output is schema-validated. Every rubric ID must appear exactly once, evidence must cite supplied material, and PASS requires every requirement to pass. The harness replaces the Judge's `check-integrity` and `local-checks` conclusions with authoritative local results.
+
+Human acceptance remains the final calibration standard. A Judge PASS does not overrule a problem found during review.
+
+## Human Calibration
+
+After grading, the implementation remains in the real target repository. The harness prints the artifact path and waits.
+
+Use this pause to inspect commits, code, tests, architecture, and the structured grade. If the work reveals a behavioral problem, edit `CLAUDE.md`. If human review catches a requirement the Judge missed, edit `rubric.md` as well. Press Enter only after the review and tuning changes are complete.
+
+The harness then restores the target. Changes made to this control repository during review are retained and must be committed before the next run.
+
+## Restoration
+
+Normal cleanup performs these operations in the target:
+
+```sh
+git switch --force main
+git reset --hard <original-sha>
+git clean -fd
+```
+
+It then replaces `backlog/` and `.boris/` with their pre-run copies and verifies that `main` is clean at the original commit.
+
+This removes the temporary instruction commit, all candidate commits, tracked modifications, and ordinary untracked files. Git-ignored dependency and build directories outside the workflow paths are not byte-for-byte snapshotted.
+
+If the process is forcibly killed before its `finally` cleanup runs, use the original SHA printed at startup to restore Git manually. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until normal cleanup removes it.
+
+## Inputs
+
+### `CLAUDE.md`
+
+The instruction corpus being tuned. Change it only in response to observed behavior. Keep the task, product brief, rubric, models, and target baseline stable when comparing instruction revisions.
+
+### `backlog-seed.md`
+
+The rough product request. It must start with one level-one heading followed by a non-empty description. Discuss turns it into a spec and acceptance criteria through dynamic PO questions.
+
+### `product-brief.md`
+
+Stable product facts known by the simulated PO. This is not a question-and-answer script: the PO still receives and answers the actual questions generated during each run. Keep this file fixed while comparing instruction revisions.
+
+### `rubric.md`
+
+The independent acceptance criteria. Requirements use this format:
+
+```text
+1. `requirement-id`: Binary requirement text.
+```
+
+IDs are parsed at runtime, so adding a newly discovered requirement does not require a TypeScript change. IDs must be unique. The rubric must retain `check-integrity` and `local-checks` because those are owned by measured harness results.
+
+### `run_benchmark.ts`
+
+The orchestration program. It owns preflight, target restoration, Backlog.md setup, fresh skill sessions, PO mediation, checks, grading, artifacts, and the human-review pause.
+
+### `run_benchmark.test.ts`
+
+Unit and filesystem integration tests for configuration parsing, rubric validation, native-skill invocation, stage order, direct-target restoration, preserved workflow state, commit rules, check integrity, and Judge evidence.
+
+## Prerequisites
+
+- Bun `1.4.0`
+- authenticated `claude` CLI
+- installed `/discuss`, `/grill`, `/plan`, and `/build` skills
+- installed `backlog` CLI
+- target dependencies already installed
+- clean, committed control repository
+- clean target repository on `main`
+- enough budget for six independent allocations: four engineering stages, one shared PO session, and one Judge session
+
+Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
+
+## Running
+
+```sh
+bun install --frozen-lockfile
+bun run typecheck
+bun run check
+bun test
+
+bun run benchmark \
+  --target /Users/joaofnds/code/nest/template \
   --model claude-opus-4-8 \
   --judge-model claude-sonnet-4-6 \
   --session-budget-usd 5
 ```
 
-`--judge-model` defaults to `--model`. The equivalent environment variables are `BENCHMARK_TARGET_DIR`, `BENCHMARK_MODEL`, `BENCHMARK_JUDGE_MODEL`, and `BENCHMARK_SESSION_BUDGET_USD`. The budget applies separately to Discuss, Build, and Judge sessions.
+Equivalent environment variables are available:
 
-The control repository must be committed and clean. The target must be a clean Git repository on `main`. The harness creates a disposable local clone at the captured source commit, removes its remote, and runs the agent directly on the clone's `main`. Baseline and treatment checks run with `CONFIG_PATH=src/config/test.yaml`. Completed assessments are recorded under `.benchmark-runs/` with the control and source identities; the disposable clone is deleted in a `finally` block, and the source repository is verified unchanged.
+```sh
+export BENCHMARK_TARGET_DIR=/Users/joaofnds/code/nest/template
+export BENCHMARK_MODEL=claude-opus-4-8
+export BENCHMARK_JUDGE_MODEL=claude-sonnet-4-6
+export BENCHMARK_SESSION_BUDGET_USD=5
+bun run benchmark
+```
+
+Use full model IDs rather than moving aliases. The session budget is enforced independently for each engineering stage, across the shared PO session, and for Judge.
+
+## Run Artifacts
+
+Completed runs are written to:
+
+```text
+.benchmark-runs/<ISO timestamp>.json
+```
+
+The directory is ignored by Git. Each artifact records:
+
+- control, source, setup, and result commit SHAs
+- source path and origin
+- model IDs, budgets, Bun version, and Claude version
+- task, product brief, instructions, rubric, and parsed rubric IDs
+- each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
+- final Backlog.md task state
+- baseline context supplied to Judge
+- complete implementation diff
+- measured checks and check integrity
+- Judge prompt and structured final grade
+
+Artifacts are written after a valid Judge result and before human review. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
+
+## Tuning Loop
+
+1. Commit a clean control state.
+2. Run the benchmark against the same target SHA and model IDs.
+3. Inspect the actual target implementation during the review pause.
+4. Compare human findings with the Judge result.
+5. Update `CLAUDE.md` for behavior failures.
+6. Update `rubric.md` for evaluation blind spots.
+7. Press Enter to restore the target.
+8. Commit control changes.
+9. Run again and compare artifacts.
+
+The benchmark is ready for unattended end-to-end use only after repeated runs produce work that satisfies both the external rubric and human production standards.
