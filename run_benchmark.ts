@@ -1225,9 +1225,10 @@ export function validateJudgeEvidence(
 
 		for (const evidence of requirement.evidence) {
 			const valid =
-				(evidence.source === "diff" && changedPaths.includes(evidence.path)) ||
+				(evidence.source === "diff" &&
+					citationMatchesPath(evidence.path, changedPaths)) ||
 				(evidence.source === "baseline-context" &&
-					contextPaths.includes(evidence.path));
+					citationMatchesPath(evidence.path, contextPaths));
 
 			if (!valid) {
 				throw new Error(
@@ -1235,6 +1236,18 @@ export function validateJudgeEvidence(
 				);
 			}
 		}
+	}
+}
+
+function citationMatchesPath(
+	citation: string,
+	availablePaths: readonly string[],
+): boolean {
+	try {
+		const glob = new Bun.Glob(citation);
+		return availablePaths.some((path) => path === citation || glob.match(path));
+	} catch {
+		return false;
 	}
 }
 

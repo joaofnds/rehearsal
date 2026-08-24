@@ -307,6 +307,50 @@ describe(validateJudgeEvidence, () => {
 		).not.toThrow();
 	});
 
+	it("accepts glob citations that resolve to supplied paths", () => {
+		const grade = completeGrade("PASS");
+		grade.requirements[0] = {
+			...grade.requirements[0],
+			evidence: [
+				{
+					source: "diff",
+					path: "src/audit-log/*",
+					claim: "audit-log implementation files changed",
+				},
+			],
+		};
+
+		expect(() =>
+			validateJudgeEvidence(
+				grade,
+				["src/audit/example.ts", "src/audit-log/audit-log.module.ts"],
+				["src/app.module.ts"],
+			),
+		).not.toThrow();
+	});
+
+	it("rejects glob citations that do not resolve to supplied paths", () => {
+		const grade = completeGrade("PASS");
+		grade.requirements[0] = {
+			...grade.requirements[0],
+			evidence: [
+				{
+					source: "diff",
+					path: "src/missing/*",
+					claim: "unsupported",
+				},
+			],
+		};
+
+		expect(() =>
+			validateJudgeEvidence(
+				grade,
+				["src/audit/example.ts", "src/audit-log/audit-log.module.ts"],
+				["src/app.module.ts"],
+			),
+		).toThrow("cited unavailable evidence");
+	});
+
 	it("rejects citations to unavailable paths", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {
