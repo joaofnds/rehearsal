@@ -79,6 +79,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
+	let pendingArtifact: RunArtifact | undefined;
 
 	let teardownStarted: Promise<void> | undefined;
 	const teardown = () => {
@@ -217,12 +218,30 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					2,
 				)}\n`,
 			);
-			const scorecard = await runStageJudge(
-				config.judgeModel,
-				config.judgeEffort,
-				config.sessionBudgetUsd,
-				input,
-			);
+			let scorecard: StageScorecard;
+			try {
+				scorecard = await runStageJudge(
+					config.judgeModel,
+					config.judgeEffort,
+					config.sessionBudgetUsd,
+					input,
+				);
+			} catch (error) {
+				await Bun.write(
+					runFiles.stage(stage),
+					`${JSON.stringify(
+						{
+							status: "STAGE_JUDGE_FAILED",
+							stage,
+							error: error instanceof Error ? error.message : String(error),
+							input,
+						},
+						null,
+						2,
+					)}\n`,
+				);
+				throw error;
+			}
 			stageScorecards.push(scorecard);
 			await Bun.write(
 				runFiles.stage(stage),
@@ -305,6 +324,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			reviewFile: runFiles.review,
 		};
 		await writeArtifact(runFiles.artifact, artifact);
+		pendingArtifact = artifact;
 		console.log(`Run artifact: ${runFiles.artifact}`);
 		console.log(`Human review: ${runFiles.review}`);
 
@@ -332,9 +352,22 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			status: "COMPLETE",
 			calibration,
 		});
+		pendingArtifact = undefined;
 		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
+		if (pendingArtifact) {
+			try {
+				await writeArtifact(runFiles.artifact, {
+					...pendingArtifact,
+					status: "FAILED",
+				});
+			} catch (writeError) {
+				console.error(
+					`Failed to update the run artifact: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+				);
+			}
+		}
 		if (!stageFailureCalibrated) {
 			await rl.question(
 				`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,

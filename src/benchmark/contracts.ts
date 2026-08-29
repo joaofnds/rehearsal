@@ -218,7 +218,7 @@ export interface CalibrationResult {
 }
 
 export interface RunArtifact {
-	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE";
+	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | "FAILED";
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly sourceRoot: string;
