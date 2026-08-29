@@ -44,10 +44,10 @@ import {
 } from "./src/benchmark/judge";
 import {
 	applyAuthoritativeStageResults,
+	assertStageGradePassed,
 	captureStageJudgeInput,
 	deriveStageGrade,
 	parseStageRubric,
-	runStageGates,
 	validateStageJudgeEvidence,
 } from "./src/benchmark/stage-grading";
 import {
@@ -1016,17 +1016,15 @@ describe(validateStageJudgeEvidence, () => {
 	});
 });
 
-describe(runStageGates, () => {
-	it("does not run a stage after a failed grade", async () => {
-		const executedStages: string[] = [];
+describe(assertStageGradePassed, () => {
+	it("stops the workflow on a failed stage grade", () => {
+		expect(() => assertStageGradePassed(stageScorecard("FAIL"))).toThrow(
+			"minimum grade is B",
+		);
+	});
 
-		const result = runStageGates(async (stage) => {
-			executedStages.push(stage);
-			return stageScorecard(stage === "grill" ? "FAIL" : "PASS");
-		});
-
-		await expect(result).rejects.toThrow("minimum grade is B");
-		expect(executedStages).toEqual(["discuss", "grill"]);
+	it("continues past a passing stage grade", () => {
+		expect(() => assertStageGradePassed(stageScorecard("PASS"))).not.toThrow();
 	});
 });
 

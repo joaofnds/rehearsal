@@ -17,7 +17,7 @@ import {
 	runChecks,
 } from "./checks";
 import { runCommand } from "./command";
-import { type BenchmarkConfig, CONTROL_DIR } from "./config";
+import { type BenchmarkConfig, CONTROL_DIR, WORKFLOW_STAGES } from "./config";
 import type {
 	ContextFile,
 	LocalCheckResult,
@@ -28,8 +28,8 @@ import type {
 } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
 import {
+	assertStageGradePassed,
 	captureStageJudgeInput,
-	runStageGates,
 	runStageJudge,
 } from "./stage-grading";
 import {
@@ -60,6 +60,15 @@ async function createRunFiles(timestamp: string) {
 
 async function writeArtifact(path: string, artifact: RunArtifact) {
 	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
+}
+
+interface BuildEvidence {
+	readonly resultSha: string;
+	readonly diff: string;
+	readonly changedPaths: readonly string[];
+	readonly checkIntegrity: LocalCheckResult;
+	readonly localChecks: LocalCheckResult;
+	readonly taskState: string;
 }
 
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
@@ -118,14 +127,9 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		const workflow: StageTranscript[] = [];
 		const stageScorecards: StageScorecard[] = [];
 		const stageArtifacts: ContextFile[] = [];
-		let resultSha: string | undefined;
-		let diff: string | undefined;
-		let changedPaths: readonly string[] | undefined;
-		let checkIntegrity: LocalCheckResult | undefined;
-		let localChecks: LocalCheckResult | undefined;
-		let taskState: string | undefined;
+		let buildEvidence: BuildEvidence | undefined;
 
-		await runStageGates(async (stage) => {
+		for (const stage of WORKFLOW_STAGES) {
 			console.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 			const transcript = await runWorkflowStage(
 				source.root,
@@ -178,27 +182,29 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				}
 
 				const build = await assertBuildCommitted(source.root, taskSha);
-				resultSha = build.resultSha;
-				diff = build.diff;
-				changedPaths = await changedPathsBetween(
-					source.root,
-					taskSha,
-					resultSha,
-				);
-				checkIntegrity = await captureCheckIntegrity(
-					source.root,
-					baselineHashes,
-				);
-				localChecks = await captureTreatmentChecks(source.root);
-				taskState = currentTaskOutput;
+				buildEvidence = {
+					resultSha: build.resultSha,
+					diff: build.diff,
+					changedPaths: await changedPathsBetween(
+						source.root,
+						taskSha,
+						build.resultSha,
+					),
+					checkIntegrity: await captureCheckIntegrity(
+						source.root,
+						baselineHashes,
+					),
+					localChecks: await captureTreatmentChecks(source.root),
+					taskState: currentTaskOutput,
+				};
 
 				return {
 					...baseInput,
-					taskState,
-					diff,
-					changedPaths,
-					checkIntegrity,
-					localChecks,
+					taskState: buildEvidence.taskState,
+					diff: buildEvidence.diff,
+					changedPaths: buildEvidence.changedPaths,
+					checkIntegrity: buildEvidence.checkIntegrity,
+					localChecks: buildEvidence.localChecks,
 				};
 			});
 
@@ -241,19 +247,13 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				);
 				stageFailureCalibrated = true;
 			}
-			return scorecard;
-		});
-
-		if (
-			!resultSha ||
-			diff === undefined ||
-			!changedPaths ||
-			!checkIntegrity ||
-			!localChecks ||
-			taskState === undefined
-		) {
-			throw new Error("Build completed without captured evaluation evidence");
+			assertStageGradePassed(scorecard);
 		}
+
+		if (!buildEvidence) {
+			throw new Error("Build stage did not run");
+		}
+		const evidence = buildEvidence;
 
 		console.log("\nJudge session");
 		const judge = await runJudge(
@@ -262,10 +262,10 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			config.sessionBudgetUsd,
 			rubric,
 			baselineContext,
-			diff,
-			changedPaths,
-			checkIntegrity,
-			localChecks,
+			evidence.diff,
+			evidence.changedPaths,
+			evidence.checkIntegrity,
+			evidence.localChecks,
 		);
 		const { grade } = judge;
 		console.log(JSON.stringify(grade, null, 2));
@@ -277,7 +277,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			sourceOrigin: source.origin,
 			sourceSha: source.sha,
 			taskSha,
-			resultSha,
+			resultSha: evidence.resultSha,
 			model: config.model,
 			effort: config.effort,
 			judgeModel: config.judgeModel,
@@ -296,11 +296,11 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			productOwnerCostUsd: productOwner.spentUsd,
 			workflow,
 			stageScorecards,
-			taskState,
+			taskState: evidence.taskState,
 			judgePrompt: judge.prompt,
-			diff,
-			checkIntegrity,
-			localChecks,
+			diff: evidence.diff,
+			checkIntegrity: evidence.checkIntegrity,
+			localChecks: evidence.localChecks,
 			grade,
 			reviewFile: runFiles.review,
 		};
@@ -317,10 +317,10 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			finalCandidate: {
 				originalGrade: grade,
 				baselineContext,
-				diff,
-				changedPaths,
-				checkIntegrity,
-				localChecks,
+				diff: evidence.diff,
+				changedPaths: evidence.changedPaths,
+				checkIntegrity: evidence.checkIntegrity,
+				localChecks: evidence.localChecks,
 			},
 			stageScorecards,
 			judgeModel: config.judgeModel,

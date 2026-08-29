@@ -7,7 +7,6 @@ import {
 	CLAUDE_TIMEOUT_MS,
 	CONTROL_DIR,
 	type Effort,
-	WORKFLOW_STAGES,
 	type WorkflowStage,
 } from "./config";
 import {
@@ -296,13 +295,5 @@ export class StageQualityError extends Error {
 export function assertStageGradePassed(scorecard: StageScorecard) {
 	if (scorecard.grade.verdict === "STOP") {
 		throw new StageQualityError(scorecard);
-	}
-}
-
-export async function runStageGates(
-	runStage: (stage: WorkflowStage) => Promise<StageScorecard>,
-) {
-	for (const stage of WORKFLOW_STAGES) {
-		assertStageGradePassed(await runStage(stage));
 	}
 }
