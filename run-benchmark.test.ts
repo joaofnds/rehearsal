@@ -7,6 +7,7 @@ import {
 	parseTaskState,
 } from "./src/benchmark/backlog";
 import {
+	collectCalibration,
 	parseHumanReview,
 	validateCalibration,
 } from "./src/benchmark/calibration";
@@ -20,7 +21,7 @@ import {
 	readClaudeEnvelope,
 	readStructuredOutput,
 } from "./src/benchmark/claude";
-import { runCommand } from "./src/benchmark/command";
+import { CommandError, runCommand } from "./src/benchmark/command";
 import { parseArgs, RUBRIC_IDS, WORKFLOW_STAGES } from "./src/benchmark/config";
 import type {
 	HumanReview,
@@ -307,6 +308,83 @@ describe(parseHumanReview, () => {
 				}),
 			),
 		).toThrow();
+	});
+});
+
+describe(collectCalibration, () => {
+	it("records a rubric.md edit during stage-failure calibration without a final rejudge", async () => {
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
+		temporaryDirectories.push(reviewDirectory);
+		const reviewFile = join(reviewDirectory, "review.json");
+		const rubricPath = join(import.meta.dir, "rubrics", "discuss.json");
+		const rubric = parseStageRubric(
+			await Bun.file(rubricPath).text(),
+			"discuss",
+		);
+		const scorecard: StageScorecard = {
+			stage: "discuss",
+			rubricPath,
+			rubric,
+			input: {
+				stage: "discuss",
+				task: "Task",
+				productBrief: "Brief",
+				instructions: "Instructions",
+				baselineContext: [],
+				taskState: "State",
+				transcript: {
+					stage: "discuss",
+					sessionId: "session",
+					costUsd: 1,
+					exchanges: [],
+				},
+				priorArtifacts: [],
+			},
+			prompt: "prompt",
+			costUsd: 1,
+			grade: {
+				...stageJudgeOutput("PASS", "FAIL", "F"),
+				grade: "F",
+				verdict: "STOP",
+			},
+		};
+		const questions: string[] = [];
+		const rl = {
+			async question(prompt: string) {
+				if (questions.length > 0) {
+					throw new CommandError(["calibration"], 1, "", "re-prompted");
+				}
+				questions.push(prompt);
+				await Bun.write(
+					reviewFile,
+					`${JSON.stringify({
+						verdict: "REJECT",
+						summary: "The discuss stage missed scope.",
+						findings: [],
+					})}\n`,
+				);
+				return "";
+			},
+		};
+
+		const result = await collectCalibration({
+			rl,
+			reviewFile,
+			targetDir: reviewDirectory,
+			originalInstructions: await Bun.file(
+				join(import.meta.dir, "CLAUDE.md"),
+			).text(),
+			originalRubric: "1. `old`: Old requirement.\n",
+			stageScorecards: [scorecard],
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+		});
+
+		expect(questions).toHaveLength(1);
+		expect(questions[0]).not.toContain("rubric.md");
+		expect(result.rubricChanged).toBe(true);
+		expect(result.updatedRubric).toBeDefined();
+		expect(result.revisedGrade).toBeUndefined();
 	});
 });
 

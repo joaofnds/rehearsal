@@ -17,22 +17,26 @@ export interface Questioner {
 	question(prompt: string): Promise<string>;
 }
 
+export interface FinalCandidate {
+	readonly originalGrade: JudgeGrade;
+	readonly baselineContext: readonly ContextFile[];
+	readonly diff: string;
+	readonly changedPaths: readonly string[];
+	readonly checkIntegrity: LocalCheckResult;
+	readonly localChecks: LocalCheckResult;
+}
+
 interface CalibrationContext {
 	readonly rl: Questioner;
 	readonly reviewFile: string;
 	readonly targetDir: string;
 	readonly originalInstructions: string;
 	readonly originalRubric: string;
-	readonly originalGrade?: JudgeGrade;
+	readonly finalCandidate?: FinalCandidate;
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort;
 	readonly sessionBudgetUsd: number;
-	readonly baselineContext?: readonly ContextFile[];
-	readonly diff?: string;
-	readonly changedPaths?: readonly string[];
-	readonly checkIntegrity?: LocalCheckResult;
-	readonly localChecks?: LocalCheckResult;
 }
 
 export function parseHumanReview(review: string): HumanReview {
@@ -199,10 +203,13 @@ export async function collectCalibration(
 	context: CalibrationContext,
 ): Promise<CalibrationResult> {
 	await writeHumanReviewTemplate(context.reviewFile);
+	const editTargets = context.finalCandidate
+		? `${join(CONTROL_DIR, "CLAUDE.md")}, ${join(CONTROL_DIR, "rubric.md")}, and/or the relevant file under ${join(CONTROL_DIR, "rubrics")}`
+		: `${join(CONTROL_DIR, "CLAUDE.md")} and/or the relevant file under ${join(CONTROL_DIR, "rubrics")}`;
 
 	while (true) {
 		await context.rl.question(
-			`Review the completed stages in ${context.targetDir}. Record every finding with its stage in ${context.reviewFile}. Update ${join(CONTROL_DIR, "CLAUDE.md")}, ${join(CONTROL_DIR, "rubric.md")}, and/or the relevant file under ${join(CONTROL_DIR, "rubrics")} where justified, then press Enter to validate the calibration.`,
+			`Review the completed stages in ${context.targetDir}. Record every finding with its stage in ${context.reviewFile}. Update ${editTargets} where justified, then press Enter to validate the calibration.`,
 		);
 
 		try {
@@ -251,19 +258,7 @@ export async function collectCalibration(
 			let revisedRubricIds: readonly string[] | undefined;
 			let revisedJudgePrompt: string | undefined;
 			let revisedGrade: JudgeGrade | undefined;
-			if (rubricChanged) {
-				if (
-					!context.originalGrade ||
-					!context.baselineContext ||
-					context.diff === undefined ||
-					!context.changedPaths ||
-					!context.checkIntegrity ||
-					!context.localChecks
-				) {
-					throw new Error(
-						"Final rubric cannot be calibrated before final grading",
-					);
-				}
+			if (rubricChanged && context.finalCandidate) {
 				revisedRubricIds = validateRubricDefinition(updatedRubric);
 				console.log("\nRejudging the same candidate with the revised rubric");
 				const revisedJudge = await runJudge(
@@ -271,11 +266,11 @@ export async function collectCalibration(
 					context.judgeEffort,
 					context.sessionBudgetUsd,
 					updatedRubric,
-					context.baselineContext,
-					context.diff,
-					context.changedPaths,
-					context.checkIntegrity,
-					context.localChecks,
+					context.finalCandidate.baselineContext,
+					context.finalCandidate.diff,
+					context.finalCandidate.changedPaths,
+					context.finalCandidate.checkIntegrity,
+					context.finalCandidate.localChecks,
 				);
 				revisedJudgePrompt = revisedJudge.prompt;
 				revisedGrade = revisedJudge.grade;
@@ -284,7 +279,7 @@ export async function collectCalibration(
 
 			validateCalibration(
 				humanReview,
-				context.originalGrade,
+				context.finalCandidate?.originalGrade,
 				revisedGrade,
 				context.stageScorecards,
 				revisedStageScorecards,
@@ -320,6 +315,13 @@ export async function collectCalibration(
 			};
 		} catch (error) {
 			if (error instanceof CommandError) throw error;
+			if (
+				error instanceof TypeError ||
+				error instanceof ReferenceError ||
+				error instanceof RangeError
+			) {
+				throw error;
+			}
 
 			console.error(
 				`Calibration incomplete: ${error instanceof Error ? error.message : String(error)}`,
