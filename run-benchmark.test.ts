@@ -320,11 +320,24 @@ describe(collectCalibration, () => {
 		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
 		temporaryDirectories.push(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
-		const rubricPath = join(import.meta.dir, "rubrics", "discuss.json");
-		const rubric = parseStageRubric(
-			await Bun.file(rubricPath).text(),
-			"discuss",
-		);
+		const rubricPath = join(reviewDirectory, "discuss.json");
+		const rubricContent = JSON.stringify({
+			stage: "discuss",
+			hardBlockers: [
+				{ id: "invalid-stage-delivery", description: "Valid delivery" },
+			],
+			requirements: [{ id: "scope", description: "Scope is explicit" }],
+			dimensions: [
+				{
+					id: "clarity",
+					description: "Clear output",
+					good: "Concrete",
+					excellent: "Precise",
+				},
+			],
+		});
+		await Bun.write(rubricPath, rubricContent);
+		const rubric = parseStageRubric(rubricContent, "discuss");
 		const scorecard: StageScorecard = {
 			stage: "discuss",
 			rubricPath,
