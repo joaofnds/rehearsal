@@ -168,7 +168,6 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					const currentTask = parseTaskState(currentTaskOutput);
 					const planning = await assertPlanningStageCompleted(
 						source.root,
-						taskId,
 						taskSha,
 						stage,
 						currentTask,

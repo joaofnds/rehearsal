@@ -121,10 +121,6 @@ export function parseTaskState(output: string) {
 	}
 }
 
-export async function readTaskState(targetDir: string, taskId: string) {
-	return parseTaskState(await readTaskOutput(targetDir, taskId));
-}
-
 export function assertStageArtifactState(
 	stage: Exclude<WorkflowStage, "build">,
 	view: TaskView,
@@ -167,14 +163,12 @@ export function assertStageArtifactState(
 
 export async function assertPlanningStageCompleted(
 	targetDir: string,
-	taskId: string,
 	taskSha: string,
 	stage: Exclude<WorkflowStage, "build">,
-	taskState?: { output: string; view: TaskView },
+	taskState: { output: string; view: TaskView },
 ) {
 	await assertWorkspaceCleanAt(targetDir, taskSha);
-	const { output, view } =
-		taskState ?? (await readTaskState(targetDir, taskId));
+	const { output, view } = taskState;
 	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
 	const artifactPath = join("backlog", "docs", artifactFile);

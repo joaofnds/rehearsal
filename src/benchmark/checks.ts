@@ -1,11 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
-import {
-	BASELINE_CONTEXT_EXCLUDED_PATHS,
-	CHECK_PATHS,
-	TEST_CONFIG_PATH,
-} from "./config";
+import { CHECK_PATHS, TEST_CONFIG_PATH } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 
 export async function runChecks(targetDir: string, label: string) {
@@ -99,9 +95,7 @@ export async function captureBaselineContext(directory: string) {
 		.trim()
 		.split("\n")
 		.filter(Boolean)
-		.filter(
-			(path) => !BASELINE_CONTEXT_EXCLUDED_PATHS.includes(path as "bun.lock"),
-		);
+		.filter((path) => path !== "bun.lock");
 
 	for (const path of trackedPaths) {
 		const file = Bun.file(join(directory, path));

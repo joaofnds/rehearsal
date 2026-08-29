@@ -22,7 +22,7 @@ import {
 	readStructuredOutput,
 } from "./src/benchmark/claude";
 import { CommandError, runCommand } from "./src/benchmark/command";
-import { parseArgs, RUBRIC_IDS, WORKFLOW_STAGES } from "./src/benchmark/config";
+import { parseArgs, WORKFLOW_STAGES } from "./src/benchmark/config";
 import type {
 	HumanReview,
 	JudgeGrade,
@@ -60,6 +60,8 @@ import {
 	restoreTarget,
 	teardownTarget,
 } from "./src/benchmark/target";
+
+const RUBRIC_IDS = ["tests", "worker", "check-integrity", "local-checks"];
 
 const temporaryDirectories: string[] = [];
 

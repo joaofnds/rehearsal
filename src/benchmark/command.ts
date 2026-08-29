@@ -2,7 +2,6 @@ import { COMMAND_TIMEOUT_MS } from "./config";
 
 interface CommandOptions {
 	readonly env?: Record<string, string>;
-	readonly inheritEnv?: boolean;
 	readonly input?: string;
 	readonly timeoutMs?: number;
 }
@@ -27,10 +26,7 @@ export async function runCommand(
 ): Promise<string> {
 	const process = Bun.spawn([...command], {
 		cwd,
-		env: {
-			...(options.inheritEnv === false ? {} : Bun.env),
-			...options.env,
-		},
+		env: { ...Bun.env, ...options.env },
 		stdin: options.input === undefined ? "ignore" : new Blob([options.input]),
 		stdout: "pipe",
 		stderr: "pipe",
