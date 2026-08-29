@@ -198,7 +198,7 @@ Each finding has one Judge assessment:
 
 `stage` identifies `discuss`, `grill`, `plan`, `build`, or `final`; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
 
-If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under `rubrics/`; for a final finding, edit `rubric.md`. Press Enter when the review and control-file edits are ready.
+If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under `rubrics/`; for a final finding, edit `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading. Press Enter when the review and control-file edits are ready.
 
 When a stage rubric changes, the harness regrades the exact same transcript and frozen stage artifacts. When `rubric.md` changes, it runs the final Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
 
@@ -221,11 +221,11 @@ git reset --hard <original-sha>
 git clean -fd
 ```
 
-It then replaces `backlog/` and `.boris/` with their pre-run copies and verifies that `main` is clean at the original commit.
+It then replaces `backlog/` and `.boris/` with their pre-run copies, verifies that `main` is clean at the original commit, and removes the run marker the harness wrote to the target's `.git/benchmark-run.json` before the first mutation. The workflow backup is deleted only after that verification succeeds; when restoration fails, the backup stays in place and its path is printed.
 
 This removes the temporary instruction commit, all candidate commits, tracked modifications, and ordinary untracked files. Git-ignored dependency and build directories outside the workflow paths are not byte-for-byte snapshotted.
 
-If the process is forcibly killed before its `finally` cleanup runs, use the original SHA printed at startup to restore Git manually. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until normal cleanup removes it.
+SIGINT and SIGTERM run this same restoration before the process exits. If the process dies without it, for example under SIGKILL, the run marker stays behind and the next run refuses the target with recovery instructions: restore Git manually with the original SHA printed at startup, then delete the marker. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until a successful restoration removes it.
 
 ## Inputs
 
@@ -261,7 +261,7 @@ The CLI entry point. It validates the Bun version, parses arguments, creates the
 
 ### `src/benchmark/`
 
-The harness implementation, separated by responsibility: Backlog state, calibration, checks, command execution, configuration, validated contracts, final judging, orchestration, stage grading, target Git lifecycle, and workflow sessions. Expensive Claude calls live in `workflow.ts`, `stage-grading.ts`, and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
+The harness implementation, separated by responsibility: Backlog state, calibration, checks, Claude session invocation, command execution, configuration, validated contracts, final judging, orchestration, stage grading, target Git lifecycle, and workflow sessions. Every Claude session builds its command line and parses its response envelope through `claude.ts`; expensive Claude calls live in `workflow.ts`, `stage-grading.ts`, and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
 
 ### `run-benchmark.test.ts`
 
@@ -340,7 +340,7 @@ The directory is ignored by Git. Each artifact records:
 - revised Judge prompt and grade when the rubric changed
 - human confirmation of the revised Judge reasoning
 
-The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
+The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. A run that aborts after the preliminary artifact rewrites it with status `FAILED`, and a stage Judge failure rewrites its stage file as `STAGE_JUDGE_FAILED` with the error and the frozen input. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
 
 ## Tuning Loop
 
