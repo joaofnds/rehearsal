@@ -64,7 +64,8 @@ export function validateCalibration(
 		const rubricId = finding.rubricId ?? "";
 		if (finding.stage !== "final") {
 			validateStageFinding(
-				finding,
+				finding.stage,
+				finding.judgeAssessment,
 				rubricId,
 				originalStageScorecards,
 				revisedStageScorecards,
@@ -75,95 +76,84 @@ export function validateCalibration(
 		if (!originalGrade) {
 			throw new Error("Final-stage findings require a final Judge grade");
 		}
+
 		const originalRequirement = originalGrade.requirements.find(
 			({ id }) => id === rubricId,
 		);
-
-		if (finding.judgeAssessment === "CAUGHT") {
-			if (originalRequirement?.status !== "FAIL") {
-				throw new Error(`Original Judge did not catch ${rubricId}`);
-			}
-
-			continue;
-		}
-
-		if (!revisedGrade) {
-			throw new Error(`${finding.judgeAssessment} requires a revised grade`);
-		}
-
-		if (
-			finding.judgeAssessment === "MISSED" &&
-			originalRequirement?.status === "FAIL"
-		) {
-			throw new Error(`Original Judge already caught ${rubricId}`);
-		}
-
-		const revisedRequirement = revisedGrade.requirements.find(
+		const revisedRequirement = revisedGrade?.requirements.find(
 			({ id }) => id === rubricId,
 		);
-		if (
-			finding.judgeAssessment === "MISSED" &&
-			revisedRequirement?.status !== "FAIL"
-		) {
-			throw new Error(`Revised rubric does not catch ${rubricId}`);
-		}
-
-		if (
-			finding.judgeAssessment === "FALSE_POSITIVE" &&
-			(originalRequirement?.status !== "FAIL" ||
-				revisedRequirement?.status !== "PASS")
-		) {
-			throw new Error(`Revised rubric does not correct ${rubricId}`);
-		}
+		assertFindingMatchesGrades(
+			finding.judgeAssessment,
+			rubricId,
+			"",
+			originalRequirement && originalRequirement.status === "FAIL",
+			revisedGrade !== undefined,
+			revisedRequirement && revisedRequirement.status === "FAIL",
+		);
 	}
 }
 
+type ConfirmedAssessment = Exclude<
+	HumanReview["findings"][number]["judgeAssessment"],
+	"NOT_PROMOTED"
+>;
+
 function validateStageFinding(
-	finding: HumanReview["findings"][number],
+	stage: WorkflowStage,
+	assessment: ConfirmedAssessment,
 	rubricId: string,
 	originalScorecards: readonly StageScorecard[],
 	revisedScorecards: readonly StageScorecard[],
 ) {
 	const original = originalScorecards.find(
-		({ stage }) => stage === finding.stage,
+		(scorecard) => scorecard.stage === stage,
 	);
-	if (!original) throw new Error(`No ${finding.stage} scorecard was recorded`);
+	if (!original) throw new Error(`No ${stage} scorecard was recorded`);
 
-	const originalFailure = stageItemFailure(original, rubricId);
-	if (finding.judgeAssessment === "CAUGHT") {
+	const revised = revisedScorecards.find(
+		(scorecard) => scorecard.stage === stage,
+	);
+	assertFindingMatchesGrades(
+		assessment,
+		rubricId,
+		`${stage} `,
+		stageItemFailure(original, rubricId),
+		revised !== undefined,
+		revised && stageItemFailure(revised, rubricId),
+	);
+}
+
+function assertFindingMatchesGrades(
+	assessment: ConfirmedAssessment,
+	rubricId: string,
+	label: string,
+	originalFailure: boolean | undefined,
+	revisedAvailable: boolean,
+	revisedFailure: boolean | undefined,
+) {
+	if (assessment === "CAUGHT") {
 		if (originalFailure !== true) {
-			throw new Error(
-				`Original ${finding.stage} Judge did not catch ${rubricId}`,
-			);
+			throw new Error(`Original ${label}Judge did not catch ${rubricId}`);
 		}
 		return;
 	}
 
-	const revised = revisedScorecards.find(
-		({ stage }) => stage === finding.stage,
-	);
-	if (!revised) {
-		throw new Error(`${finding.judgeAssessment} requires a revised grade`);
+	if (!revisedAvailable) {
+		throw new Error(`${assessment} requires a revised grade`);
 	}
-	const revisedFailure = stageItemFailure(revised, rubricId);
 
-	if (finding.judgeAssessment === "MISSED" && originalFailure) {
-		throw new Error(
-			`Original ${finding.stage} Judge already caught ${rubricId}`,
-		);
+	if (assessment === "MISSED" && originalFailure) {
+		throw new Error(`Original ${label}Judge already caught ${rubricId}`);
 	}
-	if (finding.judgeAssessment === "MISSED" && revisedFailure !== true) {
-		throw new Error(
-			`Revised ${finding.stage} rubric does not catch ${rubricId}`,
-		);
+	if (assessment === "MISSED" && revisedFailure !== true) {
+		throw new Error(`Revised ${label}rubric does not catch ${rubricId}`);
 	}
 	if (
-		finding.judgeAssessment === "FALSE_POSITIVE" &&
+		assessment === "FALSE_POSITIVE" &&
 		(originalFailure !== true || revisedFailure !== false)
 	) {
-		throw new Error(
-			`Revised ${finding.stage} rubric does not correct ${rubricId}`,
-		);
+		throw new Error(`Revised ${label}rubric does not correct ${rubricId}`);
 	}
 }
 
