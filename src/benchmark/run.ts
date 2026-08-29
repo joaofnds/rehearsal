@@ -67,6 +67,11 @@ async function writeArtifact(path: string, artifact: RunArtifact) {
 	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
+const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
+	SIGTERM: 143,
+	SIGHUP: 129,
+};
+
 interface BuildEvidence {
 	readonly resultSha: string;
 	readonly diff: string;
@@ -93,56 +98,71 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		  }
 		| undefined;
 
-	const markAborted = async (reason: string) => {
-		try {
-			if (pendingStage) {
-				await Bun.write(
-					pendingStage.file,
-					`${JSON.stringify(
-						{
-							status: "STAGE_JUDGE_FAILED",
-							stage: pendingStage.stage,
-							error: reason,
-							input: pendingStage.input,
-						},
-						null,
-						2,
-					)}\n`,
+	let abortRecorded: Promise<void> | undefined;
+	const markAborted = (reason: string) => {
+		abortRecorded ??= (async () => {
+			try {
+				if (pendingStage) {
+					await Bun.write(
+						pendingStage.file,
+						`${JSON.stringify(
+							{
+								status: "STAGE_JUDGE_FAILED",
+								stage: pendingStage.stage,
+								error: reason,
+								input: pendingStage.input,
+							},
+							null,
+							2,
+						)}\n`,
+					);
+				}
+				if (pendingArtifact) {
+					await writeArtifact(runFiles.artifact, {
+						...pendingArtifact,
+						status: "FAILED",
+					});
+				}
+			} catch (writeError) {
+				console.error(
+					`Failed to update run artifacts: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
 				);
 			}
-			if (pendingArtifact) {
-				await writeArtifact(runFiles.artifact, {
-					...pendingArtifact,
-					status: "FAILED",
-				});
-			}
-		} catch (writeError) {
-			console.error(
-				`Failed to update run artifacts: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
-			);
-		}
+		})();
+
+		return abortRecorded;
 	};
 	let teardownStarted: Promise<void> | undefined;
 	const teardown = () => {
 		teardownStarted ??= teardownTarget(source, workflowBackup);
 		return teardownStarted;
 	};
+	let aborting: Promise<void> | undefined;
 	const restoreOnSignal = (signal: NodeJS.Signals) => {
 		console.error(`\nReceived ${signal}; restoring the target before exit.`);
-		killActiveCommands()
+		aborting ??= (teardownStarted ? Promise.resolve() : killActiveCommands())
 			.then(() => markAborted(`run interrupted by ${signal}`))
 			.then(teardown)
 			.catch((error) =>
 				console.error(error instanceof Error ? error.message : String(error)),
-			)
-			.finally(() =>
-				process.exit({ SIGTERM: 143, SIGHUP: 129 }[signal as string] ?? 130),
 			);
+		aborting.finally(() => process.exit(SIGNAL_EXIT_CODES[signal] ?? 130));
+	};
+	const releaseSignalHandlers = () => {
+		process.off("SIGINT", restoreOnSignal);
+		process.off("SIGTERM", restoreOnSignal);
+		process.off("SIGHUP", restoreOnSignal);
 	};
 	process.on("SIGINT", restoreOnSignal);
 	process.on("SIGTERM", restoreOnSignal);
 	process.on("SIGHUP", restoreOnSignal);
-	await claimTarget(source);
+
+	try {
+		await claimTarget(source);
+	} catch (error) {
+		releaseSignalHandlers();
+		throw error;
+	}
 
 	try {
 		console.log(`Target: ${source.root}`);
@@ -401,9 +421,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		try {
 			await teardown();
 		} finally {
-			process.off("SIGINT", restoreOnSignal);
-			process.off("SIGTERM", restoreOnSignal);
-			process.off("SIGHUP", restoreOnSignal);
+			releaseSignalHandlers();
 			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}

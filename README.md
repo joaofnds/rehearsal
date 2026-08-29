@@ -225,7 +225,7 @@ It then replaces `backlog/` and `.boris/` with their pre-run copies, verifies th
 
 This removes the temporary instruction commit, all candidate commits, tracked modifications, and ordinary untracked files. Git-ignored dependency and build directories outside the workflow paths are not byte-for-byte snapshotted.
 
-SIGINT and SIGTERM run this same restoration before the process exits. If the process dies without it, for example under SIGKILL, the run marker stays behind and the next run refuses the target with recovery instructions: restore Git manually with the original SHA printed at startup, then delete the marker. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until a successful restoration removes it.
+SIGINT, SIGTERM, and SIGHUP kill the harness's child process groups and run this same restoration before the process exits. If the process dies without it, for example under SIGKILL, the run marker stays behind and the next run refuses the target with recovery instructions: first kill any surviving agent processes (children run detached in their own process groups, so they outlive the harness), then restore Git manually with the original SHA printed at startup, then delete the marker. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until a successful restoration removes it.
 
 ## Inputs
 
