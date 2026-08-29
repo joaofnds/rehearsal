@@ -73,7 +73,7 @@ describe(parseArgs, () => {
 			"high",
 			"--session-budget-usd",
 			"5",
-		]);
+		], {});
 
 		expect(config).toEqual({
 			sourceDir: join(process.cwd(), "target"),
@@ -95,10 +95,22 @@ describe(parseArgs, () => {
 			"xhigh",
 			"--session-budget-usd",
 			"5",
-		]);
+		], {});
 
 		expect(config.judgeModel).toBe("sonnet");
 		expect(config.judgeEffort).toBe("xhigh");
+	});
+
+	it("resolves configuration from environment variables", () => {
+		const config = parseArgs([], {
+			BENCHMARK_TARGET_DIR: "./target",
+			BENCHMARK_MODEL: "sonnet",
+			BENCHMARK_SESSION_BUDGET_USD: "5",
+		});
+
+		expect(config.sourceDir).toBe(join(process.cwd(), "target"));
+		expect(config.model).toBe("sonnet");
+		expect(config.sessionBudgetUsd).toBe(5);
 	});
 
 	it("rejects unsupported effort levels", () => {
@@ -112,13 +124,13 @@ describe(parseArgs, () => {
 				"extreme",
 				"--session-budget-usd",
 				"5",
-			]),
+			], {}),
 		).toThrow("Unsupported effort");
 	});
 
 	it("rejects missing spend limits", () => {
 		expect(() =>
-			parseArgs(["--target", "./target", "--model", "claude-opus-4-8"]),
+			parseArgs(["--target", "./target", "--model", "claude-opus-4-8"], {}),
 		).toThrow("Provide --session-budget-usd");
 	});
 });
@@ -927,10 +939,14 @@ describe(captureBaselineContext, () => {
 	it("captures every tracked file except the lockfile", async () => {
 		const source = await createRepository();
 
+		const tracked = await runCommand(["git", "ls-files"], source.directory);
 		const context = await captureBaselineContext(source.directory);
 
-		expect(context.map(({ path }) => path)).toContain("base.txt");
-		expect(context.map(({ path }) => path)).not.toContain("bun.lock");
+		expect(tracked).toContain("bun.lock");
+		expect(context.map(({ path }) => path).sort()).toEqual([
+			"base.txt",
+			"package.json",
+		]);
 	});
 });
 
@@ -1158,7 +1174,7 @@ async function createRepository() {
 		join(directory, "package.json"),
 		'{"scripts":{"typecheck":"tsc --noEmit","check":"biome check","test:unit":"bun test src"}}\n',
 	);
-	await runCommand(["bun", "install"], directory);
+	await Bun.write(join(directory, "bun.lock"), "{}\n");
 	await commitAll(directory, "chore: base");
 	const sha = (
 		await runCommand(["git", "rev-parse", "HEAD"], directory)
