@@ -33,8 +33,10 @@ import {
 	WORKFLOW_STAGES,
 } from "./src/benchmark/config";
 import type {
+	CalibrationResult,
 	HumanReview,
 	JudgeGrade,
+	StageJudgeInput,
 	StageJudgeOutput,
 	StageScorecard,
 } from "./src/benchmark/contracts";
@@ -51,6 +53,7 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
+import { runGradedStages } from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
 	assertStageGradePassed,
@@ -1128,6 +1131,205 @@ describe(assertStageGradePassed, () => {
 
 	it("continues past a passing stage grade", () => {
 		expect(() => assertStageGradePassed(stageScorecard("PASS"))).not.toThrow();
+	});
+});
+
+describe(runGradedStages, () => {
+	function fakeStageDependencies(
+		judged: StageJudgeInput[],
+		executed: string[],
+	) {
+		const scorecardFor = (
+			input: StageJudgeInput,
+			verdict: "CONTINUE" | "STOP",
+		): StageScorecard => ({
+			stage: input.stage,
+			rubricPath: `${input.stage}.json`,
+			rubric: parseStageRubric(
+				JSON.stringify({
+					stage: input.stage,
+					hardBlockers: [
+						{ id: "invalid-stage-delivery", description: "Valid delivery" },
+						{ id: "false-test-safety", description: "Checks intact" },
+						{ id: "unfinished-delivery", description: "Checks pass" },
+					],
+					requirements: [{ id: "scope", description: "Scope is explicit" }],
+					dimensions: [
+						{
+							id: "clarity",
+							description: "Clear output",
+							good: "Concrete",
+							excellent: "Precise",
+						},
+					],
+				}),
+				input.stage,
+			),
+			input,
+			prompt: "prompt",
+			costUsd: 0,
+			grade: {
+				...stageJudgeOutput("PASS", "PASS", verdict === "CONTINUE" ? "B" : "F"),
+				grade: verdict === "CONTINUE" ? "B" : "F",
+				verdict,
+			},
+		});
+
+		return {
+			scorecardFor,
+			dependencies: {
+				runWorkflowStage: async (
+					_targetDir: string,
+					_productOwnerDirectory: string,
+					_model: string,
+					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+					_budget: number,
+					_productOwner: unknown,
+					_task: string,
+					_productBrief: string,
+					_taskId: string,
+					stage: (typeof WORKFLOW_STAGES)[number],
+				) => {
+					executed.push(stage);
+
+					return { stage, sessionId: "session", costUsd: 0, exchanges: [] };
+				},
+				runStageJudge: async (
+					_model: string,
+					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+					_budget: number,
+					input: StageJudgeInput,
+				) => {
+					judged.push(input);
+
+					return scorecardFor(input, "CONTINUE");
+				},
+				readTaskOutput: async () =>
+					JSON.stringify({
+						task: { acceptanceCriteria: ["done"], documentation: [] },
+					}),
+				captureBuildCandidate: async () => ({
+					resultSha: "candidate-sha",
+					diff: "candidate-diff",
+					changedPaths: ["src/example.ts"],
+				}),
+				assertPlanningStageCompleted: async (
+					_targetDir: string,
+					_taskSha: string,
+					stage: string,
+				) => ({
+					taskState: `${stage}-state`,
+					artifact: {
+						path: `backlog/docs/${stage}.md`,
+						content: `${stage} artifact`,
+					},
+				}),
+				assertBuildCommitted: async () => ({
+					resultSha: "result-sha",
+					diff: "the-diff",
+				}),
+				changedPathsBetween: async () => ["src/example.ts"],
+				captureCheckIntegrity: async () =>
+					harnessResult("PASS", "checks match"),
+				captureTreatmentChecks: async () => harnessResult("PASS", "all green"),
+			},
+		};
+	}
+
+	async function stageContext() {
+		const stageDirectory = await mkdtemp(join(tmpdir(), "template-stages-"));
+		temporaryDirectories.push(stageDirectory);
+
+		return {
+			targetDir: stageDirectory,
+			productOwnerDirectory: stageDirectory,
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			productOwner: { sessionId: "po", spentUsd: 0, started: false },
+			task: "Task",
+			productBrief: "Brief",
+			instructions: "Instructions",
+			baselineContext: [],
+			baselineHashes: new Map<string, string>(),
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
+			trackPendingStage: () => {},
+			calibrateStageFailure: async (): Promise<CalibrationResult> => {
+				throw new Error("calibration not expected");
+			},
+		};
+	}
+
+	it("runs the stages in order and carries evidence forward", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const context = await stageContext();
+
+		const outcome = await runGradedStages(dependencies, context);
+
+		expect(executed).toEqual(["discuss", "grill", "plan", "build"]);
+		expect(judged[1]?.priorArtifacts.map(({ path }) => path)).toEqual([
+			"backlog/docs/discuss.md",
+		]);
+		expect(judged[3]?.diff).toBe("the-diff");
+		expect(outcome.buildEvidence?.resultSha).toBe("result-sha");
+		expect(outcome.workflow).toHaveLength(4);
+	});
+
+	it("stops after a failing grade and calibrates the failed stage", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies, scorecardFor } = fakeStageDependencies(
+			judged,
+			executed,
+		);
+		const context = await stageContext();
+		let calibrations = 0;
+		const failing = {
+			...dependencies,
+			runStageJudge: async (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => {
+				judged.push(input);
+
+				return scorecardFor(
+					input,
+					input.stage === "grill" ? "STOP" : "CONTINUE",
+				);
+			},
+		};
+		const calibrating = {
+			...context,
+			calibrateStageFailure: async (): Promise<CalibrationResult> => {
+				calibrations += 1;
+
+				return {
+					humanReview: {
+						verdict: "REJECT",
+						summary: "The grill stage failed.",
+						findings: [],
+					},
+					instructionsChanged: false,
+					rubricChanged: false,
+					stageRubricsChanged: [],
+				};
+			},
+		};
+
+		const outcome = runGradedStages(failing, calibrating);
+
+		await expect(outcome).rejects.toThrow("minimum grade is B");
+		expect(executed).toEqual(["discuss", "grill"]);
+		expect(calibrations).toBe(1);
+		expect(await Bun.file(calibrating.stageFile("grill")).text()).toContain(
+			"calibration",
+		);
 	});
 });
 

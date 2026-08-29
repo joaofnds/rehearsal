@@ -20,10 +20,12 @@ import { killActiveCommands, runCommand } from "./command";
 import {
 	type BenchmarkConfig,
 	CONTROL_DIR,
+	type Effort,
 	WORKFLOW_STAGES,
 	type WorkflowStage,
 } from "./config";
 import type {
+	CalibrationResult,
 	ContextFile,
 	LocalCheckResult,
 	RunArtifact,
@@ -81,6 +83,185 @@ interface BuildEvidence {
 	readonly taskState: string;
 }
 
+export interface StageDependencies {
+	readonly runWorkflowStage: typeof runWorkflowStage;
+	readonly runStageJudge: typeof runStageJudge;
+	readonly readTaskOutput: typeof readTaskOutput;
+	readonly captureBuildCandidate: typeof captureBuildCandidate;
+	readonly assertPlanningStageCompleted: typeof assertPlanningStageCompleted;
+	readonly assertBuildCommitted: typeof assertBuildCommitted;
+	readonly changedPathsBetween: typeof changedPathsBetween;
+	readonly captureCheckIntegrity: typeof captureCheckIntegrity;
+	readonly captureTreatmentChecks: typeof captureTreatmentChecks;
+}
+
+export interface PendingStage {
+	readonly file: string;
+	readonly stage: WorkflowStage;
+	readonly input: StageJudgeInput;
+}
+
+export interface StageContext {
+	readonly targetDir: string;
+	readonly productOwnerDirectory: string;
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
+	readonly sessionBudgetUsd: number;
+	readonly productOwner: ProductOwnerSession;
+	readonly task: string;
+	readonly productBrief: string;
+	readonly instructions: string;
+	readonly baselineContext: readonly ContextFile[];
+	readonly baselineHashes: ReadonlyMap<string, string>;
+	readonly taskId: string;
+	readonly taskSha: string;
+	readonly stageFile: (stage: WorkflowStage) => string;
+	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
+	readonly calibrateStageFailure: (
+		stageScorecards: readonly StageScorecard[],
+	) => Promise<CalibrationResult>;
+}
+
+export interface StageOutcome {
+	readonly workflow: readonly StageTranscript[];
+	readonly stageScorecards: readonly StageScorecard[];
+	readonly buildEvidence?: BuildEvidence;
+}
+
+export async function runGradedStages(
+	dependencies: StageDependencies,
+	context: StageContext,
+): Promise<StageOutcome> {
+	const workflow: StageTranscript[] = [];
+	const stageScorecards: StageScorecard[] = [];
+	const stageArtifacts: ContextFile[] = [];
+	let buildEvidence: BuildEvidence | undefined;
+
+	for (const stage of WORKFLOW_STAGES) {
+		console.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
+		const transcript = await dependencies.runWorkflowStage(
+			context.targetDir,
+			context.productOwnerDirectory,
+			context.model,
+			context.effort,
+			context.sessionBudgetUsd,
+			context.productOwner,
+			context.task,
+			context.productBrief,
+			context.taskId,
+			stage,
+		);
+		workflow.push(transcript);
+
+		const currentTaskOutput = await dependencies.readTaskOutput(
+			context.targetDir,
+			context.taskId,
+		);
+		const buildCandidate =
+			stage === "build"
+				? await dependencies.captureBuildCandidate(
+						context.targetDir,
+						context.taskSha,
+					)
+				: undefined;
+		const baseInput: StageJudgeInput = {
+			stage,
+			task: context.task,
+			productBrief: context.productBrief,
+			instructions: context.instructions,
+			baselineContext: context.baselineContext,
+			taskState: currentTaskOutput,
+			transcript,
+			priorArtifacts: [...stageArtifacts],
+			diff: buildCandidate?.diff,
+			changedPaths: buildCandidate?.changedPaths,
+		};
+		const input = await captureStageJudgeInput(baseInput, async () => {
+			if (stage !== "build") {
+				const currentTask = parseTaskState(currentTaskOutput);
+				const planning = await dependencies.assertPlanningStageCompleted(
+					context.targetDir,
+					context.taskSha,
+					stage,
+					currentTask,
+				);
+				stageArtifacts.push(planning.artifact);
+
+				return {
+					...baseInput,
+					taskState: planning.taskState,
+					artifact: planning.artifact,
+				};
+			}
+
+			const build = await dependencies.assertBuildCommitted(
+				context.targetDir,
+				context.taskSha,
+			);
+			buildEvidence = {
+				resultSha: build.resultSha,
+				diff: build.diff,
+				changedPaths: await dependencies.changedPathsBetween(
+					context.targetDir,
+					context.taskSha,
+					build.resultSha,
+				),
+				checkIntegrity: await dependencies.captureCheckIntegrity(
+					context.targetDir,
+					context.baselineHashes,
+				),
+				localChecks: await dependencies.captureTreatmentChecks(
+					context.targetDir,
+				),
+				taskState: currentTaskOutput,
+			};
+
+			return {
+				...baseInput,
+				taskState: buildEvidence.taskState,
+				diff: buildEvidence.diff,
+				changedPaths: buildEvidence.changedPaths,
+				checkIntegrity: buildEvidence.checkIntegrity,
+				localChecks: buildEvidence.localChecks,
+			};
+		});
+
+		console.log(`\n${stage} stage Judge`);
+		const stageFile = context.stageFile(stage);
+		await Bun.write(
+			stageFile,
+			`${JSON.stringify(
+				{ status: "AWAITING_STAGE_JUDGE", stage, input },
+				null,
+				2,
+			)}\n`,
+		);
+		context.trackPendingStage({ file: stageFile, stage, input });
+		const scorecard = await dependencies.runStageJudge(
+			context.judgeModel,
+			context.judgeEffort,
+			context.sessionBudgetUsd,
+			input,
+		);
+		context.trackPendingStage(undefined);
+		stageScorecards.push(scorecard);
+		await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
+		console.log(JSON.stringify(scorecard.grade, null, 2));
+		if (scorecard.grade.verdict === "STOP") {
+			const calibration = await context.calibrateStageFailure(stageScorecards);
+			await Bun.write(
+				stageFile,
+				`${JSON.stringify({ ...scorecard, calibration }, null, 2)}\n`,
+			);
+		}
+		assertStageGradePassed(scorecard);
+	}
+
+	return { workflow, stageScorecards, buildEvidence };
+}
+
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
@@ -90,13 +271,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
 	let pendingArtifact: RunArtifact | undefined;
-	let pendingStage:
-		| {
-				readonly file: string;
-				readonly stage: WorkflowStage;
-				readonly input: StageJudgeInput;
-		  }
-		| undefined;
+	let pendingStage: PendingStage | undefined;
 
 	let abortRecorded: Promise<void> | undefined;
 	const markAborted = (reason: string) => {
@@ -191,132 +366,56 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			spentUsd: 0,
 			started: false,
 		};
-		const workflow: StageTranscript[] = [];
-		const stageScorecards: StageScorecard[] = [];
-		const stageArtifacts: ContextFile[] = [];
-		let buildEvidence: BuildEvidence | undefined;
-
-		for (const stage of WORKFLOW_STAGES) {
-			console.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
-			const transcript = await runWorkflowStage(
-				source.root,
+		const { workflow, stageScorecards, buildEvidence } = await runGradedStages(
+			{
+				runWorkflowStage,
+				runStageJudge,
+				readTaskOutput,
+				captureBuildCandidate,
+				assertPlanningStageCompleted,
+				assertBuildCommitted,
+				changedPathsBetween,
+				captureCheckIntegrity,
+				captureTreatmentChecks,
+			},
+			{
+				targetDir: source.root,
 				productOwnerDirectory,
-				config.model,
-				config.effort,
-				config.sessionBudgetUsd,
+				model: config.model,
+				effort: config.effort,
+				judgeModel: config.judgeModel,
+				judgeEffort: config.judgeEffort,
+				sessionBudgetUsd: config.sessionBudgetUsd,
 				productOwner,
-				task,
-				productBrief,
-				taskId,
-				stage,
-			);
-			workflow.push(transcript);
-
-			const currentTaskOutput = await readTaskOutput(source.root, taskId);
-			const buildCandidate =
-				stage === "build"
-					? await captureBuildCandidate(source.root, taskSha)
-					: undefined;
-			const baseInput: StageJudgeInput = {
-				stage,
 				task,
 				productBrief,
 				instructions,
 				baselineContext,
-				taskState: currentTaskOutput,
-				transcript,
-				priorArtifacts: [...stageArtifacts],
-				diff: buildCandidate?.diff,
-				changedPaths: buildCandidate?.changedPaths,
-			};
-			const input = await captureStageJudgeInput(baseInput, async () => {
-				if (stage !== "build") {
-					const currentTask = parseTaskState(currentTaskOutput);
-					const planning = await assertPlanningStageCompleted(
-						source.root,
-						taskSha,
-						stage,
-						currentTask,
-					);
-					stageArtifacts.push(planning.artifact);
+				baselineHashes,
+				taskId,
+				taskSha,
+				stageFile: runFiles.stage,
+				trackPendingStage: (pending) => {
+					pendingStage = pending;
+				},
+				calibrateStageFailure: async (stageScorecards) => {
+					const calibration = await collectCalibration({
+						rl,
+						reviewFile: runFiles.review,
+						targetDir: source.root,
+						originalInstructions: instructions,
+						originalRubric: rubric,
+						stageScorecards,
+						judgeModel: config.judgeModel,
+						judgeEffort: config.judgeEffort,
+						sessionBudgetUsd: config.sessionBudgetUsd,
+					});
+					stageFailureCalibrated = true;
 
-					return {
-						...baseInput,
-						taskState: planning.taskState,
-						artifact: planning.artifact,
-					};
-				}
-
-				const build = await assertBuildCommitted(source.root, taskSha);
-				buildEvidence = {
-					resultSha: build.resultSha,
-					diff: build.diff,
-					changedPaths: await changedPathsBetween(
-						source.root,
-						taskSha,
-						build.resultSha,
-					),
-					checkIntegrity: await captureCheckIntegrity(
-						source.root,
-						baselineHashes,
-					),
-					localChecks: await captureTreatmentChecks(source.root),
-					taskState: currentTaskOutput,
-				};
-
-				return {
-					...baseInput,
-					taskState: buildEvidence.taskState,
-					diff: buildEvidence.diff,
-					changedPaths: buildEvidence.changedPaths,
-					checkIntegrity: buildEvidence.checkIntegrity,
-					localChecks: buildEvidence.localChecks,
-				};
-			});
-
-			console.log(`\n${stage} stage Judge`);
-			await Bun.write(
-				runFiles.stage(stage),
-				`${JSON.stringify(
-					{ status: "AWAITING_STAGE_JUDGE", stage, input },
-					null,
-					2,
-				)}\n`,
-			);
-			pendingStage = { file: runFiles.stage(stage), stage, input };
-			const scorecard = await runStageJudge(
-				config.judgeModel,
-				config.judgeEffort,
-				config.sessionBudgetUsd,
-				input,
-			);
-			pendingStage = undefined;
-			stageScorecards.push(scorecard);
-			await Bun.write(
-				runFiles.stage(stage),
-				`${JSON.stringify(scorecard, null, 2)}\n`,
-			);
-			console.log(JSON.stringify(scorecard.grade, null, 2));
-			if (scorecard.grade.verdict === "STOP") {
-				const calibration = await collectCalibration({
-					rl,
-					reviewFile: runFiles.review,
-					targetDir: source.root,
-					originalInstructions: instructions,
-					originalRubric: rubric,
-					stageScorecards,
-					judgeModel: config.judgeModel,
-					judgeEffort: config.judgeEffort,
-					sessionBudgetUsd: config.sessionBudgetUsd,
-				});
-				await Bun.write(
-					runFiles.stage(stage),
-					`${JSON.stringify({ ...scorecard, calibration }, null, 2)}\n`,
-				);
-				stageFailureCalibrated = true;
-			}
-			assertStageGradePassed(scorecard);
-		}
+					return calibration;
+				},
+			},
+		);
 
 		if (!buildEvidence) {
 			throw new Error("Build stage did not run");
