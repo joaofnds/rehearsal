@@ -1,4 +1,4 @@
-# Template Agent Benchmark
+# Rehearsal
 
 This repository controls an authentic rehearsal of the development workflow used in the NestJS template. It gives a known task to Claude Code, lets the installed workflow skills produce and execute the work, grades the committed result, pauses for human calibration, and restores the target repository.
 
@@ -11,11 +11,11 @@ The benchmark tests whether the current instruction corpus and workflow can turn
 One run uses:
 
 ```text
-template-ops/CLAUDE.md       project instructions under evaluation
-template-ops/backlog-seed.md known feature request
-template-ops/product-brief.md stable product facts available to the PO
-template-ops/rubrics/*.json  stage-specific process-quality rubrics
-template-ops/rubric.md       external binary acceptance rubric
+rehearsal/CLAUDE.md       project instructions under evaluation
+rehearsal/backlog-seed.md known feature request
+rehearsal/product-brief.md stable product facts available to the PO
+rehearsal/rubrics/*.json  stage-specific process-quality rubrics
+rehearsal/rubric.md       external binary acceptance rubric
 target repository            real application and real main branch
 installed Claude skills      discuss, grill, plan, and build
 ```
@@ -225,7 +225,7 @@ It then replaces `backlog/` and `.boris/` with their pre-run copies, verifies th
 
 This removes the temporary instruction commit, all candidate commits, tracked modifications, and ordinary untracked files. Git-ignored dependency and build directories outside the workflow paths are not byte-for-byte snapshotted.
 
-SIGINT, SIGTERM, and SIGHUP kill the harness's child process groups and run this same restoration before the process exits. If the process dies without it, for example under SIGKILL, the run marker stays behind and the next run refuses the target with recovery instructions: first kill any surviving agent processes (children run detached in their own process groups, so they outlive the harness), then restore Git manually with the original SHA printed at startup, then delete the marker. The workflow backup remains under the system temporary directory with a `template-workflow-backup-` prefix until a successful restoration removes it.
+SIGINT, SIGTERM, and SIGHUP kill the harness's child process groups and run this same restoration before the process exits. If the process dies without it, for example under SIGKILL, the run marker stays behind and the next run refuses the target with recovery instructions: first kill any surviving agent processes (children run detached in their own process groups, so they outlive the harness), then restore Git manually with the original SHA printed at startup, then delete the marker. The workflow backup remains under the system temporary directory with a `rehearsal-workflow-backup-` prefix until a successful restoration removes it.
 
 ## Inputs
 

@@ -335,7 +335,7 @@ describe(parseHumanReview, () => {
 
 describe(collectCalibration, () => {
 	it("re-prompts after invalid review JSON and accepts the corrected review", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
 		temporaryDirectories.push(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
 		const prompts: string[] = [];
@@ -374,7 +374,7 @@ describe(collectCalibration, () => {
 	});
 
 	it("records a rubric.md edit during stage-failure calibration without a final rejudge", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
 		temporaryDirectories.push(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
 		const rubricPath = join(reviewDirectory, "discuss.json");
@@ -1237,7 +1237,7 @@ describe(runGradedStages, () => {
 	}
 
 	async function stageContext() {
-		const stageDirectory = await mkdtemp(join(tmpdir(), "template-stages-"));
+		const stageDirectory = await mkdtemp(join(tmpdir(), "rehearsal-stages-"));
 		temporaryDirectories.push(stageDirectory);
 
 		return {
@@ -1489,7 +1489,7 @@ describe(claimTarget, () => {
 	it("claims a linked-worktree target whose .git is a file", async () => {
 		const source = await createRepository();
 		await runCommand(["git", "switch", "-c", "primary"], source.directory);
-		const worktreeParent = await mkdtemp(join(tmpdir(), "template-worktree-"));
+		const worktreeParent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
 		temporaryDirectories.push(worktreeParent);
 		const worktree = join(worktreeParent, "main");
 		await runCommand(
@@ -1866,7 +1866,7 @@ async function pgrepMatches(pattern: string) {
 }
 
 async function createRepository() {
-	const directory = await mkdtemp(join(tmpdir(), "template-source-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
 	temporaryDirectories.push(directory);
 	await runCommand(["git", "init", "-b", "main"], directory);
 	await runCommand(["git", "config", "user.name", "Benchmark Test"], directory);

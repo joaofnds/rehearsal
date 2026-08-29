@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "template-ops",
+      "name": "rehearsal",
       "dependencies": {
         "zod": "^4.4.3",
       },

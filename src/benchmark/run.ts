@@ -267,7 +267,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
 	const workflowBackup = await captureWorkflowBackup(source.root);
-	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "template-po-"));
+	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "rehearsal-po-"));
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;

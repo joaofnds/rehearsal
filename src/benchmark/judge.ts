@@ -142,7 +142,7 @@ export async function runJudge(
 	checkIntegrity: LocalCheckResult,
 	localChecks: LocalCheckResult,
 ): Promise<{ grade: JudgeGrade; prompt: string }> {
-	const judgeDirectory = await mkdtemp(join(tmpdir(), "template-judge-"));
+	const judgeDirectory = await mkdtemp(join(tmpdir(), "rehearsal-judge-"));
 	const rubricIds = parseRubricIds(rubric);
 	const evidence = JSON.stringify({
 		baselineContext,

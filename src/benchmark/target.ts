@@ -87,7 +87,7 @@ export async function assertControlReady() {
 export async function captureWorkflowBackup(
 	targetDir: string,
 ): Promise<WorkflowBackup> {
-	const directory = await mkdtemp(join(tmpdir(), "template-workflow-backup-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
 	const presentPaths: string[] = [];
 
 	for (const path of WORKFLOW_PATHS) {
