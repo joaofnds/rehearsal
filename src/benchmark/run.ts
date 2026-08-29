@@ -135,10 +135,13 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			.catch((error) =>
 				console.error(error instanceof Error ? error.message : String(error)),
 			)
-			.finally(() => process.exit(signal === "SIGTERM" ? 143 : 130));
+			.finally(() =>
+				process.exit({ SIGTERM: 143, SIGHUP: 129 }[signal as string] ?? 130),
+			);
 	};
 	process.on("SIGINT", restoreOnSignal);
 	process.on("SIGTERM", restoreOnSignal);
+	process.on("SIGHUP", restoreOnSignal);
 	await claimTarget(source);
 
 	try {
@@ -400,6 +403,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		} finally {
 			process.off("SIGINT", restoreOnSignal);
 			process.off("SIGTERM", restoreOnSignal);
+			process.off("SIGHUP", restoreOnSignal);
 			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}

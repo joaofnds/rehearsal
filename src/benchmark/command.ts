@@ -34,6 +34,7 @@ export async function runCommand(
 		stderr: "pipe",
 		timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
 		killSignal: "SIGKILL",
+		detached: true,
 	});
 	activeProcesses.add(process);
 
@@ -55,8 +56,14 @@ export async function runCommand(
 }
 
 export async function killActiveCommands() {
-	const processes = [...activeProcesses];
-	for (const process of processes) process.kill("SIGKILL");
+	const children = [...activeProcesses];
+	for (const child of children) {
+		try {
+			process.kill(-child.pid, "SIGKILL");
+		} catch {
+			child.kill("SIGKILL");
+		}
+	}
 
-	await Promise.allSettled(processes.map((process) => process.exited));
+	await Promise.allSettled(children.map((child) => child.exited));
 }

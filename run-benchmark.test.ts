@@ -21,7 +21,11 @@ import {
 	readClaudeEnvelope,
 	readStructuredOutput,
 } from "./src/benchmark/claude";
-import { CommandError, runCommand } from "./src/benchmark/command";
+import {
+	CommandError,
+	killActiveCommands,
+	runCommand,
+} from "./src/benchmark/command";
 import { parseArgs, WORKFLOW_STAGES } from "./src/benchmark/config";
 import type {
 	HumanReview,
@@ -1028,6 +1032,25 @@ describe(validateStageJudgeEvidence, () => {
 		expect(() =>
 			validateStageJudgeEvidence(output, stageJudgeInput("discuss")),
 		).toThrow("cited unavailable evidence");
+	});
+});
+
+describe(killActiveCommands, () => {
+	it("kills a running command's whole process group", async () => {
+		const running = runCommand(
+			["sh", "-c", "sleep 987654 & wait"],
+			process.cwd(),
+		).catch(() => "killed");
+		await Bun.sleep(200);
+
+		await killActiveCommands();
+
+		await running;
+		const survivors = await runCommand(
+			["pgrep", "-f", "sleep 987654"],
+			process.cwd(),
+		).catch(() => "");
+		expect(survivors).toBe("");
 	});
 });
 
