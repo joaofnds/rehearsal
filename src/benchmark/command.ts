@@ -21,28 +21,38 @@ export class CommandError extends Error {
 
 const activeProcesses = new Set<ReturnType<typeof Bun.spawn>>();
 
+function killProcessGroup(child: ReturnType<typeof Bun.spawn>) {
+	try {
+		process.kill(-child.pid, "SIGKILL");
+	} catch {
+		child.kill("SIGKILL");
+	}
+}
+
 export async function runCommand(
 	command: readonly string[],
 	cwd: string,
 	options: CommandOptions = {},
 ): Promise<string> {
-	const process = Bun.spawn([...command], {
+	const child = Bun.spawn([...command], {
 		cwd,
 		env: { ...Bun.env, ...options.env },
 		stdin: options.input === undefined ? "ignore" : new Blob([options.input]),
 		stdout: "pipe",
 		stderr: "pipe",
-		timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
-		killSignal: "SIGKILL",
 		detached: true,
 	});
-	activeProcesses.add(process);
+	activeProcesses.add(child);
+	const timeout = setTimeout(
+		() => killProcessGroup(child),
+		options.timeoutMs ?? COMMAND_TIMEOUT_MS,
+	);
 
 	try {
 		const [exitCode, stdout, stderr] = await Promise.all([
-			process.exited,
-			new Response(process.stdout).text(),
-			new Response(process.stderr).text(),
+			child.exited,
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
 		]);
 
 		if (exitCode !== 0) {
@@ -51,19 +61,14 @@ export async function runCommand(
 
 		return stdout;
 	} finally {
-		activeProcesses.delete(process);
+		clearTimeout(timeout);
+		activeProcesses.delete(child);
 	}
 }
 
 export async function killActiveCommands() {
 	const children = [...activeProcesses];
-	for (const child of children) {
-		try {
-			process.kill(-child.pid, "SIGKILL");
-		} catch {
-			child.kill("SIGKILL");
-		}
-	}
+	for (const child of children) killProcessGroup(child);
 
 	await Promise.allSettled(children.map((child) => child.exited));
 }

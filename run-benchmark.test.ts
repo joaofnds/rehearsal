@@ -1041,16 +1041,23 @@ describe(killActiveCommands, () => {
 			["sh", "-c", "sleep 987654 & wait"],
 			process.cwd(),
 		).catch(() => "killed");
-		await Bun.sleep(200);
+		while ((await pgrepMatches("sleep 987654")) === "") await Bun.sleep(25);
 
 		await killActiveCommands();
 
-		await running;
-		const survivors = await runCommand(
-			["pgrep", "-f", "sleep 987654"],
+		expect(await running).toBe("killed");
+		expect(await pgrepMatches("sleep 987654")).toBe("");
+	});
+
+	it("kills the whole group when a command times out", async () => {
+		const running = runCommand(
+			["sh", "-c", "sleep 987653 & wait"],
 			process.cwd(),
-		).catch(() => "");
-		expect(survivors).toBe("");
+			{ timeoutMs: 250 },
+		).catch(() => "killed");
+
+		expect(await running).toBe("killed");
+		expect(await pgrepMatches("sleep 987653")).toBe("");
 	});
 });
 
@@ -1527,6 +1534,16 @@ function humanReview(
 			},
 		],
 	};
+}
+
+async function pgrepMatches(pattern: string) {
+	try {
+		return (await runCommand(["pgrep", "-f", pattern], process.cwd())).trim();
+	} catch (error) {
+		if (error instanceof CommandError && error.exitCode === 1) return "";
+
+		throw error;
+	}
 }
 
 async function createRepository() {
