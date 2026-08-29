@@ -368,9 +368,13 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			}
 		}
 		if (!stageFailureCalibrated) {
-			await rl.question(
-				`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
-			);
+			try {
+				await rl.question(
+					`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
+				);
+			} catch {
+				console.error("No interactive stdin; restoring the target now.");
+			}
 		}
 		throw error;
 	} finally {
