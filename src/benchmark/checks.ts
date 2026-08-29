@@ -94,6 +94,17 @@ export async function captureCheckIntegrity(
 	};
 }
 
+export async function captureBoundedContent(file: ReturnType<typeof Bun.file>) {
+	if (file.size > MAX_CONTEXT_FILE_BYTES) {
+		return `[${file.size} bytes omitted: exceeds the ${MAX_CONTEXT_FILE_BYTES}-byte capture limit]`;
+	}
+
+	const bytes = await file.bytes();
+	if (bytes.subarray(0, 8192).includes(0)) return "[binary file omitted]";
+
+	return new TextDecoder().decode(bytes);
+}
+
 export async function captureBaselineContext(directory: string) {
 	const context: ContextFile[] = [];
 	const trackedPaths = (await runCommand(["git", "ls-files"], directory))
@@ -106,14 +117,18 @@ export async function captureBaselineContext(directory: string) {
 	for (const path of trackedPaths) {
 		const file = Bun.file(join(directory, path));
 		if (!(await file.exists())) continue;
-		if (file.size > MAX_CONTEXT_FILE_BYTES) continue;
-		if (totalBytes + file.size > MAX_CONTEXT_TOTAL_BYTES) continue;
 
-		const bytes = await file.bytes();
-		if (bytes.subarray(0, 8192).includes(0)) continue;
+		if (totalBytes + file.size > MAX_CONTEXT_TOTAL_BYTES) {
+			context.push({
+				path,
+				content: "[omitted: total capture budget exhausted]",
+			});
+			continue;
+		}
 
-		context.push({ path, content: new TextDecoder().decode(bytes) });
-		totalBytes += bytes.byteLength;
+		const content = await captureBoundedContent(file);
+		context.push({ path, content });
+		totalBytes += content.length;
 	}
 
 	return context;

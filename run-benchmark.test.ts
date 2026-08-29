@@ -1255,6 +1255,7 @@ describe(runGradedStages, () => {
 			taskId: "TASK-1",
 			taskSha: "task-sha",
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
+			log: () => {},
 			trackPendingStage: () => {},
 			calibrateStageFailure: async (): Promise<CalibrationResult> => {
 				throw new Error("calibration not expected");
@@ -1327,9 +1328,10 @@ describe(runGradedStages, () => {
 		await expect(outcome).rejects.toThrow("minimum grade is B");
 		expect(executed).toEqual(["discuss", "grill"]);
 		expect(calibrations).toBe(1);
-		expect(await Bun.file(calibrating.stageFile("grill")).text()).toContain(
-			"calibration",
+		const grillRecord = JSON.parse(
+			await Bun.file(calibrating.stageFile("grill")).text(),
 		);
+		expect(grillRecord.calibration.humanReview.verdict).toBe("REJECT");
 	});
 });
 
@@ -1583,6 +1585,20 @@ describe(captureBuildCandidate, () => {
 		expect(candidate.diff).toContain("bytes omitted");
 		expect(candidate.diff).not.toContain("yyyy");
 	});
+
+	it("summarizes committed binary changes instead of embedding them", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, "asset.bin"),
+			new Uint8Array([137, 80, 78, 71, 0, 13, 10, 26]),
+		);
+		await commitAll(source.directory, "feat: add binary asset");
+
+		const candidate = await captureBuildCandidate(source.directory, source.sha);
+
+		expect(candidate.diff).toContain("Binary files");
+		expect(candidate.diff).not.toContain("GIT binary patch");
+	});
 });
 
 describe(captureBaselineContext, () => {
@@ -1599,7 +1615,7 @@ describe(captureBaselineContext, () => {
 		]);
 	});
 
-	it("skips files beyond the per-file capture limit", async () => {
+	it("replaces files beyond the per-file capture limit with an omission marker", async () => {
 		const source = await createRepository();
 		await Bun.write(
 			join(source.directory, "huge.txt"),
@@ -1608,12 +1624,13 @@ describe(captureBaselineContext, () => {
 		await commitAll(source.directory, "chore: huge file");
 
 		const context = await captureBaselineContext(source.directory);
+		const huge = context.find(({ path }) => path === "huge.txt");
 
-		expect(context.map(({ path }) => path)).not.toContain("huge.txt");
-		expect(context.map(({ path }) => path)).toContain("base.txt");
+		expect(huge?.content).toContain("bytes omitted");
+		expect(huge?.content).not.toContain("xxxx");
 	});
 
-	it("skips binary files", async () => {
+	it("replaces binary files with a binary marker", async () => {
 		const source = await createRepository();
 		await Bun.write(
 			join(source.directory, "image.bin"),
@@ -1622,8 +1639,9 @@ describe(captureBaselineContext, () => {
 		await commitAll(source.directory, "chore: binary file");
 
 		const context = await captureBaselineContext(source.directory);
+		const binary = context.find(({ path }) => path === "image.bin");
 
-		expect(context.map(({ path }) => path)).not.toContain("image.bin");
+		expect(binary?.content).toBe("[binary file omitted]");
 	});
 });
 

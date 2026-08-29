@@ -59,6 +59,7 @@ async function asCalibrationInput<T>(
 
 		throw new CalibrationIncompleteError(
 			error instanceof Error ? error.message : String(error),
+			{ cause: error },
 		);
 	}
 }
@@ -69,6 +70,7 @@ export function parseHumanReview(review: string): HumanReview {
 	} catch (error) {
 		throw new CalibrationIncompleteError(
 			error instanceof Error ? error.message : String(error),
+			{ cause: error },
 		);
 	}
 }

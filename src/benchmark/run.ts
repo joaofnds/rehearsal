@@ -118,6 +118,7 @@ export interface StageContext {
 	readonly taskId: string;
 	readonly taskSha: string;
 	readonly stageFile: (stage: WorkflowStage) => string;
+	readonly log: (message: string) => void;
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly calibrateStageFailure: (
 		stageScorecards: readonly StageScorecard[],
@@ -140,7 +141,7 @@ export async function runGradedStages(
 	let buildEvidence: BuildEvidence | undefined;
 
 	for (const stage of WORKFLOW_STAGES) {
-		console.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
+		context.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 		const transcript = await dependencies.runWorkflowStage(
 			context.targetDir,
 			context.productOwnerDirectory,
@@ -228,7 +229,7 @@ export async function runGradedStages(
 			};
 		});
 
-		console.log(`\n${stage} stage Judge`);
+		context.log(`\n${stage} stage Judge`);
 		const stageFile = context.stageFile(stage);
 		await Bun.write(
 			stageFile,
@@ -248,7 +249,7 @@ export async function runGradedStages(
 		context.trackPendingStage(undefined);
 		stageScorecards.push(scorecard);
 		await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
-		console.log(JSON.stringify(scorecard.grade, null, 2));
+		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			const calibration = await context.calibrateStageFailure(stageScorecards);
 			await Bun.write(
@@ -395,6 +396,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				taskId,
 				taskSha,
 				stageFile: runFiles.stage,
+				log: console.log,
 				trackPendingStage: (pending) => {
 					pendingStage = pending;
 				},

@@ -159,7 +159,7 @@ After every stage has passed, the final Judge runs separately in safe mode with 
 
 - the external rubric
 - frozen tracked baseline files except `bun.lock`
-- the complete implementation diff
+- the implementation diff, with binary changes summarized
 - measured check results
 - measured check-integrity results
 
