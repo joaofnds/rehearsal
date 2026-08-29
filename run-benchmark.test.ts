@@ -15,6 +15,11 @@ import {
 	captureCheckIntegrity,
 	captureFileHashes,
 } from "./src/benchmark/checks";
+import {
+	claudeArgs,
+	readClaudeEnvelope,
+	readStructuredOutput,
+} from "./src/benchmark/claude";
 import { runCommand } from "./src/benchmark/command";
 import { parseArgs, RUBRIC_IDS, WORKFLOW_STAGES } from "./src/benchmark/config";
 import type {
@@ -23,12 +28,18 @@ import type {
 	StageJudgeOutput,
 	StageScorecard,
 } from "./src/benchmark/contracts";
-import { StageValidationError } from "./src/benchmark/contracts";
+import {
+	claudeJsonSchema,
+	judgeGradeSchema,
+	productAnswerSchema,
+	StageValidationError,
+	stageTurnSchema,
+} from "./src/benchmark/contracts";
 import {
 	applyHarnessResults,
-	parseJudgeOutput,
 	parseRubricIds,
 	validateJudgeEvidence,
+	validateJudgeGrade,
 } from "./src/benchmark/judge";
 import {
 	applyAuthoritativeStageResults,
@@ -46,7 +57,6 @@ import {
 	captureWorkflowBackup,
 	restoreTarget,
 } from "./src/benchmark/target";
-import { createWorkflowCommand } from "./src/benchmark/workflow";
 
 const temporaryDirectories: string[] = [];
 
@@ -60,20 +70,23 @@ afterEach(async () => {
 
 describe(parseArgs, () => {
 	it("resolves explicit configuration", () => {
-		const config = parseArgs([
-			"--target",
-			"./target",
-			"--model",
-			"sonnet",
-			"--effort",
-			"high",
-			"--judge-model",
-			"sonnet",
-			"--judge-effort",
-			"high",
-			"--session-budget-usd",
-			"5",
-		], {});
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--effort",
+				"high",
+				"--judge-model",
+				"sonnet",
+				"--judge-effort",
+				"high",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
 
 		expect(config).toEqual({
 			sourceDir: join(process.cwd(), "target"),
@@ -86,16 +99,19 @@ describe(parseArgs, () => {
 	});
 
 	it("defaults Judge effort to workflow effort", () => {
-		const config = parseArgs([
-			"--target",
-			"./target",
-			"--model",
-			"sonnet",
-			"--effort",
-			"xhigh",
-			"--session-budget-usd",
-			"5",
-		], {});
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--effort",
+				"xhigh",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
 
 		expect(config.judgeModel).toBe("sonnet");
 		expect(config.judgeEffort).toBe("xhigh");
@@ -115,16 +131,19 @@ describe(parseArgs, () => {
 
 	it("rejects unsupported effort levels", () => {
 		expect(() =>
-			parseArgs([
-				"--target",
-				"./target",
-				"--model",
-				"sonnet",
-				"--effort",
-				"extreme",
-				"--session-budget-usd",
-				"5",
-			], {}),
+			parseArgs(
+				[
+					"--target",
+					"./target",
+					"--model",
+					"sonnet",
+					"--effort",
+					"extreme",
+					"--session-budget-usd",
+					"5",
+				],
+				{},
+			),
 		).toThrow("Unsupported effort");
 	});
 
@@ -135,22 +154,18 @@ describe(parseArgs, () => {
 	});
 });
 
-describe(parseJudgeOutput, () => {
+describe(validateJudgeGrade, () => {
 	it("accepts a complete consistent grade", () => {
 		const grade = completeGrade("PASS");
 
-		const parsed = parseJudgeOutput(
-			JSON.stringify({ structured_output: grade }),
-		);
-
-		expect(parsed).toEqual(grade);
+		expect(validateJudgeGrade(grade, RUBRIC_IDS)).toEqual(grade);
 	});
 
 	it("rejects a verdict that contradicts requirement results", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
 
-		expect(() => parseJudgeOutput(JSON.stringify(grade))).toThrow(
+		expect(() => validateJudgeGrade(grade, RUBRIC_IDS)).toThrow(
 			"contradicts requirement results",
 		);
 	});
@@ -159,7 +174,7 @@ describe(parseJudgeOutput, () => {
 		const grade = completeGrade("PASS");
 		grade.requirements.pop();
 
-		expect(() => parseJudgeOutput(JSON.stringify(grade))).toThrow(
+		expect(() => validateJudgeGrade(grade, RUBRIC_IDS)).toThrow(
 			"every rubric requirement exactly once",
 		);
 	});
@@ -168,12 +183,73 @@ describe(parseJudgeOutput, () => {
 		const grade = completeGrade("PASS");
 		grade.requirements.push(requirement("human-review", "PASS"));
 
-		const parsed = parseJudgeOutput(JSON.stringify(grade), [
+		const validated = validateJudgeGrade(grade, [
 			...RUBRIC_IDS,
 			"human-review",
 		]);
 
-		expect(parsed).toEqual(grade);
+		expect(validated).toEqual(grade);
+	});
+});
+
+describe(readClaudeEnvelope, () => {
+	it("returns the parsed session envelope", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({ session_id: "session-1", total_cost_usd: 0.5 }),
+		);
+
+		expect(envelope.session_id).toBe("session-1");
+		expect(envelope.total_cost_usd).toBe(0.5);
+	});
+
+	it("throws the session's own error message on an error envelope", () => {
+		expect(() =>
+			readClaudeEnvelope(
+				JSON.stringify({
+					session_id: "session-1",
+					is_error: true,
+					result: "session exhausted its budget",
+				}),
+			),
+		).toThrow("session exhausted its budget");
+	});
+});
+
+describe(readStructuredOutput, () => {
+	it("reads the structured output field", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				structured_output: { answer: "ship it" },
+			}),
+		);
+
+		const output = readStructuredOutput(envelope, productAnswerSchema);
+
+		expect(output.answer).toBe("ship it");
+	});
+
+	it("parses the result text when structured output is absent", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				result: JSON.stringify({ answer: "ship it" }),
+			}),
+		);
+
+		const output = readStructuredOutput(envelope, productAnswerSchema);
+
+		expect(output.answer).toBe("ship it");
+	});
+
+	it("rejects an envelope with no output", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({ session_id: "session-1" }),
+		);
+
+		expect(() => readStructuredOutput(envelope, productAnswerSchema)).toThrow(
+			"did not contain structured output",
+		);
 	});
 });
 
@@ -327,25 +403,80 @@ describe("workflow stages", () => {
 	});
 });
 
-describe(createWorkflowCommand, () => {
-	it("loads native project and user customizations", () => {
-		const command = createWorkflowCommand(
-			"sonnet",
-			5,
-			"/discuss TASK-1",
-			"high",
-		);
+describe(claudeArgs, () => {
+	it("grants a workflow session native customizations without permission prompts", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", effort: "high", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
 
-		expect(command).not.toContain("--safe-mode");
-		expect(command).not.toContain("--disable-slash-commands");
-		expect(command).not.toContain("--strict-mcp-config");
-		expect(command).toContain("--dangerously-skip-permissions");
-		expect(command).toContain("--effort");
-		expect(command).toContain("high");
-		expect(command).toContain("/discuss TASK-1");
-		expect(command[command.indexOf("--json-schema") + 1]).not.toContain(
-			'"$schema"',
-		);
+		expect(command).toEqual([
+			"claude",
+			"-p",
+			"--model",
+			"sonnet",
+			"--effort",
+			"high",
+			"--max-budget-usd",
+			"5",
+			"--output-format",
+			"json",
+			"--json-schema",
+			claudeJsonSchema(stageTurnSchema),
+			"--dangerously-skip-permissions",
+			"--session-id",
+			"session-1",
+		]);
+	});
+
+	it("seals a judge session away from tools, skills, and persistence", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: judgeGradeSchema,
+			access: "sealed",
+			systemPrompt: "You are a judge.",
+		});
+
+		expect(command).toEqual([
+			"claude",
+			"-p",
+			"--safe-mode",
+			"--disable-slash-commands",
+			"--strict-mcp-config",
+			"--model",
+			"sonnet",
+			"--max-budget-usd",
+			"5",
+			"--output-format",
+			"json",
+			"--json-schema",
+			claudeJsonSchema(judgeGradeSchema),
+			"--tools",
+			"",
+			"--system-prompt",
+			"You are a judge.",
+			"--no-session-persistence",
+		]);
+	});
+
+	it("resumes an existing session", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: true },
+		});
+
+		expect(command).toContain("--resume");
+		expect(command).not.toContain("--session-id");
+	});
+});
+
+describe(claudeJsonSchema, () => {
+	it("omits the $schema key Claude rejects", () => {
+		expect(claudeJsonSchema(stageTurnSchema)).not.toContain('"$schema"');
 	});
 });
 

@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
 import {
 	CLAUDE_TIMEOUT_MS,
@@ -10,8 +11,6 @@ import {
 	type WorkflowStage,
 } from "./config";
 import {
-	claudeEnvelopeSchema,
-	claudeJsonSchema,
 	type StageGrade,
 	type StageJudgeInput,
 	type StageJudgeOutput,
@@ -273,42 +272,19 @@ export async function runStageJudge(
 
 	try {
 		const output = await runCommand(
-			[
-				"claude",
-				"-p",
-				"--safe-mode",
-				"--disable-slash-commands",
-				"--strict-mcp-config",
-				"--model",
-				model,
-				...(effort ? ["--effort", effort] : []),
-				"--max-budget-usd",
-				String(sessionBudgetUsd),
-				"--no-session-persistence",
-				"--tools",
-				"",
-				"--output-format",
-				"json",
-				"--json-schema",
-				claudeJsonSchema(stageJudgeOutputSchema),
-				"--system-prompt",
-				"You are an independent process-quality judge. Judge only the named workflow stage and only from the trusted rubric and supplied evidence. Do not reward polish that omits a requirement. Return evidence for every result.",
-			],
+			claudeArgs({
+				settings: { model, effort, budgetUsd: sessionBudgetUsd },
+				schema: stageJudgeOutputSchema,
+				access: "sealed",
+				systemPrompt:
+					"You are an independent process-quality judge. Judge only the named workflow stage and only from the trusted rubric and supplied evidence. Do not reward polish that omits a requirement. Return evidence for every result.",
+			}),
 			judgeDirectory,
 			{ input: prompt, timeoutMs: CLAUDE_TIMEOUT_MS },
 		);
-		const envelope = claudeEnvelopeSchema.parse(JSON.parse(output));
-		if (envelope.is_error) {
-			throw new Error(envelope.result ?? "Stage Judge session failed");
-		}
-		const structured =
-			envelope.structured_output ??
-			(envelope.result ? JSON.parse(envelope.result) : undefined);
-		if (structured === undefined) {
-			throw new Error("Stage Judge response did not contain structured output");
-		}
+		const envelope = readClaudeEnvelope(output);
 		const stageOutput = applyAuthoritativeStageResults(
-			stageJudgeOutputSchema.parse(structured),
+			readStructuredOutput(envelope, stageJudgeOutputSchema),
 			input,
 		);
 		validateStageJudgeEvidence(stageOutput, input);

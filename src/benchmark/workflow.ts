@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { z } from "zod";
+import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
 import {
 	CLAUDE_TIMEOUT_MS,
@@ -8,8 +8,6 @@ import {
 	type WorkflowStage,
 } from "./config";
 import {
-	claudeEnvelopeSchema,
-	claudeJsonSchema,
 	productAnswerSchema,
 	type StageTranscript,
 	stageTurnSchema,
@@ -19,55 +17,6 @@ export interface ProductOwnerSession {
 	sessionId: string;
 	spentUsd: number;
 	started: boolean;
-}
-
-export function createWorkflowCommand(
-	model: string,
-	remainingBudgetUsd: number,
-	prompt: string,
-	effort?: Effort,
-	sessionId: string = randomUUID(),
-	resume = false,
-) {
-	return [
-		"claude",
-		"-p",
-		"--model",
-		model,
-		...(effort ? ["--effort", effort] : []),
-		"--max-budget-usd",
-		String(remainingBudgetUsd),
-		"--output-format",
-		"json",
-		"--json-schema",
-		claudeJsonSchema(stageTurnSchema),
-		"--dangerously-skip-permissions",
-		resume ? "--resume" : "--session-id",
-		sessionId,
-		prompt,
-	];
-}
-
-function parseClaudeEnvelope(output: string) {
-	const envelope = claudeEnvelopeSchema.parse(JSON.parse(output));
-	if (envelope.is_error) {
-		throw new Error(envelope.result ?? "Claude session failed");
-	}
-
-	return envelope;
-}
-
-function parseStructuredOutput<T>(
-	envelope: z.infer<typeof claudeEnvelopeSchema>,
-	schema: z.ZodType<T>,
-) {
-	if (envelope.structured_output !== undefined) {
-		return schema.parse(envelope.structured_output);
-	}
-
-	if (envelope.result) return schema.parse(JSON.parse(envelope.result));
-
-	throw new Error("Claude response did not contain structured output");
 }
 
 function remainingBudget(limitUsd: number, spentUsd: number) {
@@ -85,39 +34,6 @@ function continueStagePrompt(stage: WorkflowStage, productOwnerAnswer: string) {
 	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${stage} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
 }
 
-function createProductOwnerCommand(
-	model: string,
-	effort: Effort | undefined,
-	remainingBudgetUsd: number,
-	prompt: string,
-	sessionId: string,
-	resume: boolean,
-) {
-	return [
-		"claude",
-		"-p",
-		"--safe-mode",
-		"--disable-slash-commands",
-		"--strict-mcp-config",
-		"--model",
-		model,
-		...(effort ? ["--effort", effort] : []),
-		"--max-budget-usd",
-		String(remainingBudgetUsd),
-		"--output-format",
-		"json",
-		"--json-schema",
-		claudeJsonSchema(productAnswerSchema),
-		"--tools",
-		"",
-		"--system-prompt",
-		"You are the Product Owner for one software feature. Answer the current question directly and make a concrete decision. Keep every answer consistent with prior answers in this session. Prefer the smallest coherent product scope, preserve the task's required behavior, and defer implementation mechanics to the engineering agent. Do not discuss evaluation, grading, or this protocol.",
-		resume ? "--resume" : "--session-id",
-		sessionId,
-		prompt,
-	];
-}
-
 async function askProductOwner(
 	directory: string,
 	model: string,
@@ -133,24 +49,31 @@ async function askProductOwner(
 		? `The ${stage} session asks:\n\n${question}`
 		: `Feature request:\n\n${task}\n\nProduct brief:\n\n${productBrief}\n\nThe ${stage} session asks:\n\n${question}`;
 	const output = await runCommand(
-		createProductOwnerCommand(
-			model,
-			effort,
-			remainingBudget(sessionBudgetUsd, session.spentUsd),
+		[
+			...claudeArgs({
+				settings: {
+					model,
+					effort,
+					budgetUsd: remainingBudget(sessionBudgetUsd, session.spentUsd),
+				},
+				schema: productAnswerSchema,
+				access: "sealed",
+				systemPrompt:
+					"You are the Product Owner for one software feature. Answer the current question directly and make a concrete decision. Keep every answer consistent with prior answers in this session. Prefer the smallest coherent product scope, preserve the task's required behavior, and defer implementation mechanics to the engineering agent. Do not discuss evaluation, grading, or this protocol.",
+				session: { id: session.sessionId, resume: session.started },
+			}),
 			prompt,
-			session.sessionId,
-			session.started,
-		),
+		],
 		directory,
 		{ timeoutMs: CLAUDE_TIMEOUT_MS },
 	);
-	const envelope = parseClaudeEnvelope(output);
+	const envelope = readClaudeEnvelope(output);
 
 	session.sessionId = envelope.session_id;
 	session.spentUsd += envelope.total_cost_usd ?? 0;
 	session.started = true;
 
-	return parseStructuredOutput(envelope, productAnswerSchema).answer;
+	return readStructuredOutput(envelope, productAnswerSchema).answer;
 }
 
 export async function runWorkflowStage(
@@ -172,19 +95,24 @@ export async function runWorkflowStage(
 
 	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
 		const output = await runCommand(
-			createWorkflowCommand(
-				model,
-				remainingBudget(sessionBudgetUsd, spentUsd),
+			[
+				...claudeArgs({
+					settings: {
+						model,
+						effort,
+						budgetUsd: remainingBudget(sessionBudgetUsd, spentUsd),
+					},
+					schema: stageTurnSchema,
+					access: "unrestricted",
+					session: { id: sessionId, resume: turn > 0 },
+				}),
 				prompt,
-				effort,
-				sessionId,
-				turn > 0,
-			),
+			],
 			targetDir,
 			{ timeoutMs: CLAUDE_TIMEOUT_MS },
 		);
-		const envelope = parseClaudeEnvelope(output);
-		const agent = parseStructuredOutput(envelope, stageTurnSchema);
+		const envelope = readClaudeEnvelope(output);
+		const agent = readStructuredOutput(envelope, stageTurnSchema);
 
 		sessionId = envelope.session_id;
 		spentUsd += envelope.total_cost_usd ?? 0;

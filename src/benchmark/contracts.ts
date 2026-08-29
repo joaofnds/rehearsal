@@ -139,13 +139,6 @@ export const claudeEnvelopeSchema = z
 	})
 	.passthrough();
 
-export const judgeEnvelopeSchema = z
-	.object({
-		structured_output: judgeGradeSchema.optional(),
-		result: z.string().optional(),
-	})
-	.passthrough();
-
 export type JudgeGrade = z.infer<typeof judgeGradeSchema>;
 export type HumanReview = z.infer<typeof humanReviewSchema>;
 export type StageTurn = z.infer<typeof stageTurnSchema>;
