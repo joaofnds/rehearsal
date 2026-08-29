@@ -7,6 +7,7 @@ import {
 	parseTaskState,
 } from "./src/benchmark/backlog";
 import {
+	CalibrationIncompleteError,
 	collectCalibration,
 	parseHumanReview,
 	validateCalibration,
@@ -299,6 +300,12 @@ describe(parseHumanReview, () => {
 		expect(review.findings[0]?.rubricId).toBe("worker-metadata");
 	});
 
+	it("reports malformed review JSON as incomplete calibration", () => {
+		expect(() => parseHumanReview("not json")).toThrow(
+			CalibrationIncompleteError,
+		);
+	});
+
 	it("requires a rubric ID for Judge-related findings", () => {
 		expect(() =>
 			parseHumanReview(
@@ -320,6 +327,45 @@ describe(parseHumanReview, () => {
 });
 
 describe(collectCalibration, () => {
+	it("re-prompts after invalid review JSON and accepts the corrected review", async () => {
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
+		temporaryDirectories.push(reviewDirectory);
+		const reviewFile = join(reviewDirectory, "review.json");
+		const prompts: string[] = [];
+		const rl = {
+			async question(prompt: string) {
+				prompts.push(prompt);
+				await Bun.write(
+					reviewFile,
+					prompts.length === 1
+						? "not json"
+						: `${JSON.stringify({
+								verdict: "REJECT",
+								summary: "Stage failed.",
+								findings: [],
+							})}\n`,
+				);
+				return "";
+			},
+		};
+
+		const result = await collectCalibration({
+			rl,
+			reviewFile,
+			targetDir: reviewDirectory,
+			originalInstructions: await Bun.file(
+				join(import.meta.dir, "CLAUDE.md"),
+			).text(),
+			originalRubric: await Bun.file(join(import.meta.dir, "rubric.md")).text(),
+			stageScorecards: [],
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+		});
+
+		expect(prompts).toHaveLength(2);
+		expect(result.humanReview.verdict).toBe("REJECT");
+	});
+
 	it("records a rubric.md edit during stage-failure calibration without a final rejudge", async () => {
 		const reviewDirectory = await mkdtemp(join(tmpdir(), "template-review-"));
 		temporaryDirectories.push(reviewDirectory);
@@ -410,6 +456,14 @@ describe(collectCalibration, () => {
 });
 
 describe(validateCalibration, () => {
+	it("throws a calibration-incomplete error for inconsistent findings", () => {
+		const review = humanReview("ACCEPT", "MISSED", "worker-metadata");
+
+		expect(() => validateCalibration(review, completeGrade("PASS"))).toThrow(
+			CalibrationIncompleteError,
+		);
+	});
+
 	it("accepts a missed defect caught by the revised rubric", () => {
 		const original = completeGrade("PASS");
 		const revised = completeGrade("PASS");

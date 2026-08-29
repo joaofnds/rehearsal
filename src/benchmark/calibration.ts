@@ -39,8 +39,38 @@ interface CalibrationContext {
 	readonly sessionBudgetUsd: number;
 }
 
+export class CalibrationIncompleteError extends Error {}
+
+async function asCalibrationInput<T>(
+	operation: () => T | Promise<T>,
+): Promise<T> {
+	try {
+		return await operation();
+	} catch (error) {
+		if (
+			error instanceof CommandError ||
+			error instanceof CalibrationIncompleteError ||
+			error instanceof TypeError ||
+			error instanceof ReferenceError ||
+			error instanceof RangeError
+		) {
+			throw error;
+		}
+
+		throw new CalibrationIncompleteError(
+			error instanceof Error ? error.message : String(error),
+		);
+	}
+}
+
 export function parseHumanReview(review: string): HumanReview {
-	return humanReviewSchema.parse(JSON.parse(review));
+	try {
+		return humanReviewSchema.parse(JSON.parse(review));
+	} catch (error) {
+		throw new CalibrationIncompleteError(
+			error instanceof Error ? error.message : String(error),
+		);
+	}
 }
 
 export function validateCalibration(
@@ -55,7 +85,9 @@ export function validateCalibration(
 	);
 
 	if (review.verdict === "ACCEPT" && realDefects.length > 0) {
-		throw new Error("Human review cannot accept a candidate with real defects");
+		throw new CalibrationIncompleteError(
+			"Human review cannot accept a candidate with real defects",
+		);
 	}
 
 	for (const finding of review.findings) {
@@ -74,7 +106,9 @@ export function validateCalibration(
 		}
 
 		if (!originalGrade) {
-			throw new Error("Final-stage findings require a final Judge grade");
+			throw new CalibrationIncompleteError(
+				"Final-stage findings require a final Judge grade",
+			);
 		}
 
 		const originalRequirement = originalGrade.requirements.find(
@@ -109,7 +143,8 @@ function validateStageFinding(
 	const original = originalScorecards.find(
 		(scorecard) => scorecard.stage === stage,
 	);
-	if (!original) throw new Error(`No ${stage} scorecard was recorded`);
+	if (!original)
+		throw new CalibrationIncompleteError(`No ${stage} scorecard was recorded`);
 
 	const revised = revisedScorecards.find(
 		(scorecard) => scorecard.stage === stage,
@@ -134,26 +169,36 @@ function assertFindingMatchesGrades(
 ) {
 	if (assessment === "CAUGHT") {
 		if (originalFailure !== true) {
-			throw new Error(`Original ${label}Judge did not catch ${rubricId}`);
+			throw new CalibrationIncompleteError(
+				`Original ${label}Judge did not catch ${rubricId}`,
+			);
 		}
 		return;
 	}
 
 	if (!revisedAvailable) {
-		throw new Error(`${assessment} requires a revised grade`);
+		throw new CalibrationIncompleteError(
+			`${assessment} requires a revised grade`,
+		);
 	}
 
 	if (assessment === "MISSED" && originalFailure) {
-		throw new Error(`Original ${label}Judge already caught ${rubricId}`);
+		throw new CalibrationIncompleteError(
+			`Original ${label}Judge already caught ${rubricId}`,
+		);
 	}
 	if (assessment === "MISSED" && revisedFailure !== true) {
-		throw new Error(`Revised ${label}rubric does not catch ${rubricId}`);
+		throw new CalibrationIncompleteError(
+			`Revised ${label}rubric does not catch ${rubricId}`,
+		);
 	}
 	if (
 		assessment === "FALSE_POSITIVE" &&
 		(originalFailure !== true || revisedFailure !== false)
 	) {
-		throw new Error(`Revised ${label}rubric does not correct ${rubricId}`);
+		throw new CalibrationIncompleteError(
+			`Revised ${label}rubric does not correct ${rubricId}`,
+		);
 	}
 }
 
@@ -204,22 +249,30 @@ export async function collectCalibration(
 
 		try {
 			const humanReview = parseHumanReview(
-				await Bun.file(context.reviewFile).text(),
+				await asCalibrationInput(() => Bun.file(context.reviewFile).text()),
 			);
-			const [updatedInstructions, updatedRubric] = await Promise.all([
-				Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-				Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
-			]);
+			const [updatedInstructions, updatedRubric] = await asCalibrationInput(
+				() =>
+					Promise.all([
+						Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+						Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
+					]),
+			);
 			const instructionsChanged =
 				updatedInstructions !== context.originalInstructions;
 			const rubricChanged = updatedRubric !== context.originalRubric;
 			const revisedStageScorecards: StageScorecard[] = [];
 			const stageRubricsChanged: WorkflowStage[] = [];
 			for (const scorecard of context.stageScorecards) {
-				const updatedContent = await Bun.file(scorecard.rubricPath).text();
-				const updatedStageRubric = parseStageRubric(
-					updatedContent,
-					scorecard.stage,
+				const { updatedContent, updatedStageRubric } = await asCalibrationInput(
+					async () => {
+						const content = await Bun.file(scorecard.rubricPath).text();
+
+						return {
+							updatedContent: content,
+							updatedStageRubric: parseStageRubric(content, scorecard.stage),
+						};
+					},
 				);
 				if (
 					JSON.stringify(updatedStageRubric) ===
@@ -230,16 +283,18 @@ export async function collectCalibration(
 
 				stageRubricsChanged.push(scorecard.stage);
 				console.log(`\nRejudging the same ${scorecard.stage} stage`);
-				const revisedScorecard = await runStageJudge(
-					context.judgeModel,
-					context.judgeEffort,
-					context.sessionBudgetUsd,
-					scorecard.input,
-					{
-						rubricPath: scorecard.rubricPath,
-						content: updatedContent,
-						rubric: updatedStageRubric,
-					},
+				const revisedScorecard = await asCalibrationInput(() =>
+					runStageJudge(
+						context.judgeModel,
+						context.judgeEffort,
+						context.sessionBudgetUsd,
+						scorecard.input,
+						{
+							rubricPath: scorecard.rubricPath,
+							content: updatedContent,
+							rubric: updatedStageRubric,
+						},
+					),
 				);
 				revisedStageScorecards.push(revisedScorecard);
 				console.log(JSON.stringify(revisedScorecard.grade, null, 2));
@@ -249,18 +304,23 @@ export async function collectCalibration(
 			let revisedJudgePrompt: string | undefined;
 			let revisedGrade: JudgeGrade | undefined;
 			if (rubricChanged && context.finalCandidate) {
-				revisedRubricIds = validateRubricDefinition(updatedRubric);
+				const candidate = context.finalCandidate;
+				revisedRubricIds = await asCalibrationInput(() =>
+					validateRubricDefinition(updatedRubric),
+				);
 				console.log("\nRejudging the same candidate with the revised rubric");
-				const revisedJudge = await runJudge(
-					context.judgeModel,
-					context.judgeEffort,
-					context.sessionBudgetUsd,
-					updatedRubric,
-					context.finalCandidate.baselineContext,
-					context.finalCandidate.diff,
-					context.finalCandidate.changedPaths,
-					context.finalCandidate.checkIntegrity,
-					context.finalCandidate.localChecks,
+				const revisedJudge = await asCalibrationInput(() =>
+					runJudge(
+						context.judgeModel,
+						context.judgeEffort,
+						context.sessionBudgetUsd,
+						updatedRubric,
+						candidate.baselineContext,
+						candidate.diff,
+						candidate.changedPaths,
+						candidate.checkIntegrity,
+						candidate.localChecks,
+					),
 				);
 				revisedJudgePrompt = revisedJudge.prompt;
 				revisedGrade = revisedJudge.grade;
@@ -281,7 +341,9 @@ export async function collectCalibration(
 				);
 				rejudgeConfirmedByHuman = confirmation.trim().toLowerCase() === "yes";
 				if (!rejudgeConfirmedByHuman) {
-					throw new Error("Revised Judge result was not confirmed");
+					throw new CalibrationIncompleteError(
+						"Revised Judge result was not confirmed",
+					);
 				}
 			}
 
@@ -304,18 +366,9 @@ export async function collectCalibration(
 						: undefined,
 			};
 		} catch (error) {
-			if (error instanceof CommandError) throw error;
-			if (
-				error instanceof TypeError ||
-				error instanceof ReferenceError ||
-				error instanceof RangeError
-			) {
-				throw error;
-			}
+			if (!(error instanceof CalibrationIncompleteError)) throw error;
 
-			console.error(
-				`Calibration incomplete: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			console.error(`Calibration incomplete: ${error.message}`);
 		}
 	}
 }
