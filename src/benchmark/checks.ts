@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
-import { CHECK_PATHS, TEST_CONFIG_PATH } from "./config";
+import {
+	CHECK_PATHS,
+	MAX_CONTEXT_FILE_BYTES,
+	MAX_CONTEXT_TOTAL_BYTES,
+	TEST_CONFIG_PATH,
+} from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 
 export async function runChecks(targetDir: string, label: string) {
@@ -96,10 +101,19 @@ export async function captureBaselineContext(directory: string) {
 		.split("\n")
 		.filter(Boolean)
 		.filter((path) => path !== "bun.lock");
+	let totalBytes = 0;
 
 	for (const path of trackedPaths) {
 		const file = Bun.file(join(directory, path));
-		if (await file.exists()) context.push({ path, content: await file.text() });
+		if (!(await file.exists())) continue;
+		if (file.size > MAX_CONTEXT_FILE_BYTES) continue;
+		if (totalBytes + file.size > MAX_CONTEXT_TOTAL_BYTES) continue;
+
+		const bytes = await file.bytes();
+		if (bytes.subarray(0, 8192).includes(0)) continue;
+
+		context.push({ path, content: new TextDecoder().decode(bytes) });
+		totalBytes += bytes.byteLength;
 	}
 
 	return context;

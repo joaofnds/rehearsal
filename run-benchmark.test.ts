@@ -27,7 +27,11 @@ import {
 	killActiveCommands,
 	runCommand,
 } from "./src/benchmark/command";
-import { parseArgs, WORKFLOW_STAGES } from "./src/benchmark/config";
+import {
+	MAX_CONTEXT_FILE_BYTES,
+	parseArgs,
+	WORKFLOW_STAGES,
+} from "./src/benchmark/config";
 import type {
 	HumanReview,
 	JudgeGrade,
@@ -1363,6 +1367,20 @@ describe(captureBuildCandidate, () => {
 		expect(candidate.changedPaths).toContain("uncommitted.ts");
 		expect(candidate.diff).toContain("export const uncommitted = true;");
 	});
+
+	it("omits untracked content beyond the capture limit", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, "huge.log"),
+			"y".repeat(MAX_CONTEXT_FILE_BYTES + 1),
+		);
+
+		const candidate = await captureBuildCandidate(source.directory, source.sha);
+
+		expect(candidate.changedPaths).toContain("huge.log");
+		expect(candidate.diff).toContain("bytes omitted");
+		expect(candidate.diff).not.toContain("yyyy");
+	});
 });
 
 describe(captureBaselineContext, () => {
@@ -1377,6 +1395,33 @@ describe(captureBaselineContext, () => {
 			"base.txt",
 			"package.json",
 		]);
+	});
+
+	it("skips files beyond the per-file capture limit", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, "huge.txt"),
+			"x".repeat(MAX_CONTEXT_FILE_BYTES + 1),
+		);
+		await commitAll(source.directory, "chore: huge file");
+
+		const context = await captureBaselineContext(source.directory);
+
+		expect(context.map(({ path }) => path)).not.toContain("huge.txt");
+		expect(context.map(({ path }) => path)).toContain("base.txt");
+	});
+
+	it("skips binary files", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, "image.bin"),
+			new Uint8Array([137, 80, 78, 71, 0, 13, 10, 26]),
+		);
+		await commitAll(source.directory, "chore: binary file");
+
+		const context = await captureBaselineContext(source.directory);
+
+		expect(context.map(({ path }) => path)).not.toContain("image.bin");
 	});
 });
 

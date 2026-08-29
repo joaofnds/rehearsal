@@ -14,6 +14,8 @@ export const CHECK_PATHS = [
 ] as const;
 export const WORKFLOW_PATHS = ["backlog", ".boris"] as const;
 export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
+export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
+export const MAX_CONTEXT_TOTAL_BYTES = 8 * 1024 * 1024;
 
 export const WORKFLOW_STAGES = ["discuss", "grill", "plan", "build"] as const;
 

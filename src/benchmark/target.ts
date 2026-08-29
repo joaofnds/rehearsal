@@ -2,7 +2,7 @@ import { cp, mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
-import { CONTROL_DIR, WORKFLOW_PATHS } from "./config";
+import { CONTROL_DIR, MAX_CONTEXT_FILE_BYTES, WORKFLOW_PATHS } from "./config";
 import { StageValidationError } from "./contracts";
 
 export interface SourceBaseline {
@@ -230,7 +230,7 @@ export async function captureBuildCandidate(
 		.filter(Boolean);
 	const untrackedDiffs = await Promise.all(
 		untrackedPaths.map(async (path) => {
-			const content = await Bun.file(join(targetDir, path)).text();
+			const content = await captureUntrackedContent(join(targetDir, path));
 			return `diff --git a/${path} b/${path}\nnew untracked file\n--- /dev/null\n+++ b/${path}\n@@ untracked file @@\n${content}`;
 		}),
 	);
@@ -240,6 +240,18 @@ export async function captureBuildCandidate(
 		diff: [trackedDiff, ...untrackedDiffs].filter(Boolean).join("\n"),
 		changedPaths: [...new Set([...trackedPaths, ...untrackedPaths])],
 	};
+}
+
+async function captureUntrackedContent(path: string) {
+	const file = Bun.file(path);
+	if (file.size > MAX_CONTEXT_FILE_BYTES) {
+		return `[${file.size} bytes omitted: exceeds the ${MAX_CONTEXT_FILE_BYTES}-byte capture limit]`;
+	}
+
+	const bytes = await file.bytes();
+	if (bytes.subarray(0, 8192).includes(0)) return "[binary file omitted]";
+
+	return new TextDecoder().decode(bytes);
 }
 
 export async function assertBuildCommitted(targetDir: string, taskSha: string) {
