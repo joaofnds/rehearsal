@@ -74,6 +74,7 @@ interface BuildEvidence {
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
+	await claimTarget(source);
 	const workflowBackup = await captureWorkflowBackup(source.root);
 	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "template-po-"));
 	const timestamp = new Date().toISOString();
@@ -98,7 +99,6 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	process.on("SIGTERM", restoreOnSignal);
 
 	try {
-		await claimTarget(source);
 		console.log(`Target: ${source.root}`);
 		console.log(`Original commit: ${source.sha}`);
 		console.log(`Workflow backup: ${workflowBackup.directory}`);
