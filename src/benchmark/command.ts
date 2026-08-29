@@ -19,6 +19,8 @@ export class CommandError extends Error {
 	}
 }
 
+const activeProcesses = new Set<ReturnType<typeof Bun.spawn>>();
+
 export async function runCommand(
 	command: readonly string[],
 	cwd: string,
@@ -33,15 +35,28 @@ export async function runCommand(
 		timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
 		killSignal: "SIGKILL",
 	});
-	const [exitCode, stdout, stderr] = await Promise.all([
-		process.exited,
-		new Response(process.stdout).text(),
-		new Response(process.stderr).text(),
-	]);
+	activeProcesses.add(process);
 
-	if (exitCode !== 0) {
-		throw new CommandError(command, exitCode, stdout, stderr);
+	try {
+		const [exitCode, stdout, stderr] = await Promise.all([
+			process.exited,
+			new Response(process.stdout).text(),
+			new Response(process.stderr).text(),
+		]);
+
+		if (exitCode !== 0) {
+			throw new CommandError(command, exitCode, stdout, stderr);
+		}
+
+		return stdout;
+	} finally {
+		activeProcesses.delete(process);
 	}
+}
 
-	return stdout;
+export async function killActiveCommands() {
+	const processes = [...activeProcesses];
+	for (const process of processes) process.kill("SIGKILL");
+
+	await Promise.allSettled(processes.map((process) => process.exited));
 }

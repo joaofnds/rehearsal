@@ -16,8 +16,13 @@ import {
 	captureTreatmentChecks,
 	runChecks,
 } from "./checks";
-import { runCommand } from "./command";
-import { type BenchmarkConfig, CONTROL_DIR, WORKFLOW_STAGES } from "./config";
+import { killActiveCommands, runCommand } from "./command";
+import {
+	type BenchmarkConfig,
+	CONTROL_DIR,
+	WORKFLOW_STAGES,
+	type WorkflowStage,
+} from "./config";
 import type {
 	ContextFile,
 	LocalCheckResult,
@@ -74,14 +79,49 @@ interface BuildEvidence {
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
-	await claimTarget(source);
 	const workflowBackup = await captureWorkflowBackup(source.root);
 	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "template-po-"));
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
 	let pendingArtifact: RunArtifact | undefined;
+	let pendingStage:
+		| {
+				readonly file: string;
+				readonly stage: WorkflowStage;
+				readonly input: StageJudgeInput;
+		  }
+		| undefined;
 
+	const markAborted = async (reason: string) => {
+		try {
+			if (pendingStage) {
+				await Bun.write(
+					pendingStage.file,
+					`${JSON.stringify(
+						{
+							status: "STAGE_JUDGE_FAILED",
+							stage: pendingStage.stage,
+							error: reason,
+							input: pendingStage.input,
+						},
+						null,
+						2,
+					)}\n`,
+				);
+			}
+			if (pendingArtifact) {
+				await writeArtifact(runFiles.artifact, {
+					...pendingArtifact,
+					status: "FAILED",
+				});
+			}
+		} catch (writeError) {
+			console.error(
+				`Failed to update run artifacts: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+			);
+		}
+	};
 	let teardownStarted: Promise<void> | undefined;
 	const teardown = () => {
 		teardownStarted ??= teardownTarget(source, workflowBackup);
@@ -89,7 +129,9 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	};
 	const restoreOnSignal = (signal: NodeJS.Signals) => {
 		console.error(`\nReceived ${signal}; restoring the target before exit.`);
-		teardown()
+		killActiveCommands()
+			.then(() => markAborted(`run interrupted by ${signal}`))
+			.then(teardown)
 			.catch((error) =>
 				console.error(error instanceof Error ? error.message : String(error)),
 			)
@@ -97,6 +139,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	};
 	process.on("SIGINT", restoreOnSignal);
 	process.on("SIGTERM", restoreOnSignal);
+	await claimTarget(source);
 
 	try {
 		console.log(`Target: ${source.root}`);
@@ -217,30 +260,14 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					2,
 				)}\n`,
 			);
-			let scorecard: StageScorecard;
-			try {
-				scorecard = await runStageJudge(
-					config.judgeModel,
-					config.judgeEffort,
-					config.sessionBudgetUsd,
-					input,
-				);
-			} catch (error) {
-				await Bun.write(
-					runFiles.stage(stage),
-					`${JSON.stringify(
-						{
-							status: "STAGE_JUDGE_FAILED",
-							stage,
-							error: error instanceof Error ? error.message : String(error),
-							input,
-						},
-						null,
-						2,
-					)}\n`,
-				);
-				throw error;
-			}
+			pendingStage = { file: runFiles.stage(stage), stage, input };
+			const scorecard = await runStageJudge(
+				config.judgeModel,
+				config.judgeEffort,
+				config.sessionBudgetUsd,
+				input,
+			);
+			pendingStage = undefined;
 			stageScorecards.push(scorecard);
 			await Bun.write(
 				runFiles.stage(stage),
@@ -354,19 +381,9 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		pendingArtifact = undefined;
 		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
-		console.error(error instanceof Error ? error.message : String(error));
-		if (pendingArtifact) {
-			try {
-				await writeArtifact(runFiles.artifact, {
-					...pendingArtifact,
-					status: "FAILED",
-				});
-			} catch (writeError) {
-				console.error(
-					`Failed to update the run artifact: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
-				);
-			}
-		}
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(message);
+		await markAborted(message);
 		if (!stageFailureCalibrated) {
 			try {
 				await rl.question(
@@ -378,11 +395,11 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		}
 		throw error;
 	} finally {
-		process.off("SIGINT", restoreOnSignal);
-		process.off("SIGTERM", restoreOnSignal);
 		try {
 			await teardown();
 		} finally {
+			process.off("SIGINT", restoreOnSignal);
+			process.off("SIGTERM", restoreOnSignal);
 			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}
