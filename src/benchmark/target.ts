@@ -126,12 +126,15 @@ async function restoreWorkflowBackup(
 	}
 }
 
-function runMarkerPath(root: string) {
-	return join(root, ".git", "benchmark-run.json");
+async function runMarkerPath(root: string) {
+	return join(
+		await git(root, "rev-parse", "--absolute-git-dir"),
+		"benchmark-run.json",
+	);
 }
 
 export async function claimTarget(source: SourceBaseline) {
-	const path = runMarkerPath(source.root);
+	const path = await runMarkerPath(source.root);
 	const marker = Bun.file(path);
 
 	if (await marker.exists()) {
@@ -167,7 +170,7 @@ export async function restoreTarget(
 		);
 	}
 
-	await rm(runMarkerPath(source.root), { force: true });
+	await rm(await runMarkerPath(source.root), { force: true });
 }
 
 export async function teardownTarget(

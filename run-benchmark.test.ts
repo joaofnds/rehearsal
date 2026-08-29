@@ -1180,6 +1180,27 @@ describe(claimTarget, () => {
 
 		await expect(claimTarget(baseline)).resolves.toBeUndefined();
 	});
+
+	it("claims a linked-worktree target whose .git is a file", async () => {
+		const source = await createRepository();
+		await runCommand(["git", "switch", "-c", "primary"], source.directory);
+		const worktreeParent = await mkdtemp(join(tmpdir(), "template-worktree-"));
+		temporaryDirectories.push(worktreeParent);
+		const worktree = join(worktreeParent, "main");
+		await runCommand(
+			["git", "worktree", "add", worktree, "main"],
+			source.directory,
+		);
+		const baseline = await assertSourceReady(worktree);
+
+		await claimTarget(baseline);
+
+		await expect(claimTarget(baseline)).rejects.toThrow(
+			"previous benchmark run left this target unrestored",
+		);
+		await restoreTarget(baseline);
+		await expect(claimTarget(baseline)).resolves.toBeUndefined();
+	});
 });
 
 describe(teardownTarget, () => {
