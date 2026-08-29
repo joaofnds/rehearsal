@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -56,7 +56,9 @@ import {
 	assertSourceReady,
 	captureBuildCandidate,
 	captureWorkflowBackup,
+	claimTarget,
 	restoreTarget,
+	teardownTarget,
 } from "./src/benchmark/target";
 
 const temporaryDirectories: string[] = [];
@@ -1110,16 +1112,39 @@ describe(restoreTarget, () => {
 		).toBe(false);
 	});
 
-	it("preserves workflow artifacts that existed before the run", async () => {
+	it("returns the target to main from a stage branch", async () => {
+		const source = await createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		await runCommand(["git", "switch", "-c", "agent-work"], source.directory);
+		await Bun.write(join(source.directory, "stray.ts"), "export {};\n");
+		await commitAll(source.directory, "feat: stray branch work");
+
+		await restoreTarget(baseline);
+
+		expect(
+			(
+				await runCommand(["git", "branch", "--show-current"], source.directory)
+			).trim(),
+		).toBe("main");
+		expect(
+			(await runCommand(["git", "rev-parse", "HEAD"], source.directory)).trim(),
+		).toBe(source.sha);
+	});
+
+	it("preserves every workflow path that existed before the run", async () => {
 		const source = await createRepository();
 		const backlogDirectory = join(source.directory, "backlog");
+		const borisDirectory = join(source.directory, ".boris");
 		await mkdir(backlogDirectory);
+		await mkdir(borisDirectory);
 		await Bun.write(join(backlogDirectory, "original.md"), "original\n");
+		await Bun.write(join(borisDirectory, "CONTEXT.md"), "context\n");
 		const baseline = await assertSourceReady(source.directory);
 		const backup = await captureWorkflowBackup(source.directory);
 		temporaryDirectories.push(backup.directory);
 		await Bun.write(join(backlogDirectory, "original.md"), "changed\n");
 		await Bun.write(join(backlogDirectory, "generated.md"), "generated\n");
+		await Bun.write(join(borisDirectory, "CONTEXT.md"), "rewritten\n");
 
 		await restoreTarget(baseline, backup);
 
@@ -1129,6 +1154,62 @@ describe(restoreTarget, () => {
 		expect(
 			await Bun.file(join(backlogDirectory, "generated.md")).exists(),
 		).toBe(false);
+		expect(await Bun.file(join(borisDirectory, "CONTEXT.md")).text()).toBe(
+			"context\n",
+		);
+	});
+});
+
+describe(claimTarget, () => {
+	it("refuses a target an unrestored run left claimed", async () => {
+		const source = await createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		await claimTarget(baseline);
+
+		await expect(claimTarget(baseline)).rejects.toThrow(
+			"previous benchmark run left this target unrestored",
+		);
+	});
+
+	it("releases the claim after a verified restore", async () => {
+		const source = await createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		await claimTarget(baseline);
+
+		await restoreTarget(baseline);
+
+		await expect(claimTarget(baseline)).resolves.toBeUndefined();
+	});
+});
+
+describe(teardownTarget, () => {
+	it("discards the workflow backup after a verified restore", async () => {
+		const source = await createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		temporaryDirectories.push(backup.directory);
+		await Bun.write(join(source.directory, "candidate.ts"), "export {};\n");
+		await commitAll(source.directory, "feat: candidate");
+
+		await teardownTarget(baseline, backup);
+
+		expect(
+			(await runCommand(["git", "rev-parse", "HEAD"], source.directory)).trim(),
+		).toBe(source.sha);
+		await expect(stat(backup.directory)).rejects.toThrow();
+	});
+
+	it("keeps the workflow backup when the restore fails", async () => {
+		const source = await createRepository();
+		const backup = await captureWorkflowBackup(source.directory);
+		temporaryDirectories.push(backup.directory);
+		const broken = {
+			root: source.directory,
+			sha: "0000000000000000000000000000000000000000",
+		};
+
+		await expect(teardownTarget(broken, backup)).rejects.toThrow();
+		await expect(stat(backup.directory)).resolves.toBeDefined();
 	});
 });
 

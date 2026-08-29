@@ -126,6 +126,30 @@ async function restoreWorkflowBackup(
 	}
 }
 
+function runMarkerPath(root: string) {
+	return join(root, ".git", "benchmark-run.json");
+}
+
+export async function claimTarget(source: SourceBaseline) {
+	const path = runMarkerPath(source.root);
+	const marker = Bun.file(path);
+
+	if (await marker.exists()) {
+		throw new Error(
+			`A previous benchmark run left this target unrestored: ${(await marker.text()).trim()}. Restore it manually (git reset --hard <sha>; git clean -fd), then delete ${path}.`,
+		);
+	}
+
+	await Bun.write(
+		path,
+		`${JSON.stringify({
+			sha: source.sha,
+			pid: process.pid,
+			startedAt: new Date().toISOString(),
+		})}\n`,
+	);
+}
+
 export async function restoreTarget(
 	source: SourceBaseline,
 	backup?: WorkflowBackup,
@@ -142,6 +166,25 @@ export async function restoreTarget(
 			"Target repository was not restored to its original commit",
 		);
 	}
+
+	await rm(runMarkerPath(source.root), { force: true });
+}
+
+export async function teardownTarget(
+	source: SourceBaseline,
+	backup: WorkflowBackup,
+) {
+	try {
+		await restoreTarget(source, backup);
+	} catch (error) {
+		console.error(
+			`Restore failed; the workflow backup remains at ${backup.directory}`,
+		);
+		throw error;
+	}
+
+	await rm(backup.directory, { force: true, recursive: true });
+	console.log(`Target restored to ${source.sha}.`);
 }
 
 export async function assertWorkspaceCleanAt(

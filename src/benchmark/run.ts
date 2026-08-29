@@ -40,7 +40,8 @@ import {
 	captureBuildCandidate,
 	captureWorkflowBackup,
 	changedPathsBetween,
-	restoreTarget,
+	claimTarget,
+	teardownTarget,
 } from "./target";
 import { type ProductOwnerSession, runWorkflowStage } from "./workflow";
 
@@ -70,7 +71,24 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
 
+	let teardownStarted: Promise<void> | undefined;
+	const teardown = () => {
+		teardownStarted ??= teardownTarget(source, workflowBackup);
+		return teardownStarted;
+	};
+	const restoreOnSignal = (signal: NodeJS.Signals) => {
+		console.error(`\nReceived ${signal}; restoring the target before exit.`);
+		teardown()
+			.catch((error) =>
+				console.error(error instanceof Error ? error.message : String(error)),
+			)
+			.finally(() => process.exit(signal === "SIGTERM" ? 143 : 130));
+	};
+	process.on("SIGINT", restoreOnSignal);
+	process.on("SIGTERM", restoreOnSignal);
+
 	try {
+		await claimTarget(source);
 		console.log(`Target: ${source.root}`);
 		console.log(`Original commit: ${source.sha}`);
 		console.log(`Workflow backup: ${workflowBackup.directory}`);
@@ -324,14 +342,12 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		}
 		throw error;
 	} finally {
+		process.off("SIGINT", restoreOnSignal);
+		process.off("SIGTERM", restoreOnSignal);
 		try {
-			await restoreTarget(source, workflowBackup);
-			console.log(`Target restored to ${source.sha}.`);
+			await teardown();
 		} finally {
-			await Promise.all([
-				rm(workflowBackup.directory, { force: true, recursive: true }),
-				rm(productOwnerDirectory, { force: true, recursive: true }),
-			]);
+			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}
 }
