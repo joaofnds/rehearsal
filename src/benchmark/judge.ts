@@ -6,6 +6,7 @@ import { runCommand } from "./command";
 import { CLAUDE_TIMEOUT_MS, type Effort, HARNESS_RUBRIC_IDS } from "./config";
 import {
 	type ContextFile,
+	citationMatchesPath,
 	type JudgeGrade,
 	judgeGradeSchema,
 	type LocalCheckResult,
@@ -127,18 +128,6 @@ export function validateJudgeEvidence(
 				);
 			}
 		}
-	}
-}
-
-function citationMatchesPath(
-	citation: string,
-	availablePaths: readonly string[],
-): boolean {
-	try {
-		const glob = new Bun.Glob(citation);
-		return availablePaths.some((path) => path === citation || glob.match(path));
-	} catch {
-		return false;
 	}
 }
 

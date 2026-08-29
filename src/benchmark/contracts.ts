@@ -254,6 +254,26 @@ export interface RunArtifact {
 	readonly calibration?: CalibrationResult;
 }
 
+export function citationMatchesPath(
+	citation: string,
+	availablePaths: readonly string[],
+) {
+	for (const candidate of new Set([citation, citation.split("#", 1)[0]])) {
+		if (!candidate) continue;
+
+		try {
+			const glob = new Bun.Glob(candidate);
+			if (
+				availablePaths.some((path) => path === candidate || glob.match(path))
+			) {
+				return true;
+			}
+		} catch {}
+	}
+
+	return false;
+}
+
 export function claudeJsonSchema(schema: z.ZodType) {
 	const compatibleEntries = Object.entries(z.toJSONSchema(schema)).filter(
 		([key]) => key !== "$schema",

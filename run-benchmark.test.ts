@@ -508,6 +508,28 @@ describe(validateJudgeEvidence, () => {
 		).not.toThrow();
 	});
 
+	it("accepts citations carrying a location fragment", () => {
+		const grade = completeGrade("PASS");
+		grade.requirements[0] = {
+			...grade.requirements[0],
+			evidence: [
+				{
+					source: "diff",
+					path: "src/audit/example.ts#L10",
+					claim: "the worker persists metadata",
+				},
+			],
+		};
+
+		expect(() =>
+			validateJudgeEvidence(
+				grade,
+				["src/audit/example.ts"],
+				["src/app.module.ts"],
+			),
+		).not.toThrow();
+	});
+
 	it("accepts glob citations that resolve to supplied paths", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {

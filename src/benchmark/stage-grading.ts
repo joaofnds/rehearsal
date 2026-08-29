@@ -11,6 +11,7 @@ import {
 	type WorkflowStage,
 } from "./config";
 import {
+	citationMatchesPath,
 	type StageGrade,
 	type StageJudgeInput,
 	type StageJudgeOutput,
@@ -203,26 +204,6 @@ export function validateStageJudgeEvidence(
 			}
 		}
 	}
-}
-
-function citationMatchesPath(
-	citation: string,
-	availablePaths: readonly string[],
-) {
-	for (const candidate of new Set([citation, citation.split("#", 1)[0]])) {
-		if (!candidate) continue;
-
-		try {
-			const glob = new Bun.Glob(candidate);
-			if (
-				availablePaths.some((path) => path === candidate || glob.match(path))
-			) {
-				return true;
-			}
-		} catch {}
-	}
-
-	return false;
 }
 
 function assertExactIds(
