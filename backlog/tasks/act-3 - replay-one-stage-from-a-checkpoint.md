@@ -1,10 +1,11 @@
 ---
 id: ACT-3
 title: replay one stage from a checkpoint
-status: Build
-assignee: []
+status: Review
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 20:49'
+updated_date: '2026-08-30 21:27'
 labels: []
 dependencies:
   - ACT-2
@@ -21,10 +22,10 @@ The inner-loop primitive: a command that takes a checkpoint and the current corp
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A CLI command replays a chosen stage from a chosen checkpoint in a fresh worktree; the primary checkout and its branch are untouched throughout.
-- [ ] #2 The replay records artifacts, trajectory, cost, and Judge result like a normal stage run, marked as a replay with its checkpoint and corpus version.
-- [ ] #3 Attempts at the same checkpoint can be presented side by side: artifacts, Judge grades, and diffs.
-- [ ] #4 The worktree is removed after grading; on failure the evidence is preserved and its path printed.
+- [x] #1 A CLI command replays a chosen stage from a chosen checkpoint in a fresh worktree; the primary checkout and its branch are untouched throughout.
+- [x] #2 The replay records artifacts, trajectory, cost, and Judge result like a normal stage run, marked as a replay with its checkpoint and corpus version.
+- [x] #3 Attempts at the same checkpoint can be presented side by side: artifacts, Judge grades, and diffs.
+- [x] #4 The worktree is removed after grading; on failure the evidence is preserved and its path printed.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,3 +60,37 @@ Acceptance as observations:
 4. Side-by-side presentation of two attempts at one checkpoint: judge grades and artifact diff visible in one output.
 5. Stage-1 replay from the initial checkpoint succeeds on a run recorded after decision 1; on an older run the command fails with a message naming the missing initial checkpoint.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Built and observed 2026-08-30. Commits c6d8e90..16e91c2 on main.
+
+What changed:
+- Run manifest written at run start beside the checkpoints (manifest.ts), so a run that dies mid-pipeline stays replayable.
+- Initial checkpoint recorded at the task commit (decision 1); the stage loop takes its starting lineage from the caller. Stage names final/review/initial are reserved.
+- Every recorded checkpoint pins its commit under refs/rehearsal/<run> in the target (decision 2), so restore and gc cannot prune replayed history.
+- Stage validations take an expected branch; null means the detached worktree HEAD. Worktree add/remove wrap git worktree.
+- executeStageSession extracted from the graded-stage loop; the run loop and replay share it.
+- replay.ts: loadRunCheckpoints, resolveReplay (pure plan with chain verification), runReplay (worktree lifecycle, current-corpus install, frozen-lockfile dependency install for delivery stages per decision 3, judge with current rubric, strict-enveloped record under .benchmark-runs/replays/<consumed-lineage>/).
+- attempts.ts: loadAttempts groups the original stage result and replays at one checkpoint; presentAttempts prints grades, dimensions, cost, changed paths, and diffs the latest attempt against earlier ones (decision 4).
+- CLI: bun run replay --run <name> --stage <stage>; knobs and env fallbacks match the benchmark CLI; dirty control repo is recorded as <sha>-dirty, not refused.
+
+Observed:
+- Full suite green from fresh runs throughout (169 tests).
+- Integration test drives runReplay with real git worktrees, materialization, instruction commits, and real assertPlanningStageCompleted; primary HEAD/branch/status byte-identical before and after; worktree list clean after; record validates; STOP verdict recorded without throwing; induced pre-grading failure keeps the worktree and prints its path.
+- CLI observed on the error path: refuses a pre-manifest run naming it and listing replayable runs (none exist yet).
+
+Not observed:
+- A replay of a real recorded run with paid Claude sessions. No run with checkpoints exists yet; the first post-change benchmark run costs real money and is Joao's call. Until then the CLI happy path end-to-end (arg parsing -> paid sessions) is inferred from piecewise tests.
+- Lineage equality/difference across corpus edits on a real run (pinned at unit level via lineageKey).
+
+Known gaps, deliberate:
+- A replayed build that switches branches in the worktree fails validation, but a branch it created survives worktree removal as debris in the shared repo.
+- Checkpoint directory name is assumed to equal the stage name in two places (createRunFiles and runReplay).
+- Replay result commits are not ref-pinned; the record keeps the diff, the commits may be gc'd.
+
+Coordination: a parallel session is hardening tsconfig/oxlint across the repo. My files conform to exactOptionalPropertyTypes already; run.ts lines ~325/390/460/633 still need their mechanical spreads, agreed to land with their pass.
+
+Independent review due: new subsystem touching git state in the target repository; review skill triggers apply.
+<!-- SECTION:NOTES:END -->
