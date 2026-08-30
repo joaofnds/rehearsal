@@ -167,10 +167,10 @@ export function parseReplayArgs(
 		runName,
 		stage,
 		model,
-		...(effort === undefined ? {} : { effort }),
+		effort,
 		judgeModel:
 			values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model,
-		...(judgeEffort === undefined ? {} : { judgeEffort }),
+		judgeEffort,
 		sessionBudgetUsd,
 	};
 }

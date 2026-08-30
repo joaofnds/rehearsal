@@ -70,10 +70,10 @@ function attemptFromScorecard(
 		verdict: scorecard.grade.verdict,
 		dimensions: scorecard.grade.dimensions,
 		judgeCostUsd: scorecard.costUsd,
-		...(totalCostUsd === undefined ? {} : { totalCostUsd }),
-		...(artifact === undefined ? {} : { artifact }),
-		...(changedPaths === undefined ? {} : { changedPaths }),
-		...(diff === undefined ? {} : { diff }),
+		totalCostUsd,
+		artifact,
+		changedPaths,
+		diff,
 	};
 }
 

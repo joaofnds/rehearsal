@@ -30,7 +30,7 @@ Implications, all **adopted**:
   the report must show.
 - Pruning is a goal equal to improvement. The literature says corpora
   over-accumulate; the tool must make removal as cheap as addition.
-- LLM-generated instructions hurt *when unvalidated*. Machine-proposed edits
+- LLM-generated instructions hurt _when unvalidated_. Machine-proposed edits
   are acceptable only through the same outer-loop confirmation as human edits.
 
 ## Variance and statistics

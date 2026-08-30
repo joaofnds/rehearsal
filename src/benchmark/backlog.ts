@@ -20,10 +20,12 @@ const taskViewSchema = z
 
 type TaskView = z.infer<typeof taskViewSchema>;
 
-function parseTaskSeed(task: string): {
-	title: string;
-	description: string;
-} {
+interface TaskSeed {
+	readonly title: string;
+	readonly description: string;
+}
+
+function parseTaskSeed(task: string): TaskSeed {
 	const [heading, ...body] = task.trim().split("\n");
 	if (!heading?.startsWith("# ")) {
 		throw new Error("backlog-seed.md must start with a level-one heading");
@@ -137,10 +139,12 @@ export async function readTaskOutput(
 	return await runCommand(["backlog", "task", taskId, "--json"], targetDir);
 }
 
-export function parseTaskState(output: string): {
-	output: string;
-	view: TaskView;
-} {
+export interface TaskState {
+	readonly output: string;
+	readonly view: TaskView;
+}
+
+export function parseTaskState(output: string): TaskState {
 	try {
 		return { output, view: taskViewSchema.parse(JSON.parse(output)) };
 	} catch {

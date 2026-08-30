@@ -120,11 +120,9 @@ async function main(): Promise<void> {
 			instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
 			controlSha: await currentControlSha(),
 			model: config.model,
-			...(config.effort === undefined ? {} : { effort: config.effort }),
+			effort: config.effort,
 			judgeModel: config.judgeModel,
-			...(config.judgeEffort === undefined
-				? {}
-				: { judgeEffort: config.judgeEffort }),
+			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		},
 	);

@@ -180,17 +180,17 @@ Use this pause to inspect commits, code, tests, architecture, and the structured
 
 ```json
 {
-  "verdict": "REJECT",
-  "summary": "The worker drops request metadata.",
-  "findings": [
-    {
-      "description": "The persisted row omits request metadata.",
-      "paths": ["src/audit/worker/audit.worker.ts"],
-      "stage": "build",
-      "judgeAssessment": "MISSED",
-      "rubricId": "worker-metadata"
-    }
-  ]
+	"verdict": "REJECT",
+	"summary": "The worker drops request metadata.",
+	"findings": [
+		{
+			"description": "The persisted row omits request metadata.",
+			"paths": ["src/audit/worker/audit.worker.ts"],
+			"stage": "build",
+			"judgeAssessment": "MISSED",
+			"rubricId": "worker-metadata"
+		}
+	]
 }
 ```
 
@@ -293,7 +293,7 @@ The toolchain is pinned in `mise.toml`: Bun, the `claude` CLI, and `backlog`. In
 mise install
 bun install --frozen-lockfile
 bun run typecheck
-bun run check
+bun run fmt:check
 bun run lint
 bun test
 

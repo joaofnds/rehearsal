@@ -59,31 +59,33 @@ export const stageRubricSchema = z.object({
 		.min(1),
 });
 
+const stageEvidenceListSchema = z
+	.array(
+		z.object({
+			source: z.enum([
+				"task",
+				"product-brief",
+				"instructions",
+				"task-state",
+				"transcript",
+				"artifact",
+				"prior-artifact",
+				"baseline-context",
+				"diff",
+				"check-integrity",
+				"local-checks",
+				"harness-failure",
+			]),
+			path: z.string().min(1),
+			claim: z.string().min(1),
+		}),
+	)
+	.min(1);
+
 const stagePassFailResultSchema = z.object({
 	id: z.string().min(1),
 	status: z.enum(["PASS", "FAIL"]),
-	evidence: z
-		.array(
-			z.object({
-				source: z.enum([
-					"task",
-					"product-brief",
-					"instructions",
-					"task-state",
-					"transcript",
-					"artifact",
-					"prior-artifact",
-					"baseline-context",
-					"diff",
-					"check-integrity",
-					"local-checks",
-					"harness-failure",
-				]),
-				path: z.string().min(1),
-				claim: z.string().min(1),
-			}),
-		)
-		.min(1),
+	evidence: stageEvidenceListSchema,
 });
 
 export const stageJudgeOutputSchema = z.object({
@@ -93,7 +95,7 @@ export const stageJudgeOutputSchema = z.object({
 		z.object({
 			id: z.string().min(1),
 			grade: stageLetterGradeSchema,
-			evidence: stagePassFailResultSchema.shape.evidence,
+			evidence: stageEvidenceListSchema,
 		}),
 	),
 	summary: z.string().min(1),

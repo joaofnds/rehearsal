@@ -11,6 +11,7 @@
 		"allowUnreachableCode": false,
 		"allowUnusedLabels": false,
 		"verbatimModuleSyntax": true,
+		"allowImportingTsExtensions": true,
 		"noEmit": true,
 		"skipLibCheck": true,
 		"module": "esnext",

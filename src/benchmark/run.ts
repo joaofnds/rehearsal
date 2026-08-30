@@ -97,10 +97,19 @@ async function writeArtifact(
 	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
-const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
-	SIGTERM: 143,
-	SIGHUP: 129,
-};
+function signalExitCode(signal: NodeJS.Signals): number {
+	switch (signal) {
+		case "SIGTERM": {
+			return 143;
+		}
+		case "SIGHUP": {
+			return 129;
+		}
+		default: {
+			return 130;
+		}
+	}
+}
 
 export interface BuildEvidence {
 	readonly resultSha: string;
@@ -550,7 +559,7 @@ export async function runBenchmark(
 		} catch (error) {
 			console.error(error instanceof Error ? error.message : String(error));
 		} finally {
-			process.exit(SIGNAL_EXIT_CODES[signal] ?? 130);
+			process.exit(signalExitCode(signal));
 		}
 	};
 	const restoreOnSignal = (signal: NodeJS.Signals): void => {

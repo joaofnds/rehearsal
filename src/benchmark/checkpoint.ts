@@ -168,7 +168,7 @@ export function initialCheckpointInputs(
 		targetSha: root.taskSha,
 		upstream: rootLineage(root),
 		model,
-		...(effort === undefined ? {} : { effort }),
+		effort,
 		corpusFiles: [],
 		artifacts: [],
 	};
@@ -288,7 +288,7 @@ export async function recordCheckpoint(
 		lineage: lineageKey(inputs),
 		upstream: inputs.upstream,
 		model: inputs.model,
-		...(inputs.effort === undefined ? {} : { effort: inputs.effort }),
+		effort: inputs.effort,
 		corpusFiles: canonicalFiles(inputs.corpusFiles),
 		artifacts: canonicalFiles(inputs.artifacts),
 		workflowState: canonicalFiles(workflowState),

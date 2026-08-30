@@ -69,15 +69,8 @@ const RESERVED_STAGE_NAMES: readonly string[] = [
 	INITIAL_CHECKPOINT_STAGE,
 ];
 
-function stageLabel(stage: unknown, index: number): string {
-	const name =
-		typeof stage === "object" && stage !== null && "name" in stage
-			? (stage as { name?: unknown }).name
-			: undefined;
-
-	return typeof name === "string" && name.length > 0
-		? `stage ${name}`
-		: `stage at index ${index}`;
+function stageLabel(name: string | undefined, index: number): string {
+	return name === undefined ? `stage at index ${index}` : `stage ${name}`;
 }
 
 export function parsePipeline(
@@ -96,21 +89,32 @@ export function parsePipeline(
 	const parsed = pipelineDefinitionSchema.safeParse(document);
 	if (!parsed.success) {
 		const [issue] = parsed.error.issues;
-		const [, index, ...rest] = issue?.path ?? [];
+		const [, indexCandidate, ...rest] = issue?.path ?? [];
 		const message = issue?.message ?? "invalid definition";
 
-		if (typeof index !== "number") {
+		const index = z.int().safeParse(indexCandidate);
+		if (!index.success) {
 			throw new PipelineDefinitionError(
 				`Pipeline definition has an invalid stages list: ${message}`,
 			);
 		}
 
-		const rawStages = (document as { stages?: unknown })?.stages;
-		const stage = Array.isArray(rawStages) ? rawStages[index] : undefined;
+		// The definition already failed full validation; these probes only
+		// recover the offending stage's name for the error message, so every
+		// invalid part collapses to an absent name instead of failing too.
+		const container = z
+			.looseObject({ stages: z.array(z.unknown()) })
+			.safeParse(document);
+		const stage = z
+			.looseObject({ name: z.string().min(1) })
+			.safeParse(
+				container.success ? container.data.stages[index.data] : undefined,
+			);
+		const stageName = stage.success ? stage.data.name : undefined;
 		const field = rest.length > 0 ? rest.join(".") : "definition";
 
 		throw new PipelineDefinitionError(
-			`Pipeline ${stageLabel(stage, index)} has an invalid ${field}: ${message}`,
+			`Pipeline ${stageLabel(stageName, index.data)} has an invalid ${field}: ${message}`,
 		);
 	}
 

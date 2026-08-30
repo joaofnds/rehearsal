@@ -55,6 +55,7 @@ import type {
 	JudgeGrade,
 	StageJudgeInput,
 	StageJudgeOutput,
+	StageRubric,
 	StageScorecard,
 } from "./src/benchmark/contracts";
 import {
@@ -109,6 +110,7 @@ import {
 	restoreTarget,
 	teardownTarget,
 } from "./src/benchmark/target";
+import type { ProductOwnerSession } from "./src/benchmark/workflow";
 
 const RUBRIC_IDS = [
 	"tests",
@@ -1430,7 +1432,7 @@ describe(runGradedStages, () => {
 					_model: string,
 					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 					_budget: number,
-					_productOwner: unknown,
+					_productOwner: ProductOwnerSession,
 					_task: string,
 					_productBrief: string,
 					_taskId: string,
@@ -1727,7 +1729,7 @@ describe(runGradedStages, () => {
 				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 				_budget: number,
 				input: StageJudgeInput,
-				_source: unknown,
+				_source: { rubricPath: string; content: string; rubric: StageRubric },
 			) => scorecardFor(input, input.stage === "grill" ? "STOP" : "CONTINUE"),
 		};
 
@@ -1828,7 +1830,7 @@ describe(runGradedStages, () => {
 				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 				_budget: number,
 				input: StageJudgeInput,
-				_source: unknown,
+				_source: { rubricPath: string; content: string; rubric: StageRubric },
 			) => {
 				judged.push(input);
 
@@ -2733,7 +2735,9 @@ async function commitAll(directory: string, message: string) {
 }
 
 describe(parsePipeline, () => {
-	function stageEntry(overrides: Record<string, unknown> = {}) {
+	function stageEntry(
+		overrides: Record<string, string | boolean | undefined> = {},
+	) {
 		return {
 			name: "discuss",
 			kind: "planning",
@@ -3684,6 +3688,8 @@ describe(runReplay, () => {
 			loadStageRubric: async () => ({
 				rubricPath: "rubrics/stage.json",
 				content: "{}",
+				// SAFETY: scorecardFor builds its rubric from constants and never
+				// reads the input argument, so an empty stand-in is sufficient here.
 				rubric: scorecardFor({} as StageJudgeInput).rubric,
 			}),
 			addWorktree: async (root, sha, path) => {

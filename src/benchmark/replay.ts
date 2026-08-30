@@ -327,7 +327,7 @@ export async function runReplay(
 				targetDir: worktreeDir,
 				productOwnerDirectory,
 				model: request.model,
-				...(request.effort === undefined ? {} : { effort: request.effort }),
+				effort: request.effort,
 				sessionBudgetUsd: request.sessionBudgetUsd,
 				productOwner,
 				task: manifest.task,
@@ -369,23 +369,19 @@ export async function runReplay(
 				upstream: plan.consumed.lineage,
 				corpusFiles: session.corpusFiles,
 				model: request.model,
-				...(request.effort === undefined ? {} : { effort: request.effort }),
+				effort: request.effort,
 			}),
 			corpusFiles: session.corpusFiles,
 			model: request.model,
-			...(request.effort === undefined ? {} : { effort: request.effort }),
+			effort: request.effort,
 			judgeModel: request.judgeModel,
-			...(request.judgeEffort === undefined
-				? {}
-				: { judgeEffort: request.judgeEffort }),
+			judgeEffort: request.judgeEffort,
 			sessionBudgetUsd: request.sessionBudgetUsd,
 			controlSha: request.controlSha,
 			stageCostUsd: session.transcript.costUsd,
 			productOwnerCostUsd: productOwner.spentUsd,
 			judgeCostUsd: scorecard.costUsd,
-			...(session.buildEvidence === undefined
-				? {}
-				: { resultSha: session.buildEvidence.resultSha }),
+			resultSha: session.buildEvidence?.resultSha,
 			scorecard,
 		};
 		const recordPath = join(
