@@ -280,13 +280,19 @@ export async function recordCheckpoint(
 	return record;
 }
 
+export async function readCheckpointRecord(
+	directory: string,
+): Promise<CheckpointRecord> {
+	return checkpointRecordSchema.parse(
+		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
+	);
+}
+
 export async function materializeCheckpoint(
 	directory: string,
 	destination: string,
 ): Promise<CheckpointRecord> {
-	const record = checkpointRecordSchema.parse(
-		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
-	);
+	const record = await readCheckpointRecord(directory);
 
 	// The snapshot must match the record exactly — a modified, missing, or
 	// planted file all void it — and nothing is copied until it does.

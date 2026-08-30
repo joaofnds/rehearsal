@@ -65,6 +65,7 @@ import {
 } from "./src/benchmark/manifest";
 import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
+import { loadRunCheckpoints, resolveReplay } from "./src/benchmark/replay";
 import {
 	buildRunArtifact,
 	retainedCheckpointRecorder,
@@ -3225,6 +3226,168 @@ describe(retainedCheckpointRecorder, () => {
 				)
 			).trim(),
 		).toBe(source.sha);
+	});
+});
+
+describe(loadRunCheckpoints, () => {
+	it("loads every recorded checkpoint by its stage name", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-"));
+		temporaryDirectories.push(directory);
+		const targetDir = join(directory, "target");
+		await mkdir(join(targetDir, "backlog"), { recursive: true });
+		await Bun.write(join(targetDir, "backlog", "config.yml"), "statuses: []\n");
+		const runDirectory = join(directory, "checkpoints");
+		const base = {
+			targetSha: "task-sha",
+			upstream: "root-key",
+			model: "sonnet",
+			corpusFiles: [],
+			artifacts: [],
+		};
+		await recordCheckpoint(targetDir, join(runDirectory, "initial"), {
+			...base,
+			stage: "initial",
+		});
+		await recordCheckpoint(targetDir, join(runDirectory, "discuss"), {
+			...base,
+			stage: "discuss",
+		});
+		await Bun.write(join(runDirectory, "manifest.json"), "{}\n");
+
+		const checkpoints = await loadRunCheckpoints(runDirectory);
+
+		expect([...checkpoints.keys()].sort()).toEqual(["discuss", "initial"]);
+		expect(checkpoints.get("discuss")?.stage).toBe("discuss");
+	});
+});
+
+describe(resolveReplay, () => {
+	function manifest(): RunManifest {
+		return {
+			timestamp: "2026-08-30T00:00:00.000Z",
+			controlSha: "control-sha",
+			sourceRoot: "/tmp/target",
+			sourceSha: "source-sha",
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+			pipeline: {
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+					{
+						name: "plan",
+						kind: "planning",
+						skill: "plan",
+						artifact: "plan",
+						rubric: "rubrics/plan.json",
+						requiresAcceptanceCriteria: true,
+					},
+					{
+						name: "build",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/build.json",
+					},
+				],
+			},
+		};
+	}
+
+	function record(
+		stage: string,
+		lineage: string,
+		upstream: string,
+		artifacts: { path: string; sha256: string }[] = [],
+	) {
+		return {
+			stage,
+			targetSha: "task-sha",
+			lineage,
+			upstream,
+			model: "sonnet",
+			corpusFiles: [],
+			artifacts,
+			workflowState: [],
+		};
+	}
+
+	const artifactHash = { path: "backlog/docs/DOC-1 - spec.md", sha256: "aa" };
+
+	function checkpoints() {
+		return new Map([
+			["initial", record("initial", "lin-0", "root-key")],
+			["discuss", record("discuss", "lin-1", "lin-0", [artifactHash])],
+			[
+				"plan",
+				record("plan", "lin-2", "lin-1", [
+					{ path: "backlog/docs/DOC-2 - plan.md", sha256: "bb" },
+				]),
+			],
+		]);
+	}
+
+	it("consumes the preceding stage's checkpoint and carries earlier artifacts", () => {
+		const plan = resolveReplay(manifest(), checkpoints(), "build");
+
+		expect(plan.definition.name).toBe("build");
+		expect(plan.consumed.stage).toBe("plan");
+		expect(plan.consumed.lineage).toBe("lin-2");
+		expect(plan.priorArtifacts.map(({ path }) => path)).toEqual([
+			"backlog/docs/DOC-1 - spec.md",
+			"backlog/docs/DOC-2 - plan.md",
+		]);
+	});
+
+	it("replays the first stage from the initial checkpoint", () => {
+		const plan = resolveReplay(manifest(), checkpoints(), "discuss");
+
+		expect(plan.consumed.stage).toBe("initial");
+		expect(plan.priorArtifacts).toEqual([]);
+	});
+
+	it("names the missing initial checkpoint on a run that predates it", () => {
+		const stale = checkpoints();
+		stale.delete("initial");
+
+		expect(() => resolveReplay(manifest(), stale, "discuss")).toThrow(
+			/no initial checkpoint/,
+		);
+	});
+
+	it("refuses a stage the run's pipeline never declared", () => {
+		expect(() => resolveReplay(manifest(), checkpoints(), "grill")).toThrow(
+			/discuss, plan, build/,
+		);
+	});
+
+	it("refuses to replay past the point the run reached", () => {
+		const partial = checkpoints();
+		partial.delete("plan");
+
+		expect(() => resolveReplay(manifest(), partial, "build")).toThrow(
+			/no checkpoint for the plan stage/,
+		);
+	});
+
+	it("refuses a checkpoint chain that does not link back to the root", () => {
+		const forged = checkpoints();
+		forged.set("plan", record("plan", "lin-2", "lin-forged"));
+
+		expect(() => resolveReplay(manifest(), forged, "build")).toThrow(
+			/chain is broken at the plan stage/,
+		);
 	});
 });
 
