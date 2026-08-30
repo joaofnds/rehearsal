@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,7 +51,7 @@ import {
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
-import { runGradedStages } from "./src/benchmark/run";
+import { runBenchmark, runGradedStages } from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
 	assertStageGradePassed,
@@ -1579,6 +1580,41 @@ describe(assertBuildCommitted, () => {
 		await expect(
 			assertBuildCommitted(source.directory, source.sha),
 		).rejects.toBeInstanceOf(StageValidationError);
+	});
+});
+
+describe(runBenchmark, () => {
+	it("rejects a malformed pipeline before claiming the target", async () => {
+		const source = await createRepository();
+		const badPipeline = join("pipelines", `invalid-${randomUUID()}.json`);
+		const absolutePipeline = join(import.meta.dir, badPipeline);
+		await Bun.write(
+			absolutePipeline,
+			JSON.stringify({ stages: [{ name: "discuss", kind: "planning" }] }),
+		);
+
+		try {
+			await expect(
+				runBenchmark(
+					{
+						sourceDir: source.directory,
+						model: "sonnet",
+						judgeModel: "sonnet",
+						sessionBudgetUsd: 5,
+						pipelinePath: badPipeline,
+					},
+					{ question: async () => "" },
+				),
+			).rejects.toThrow(/discuss/);
+
+			const marker = join(source.directory, ".git", "benchmark-run.json");
+			expect(await Bun.file(marker).exists()).toBe(false);
+			expect(
+				await runCommand(["git", "status", "--porcelain"], source.directory),
+			).toBe("");
+		} finally {
+			await rm(absolutePipeline, { force: true });
+		}
 	});
 });
 
