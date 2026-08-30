@@ -13,6 +13,7 @@ import {
 	parseHumanReview,
 	validateCalibration,
 } from "./src/benchmark/calibration";
+import { lineageKey, rootLineage } from "./src/benchmark/checkpoint";
 import {
 	captureBaselineContext,
 	captureCheckIntegrity,
@@ -2547,3 +2548,78 @@ describe(parsePipeline, () => {
 async function loadDefaultPipeline() {
 	return await loadPipeline("pipelines/default.json");
 }
+
+describe(lineageKey, () => {
+	const base = {
+		upstream: "root-key",
+		corpusFiles: [
+			{ path: "CLAUDE.md", sha256: "aa11" },
+			{ path: ".claude/skills/discuss/SKILL.md", sha256: "bb22" },
+		],
+		model: "sonnet",
+		effort: "high",
+	} as const;
+
+	it("returns the same key for the same inputs", () => {
+		expect(lineageKey({ ...base })).toBe(lineageKey({ ...base }));
+	});
+
+	it("ignores the order corpus files are listed in", () => {
+		expect(
+			lineageKey({ ...base, corpusFiles: [...base.corpusFiles].reverse() }),
+		).toBe(lineageKey(base));
+	});
+
+	it("changes when any lineage input changes", () => {
+		const variants = [
+			lineageKey({ ...base, upstream: "other-upstream" }),
+			lineageKey({
+				...base,
+				corpusFiles: [
+					base.corpusFiles[0],
+					{ ...base.corpusFiles[1], sha256: "cc33" },
+				],
+			}),
+			lineageKey({
+				...base,
+				corpusFiles: [
+					...base.corpusFiles,
+					{ path: "extra.md", sha256: "dd44" },
+				],
+			}),
+			lineageKey({ ...base, model: "opus" }),
+			lineageKey({ ...base, effort: "low" }),
+			lineageKey({ ...base, effort: undefined }),
+		];
+
+		expect(new Set([lineageKey(base), ...variants]).size).toBe(
+			variants.length + 1,
+		);
+	});
+});
+
+describe(rootLineage, () => {
+	const base = {
+		taskSha: "task-sha",
+		task: "Task text",
+		productBrief: "Brief text",
+		workflowFiles: [{ path: "backlog/config.yml", sha256: "aa11" }],
+	} as const;
+
+	it("returns the same key for the same initial state", () => {
+		expect(rootLineage({ ...base })).toBe(rootLineage({ ...base }));
+	});
+
+	it("changes when any part of the initial state changes", () => {
+		const variants = [
+			rootLineage({ ...base, taskSha: "other-sha" }),
+			rootLineage({ ...base, task: "Other task" }),
+			rootLineage({ ...base, productBrief: "Other brief" }),
+			rootLineage({ ...base, workflowFiles: [] }),
+		];
+
+		expect(new Set([rootLineage(base), ...variants]).size).toBe(
+			variants.length + 1,
+		);
+	});
+});
