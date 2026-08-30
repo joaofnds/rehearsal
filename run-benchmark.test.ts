@@ -911,6 +911,19 @@ describe(validateJudgeEvidence.name, () => {
 		}).toThrow("cited unavailable evidence");
 	});
 
+	it("accepts a citation naming its whole source", () => {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
+			...requirement(RUBRIC_IDS[0], "PASS"),
+			evidence: [
+				{ source: "diff", path: "diff", claim: "nothing prohibited appears" },
+			],
+		});
+
+		expect(() => {
+			validateJudgeEvidence(grade, ["src/audit/example.ts"], []);
+		}).not.toThrow();
+	});
+
 	it("rejects citations to unavailable paths", () => {
 		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
@@ -1344,6 +1357,45 @@ describe(validateStageJudgeEvidence.name, () => {
 
 		expect(() => {
 			validateStageJudgeEvidence(output, stageJudgeInput("discuss"));
+		}).not.toThrow();
+	});
+
+	it("accepts a citation naming its whole source", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("diff", "diff")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, {
+				...stageJudgeInput("build"),
+				diff: "d",
+				changedPaths: ["src/a.ts"],
+			});
 		}).not.toThrow();
 	});
 
