@@ -50,8 +50,13 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
+import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
-import { runBenchmark, runGradedStages } from "./src/benchmark/run";
+import {
+	buildRunArtifact,
+	runBenchmark,
+	runGradedStages,
+} from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
 	assertStageGradePassed,
@@ -1670,6 +1675,124 @@ describe(runBenchmark, () => {
 		} finally {
 			await rm(absolutePipeline, { force: true });
 		}
+	});
+});
+
+describe(buildRunArtifact, () => {
+	async function artifactInputs(
+		pipeline: PipelineDefinition,
+		pipelinePath: string,
+	) {
+		return {
+			timestamp: "2026-08-30T00:00:00.000Z",
+			controlSha: "control-sha",
+			source: { root: "/tmp/target", origin: undefined, sha: "source-sha" },
+			taskSha: "task-sha",
+			config: {
+				sourceDir: "/tmp/target",
+				model: "sonnet",
+				judgeModel: "sonnet",
+				sessionBudgetUsd: 5,
+				pipelinePath,
+			},
+			pipeline,
+			claudeVersion: "claude 1.0.0",
+			task: "Task",
+			productBrief: "Brief",
+			instructions: "Instructions",
+			rubric: "Rubric",
+			rubricIds: ["scope"],
+			baselineContext: [],
+			taskId: "TASK-1",
+			productOwner: { sessionId: "po", spentUsd: 0, started: false },
+			workflow: [],
+			stageScorecards: [],
+			evidence: {
+				resultSha: "result-sha",
+				diff: "the-diff",
+				changedPaths: ["src/example.ts"],
+				taskState: "state",
+				checkIntegrity: harnessResult("PASS", "checks match"),
+				localChecks: harnessResult("PASS", "all green"),
+			},
+			judge: {
+				prompt: "judge prompt",
+				grade: {
+					requirements: [],
+					verdict: "PASS" as const,
+					summary: "ok",
+				},
+			},
+			reviewFile: "/tmp/review.json",
+		};
+	}
+
+	it("records the pipeline it ran and the path it came from", async () => {
+		const pipelinePath = join("pipelines", `custom-${randomUUID()}.json`);
+		const absolute = join(import.meta.dir, pipelinePath);
+		await Bun.write(
+			absolute,
+			JSON.stringify({
+				stages: [
+					{
+						name: "sketch",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "backlog/docs/sketch.md",
+						rubric: "rubrics/discuss.json",
+					},
+					{
+						name: "build",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/build.json",
+					},
+				],
+			}),
+		);
+
+		try {
+			const pipeline = await loadPipeline(pipelinePath);
+
+			const artifact = buildRunArtifact(
+				await artifactInputs(pipeline, pipelinePath),
+			);
+
+			expect(artifact.pipelinePath).toBe(pipelinePath);
+			expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
+				"sketch",
+				"build",
+			]);
+		} finally {
+			await rm(absolute, { force: true });
+		}
+	});
+
+	it("records the default pipeline when the run used it", async () => {
+		const pipeline = await loadDefaultPipeline();
+
+		const artifact = buildRunArtifact(
+			await artifactInputs(pipeline, "pipelines/default.json"),
+		);
+
+		expect(artifact.pipelinePath).toBe("pipelines/default.json");
+		expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
+			"discuss",
+			"grill",
+			"plan",
+			"build",
+		]);
+	});
+
+	it("records the configured relative path, not an absolute one", async () => {
+		const artifact = buildRunArtifact(
+			await artifactInputs(
+				await loadDefaultPipeline(),
+				"pipelines/default.json",
+			),
+		);
+
+		expect(artifact.pipelinePath.startsWith("/")).toBe(false);
 	});
 });
 

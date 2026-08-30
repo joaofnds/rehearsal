@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Effort, WorkflowStage } from "./config";
-import type { StageKind } from "./pipeline";
+import type { PipelineDefinition, StageKind } from "./pipeline";
 
 export const evidenceSchema = z.object({
 	source: z.enum(["diff", "baseline-context", "local-checks"]),
@@ -237,6 +237,8 @@ export interface RunArtifact {
 	readonly instructions: string;
 	readonly rubric: string;
 	readonly rubricIds: readonly string[];
+	readonly pipelinePath: string;
+	readonly pipeline: PipelineDefinition;
 	readonly baselineContext: readonly ContextFile[];
 	readonly taskId: string;
 	readonly productOwnerSessionId: string;

@@ -26,6 +26,7 @@ import {
 import type {
 	CalibrationResult,
 	ContextFile,
+	JudgeGrade,
 	LocalCheckResult,
 	RunArtifact,
 	StageJudgeInput,
@@ -82,6 +83,75 @@ interface BuildEvidence {
 	readonly checkIntegrity: LocalCheckResult;
 	readonly localChecks: LocalCheckResult;
 	readonly taskState: string;
+}
+
+export interface RunArtifactInputs {
+	readonly timestamp: string;
+	readonly controlSha: string;
+	readonly source: {
+		readonly root: string;
+		readonly origin?: string;
+		readonly sha: string;
+	};
+	readonly taskSha: string;
+	readonly config: BenchmarkConfig;
+	readonly pipeline: PipelineDefinition;
+	readonly claudeVersion: string;
+	readonly task: string;
+	readonly productBrief: string;
+	readonly instructions: string;
+	readonly rubric: string;
+	readonly rubricIds: readonly string[];
+	readonly baselineContext: readonly ContextFile[];
+	readonly taskId: string;
+	readonly productOwner: ProductOwnerSession;
+	readonly workflow: readonly StageTranscript[];
+	readonly stageScorecards: readonly StageScorecard[];
+	readonly evidence: BuildEvidence;
+	readonly judge: { readonly prompt: string; readonly grade: JudgeGrade };
+	readonly reviewFile: string;
+}
+
+export function buildRunArtifact(inputs: RunArtifactInputs): RunArtifact {
+	const { source, config, evidence, judge, productOwner } = inputs;
+
+	return {
+		status: "AWAITING_HUMAN_REVIEW",
+		timestamp: inputs.timestamp,
+		controlSha: inputs.controlSha,
+		sourceRoot: source.root,
+		sourceOrigin: source.origin,
+		sourceSha: source.sha,
+		taskSha: inputs.taskSha,
+		resultSha: evidence.resultSha,
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+		bunVersion: Bun.version,
+		claudeVersion: inputs.claudeVersion.trim(),
+		task: inputs.task,
+		productBrief: inputs.productBrief,
+		instructions: inputs.instructions,
+		rubric: inputs.rubric,
+		rubricIds: inputs.rubricIds,
+		pipelinePath: config.pipelinePath,
+		pipeline: inputs.pipeline,
+		baselineContext: inputs.baselineContext,
+		taskId: inputs.taskId,
+		productOwnerSessionId: productOwner.sessionId,
+		productOwnerCostUsd: productOwner.spentUsd,
+		workflow: inputs.workflow,
+		stageScorecards: inputs.stageScorecards,
+		taskState: evidence.taskState,
+		judgePrompt: judge.prompt,
+		diff: evidence.diff,
+		checkIntegrity: evidence.checkIntegrity,
+		localChecks: evidence.localChecks,
+		grade: judge.grade,
+		reviewFile: inputs.reviewFile,
+	};
 }
 
 export interface StageDependencies {
@@ -446,22 +516,14 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		);
 		const { grade } = judge;
 		console.log(JSON.stringify(grade, null, 2));
-		const artifact: RunArtifact = {
-			status: "AWAITING_HUMAN_REVIEW",
+		const artifact = buildRunArtifact({
 			timestamp,
 			controlSha,
-			sourceRoot: source.root,
-			sourceOrigin: source.origin,
-			sourceSha: source.sha,
+			source,
 			taskSha,
-			resultSha: evidence.resultSha,
-			model: config.model,
-			effort: config.effort,
-			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
-			sessionBudgetUsd: config.sessionBudgetUsd,
-			bunVersion: Bun.version,
-			claudeVersion: claudeVersion.trim(),
+			config,
+			pipeline,
+			claudeVersion,
 			task,
 			productBrief,
 			instructions,
@@ -469,18 +531,13 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			rubricIds,
 			baselineContext,
 			taskId,
-			productOwnerSessionId: productOwner.sessionId,
-			productOwnerCostUsd: productOwner.spentUsd,
+			productOwner,
 			workflow,
 			stageScorecards,
-			taskState: evidence.taskState,
-			judgePrompt: judge.prompt,
-			diff: evidence.diff,
-			checkIntegrity: evidence.checkIntegrity,
-			localChecks: evidence.localChecks,
-			grade,
+			evidence,
+			judge,
 			reviewFile: runFiles.review,
-		};
+		});
 		await writeArtifact(runFiles.artifact, artifact);
 		pendingArtifact = artifact;
 		console.log(`Run artifact: ${runFiles.artifact}`);
