@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { CommandError, runCommand } from "./command";
-import { type ContextFile, stageLetterGradeSchema } from "./contracts";
+import type { ContextFile } from "./contracts";
+import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
 
 /**
@@ -20,9 +21,9 @@ export interface Attempt {
 		readonly grade: string;
 	}[];
 	readonly costUsd: number;
-	readonly artifact?: ContextFile;
-	readonly changedPaths?: readonly string[];
-	readonly diff?: string;
+	readonly artifact?: ContextFile | undefined;
+	readonly changedPaths?: readonly string[] | undefined;
+	readonly diff?: string | undefined;
 }
 
 const attemptScorecardSchema = z
@@ -84,12 +85,16 @@ async function loadOriginalAttempt(
 	stage: string,
 ): Promise<Attempt | undefined> {
 	const file = Bun.file(join(runsDirectory, `${runName}.${stage}.json`));
-	if (!(await file.exists())) return undefined;
+	if (!(await file.exists())) {
+		return undefined;
+	}
 
 	const parsed = attemptScorecardSchema.safeParse(
 		JSON.parse(await file.text()),
 	);
-	if (!parsed.success) return undefined;
+	if (!parsed.success) {
+		return undefined;
+	}
 
 	return attemptFromScorecard(
 		`original run ${runName}`,
@@ -111,14 +116,15 @@ export async function loadAttempts(
 ): Promise<Attempt[]> {
 	const attempts: Attempt[] = [];
 	const original = await loadOriginalAttempt(runsDirectory, runName, stage);
-	if (original) attempts.push(original);
+	if (original) {
+		attempts.push(original);
+	}
 
 	const replaysDirectory = join(runsDirectory, "replays", lineage);
 	let entries: string[] = [];
 	try {
-		entries = (await readdir(replaysDirectory)).filter((entry) =>
-			entry.endsWith(".json"),
-		);
+		const replayEntries = await readdir(replaysDirectory);
+		entries = replayEntries.filter((entry) => entry.endsWith(".json"));
 	} catch (error) {
 		if (
 			!(error instanceof Error && "code" in error && error.code === "ENOENT")
@@ -127,7 +133,7 @@ export async function loadAttempts(
 		}
 	}
 
-	for (const entry of entries.sort()) {
+	for (const entry of entries.toSorted()) {
 		const record = await readReplayRecord(join(replaysDirectory, entry));
 		attempts.push(
 			attemptFromScorecard(
@@ -141,7 +147,10 @@ export async function loadAttempts(
 	return attempts;
 }
 
-export async function diffTexts(before: string, after: string) {
+export async function diffTexts(
+	before: string,
+	after: string,
+): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-diff-"));
 
 	try {
@@ -165,7 +174,7 @@ export async function diffTexts(before: string, after: string) {
 	}
 }
 
-function attemptContent(attempt: Attempt) {
+function attemptContent(attempt: Attempt): string | undefined {
 	return attempt.artifact?.content ?? attempt.diff;
 }
 
@@ -178,10 +187,10 @@ export async function presentAttempts(
 	lineage: string,
 	attempts: readonly Attempt[],
 	diff: typeof diffTexts = diffTexts,
-) {
+): Promise<string> {
 	const lines = [`Attempts at checkpoint ${lineage}:`];
 
-	attempts.forEach((attempt, index) => {
+	for (const [index, attempt] of attempts.entries()) {
 		const dimensions = attempt.dimensions
 			.map(({ id, grade }) => `${id} ${grade}`)
 			.join(", ");
@@ -191,14 +200,16 @@ export async function presentAttempts(
 		if (attempt.changedPaths?.length) {
 			lines.push(`   changed paths: ${attempt.changedPaths.join(", ")}`);
 		}
-	});
+	}
 
-	const latest = attempts[attempts.length - 1];
+	const latest = attempts.at(-1);
 	const latestContent = latest ? attemptContent(latest) : undefined;
 	if (latest && latestContent !== undefined) {
 		for (const earlier of attempts.slice(0, -1)) {
 			const earlierContent = attemptContent(earlier);
-			if (earlierContent === undefined) continue;
+			if (earlierContent === undefined) {
+				continue;
+			}
 
 			const changes = await diff(earlierContent, latestContent);
 			lines.push(

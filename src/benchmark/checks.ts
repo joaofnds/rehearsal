@@ -9,7 +9,10 @@ import {
 } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 
-export async function runChecks(targetDir: string, label: string) {
+export async function runChecks(
+	targetDir: string,
+	label: string,
+): Promise<void> {
 	console.log(`\n${label}`);
 	const options = { env: { CONFIG_PATH: TEST_CONFIG_PATH } };
 
@@ -54,7 +57,9 @@ export async function captureTreatmentChecks(
 	}
 }
 
-export async function captureFileHashes(directory: string) {
+export async function captureFileHashes(
+	directory: string,
+): Promise<Map<string, string>> {
 	const hashes = new Map<string, string>();
 
 	for (const path of CHECK_PATHS) {
@@ -76,7 +81,9 @@ export async function captureCheckIntegrity(
 	const changedPaths: string[] = [];
 
 	for (const [path, baselineHash] of baselineHashes) {
-		if (treatmentHashes.get(path) !== baselineHash) changedPaths.push(path);
+		if (treatmentHashes.get(path) !== baselineHash) {
+			changedPaths.push(path);
+		}
 	}
 
 	return {
@@ -94,20 +101,27 @@ export async function captureCheckIntegrity(
 	};
 }
 
-export async function captureBoundedContent(file: ReturnType<typeof Bun.file>) {
+export async function captureBoundedContent(
+	file: ReturnType<typeof Bun.file>,
+): Promise<string> {
 	if (file.size > MAX_CONTEXT_FILE_BYTES) {
 		return `[${file.size} bytes omitted: exceeds the ${MAX_CONTEXT_FILE_BYTES}-byte capture limit]`;
 	}
 
 	const bytes = await file.bytes();
-	if (bytes.subarray(0, 8192).includes(0)) return "[binary file omitted]";
+	if (bytes.subarray(0, 8192).includes(0)) {
+		return "[binary file omitted]";
+	}
 
 	return new TextDecoder().decode(bytes);
 }
 
-export async function captureBaselineContext(directory: string) {
+export async function captureBaselineContext(
+	directory: string,
+): Promise<ContextFile[]> {
 	const context: ContextFile[] = [];
-	const trackedPaths = (await runCommand(["git", "ls-files"], directory))
+	const trackedOutput = await runCommand(["git", "ls-files"], directory);
+	const trackedPaths = trackedOutput
 		.trim()
 		.split("\n")
 		.filter(Boolean)
@@ -116,7 +130,9 @@ export async function captureBaselineContext(directory: string) {
 
 	for (const path of trackedPaths) {
 		const file = Bun.file(join(directory, path));
-		if (!(await file.exists())) continue;
+		if (!(await file.exists())) {
+			continue;
+		}
 
 		if (totalBytes + file.size > MAX_CONTEXT_TOTAL_BYTES) {
 			context.push({

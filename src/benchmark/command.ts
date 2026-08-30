@@ -7,11 +7,13 @@ interface CommandOptions {
 }
 
 export class CommandError extends Error {
-	constructor(
-		readonly command: readonly string[],
-		readonly exitCode: number,
-		readonly stdout: string,
-		readonly stderr: string,
+	public override name = "CommandError";
+
+	public constructor(
+		public readonly command: readonly string[],
+		public readonly exitCode: number,
+		public readonly stdout: string,
+		public readonly stderr: string,
 	) {
 		super(
 			`Command failed (${exitCode}): ${command.join(" ")}\n${stderr || stdout}`,
@@ -21,7 +23,7 @@ export class CommandError extends Error {
 
 const activeProcesses = new Set<ReturnType<typeof Bun.spawn>>();
 
-function killProcessGroup(child: ReturnType<typeof Bun.spawn>) {
+function killProcessGroup(child: ReturnType<typeof Bun.spawn>): void {
 	try {
 		process.kill(-child.pid, "SIGKILL");
 	} catch {
@@ -66,9 +68,11 @@ export async function runCommand(
 	}
 }
 
-export async function killActiveCommands() {
+export async function killActiveCommands(): Promise<void> {
 	const children = [...activeProcesses];
-	for (const child of children) killProcessGroup(child);
+	for (const child of children) {
+		killProcessGroup(child);
+	}
 
 	await Promise.allSettled(children.map((child) => child.exited));
 }

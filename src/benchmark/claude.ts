@@ -1,10 +1,7 @@
 import type { z } from "zod";
 import type { Effort } from "./config";
-import {
-	type ClaudeEnvelope,
-	claudeEnvelopeSchema,
-	claudeJsonSchema,
-} from "./contracts";
+import type { ClaudeEnvelope } from "./contracts";
+import { claudeEnvelopeSchema, claudeJsonSchema } from "./contracts";
 
 export interface SessionSettings {
 	readonly model: string;
@@ -17,7 +14,9 @@ export interface ClaudeInvocation {
 	readonly schema: z.ZodType;
 	readonly access: "unrestricted" | "sealed";
 	readonly systemPrompt?: string | undefined;
-	readonly session?: { readonly id: string; readonly resume: boolean } | undefined;
+	readonly session?:
+		| { readonly id: string; readonly resume: boolean }
+		| undefined;
 }
 
 export function claudeArgs(invocation: ClaudeInvocation): string[] {
@@ -65,7 +64,9 @@ export function readStructuredOutput<T>(
 		return schema.parse(envelope.structured_output);
 	}
 
-	if (envelope.result) return schema.parse(JSON.parse(envelope.result));
+	if (envelope.result) {
+		return schema.parse(JSON.parse(envelope.result));
+	}
 
 	throw new Error("Claude response did not contain structured output");
 }

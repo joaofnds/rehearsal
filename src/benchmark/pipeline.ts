@@ -14,7 +14,7 @@ const identifierSchema = z
 	.string()
 	.min(1)
 	.regex(
-		/^[a-z0-9][a-z0-9_-]*$/i,
+		/^[a-z0-9][a-z0-9_-]*$/iu,
 		"must be letters, digits, dashes, or underscores",
 	);
 
@@ -51,7 +51,9 @@ export type PlanningStageDefinition = Extract<
 >;
 export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
 
-export class PipelineDefinitionError extends Error {}
+export class PipelineDefinitionError extends Error {
+	public override name = "PipelineDefinitionError";
+}
 
 /**
  * Names the harness has already given to something of its own. "final" marks a
@@ -67,7 +69,7 @@ const RESERVED_STAGE_NAMES: readonly string[] = [
 	INITIAL_CHECKPOINT_STAGE,
 ];
 
-function stageLabel(stage: unknown, index: number) {
+function stageLabel(stage: unknown, index: number): string {
 	const name =
 		typeof stage === "object" && stage !== null && "name" in stage
 			? (stage as { name?: unknown }).name
@@ -93,7 +95,7 @@ export function parsePipeline(
 
 	const parsed = pipelineDefinitionSchema.safeParse(document);
 	if (!parsed.success) {
-		const issue = parsed.error.issues[0];
+		const [issue] = parsed.error.issues;
 		const [, index, ...rest] = issue?.path ?? [];
 		const message = issue?.message ?? "invalid definition";
 
@@ -119,7 +121,7 @@ export function parsePipeline(
 	return parsed.data;
 }
 
-function assertUniqueNames(stages: readonly StageDefinition[]) {
+function assertUniqueNames(stages: readonly StageDefinition[]): void {
 	const seen = new Set<string>();
 
 	for (const stage of stages) {
@@ -140,7 +142,7 @@ function assertUniqueNames(stages: readonly StageDefinition[]) {
 function assertRubricsExist(
 	stages: readonly StageDefinition[],
 	availableRubrics: readonly string[],
-) {
+): void {
 	for (const stage of stages) {
 		if (!availableRubrics.includes(stage.rubric)) {
 			throw new PipelineDefinitionError(
@@ -150,9 +152,9 @@ function assertRubricsExist(
 	}
 }
 
-function assertOneDeliveryStageLast(stages: readonly StageDefinition[]) {
+function assertOneDeliveryStageLast(stages: readonly StageDefinition[]): void {
 	const deliveryStages = stages.filter(({ kind }) => kind === "delivery");
-	const delivery = deliveryStages[0];
+	const [delivery] = deliveryStages;
 
 	if (!delivery) {
 		throw new PipelineDefinitionError(
@@ -164,7 +166,7 @@ function assertOneDeliveryStageLast(stages: readonly StageDefinition[]) {
 			`Pipeline must declare exactly one delivery stage; it declares ${deliveryStages.map(({ name }) => name).join(", ")}`,
 		);
 	}
-	if (stages[stages.length - 1] !== delivery) {
+	if (stages.at(-1) !== delivery) {
 		throw new PipelineDefinitionError(
 			`Pipeline delivery stage ${delivery.name} must be last`,
 		);
@@ -190,7 +192,8 @@ export async function loadPipeline(
 	}
 
 	const rubricsDirectory = join(CONTROL_DIR, "rubrics");
-	const availableRubrics = (await readdir(rubricsDirectory)).map((entry) =>
+	const rubricEntries = await readdir(rubricsDirectory);
+	const availableRubrics = rubricEntries.map((entry) =>
 		relative(CONTROL_DIR, join(rubricsDirectory, entry)),
 	);
 
@@ -205,7 +208,9 @@ export async function loadPipeline(
  * that stage's Judge runs, with the target already claimed and the earlier
  * stages already paid for.
  */
-async function assertRubricsFitTheirStages(pipeline: PipelineDefinition) {
+async function assertRubricsFitTheirStages(
+	pipeline: PipelineDefinition,
+): Promise<void> {
 	for (const stage of pipeline.stages) {
 		try {
 			await loadStageRubric(stage);

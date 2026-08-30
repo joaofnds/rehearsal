@@ -1,17 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
-import {
-	CLAUDE_TIMEOUT_MS,
-	type Effort,
-	MAX_STAGE_TURNS,
-	type WorkflowStage,
-} from "./config";
-import {
-	productAnswerSchema,
-	type StageTranscript,
-	stageTurnSchema,
-} from "./contracts";
+import type { Effort, WorkflowStage } from "./config";
+import { CLAUDE_TIMEOUT_MS, MAX_STAGE_TURNS } from "./config";
+import type { StageTranscript } from "./contracts";
+import { productAnswerSchema, stageTurnSchema } from "./contracts";
 
 export interface ProductOwnerSession {
 	sessionId: string;
@@ -19,18 +12,23 @@ export interface ProductOwnerSession {
 	started: boolean;
 }
 
-function remainingBudget(limitUsd: number, spentUsd: number) {
+function remainingBudget(limitUsd: number, spentUsd: number): number {
 	const remaining = limitUsd - spentUsd;
-	if (remaining <= 0) throw new Error("Claude session exhausted its budget");
+	if (remaining <= 0) {
+		throw new Error("Claude session exhausted its budget");
+	}
 
 	return remaining;
 }
 
-function stagePrompt(skill: string, taskId: string) {
+function stagePrompt(skill: string, taskId: string): string {
 	return `/${skill} ${taskId}\n\nRun the native /${skill} skill to completion. A Product Owner is available between turns. Do not call AskUserQuestion. When product input is required, return QUESTION with exactly one question, its recommendation, and enough context to decide. Return COMPLETE only after the skill's durable artifact is saved. Never mention this mediation protocol in project artifacts.`;
 }
 
-function continueStagePrompt(skill: string, productOwnerAnswer: string) {
+function continueStagePrompt(
+	skill: string,
+	productOwnerAnswer: string,
+): string {
 	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${skill} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
 }
 
@@ -44,7 +42,7 @@ async function askProductOwner(
 	productBrief: string,
 	stage: WorkflowStage,
 	question: string,
-) {
+): Promise<string> {
 	const prompt = session.started
 		? `The ${stage} session asks:\n\n${question}`
 		: `Feature request:\n\n${task}\n\nProduct brief:\n\n${productBrief}\n\nThe ${stage} session asks:\n\n${question}`;

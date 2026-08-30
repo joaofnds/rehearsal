@@ -70,17 +70,13 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
-import {
-	loadRunManifest,
-	type RunManifest,
-	writeRunManifest,
-} from "./src/benchmark/manifest";
+import type { RunManifest } from "./src/benchmark/manifest";
+import { loadRunManifest, writeRunManifest } from "./src/benchmark/manifest";
 import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
+import type { ReplayDependencies, ReplayRequest } from "./src/benchmark/replay";
 import {
 	loadRunCheckpoints,
-	type ReplayDependencies,
-	type ReplayRequest,
 	readReplayRecord,
 	resolveReplay,
 	runReplay,
@@ -663,8 +659,10 @@ describe(validateCalibration, () => {
 
 	it("validates a missed stage requirement against the revised stage rubric", () => {
 		const review = humanReview("REJECT", "MISSED", "scope");
-		const finding = review.findings[0];
-		if (!finding) throw new Error("Expected a finding");
+		const [finding] = review.findings;
+		if (!finding) {
+			throw new Error("Expected a finding");
+		}
 		finding.stage = "discuss";
 
 		expect(() =>
@@ -680,8 +678,10 @@ describe(validateCalibration, () => {
 
 	it("accepts a missed stage defect added as a new rubric requirement", () => {
 		const review = humanReview("REJECT", "MISSED", "worker-metadata");
-		const finding = review.findings[0];
-		if (!finding) throw new Error("Expected a finding");
+		const [finding] = review.findings;
+		if (!finding) {
+			throw new Error("Expected a finding");
+		}
 		finding.stage = "discuss";
 
 		expect(() =>
@@ -1085,7 +1085,7 @@ describe(deriveStageGrade, () => {
 	});
 
 	it("parses a rubric a stage adopts under any name", () => {
-		const rubric = parseStageRubric(
+		const parsed = parseStageRubric(
 			JSON.stringify({
 				hardBlockers: [
 					{ id: "invalid-stage-delivery", description: "Valid delivery" },
@@ -1102,7 +1102,7 @@ describe(deriveStageGrade, () => {
 			}),
 		);
 
-		expect(rubric.requirements.map(({ id }) => id)).toEqual(["sources"]);
+		expect(parsed.requirements.map(({ id }) => id)).toEqual(["sources"]);
 	});
 
 	it("requires delivery-only blockers of a delivery stage under any name", () => {
@@ -1345,7 +1345,9 @@ describe(killActiveCommands, () => {
 			["sh", "-c", "sleep 987654 & wait"],
 			process.cwd(),
 		).catch(() => "killed");
-		while ((await pgrepMatches("sleep 987654")) === "") await Bun.sleep(25);
+		while ((await pgrepMatches("sleep 987654")) === "") {
+			await Bun.sleep(25);
+		}
 
 		await killActiveCommands();
 
@@ -1514,8 +1516,8 @@ describe(runGradedStages, () => {
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
 			checkpointDirectory: (stage: string) =>
 				join(stageDirectory, "checkpoints", stage),
-			log: () => {},
-			trackPendingStage: () => {},
+			log: () => undefined,
+			trackPendingStage: () => undefined,
 			calibrateStageFailure: async (): Promise<CalibrationResult> => {
 				throw new Error("calibration not expected");
 			},
@@ -1752,8 +1754,9 @@ describe(runGradedStages, () => {
 		const missing = {
 			...dependencies,
 			resolveSkillDirectory: async (skill: string) => {
-				if (skill === "build")
+				if (skill === "build") {
 					throw new Error(`The ${skill} skill is not installed`);
+				}
 
 				return `/skills/${skill}`;
 			},
@@ -1927,14 +1930,16 @@ describe(addWorktree, () => {
 		await addWorktree(source.directory, source.sha, worktree);
 
 		expect(await Bun.file(join(worktree, "base.txt")).text()).toBe("base\n");
-		expect(
-			(await runCommand(["git", "branch", "--show-current"], worktree)).trim(),
-		).toBe("");
-		expect(
-			(
-				await runCommand(["git", "branch", "--show-current"], source.directory)
-			).trim(),
-		).toBe("main");
+		const worktreeBranch = await runCommand(
+			["git", "branch", "--show-current"],
+			worktree,
+		);
+		expect(worktreeBranch.trim()).toBe("");
+		const primaryBranch = await runCommand(
+			["git", "branch", "--show-current"],
+			source.directory,
+		);
+		expect(primaryBranch.trim()).toBe("main");
 
 		await removeWorktree(source.directory, worktree);
 
@@ -2007,7 +2012,7 @@ describe(runBenchmark, () => {
 					},
 					{ question: async () => "" },
 				),
-			).rejects.toThrow(/discuss/);
+			).rejects.toThrow(/discuss/u);
 
 			const marker = join(source.directory, ".git", "benchmark-run.json");
 			expect(await Bun.file(marker).exists()).toBe(false);
@@ -2168,7 +2173,7 @@ describe(buildRunArtifact, () => {
 describe(loadPipeline, () => {
 	it("refuses a definition outside the control repository", async () => {
 		await expect(loadPipeline("../../../../etc/hosts")).rejects.toThrow(
-			/outside/,
+			/outside/u,
 		);
 	});
 
@@ -2190,7 +2195,7 @@ describe(loadPipeline, () => {
 		);
 
 		try {
-			await expect(loadPipeline(path)).rejects.toThrow(/ship/);
+			await expect(loadPipeline(path)).rejects.toThrow(/ship/u);
 		} finally {
 			await rm(absolute, { force: true });
 		}
@@ -2254,14 +2259,16 @@ describe(restoreTarget, () => {
 
 		await restoreTarget(baseline);
 
-		expect(
-			(
-				await runCommand(["git", "branch", "--show-current"], source.directory)
-			).trim(),
-		).toBe("main");
-		expect(
-			(await runCommand(["git", "rev-parse", "HEAD"], source.directory)).trim(),
-		).toBe(source.sha);
+		const restoredBranch = await runCommand(
+			["git", "branch", "--show-current"],
+			source.directory,
+		);
+		expect(restoredBranch.trim()).toBe("main");
+		const restoredSha = await runCommand(
+			["git", "rev-parse", "HEAD"],
+			source.directory,
+		);
+		expect(restoredSha.trim()).toBe(source.sha);
 	});
 
 	it("preserves every workflow path that existed before the run", async () => {
@@ -2347,9 +2354,11 @@ describe(teardownTarget, () => {
 
 		await teardownTarget(baseline, backup);
 
-		expect(
-			(await runCommand(["git", "rev-parse", "HEAD"], source.directory)).trim(),
-		).toBe(source.sha);
+		const finalSha = await runCommand(
+			["git", "rev-parse", "HEAD"],
+			source.directory,
+		);
+		expect(finalSha.trim()).toBe(source.sha);
 		await expect(stat(backup.directory)).rejects.toThrow();
 	});
 
@@ -2437,7 +2446,7 @@ describe(captureBaselineContext, () => {
 		const context = await captureBaselineContext(source.directory);
 
 		expect(tracked).toContain("bun.lock");
-		expect(context.map(({ path }) => path).sort()).toEqual([
+		expect(context.map(({ path }) => path).toSorted()).toEqual([
 			"base.txt",
 			"package.json",
 		]);
@@ -2686,9 +2695,12 @@ function humanReview(
 
 async function pgrepMatches(pattern: string) {
 	try {
-		return (await runCommand(["pgrep", "-f", pattern], process.cwd())).trim();
+		const matches = await runCommand(["pgrep", "-f", pattern], process.cwd());
+		return matches.trim();
 	} catch (error) {
-		if (error instanceof CommandError && error.exitCode === 1) return "";
+		if (error instanceof CommandError && error.exitCode === 1) {
+			return "";
+		}
 
 		throw error;
 	}
@@ -2710,11 +2722,9 @@ async function createRepository() {
 	);
 	await Bun.write(join(directory, "bun.lock"), "{}\n");
 	await commitAll(directory, "chore: base");
-	const sha = (
-		await runCommand(["git", "rev-parse", "HEAD"], directory)
-	).trim();
+	const head = await runCommand(["git", "rev-parse", "HEAD"], directory);
 
-	return { directory, sha };
+	return { directory, sha: head.trim() };
 }
 
 async function commitAll(directory: string, message: string) {
@@ -2802,18 +2812,18 @@ describe(parsePipeline, () => {
 	it("rejects a stage missing a required field", () => {
 		expect(() =>
 			parse([stageEntry({ skill: undefined }), deliveryStage]),
-		).toThrow(/discuss.*skill/s);
+		).toThrow(/discuss.*skill/su);
 	});
 
 	it("rejects a stage naming a rubric file that does not exist", () => {
 		expect(() =>
 			parse([stageEntry({ rubric: "rubrics/missing.json" }), deliveryStage]),
-		).toThrow(/discuss.*rubric/s);
+		).toThrow(/discuss.*rubric/su);
 	});
 
 	it("rejects a repeated stage name", () => {
 		expect(() => parse([stageEntry(), stageEntry(), deliveryStage])).toThrow(
-			/discuss.*name/s,
+			/discuss.*name/su,
 		);
 	});
 
@@ -2821,7 +2831,7 @@ describe(parsePipeline, () => {
 		for (const name of ["../../escaped", "a/b", "with space", "dot.dot"]) {
 			expect(() =>
 				parse([stageEntry({ name, skill: "s" }), deliveryStage]),
-			).toThrow(/name/);
+			).toThrow(/name/u);
 		}
 	});
 
@@ -2842,7 +2852,7 @@ describe(parsePipeline, () => {
 			"with space",
 		]) {
 			expect(() => parse([stageEntry({ skill }), deliveryStage])).toThrow(
-				/skill/,
+				/skill/u,
 			);
 		}
 	});
@@ -2851,7 +2861,7 @@ describe(parsePipeline, () => {
 		for (const name of ["final", "review", "initial"]) {
 			expect(() =>
 				parse([stageEntry({ name, skill: "s" }), deliveryStage]),
-			).toThrow(/reserved/);
+			).toThrow(/reserved/u);
 		}
 	});
 
@@ -2861,28 +2871,28 @@ describe(parsePipeline, () => {
 				{ ...stageEntry(), requiresAcceptanceCritera: true },
 				deliveryStage,
 			]),
-		).toThrow(/discuss/);
+		).toThrow(/discuss/u);
 	});
 
 	it("rejects a stage named final, which marks the final Judge", () => {
 		expect(() =>
 			parse([stageEntry({ name: "final", skill: "final" }), deliveryStage]),
-		).toThrow(/final.*name|name.*final/s);
+		).toThrow(/final.*name|name.*final/su);
 	});
 
 	it("rejects a pipeline with no delivery stage", () => {
-		expect(() => parse([stageEntry()])).toThrow(/delivery/);
+		expect(() => parse([stageEntry()])).toThrow(/delivery/u);
 	});
 
 	it("rejects a pipeline with more than one delivery stage", () => {
 		expect(() =>
 			parse([deliveryStage, { ...deliveryStage, name: "ship", skill: "ship" }]),
-		).toThrow(/delivery/);
+		).toThrow(/delivery/u);
 	});
 
 	it("rejects a delivery stage that is not last", () => {
 		expect(() => parse([deliveryStage, stageEntry()])).toThrow(
-			/build.*last|last.*build/s,
+			/build.*last|last.*build/su,
 		);
 	});
 });
@@ -2908,7 +2918,7 @@ describe(lineageKey, () => {
 
 	it("ignores the order corpus files are listed in", () => {
 		expect(
-			lineageKey({ ...base, corpusFiles: [...base.corpusFiles].reverse() }),
+			lineageKey({ ...base, corpusFiles: base.corpusFiles.toReversed() }),
 		).toBe(lineageKey(base));
 	});
 
@@ -3007,7 +3017,7 @@ describe(captureStageCorpus, () => {
 
 		await expect(
 			captureStageCorpus("discuss", "instructions", roots),
-		).rejects.toThrow(/discuss.*not installed/);
+		).rejects.toThrow(/discuss.*not installed/u);
 	});
 });
 
@@ -3069,7 +3079,7 @@ describe(recordCheckpoint, () => {
 				effort: "high",
 			}),
 		);
-		expect(record.workflowState.map(({ path }) => path).sort()).toEqual([
+		expect(record.workflowState.map(({ path }) => path).toSorted()).toEqual([
 			".boris/CONTEXT.md",
 			"backlog/config.yml",
 			"backlog/docs/DOC-1 - spec.md",
@@ -3082,9 +3092,8 @@ describe(recordCheckpoint, () => {
 		expect(await Bun.file(join(destination, "ignored.ts")).exists()).toBe(
 			false,
 		);
-		expect(
-			(await stat(join(destination, "backlog", "drafts"))).isDirectory(),
-		).toBe(true);
+		const draftsStats = await stat(join(destination, "backlog", "drafts"));
+		expect(draftsStats.isDirectory()).toBe(true);
 	});
 
 	it("refuses to materialize a tampered snapshot, copying nothing", async () => {
@@ -3098,7 +3107,7 @@ describe(recordCheckpoint, () => {
 
 		await expect(
 			materializeCheckpoint(checkpointDir, destination),
-		).rejects.toThrow(/backlog\/config.yml/);
+		).rejects.toThrow(/backlog\/config.yml/u);
 		expect(await readdir(destination)).toEqual([]);
 	});
 
@@ -3113,7 +3122,7 @@ describe(recordCheckpoint, () => {
 
 		await expect(
 			materializeCheckpoint(checkpointDir, destination),
-		).rejects.toThrow(/backlog\/planted.md/);
+		).rejects.toThrow(/backlog\/planted.md/u);
 		expect(await readdir(destination)).toEqual([]);
 	});
 
@@ -3148,7 +3157,7 @@ describe(recordCheckpoint, () => {
 		try {
 			await expect(
 				recordCheckpoint(targetDir, checkpointDir, checkpointInputs),
-			).rejects.toThrow(/permission denied|EACCES/i);
+			).rejects.toThrow(/permission denied|EACCES/iu);
 		} finally {
 			await chmod(targetDir, 0o755);
 		}
@@ -3244,7 +3253,7 @@ describe(loadRunManifest, () => {
 	it("rejects a manifest that lost a field it later needs", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
 		temporaryDirectories.push(directory);
-		const { taskSha, ...truncated } = manifestFixture();
+		const { taskSha: _taskSha, ...truncated } = manifestFixture();
 		await Bun.write(
 			join(directory, "manifest.json"),
 			`${JSON.stringify(truncated, null, 2)}\n`,
@@ -3300,14 +3309,11 @@ describe(retainedCheckpointRecorder, () => {
 		expect(
 			await Bun.file(join(checkpointDir, "checkpoint.json")).exists(),
 		).toBe(true);
-		expect(
-			(
-				await runCommand(
-					["git", "rev-parse", "refs/rehearsal/run-1"],
-					source.directory,
-				)
-			).trim(),
-		).toBe(source.sha);
+		const retainedSha = await runCommand(
+			["git", "rev-parse", "refs/rehearsal/run-1"],
+			source.directory,
+		);
+		expect(retainedSha.trim()).toBe(source.sha);
 	});
 });
 
@@ -3338,7 +3344,7 @@ describe(loadRunCheckpoints, () => {
 
 		const checkpoints = await loadRunCheckpoints(runDirectory);
 
-		expect([...checkpoints.keys()].sort()).toEqual(["discuss", "initial"]);
+		expect([...checkpoints.keys()].toSorted()).toEqual(["discuss", "initial"]);
 		expect(checkpoints.get("discuss")?.stage).toBe("discuss");
 	});
 });
@@ -3444,13 +3450,13 @@ describe(resolveReplay, () => {
 		stale.delete("initial");
 
 		expect(() => resolveReplay(manifest(), stale, "discuss")).toThrow(
-			/no initial checkpoint/,
+			/no initial checkpoint/u,
 		);
 	});
 
 	it("refuses a stage the run's pipeline never declared", () => {
 		expect(() => resolveReplay(manifest(), checkpoints(), "grill")).toThrow(
-			/discuss, plan, build/,
+			/discuss, plan, build/u,
 		);
 	});
 
@@ -3459,7 +3465,7 @@ describe(resolveReplay, () => {
 		partial.delete("plan");
 
 		expect(() => resolveReplay(manifest(), partial, "build")).toThrow(
-			/no checkpoint for the plan stage/,
+			/no checkpoint for the plan stage/u,
 		);
 	});
 
@@ -3468,7 +3474,7 @@ describe(resolveReplay, () => {
 		forged.set("plan", record("plan", "lin-2", "lin-forged"));
 
 		expect(() => resolveReplay(manifest(), forged, "build")).toThrow(
-			/chain is broken at the plan stage/,
+			/chain is broken at the plan stage/u,
 		);
 	});
 });
@@ -3744,7 +3750,7 @@ describe(runReplay, () => {
 
 		const outcome = await runReplay(fake.dependencies, request(run, "build"));
 
-		const worktree = fake.worktrees[0];
+		const [worktree] = fake.worktrees;
 		expect(worktree?.root).toBe(run.manifest.sourceRoot);
 		expect(worktree?.sha).toBe(run.discuss.targetSha);
 		expect(fake.stageDirs.length).toBeGreaterThan(0);
@@ -3854,7 +3860,7 @@ describe(runReplay, () => {
 
 		await expect(
 			runReplay(fake.dependencies, request(run, "discuss")),
-		).rejects.toThrow(/no initial checkpoint/);
+		).rejects.toThrow(/no initial checkpoint/u);
 		expect(fake.worktrees).toEqual([]);
 	});
 
@@ -3980,21 +3986,21 @@ describe(runReplay, () => {
 				runStageJudge: async (_model, _effort, _budget, input) => {
 					judged.push(input);
 
+					const loaded = await loadStageRubric(
+						manifest.pipeline.stages[0] ?? {
+							name: "discuss",
+							kind: "planning",
+							skill: "discuss",
+							artifact: "spec",
+							rubric: "rubrics/discuss.json",
+							requiresAcceptanceCriteria: false,
+						},
+					);
+
 					return {
 						stage: input.stage,
 						rubricPath: "rubrics/discuss.json",
-						rubric: (
-							await loadStageRubric(
-								manifest.pipeline.stages[0] ?? {
-									name: "discuss",
-									kind: "planning",
-									skill: "discuss",
-									artifact: "spec",
-									rubric: "rubrics/discuss.json",
-									requiresAcceptanceCriteria: false,
-								},
-							)
-						).rubric,
+						rubric: loaded.rubric,
 						input,
 						prompt: "prompt",
 						costUsd: 0.4,
@@ -4018,7 +4024,7 @@ describe(runReplay, () => {
 				installDependencies: async () => {
 					throw new Error("not a delivery stage");
 				},
-				log: () => {},
+				log: () => undefined,
 			},
 			{
 				runName: "run",
@@ -4044,7 +4050,7 @@ describe(runReplay, () => {
 			primary,
 		);
 		expect(
-			worktrees.split("\n").filter((l) => l.startsWith("worktree ")),
+			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
 		).toHaveLength(1);
 		const record = await readReplayRecord(outcome.recordPath);
 		expect(record.consumed.stage).toBe("initial");

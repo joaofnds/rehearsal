@@ -4,32 +4,36 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { installInstructions } from "./backlog";
+import type {
+	CheckpointRecord,
+	HashedFile,
+	materializeCheckpoint,
+} from "./checkpoint";
 import {
-	type CheckpointRecord,
-	type HashedFile,
 	hashArtifacts,
 	hashedFileSchema,
 	INITIAL_CHECKPOINT_STAGE,
 	lineageKey,
-	type materializeCheckpoint,
 	readCheckpointRecord,
 	skillSearchRoots,
 } from "./checkpoint";
 import type { captureBaselineContext, captureFileHashes } from "./checks";
-import { type Effort, effortSchema } from "./config";
-import {
-	type ContextFile,
-	type StageScorecard,
-	stageLetterGradeSchema,
-} from "./contracts";
-import { loadRunManifest, type RunManifest } from "./manifest";
+import type { Effort } from "./config";
+import { effortSchema } from "./config";
+import type { ContextFile, StageScorecard } from "./contracts";
+import { stageLetterGradeSchema } from "./contracts";
+import type { RunManifest } from "./manifest";
+import { loadRunManifest } from "./manifest";
 import type { StageDefinition } from "./pipeline";
-import { executeStageSession, type StageSessionDependencies } from "./run";
+import type { StageSessionDependencies } from "./run";
+import { executeStageSession } from "./run";
 import type { loadStageRubric, runStageJudge } from "./stage-grading";
 import type { addWorktree, removeWorktree } from "./target";
 import type { ProductOwnerSession } from "./workflow";
 
-export class ReplayError extends Error {}
+export class ReplayError extends Error {
+	public override name = "ReplayError";
+}
 
 /**
  * Every checkpoint the run recorded, keyed by stage. The record's own stage
@@ -41,7 +45,9 @@ export async function loadRunCheckpoints(
 	const checkpoints = new Map<string, CheckpointRecord>();
 
 	for (const entry of await readdir(runDirectory, { withFileTypes: true })) {
-		if (!entry.isDirectory()) continue;
+		if (!entry.isDirectory()) {
+			continue;
+		}
 
 		const record = await readCheckpointRecord(join(runDirectory, entry.name));
 		checkpoints.set(record.stage, record);
@@ -68,7 +74,7 @@ export function resolveReplay(
 	checkpoints: ReadonlyMap<string, CheckpointRecord>,
 	stageName: string,
 ): ReplayPlan {
-	const stages = manifest.pipeline.stages;
+	const { stages } = manifest.pipeline;
 	const index = stages.findIndex(({ name }) => name === stageName);
 	const definition = stages[index];
 	if (!definition) {
@@ -207,7 +213,9 @@ export const replayRecordSchema = z
 	})
 	.strict();
 
-export async function readReplayRecord(path: string) {
+export async function readReplayRecord(
+	path: string,
+): Promise<z.infer<typeof replayRecordSchema>> {
 	return replayRecordSchema.parse(JSON.parse(await Bun.file(path).text()));
 }
 

@@ -3,15 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
-import { CLAUDE_TIMEOUT_MS, CONTROL_DIR, type Effort } from "./config";
+import type { Effort } from "./config";
+import { CLAUDE_TIMEOUT_MS, CONTROL_DIR } from "./config";
+import type {
+	StageGrade,
+	StageJudgeInput,
+	StageJudgeOutput,
+	StageLetterGrade,
+	StageRubric,
+	StageScorecard,
+} from "./contracts";
 import {
 	citationMatchesPath,
-	type StageGrade,
-	type StageJudgeInput,
-	type StageJudgeOutput,
-	type StageLetterGrade,
-	type StageRubric,
-	type StageScorecard,
 	StageValidationError,
 	stageJudgeOutputSchema,
 	stageRubricSchema,
@@ -23,11 +26,13 @@ const GRADE_ORDER: readonly StageLetterGrade[] = ["A", "B", "C", "D", "F"];
 export async function captureStageJudgeInput(
 	fallback: StageJudgeInput,
 	capture: () => Promise<StageJudgeInput>,
-) {
+): Promise<StageJudgeInput> {
 	try {
 		return await capture();
 	} catch (error) {
-		if (!(error instanceof StageValidationError)) throw error;
+		if (!(error instanceof StageValidationError)) {
+			throw error;
+		}
 
 		return {
 			...fallback,
@@ -89,7 +94,9 @@ export function deriveStageGrade(
 	if (output.hardBlockers.some(({ status }) => status === "FAIL")) {
 		grade = "F";
 	} else {
-		const dimensionGrades = output.dimensions.map(({ grade }) => grade);
+		const dimensionGrades = output.dimensions.map(
+			(dimension) => dimension.grade,
+		);
 		grade = worstGrade(
 			output.requirements.some(({ status }) => status === "FAIL")
 				? ["C", ...dimensionGrades]
@@ -159,7 +166,7 @@ export function applyAuthoritativeStageResults(
 export function validateStageJudgeEvidence(
 	output: StageJudgeOutput,
 	input: StageJudgeInput,
-) {
+): void {
 	const availablePaths = {
 		task: ["backlog-seed.md"],
 		"product-brief": ["product-brief.md"],
@@ -199,7 +206,7 @@ function assertExactIds(
 	observed: readonly string[],
 	expected: readonly string[],
 	label: string,
-) {
+): void {
 	if (
 		observed.length !== expected.length ||
 		new Set(observed).size !== observed.length ||
@@ -210,12 +217,20 @@ function assertExactIds(
 }
 
 function worstGrade(grades: readonly StageLetterGrade[]): StageLetterGrade {
-	return grades.reduce((worst, grade) =>
-		GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(worst) ? grade : worst,
-	);
+	let worst: StageLetterGrade = "A";
+	for (const grade of grades) {
+		if (GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(worst)) {
+			worst = grade;
+		}
+	}
+	return worst;
 }
 
-export async function loadStageRubric(stage: StageDefinition) {
+export async function loadStageRubric(stage: StageDefinition): Promise<{
+	rubricPath: string;
+	content: string;
+	rubric: StageRubric;
+}> {
 	const rubricPath = join(CONTROL_DIR, stage.rubric);
 	const content = await Bun.file(rubricPath).text();
 
@@ -274,14 +289,16 @@ export async function runStageJudge(
 }
 
 export class StageQualityError extends Error {
-	constructor(readonly scorecard: StageScorecard) {
+	public override name = "StageQualityError";
+
+	public constructor(public readonly scorecard: StageScorecard) {
 		super(
 			`${scorecard.stage} stage graded ${scorecard.grade.grade}; minimum grade is B`,
 		);
 	}
 }
 
-export function assertStageGradePassed(scorecard: StageScorecard) {
+export function assertStageGradePassed(scorecard: StageScorecard): void {
 	if (scorecard.grade.verdict === "STOP") {
 		throw new StageQualityError(scorecard);
 	}

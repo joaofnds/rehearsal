@@ -1,16 +1,16 @@
 import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
+import { createInterface } from "node:readline/promises";
 import { parseArgs, REQUIRED_BUN_VERSION } from "./src/benchmark/config";
 import { runBenchmark } from "./src/benchmark/run";
 
-async function main() {
+async function main(): Promise<void> {
 	if (Bun.version !== REQUIRED_BUN_VERSION) {
 		throw new Error(
 			`Use Bun ${REQUIRED_BUN_VERSION}; current version is ${Bun.version}`,
 		);
 	}
 
-	const rl = readline.createInterface({ input, output });
+	const rl = createInterface({ input, output });
 
 	try {
 		await runBenchmark(parseArgs(Bun.argv.slice(2)), rl);
@@ -19,4 +19,6 @@ async function main() {
 	}
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+	await main();
+}

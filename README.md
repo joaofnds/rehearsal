@@ -294,6 +294,7 @@ mise install
 bun install --frozen-lockfile
 bun run typecheck
 bun run check
+bun run lint
 bun test
 
 bun run benchmark \

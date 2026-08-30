@@ -1,20 +1,21 @@
 import { join } from "node:path";
 import { CommandError } from "./command";
-import { CONTROL_DIR, type Effort, type WorkflowStage } from "./config";
-import {
-	type CalibrationResult,
-	type ContextFile,
-	type HumanReview,
-	humanReviewSchema,
-	type JudgeGrade,
-	type LocalCheckResult,
-	type StageScorecard,
+import type { Effort, WorkflowStage } from "./config";
+import { CONTROL_DIR } from "./config";
+import type {
+	CalibrationResult,
+	ContextFile,
+	HumanReview,
+	JudgeGrade,
+	LocalCheckResult,
+	StageScorecard,
 } from "./contracts";
+import { humanReviewSchema } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { parseStageRubric, runStageJudge } from "./stage-grading";
 
 export interface Questioner {
-	question(prompt: string): Promise<string>;
+	question: (prompt: string) => Promise<string>;
 }
 
 export interface FinalCandidate {
@@ -39,7 +40,9 @@ interface CalibrationContext {
 	readonly sessionBudgetUsd: number;
 }
 
-export class CalibrationIncompleteError extends Error {}
+export class CalibrationIncompleteError extends Error {
+	public override name = "CalibrationIncompleteError";
+}
 
 async function asCalibrationInput<T>(
 	operation: () => T | Promise<T>,
@@ -81,7 +84,7 @@ export function validateCalibration(
 	revisedGrade?: JudgeGrade,
 	originalStageScorecards: readonly StageScorecard[] = [],
 	revisedStageScorecards: readonly StageScorecard[] = [],
-) {
+): void {
 	const realDefects = review.findings.filter(({ judgeAssessment }) =>
 		["CAUGHT", "MISSED"].includes(judgeAssessment),
 	);
@@ -93,7 +96,9 @@ export function validateCalibration(
 	}
 
 	for (const finding of review.findings) {
-		if (finding.judgeAssessment === "NOT_PROMOTED") continue;
+		if (finding.judgeAssessment === "NOT_PROMOTED") {
+			continue;
+		}
 
 		const rubricId = finding.rubricId ?? "";
 		if (finding.stage !== "final") {
@@ -141,12 +146,13 @@ function validateStageFinding(
 	rubricId: string,
 	originalScorecards: readonly StageScorecard[],
 	revisedScorecards: readonly StageScorecard[],
-) {
+): void {
 	const original = originalScorecards.find(
 		(scorecard) => scorecard.stage === stage,
 	);
-	if (!original)
+	if (!original) {
 		throw new CalibrationIncompleteError(`No ${stage} scorecard was recorded`);
+	}
 
 	const revised = revisedScorecards.find(
 		(scorecard) => scorecard.stage === stage,
@@ -168,7 +174,7 @@ function assertFindingMatchesGrades(
 	originalFailure: boolean | undefined,
 	revisedAvailable: boolean,
 	revisedFailure: boolean | undefined,
-) {
+): void {
 	if (assessment === "CAUGHT") {
 		if (originalFailure !== true) {
 			throw new CalibrationIncompleteError(
@@ -204,24 +210,33 @@ function assertFindingMatchesGrades(
 	}
 }
 
-function stageItemFailure(scorecard: StageScorecard, rubricId: string) {
+function stageItemFailure(
+	scorecard: StageScorecard,
+	rubricId: string,
+): boolean | undefined {
 	const blocker = scorecard.grade.hardBlockers.find(
 		({ id }) => id === rubricId,
 	);
-	if (blocker) return blocker.status === "FAIL";
+	if (blocker) {
+		return blocker.status === "FAIL";
+	}
 	const requirement = scorecard.grade.requirements.find(
 		({ id }) => id === rubricId,
 	);
-	if (requirement) return requirement.status === "FAIL";
+	if (requirement) {
+		return requirement.status === "FAIL";
+	}
 	const dimension = scorecard.grade.dimensions.find(
 		({ id }) => id === rubricId,
 	);
-	if (dimension) return ["C", "D", "F"].includes(dimension.grade);
+	if (dimension) {
+		return ["C", "D", "F"].includes(dimension.grade);
+	}
 
 	return undefined;
 }
 
-async function writeHumanReviewTemplate(path: string) {
+async function writeHumanReviewTemplate(path: string): Promise<void> {
 	await Bun.write(
 		path,
 		`${JSON.stringify(
@@ -371,7 +386,9 @@ export async function collectCalibration(
 						: undefined,
 			};
 		} catch (error) {
-			if (!(error instanceof CalibrationIncompleteError)) throw error;
+			if (!(error instanceof CalibrationIncompleteError)) {
+				throw error;
+			}
 
 			console.error(`Calibration incomplete: ${error.message}`);
 		}

@@ -17,11 +17,11 @@ import {
 	captureTreatmentChecks,
 } from "./src/benchmark/checks";
 import { runCommand } from "./src/benchmark/command";
+import type { ReplayCliConfig } from "./src/benchmark/config";
 import {
 	CONTROL_DIR,
 	parseReplayArgs,
 	REQUIRED_BUN_VERSION,
-	type ReplayCliConfig,
 } from "./src/benchmark/config";
 import { runReplay } from "./src/benchmark/replay";
 import { loadStageRubric, runStageJudge } from "./src/benchmark/stage-grading";
@@ -37,13 +37,19 @@ import { runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUNS_DIRECTORY = join(CONTROL_DIR, ".benchmark-runs");
 
-async function resolveRunDirectory(runName: string) {
+async function resolveRunDirectory(runName: string): Promise<string> {
 	const runDirectory = join(RUNS_DIRECTORY, `${runName}.checkpoints`);
 	if (await Bun.file(join(runDirectory, "manifest.json")).exists()) {
 		return runDirectory;
 	}
 
-	const recorded = (await readdir(RUNS_DIRECTORY).catch(() => []))
+	let runEntries: string[];
+	try {
+		runEntries = await readdir(RUNS_DIRECTORY);
+	} catch {
+		runEntries = [];
+	}
+	const recorded = runEntries
 		.filter((entry) => entry.endsWith(".checkpoints"))
 		.map((entry) => entry.slice(0, -".checkpoints".length));
 
@@ -58,7 +64,7 @@ async function resolveRunDirectory(runName: string) {
  * Replay exists to iterate on an uncommitted corpus, so a dirty control
  * repository is expected; the record marks it instead of refusing.
  */
-async function currentControlSha() {
+async function currentControlSha(): Promise<string> {
 	const sha = await git(CONTROL_DIR, "rev-parse", "HEAD");
 	const status = await git(
 		CONTROL_DIR,
@@ -70,7 +76,7 @@ async function currentControlSha() {
 	return status ? `${sha}-dirty` : sha;
 }
 
-async function main() {
+async function main(): Promise<void> {
 	if (Bun.version !== REQUIRED_BUN_VERSION) {
 		throw new Error(
 			`Use Bun ${REQUIRED_BUN_VERSION}; current version is ${Bun.version}`,
@@ -137,4 +143,6 @@ async function main() {
 	);
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+	await main();
+}

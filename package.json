@@ -8,6 +8,7 @@
 		"replay": "bun run replay-stage.ts",
 		"check": "biome check .",
 		"check:apply": "biome check --write .",
+		"lint": "oxlint",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},

@@ -3,18 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
-import { CLAUDE_TIMEOUT_MS, type Effort, HARNESS_RUBRIC_IDS } from "./config";
-import {
-	type ContextFile,
-	citationMatchesPath,
-	type JudgeGrade,
-	judgeGradeSchema,
-	type LocalCheckResult,
-} from "./contracts";
+import type { Effort } from "./config";
+import { CLAUDE_TIMEOUT_MS, HARNESS_RUBRIC_IDS } from "./config";
+import type { ContextFile, JudgeGrade, LocalCheckResult } from "./contracts";
+import { citationMatchesPath, judgeGradeSchema } from "./contracts";
 
 export function parseRubricIds(rubric: string): string[] {
-	const ids = [...rubric.matchAll(/^\d+\. `([^`]+)`:/gm)].map(
-		([, id]) => id ?? "",
+	const ids = [...rubric.matchAll(/^\d+\. `(?<id>[^`]+)`:/gmu)].map(
+		(match) => match.groups?.["id"] ?? "",
 	);
 
 	if (ids.length === 0 || new Set(ids).size !== ids.length) {
@@ -24,7 +20,7 @@ export function parseRubricIds(rubric: string): string[] {
 	return ids;
 }
 
-export function validateRubricDefinition(rubric: string) {
+export function validateRubricDefinition(rubric: string): string[] {
 	const rubricIds = parseRubricIds(rubric);
 	const missingHarnessIds = HARNESS_RUBRIC_IDS.filter(
 		(id) => !rubricIds.includes(id),
@@ -111,9 +107,11 @@ export function validateJudgeEvidence(
 	grade: JudgeGrade,
 	changedPaths: readonly string[],
 	contextPaths: readonly string[],
-) {
+): void {
 	for (const requirement of grade.requirements) {
-		if (["check-integrity", "local-checks"].includes(requirement.id)) continue;
+		if (["check-integrity", "local-checks"].includes(requirement.id)) {
+			continue;
+		}
 
 		for (const evidence of requirement.evidence) {
 			const valid =

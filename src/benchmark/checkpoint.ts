@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+import type { Stats } from "node:fs";
 import { cp, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { type Effort, effortSchema, WORKFLOW_PATHS } from "./config";
+import type { Effort } from "./config";
+import { effortSchema, WORKFLOW_PATHS } from "./config";
 
 export interface HashedFile {
 	readonly path: string;
@@ -24,17 +26,25 @@ export interface RootLineageInputs {
 	readonly workflowFiles: readonly HashedFile[];
 }
 
-function sha256(content: string) {
+function sha256(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
 }
 
 // Codepoint order, never locale collation: the lineage key must hash the
 // same bytes on every machine, and locale-aware sorting varies with the
 // host's collation rules.
-function canonicalFiles(files: readonly HashedFile[]) {
-	return [...files]
-		.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-		.map(({ path, sha256 }) => ({ path, sha256 }));
+function canonicalFiles(files: readonly HashedFile[]): HashedFile[] {
+	return files
+		.toSorted((left, right) => {
+			if (left.path < right.path) {
+				return -1;
+			}
+			if (left.path > right.path) {
+				return 1;
+			}
+			return 0;
+		})
+		.map((file) => ({ path: file.path, sha256: file.sha256 }));
 }
 
 /**
@@ -43,7 +53,7 @@ function canonicalFiles(files: readonly HashedFile[]) {
  * invalidated when and only when one of them changes. Nothing else may enter
  * this object: an extra field would invalidate checkpoints spuriously.
  */
-export function lineageKey(inputs: LineageInputs) {
+export function lineageKey(inputs: LineageInputs): string {
 	return sha256(
 		JSON.stringify({
 			upstream: inputs.upstream,
@@ -56,7 +66,7 @@ export function lineageKey(inputs: LineageInputs) {
 
 // Only a missing path may read as absent; any other failure (EACCES, EIO)
 // must surface, or a checkpoint would silently record partial state as truth.
-async function statIfExists(path: string) {
+async function statIfExists(path: string): Promise<Stats | undefined> {
 	try {
 		return await stat(path);
 	} catch (error) {
@@ -68,19 +78,25 @@ async function statIfExists(path: string) {
 	}
 }
 
-async function hashFile(path: string) {
+async function hashFile(path: string): Promise<string> {
 	return createHash("sha256")
 		.update(await Bun.file(path).bytes())
 		.digest("hex");
 }
 
-async function hashDirectory(root: string, prefix: string) {
+async function hashDirectory(
+	root: string,
+	prefix: string,
+): Promise<HashedFile[]> {
 	const entries = await readdir(root, { recursive: true });
 	const files: HashedFile[] = [];
 
-	for (const entry of entries.sort()) {
+	for (const entry of entries.toSorted()) {
 		const absolute = join(root, entry);
-		if (!(await stat(absolute)).isFile()) continue;
+		const entryStats = await stat(absolute);
+		if (!entryStats.isFile()) {
+			continue;
+		}
 
 		files.push({ path: join(prefix, entry), sha256: await hashFile(absolute) });
 	}
@@ -88,7 +104,7 @@ async function hashDirectory(root: string, prefix: string) {
 	return files;
 }
 
-export function skillSearchRoots(targetDir: string) {
+export function skillSearchRoots(targetDir: string): string[] {
 	return [
 		join(targetDir, ".claude", "skills"),
 		join(homedir(), ".claude", "skills"),
@@ -98,10 +114,13 @@ export function skillSearchRoots(targetDir: string) {
 export async function resolveSkillDirectory(
 	skill: string,
 	roots: readonly string[],
-) {
+): Promise<string> {
 	for (const root of roots) {
 		const directory = join(root, skill);
-		if ((await statIfExists(directory))?.isDirectory()) return directory;
+		const directoryStats = await statIfExists(directory);
+		if (directoryStats?.isDirectory()) {
+			return directory;
+		}
 	}
 
 	throw new Error(
@@ -160,7 +179,7 @@ export function initialCheckpointInputs(
  * state the run created: the task commit, the task and brief texts that feed
  * every session, and the workflow files present before any stage ran.
  */
-export function rootLineage(inputs: RootLineageInputs) {
+export function rootLineage(inputs: RootLineageInputs): string {
 	return sha256(
 		JSON.stringify({
 			taskSha: inputs.taskSha,
@@ -188,7 +207,7 @@ export const hashedFileSchema = z.object({
 			(path) => !path.startsWith("/") && !path.split("/").includes(".."),
 			"must be a relative path without traversal",
 		),
-	sha256: z.string().regex(/^[0-9a-f]{64}$/),
+	sha256: z.string().regex(/^[0-9a-f]{64}$/u),
 });
 
 const checkpointRecordSchema = z
@@ -220,17 +239,19 @@ export interface CheckpointInputs {
 const RECORD_FILE = "checkpoint.json";
 const SNAPSHOT_DIRECTORY = "workflow-state";
 
-async function existingWorkflowPaths(root: string) {
+async function existingWorkflowPaths(root: string): Promise<string[]> {
 	const present: string[] = [];
 
 	for (const path of WORKFLOW_PATHS) {
-		if (await statIfExists(join(root, path))) present.push(path);
+		if (await statIfExists(join(root, path))) {
+			present.push(path);
+		}
 	}
 
 	return present;
 }
 
-async function copyWorkflowTrees(from: string, to: string) {
+async function copyWorkflowTrees(from: string, to: string): Promise<void> {
 	for (const path of await existingWorkflowPaths(from)) {
 		await cp(join(from, path), join(to, path), { recursive: true });
 	}
@@ -298,22 +319,22 @@ export async function materializeCheckpoint(
 	// planted file all void it — and nothing is copied until it does.
 	const snapshot = join(directory, SNAPSHOT_DIRECTORY);
 	const recorded = new Map(
-		record.workflowState.map(({ path, sha256 }) => [path, sha256]),
+		record.workflowState.map((file) => [file.path, file.sha256]),
 	);
-	for (const { path, sha256 } of await hashWorkflowState(snapshot)) {
-		const expected = recorded.get(path);
+	for (const file of await hashWorkflowState(snapshot)) {
+		const expected = recorded.get(file.path);
 		if (expected === undefined) {
 			throw new Error(
-				`Checkpoint snapshot does not match its record: ${path} is not recorded`,
+				`Checkpoint snapshot does not match its record: ${file.path} is not recorded`,
 			);
 		}
-		if (sha256 !== expected) {
+		if (file.sha256 !== expected) {
 			throw new Error(
-				`Checkpoint snapshot does not match its record: ${path} hashes ${sha256}, recorded ${expected}`,
+				`Checkpoint snapshot does not match its record: ${file.path} hashes ${file.sha256}, recorded ${expected}`,
 			);
 		}
 
-		recorded.delete(path);
+		recorded.delete(file.path);
 	}
 	const missing = recorded.keys().next();
 	if (!missing.done) {

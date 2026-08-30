@@ -4,8 +4,8 @@ import { z } from "zod";
 export const CONTROL_DIR = resolve(import.meta.dir, "../..");
 export const REQUIRED_BUN_VERSION = "1.4.0";
 export const TEST_CONFIG_PATH = "src/config/test.yaml";
-export const COMMAND_TIMEOUT_MS = 5 * 60 * 1_000;
-export const CLAUDE_TIMEOUT_MS = 30 * 60 * 1_000;
+export const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
+export const CLAUDE_TIMEOUT_MS = 30 * 60 * 1000;
 export const MAX_STAGE_TURNS = 20;
 export const CHECK_PATHS = [
 	"package.json",
@@ -34,7 +34,7 @@ export interface BenchmarkConfig {
 	readonly pipelinePath: string;
 }
 
-function flagValues(args: readonly string[]) {
+function flagValues(args: readonly string[]): Map<string, string> {
 	const values = new Map<string, string>();
 
 	for (let index = 0; index < args.length; index += 2) {
@@ -64,8 +64,12 @@ export function parseArgs(
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
-	if (!sourceDir) throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
-	if (!model) throw new Error("Provide --model or BENCHMARK_MODEL");
+	if (!sourceDir) {
+		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
+	}
+	if (!model) {
+		throw new Error("Provide --model or BENCHMARK_MODEL");
+	}
 	if (!budgetText) {
 		throw new Error(
 			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
@@ -130,9 +134,15 @@ export function parseReplayArgs(
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
-	if (!runName) throw new Error("Provide --run with the run's name");
-	if (!stage) throw new Error("Provide --stage with the stage to replay");
-	if (!model) throw new Error("Provide --model or BENCHMARK_MODEL");
+	if (!runName) {
+		throw new Error("Provide --run with the run's name");
+	}
+	if (!stage) {
+		throw new Error("Provide --stage with the stage to replay");
+	}
+	if (!model) {
+		throw new Error("Provide --model or BENCHMARK_MODEL");
+	}
 	if (!budgetText) {
 		throw new Error(
 			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
@@ -172,12 +182,17 @@ export function parseReplayArgs(
  * relative path names too, so the path is reduced to that one form here, at the
  * boundary, rather than left for every later reader to normalise.
  */
-function controlRelativePath(pipelinePath: string) {
+function controlRelativePath(pipelinePath: string): string {
 	return relative(CONTROL_DIR, resolve(CONTROL_DIR, pipelinePath));
 }
 
-function parseEffort(value: string | undefined, role: string) {
-	if (value === undefined) return undefined;
+function parseEffort(
+	value: string | undefined,
+	role: string,
+): Effort | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
 
 	const parsed = effortSchema.safeParse(value);
 	if (!parsed.success) {

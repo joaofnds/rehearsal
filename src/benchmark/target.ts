@@ -17,8 +17,12 @@ export interface WorkflowBackup {
 	readonly presentPaths: readonly string[];
 }
 
-export async function git(directory: string, ...args: string[]) {
-	return (await runCommand(["git", ...args], directory)).trim();
+export async function git(
+	directory: string,
+	...args: string[]
+): Promise<string> {
+	const output = await runCommand(["git", ...args], directory);
+	return output.trim();
 }
 
 export async function assertSourceReady(
@@ -51,7 +55,9 @@ export async function assertSourceReady(
 		"--porcelain=v1",
 		"--untracked-files=all",
 	);
-	if (status) throw new Error("Target main must be clean before a run");
+	if (status) {
+		throw new Error("Target main must be clean before a run");
+	}
 
 	return {
 		root: sourceRoot,
@@ -60,7 +66,10 @@ export async function assertSourceReady(
 	};
 }
 
-async function optionalGit(directory: string, ...args: string[]) {
+async function optionalGit(
+	directory: string,
+	...args: string[]
+): Promise<string | undefined> {
 	try {
 		return await git(directory, ...args);
 	} catch {
@@ -68,7 +77,7 @@ async function optionalGit(directory: string, ...args: string[]) {
 	}
 }
 
-export async function assertControlReady() {
+export async function assertControlReady(): Promise<string> {
 	const status = await git(
 		CONTROL_DIR,
 		"status",
@@ -115,7 +124,7 @@ export async function captureWorkflowBackup(
 async function restoreWorkflowBackup(
 	targetDir: string,
 	backup: WorkflowBackup,
-) {
+): Promise<void> {
 	for (const path of WORKFLOW_PATHS) {
 		await rm(join(targetDir, path), { force: true, recursive: true });
 	}
@@ -127,20 +136,21 @@ async function restoreWorkflowBackup(
 	}
 }
 
-async function runMarkerPath(root: string) {
+async function runMarkerPath(root: string): Promise<string> {
 	return join(
 		await git(root, "rev-parse", "--absolute-git-dir"),
 		"benchmark-run.json",
 	);
 }
 
-export async function claimTarget(source: SourceBaseline) {
+export async function claimTarget(source: SourceBaseline): Promise<void> {
 	const path = await runMarkerPath(source.root);
 	const marker = Bun.file(path);
 
 	if (await marker.exists()) {
+		const markerText = await marker.text();
 		throw new Error(
-			`A previous benchmark run left this target unrestored: ${(await marker.text()).trim()}. Restore it manually (git reset --hard <sha>; git clean -fd), then delete ${path}.`,
+			`A previous benchmark run left this target unrestored: ${markerText.trim()}. Restore it manually (git reset --hard <sha>; git clean -fd), then delete ${path}.`,
 		);
 	}
 
@@ -157,12 +167,14 @@ export async function claimTarget(source: SourceBaseline) {
 export async function restoreTarget(
 	source: SourceBaseline,
 	backup?: WorkflowBackup,
-) {
+): Promise<void> {
 	await git(source.root, "switch", "--force", "main");
 	await git(source.root, "reset", "--hard", source.sha);
 	await git(source.root, "clean", "-fd");
 
-	if (backup) await restoreWorkflowBackup(source.root, backup);
+	if (backup) {
+		await restoreWorkflowBackup(source.root, backup);
+	}
 
 	const restored = await assertSourceReady(source.root);
 	if (restored.sha !== source.sha) {
@@ -177,7 +189,7 @@ export async function restoreTarget(
 export async function teardownTarget(
 	source: SourceBaseline,
 	backup: WorkflowBackup,
-) {
+): Promise<void> {
 	try {
 		await restoreTarget(source, backup);
 	} catch (error) {
@@ -201,7 +213,7 @@ export async function recordRetentionRef(
 	targetDir: string,
 	runName: string,
 	sha: string,
-) {
+): Promise<void> {
 	await git(targetDir, "update-ref", `refs/rehearsal/${runName}`, sha);
 }
 
@@ -216,7 +228,7 @@ export async function assertWorkspaceCleanAt(
 	targetDir: string,
 	expectedSha: string,
 	expectedBranch: ExpectedBranch = "main",
-) {
+): Promise<void> {
 	const branch = await git(targetDir, "branch", "--show-current");
 	const sha = await git(targetDir, "rev-parse", "HEAD");
 	const status = await git(
@@ -231,26 +243,28 @@ export async function assertWorkspaceCleanAt(
 	}
 }
 
+export interface BuildCandidate {
+	readonly resultSha: string;
+	readonly diff: string;
+	readonly changedPaths: readonly string[];
+}
+
 export async function captureBuildCandidate(
 	targetDir: string,
 	taskSha: string,
-) {
+): Promise<BuildCandidate> {
 	const resultSha = await git(targetDir, "rev-parse", "HEAD");
 	const trackedDiff = await runCommand(
 		["git", "diff", "--no-ext-diff", taskSha],
 		targetDir,
 	);
-	const trackedPaths = (await git(targetDir, "diff", "--name-only", taskSha))
-		.split("\n")
-		.filter(Boolean);
-	const untrackedPaths = (
-		await runCommand(
-			["git", "ls-files", "--others", "--exclude-standard", "-z"],
-			targetDir,
-		)
-	)
-		.split("\0")
-		.filter(Boolean);
+	const trackedOutput = await git(targetDir, "diff", "--name-only", taskSha);
+	const trackedPaths = trackedOutput.split("\n").filter(Boolean);
+	const untrackedOutput = await runCommand(
+		["git", "ls-files", "--others", "--exclude-standard", "-z"],
+		targetDir,
+	);
+	const untrackedPaths = untrackedOutput.split("\0").filter(Boolean);
 	const untrackedDiffs = await Promise.all(
 		untrackedPaths.map(async (path) => {
 			const content = await captureBoundedContent(
@@ -271,7 +285,7 @@ export async function assertBuildCommitted(
 	targetDir: string,
 	taskSha: string,
 	expectedBranch: ExpectedBranch = "main",
-) {
+): Promise<{ resultSha: string; diff: string }> {
 	const branch = await git(targetDir, "branch", "--show-current");
 	if (branch !== (expectedBranch ?? "")) {
 		throw new StageValidationError(
@@ -326,9 +340,11 @@ export async function assertBuildCommitted(
 	return { resultSha, diff };
 }
 
-export function assertConventionalCommitSubjects(subjects: readonly string[]) {
+export function assertConventionalCommitSubjects(
+	subjects: readonly string[],
+): void {
 	const invalidSubjects = subjects.filter(
-		(subject) => !/^[a-z]+(?:\([^)]+\))?!?: .+/.test(subject),
+		(subject) => !/^[a-z]+(?:\([^)]+\))?!?: .+/u.test(subject),
 	);
 
 	if (invalidSubjects.length > 0) {
@@ -342,12 +358,15 @@ export async function addWorktree(
 	repositoryRoot: string,
 	sha: string,
 	path: string,
-) {
+): Promise<void> {
 	await git(repositoryRoot, "worktree", "add", "--detach", path, sha);
 }
 
 // --force: a replay worktree holds untracked workflow state by design.
-export async function removeWorktree(repositoryRoot: string, path: string) {
+export async function removeWorktree(
+	repositoryRoot: string,
+	path: string,
+): Promise<void> {
 	await git(repositoryRoot, "worktree", "remove", "--force", path);
 }
 
@@ -355,8 +374,12 @@ export async function changedPathsBetween(
 	targetDir: string,
 	fromSha: string,
 	toSha: string,
-) {
-	return (await git(targetDir, "diff", "--name-only", `${fromSha}..${toSha}`))
-		.split("\n")
-		.filter(Boolean);
+): Promise<string[]> {
+	const output = await git(
+		targetDir,
+		"diff",
+		"--name-only",
+		`${fromSha}..${toSha}`,
+	);
+	return output.split("\n").filter(Boolean);
 }

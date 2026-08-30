@@ -113,7 +113,9 @@ export const humanFindingSchema = z
 		rubricId: z.string().min(1).nullable(),
 	})
 	.superRefine((finding, context) => {
-		if (finding.judgeAssessment === "NOT_PROMOTED" || finding.rubricId) return;
+		if (finding.judgeAssessment === "NOT_PROMOTED" || finding.rubricId) {
+			return;
+		}
 
 		context.addIssue({
 			code: "custom",
@@ -146,7 +148,9 @@ export type StageLetterGrade = z.infer<typeof stageLetterGradeSchema>;
 export type StageRubric = z.infer<typeof stageRubricSchema>;
 export type StageJudgeOutput = z.infer<typeof stageJudgeOutputSchema>;
 
-export class StageValidationError extends Error {}
+export class StageValidationError extends Error {
+	public override name = "StageValidationError";
+}
 
 export interface ContextFile {
 	readonly path: string;
@@ -260,9 +264,11 @@ export interface RunArtifact {
 export function citationMatchesPath(
 	citation: string,
 	availablePaths: readonly string[],
-) {
+): boolean {
 	for (const candidate of new Set([citation, citation.split("#", 1)[0]])) {
-		if (!candidate) continue;
+		if (!candidate) {
+			continue;
+		}
 
 		try {
 			const glob = new Bun.Glob(candidate);
@@ -271,13 +277,15 @@ export function citationMatchesPath(
 			) {
 				return true;
 			}
-		} catch {}
+		} catch {
+			// A citation that is not a valid glob simply matches nothing.
+		}
 	}
 
 	return false;
 }
 
-export function claudeJsonSchema(schema: z.ZodType) {
+export function claudeJsonSchema(schema: z.ZodType): string {
 	const compatibleEntries = Object.entries(z.toJSONSchema(schema)).filter(
 		([key]) => key !== "$schema",
 	);

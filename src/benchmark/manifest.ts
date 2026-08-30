@@ -35,7 +35,7 @@ export type RunManifest = z.infer<typeof runManifestSchema>;
 export async function writeRunManifest(
 	runDirectory: string,
 	manifest: RunManifest,
-) {
+): Promise<void> {
 	await Bun.write(
 		join(runDirectory, RUN_MANIFEST_FILE),
 		`${JSON.stringify(manifest, null, 2)}\n`,

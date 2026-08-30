@@ -8,11 +8,11 @@ import {
 	parseTaskState,
 	readTaskOutput,
 } from "./backlog";
-import { collectCalibration, type Questioner } from "./calibration";
+import type { Questioner } from "./calibration";
+import { collectCalibration } from "./calibration";
+import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
-	type CheckpointRecord,
 	captureStageCorpus,
-	type HashedFile,
 	hashArtifacts,
 	hashWorkflowState,
 	INITIAL_CHECKPOINT_STAGE,
@@ -29,12 +29,8 @@ import {
 	runChecks,
 } from "./checks";
 import { killActiveCommands, runCommand } from "./command";
-import {
-	type BenchmarkConfig,
-	CONTROL_DIR,
-	type Effort,
-	type WorkflowStage,
-} from "./config";
+import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
+import { CONTROL_DIR } from "./config";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -47,11 +43,8 @@ import type {
 } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
-import {
-	loadPipeline,
-	type PipelineDefinition,
-	type StageDefinition,
-} from "./pipeline";
+import type { PipelineDefinition, StageDefinition } from "./pipeline";
+import { loadPipeline } from "./pipeline";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
@@ -70,9 +63,17 @@ import {
 	recordRetentionRef,
 	teardownTarget,
 } from "./target";
-import { type ProductOwnerSession, runWorkflowStage } from "./workflow";
+import type { ProductOwnerSession } from "./workflow";
+import { runWorkflowStage } from "./workflow";
 
-async function createRunFiles(timestamp: string) {
+async function createRunFiles(timestamp: string): Promise<{
+	name: string;
+	artifact: string;
+	review: string;
+	stage: (stage: string) => string;
+	checkpointsRoot: string;
+	checkpoint: (stage: string) => string;
+}> {
 	const directory = join(CONTROL_DIR, ".benchmark-runs");
 	const name = timestamp.replaceAll(":", "-");
 
@@ -89,7 +90,10 @@ async function createRunFiles(timestamp: string) {
 	};
 }
 
-async function writeArtifact(path: string, artifact: RunArtifact) {
+async function writeArtifact(
+	path: string,
+	artifact: RunArtifact,
+): Promise<void> {
 	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
@@ -346,7 +350,7 @@ export async function executeStageSession(
 				definition,
 				currentTask,
 			);
-			artifact = planning.artifact;
+			({ artifact } = planning);
 
 			return {
 				...baseInput,
@@ -420,8 +424,12 @@ export async function runGradedStages(
 		);
 		const { corpusFiles, input } = session;
 		workflow.push(session.transcript);
-		if (session.artifact) stageArtifacts.push(session.artifact);
-		if (session.buildEvidence) buildEvidence = session.buildEvidence;
+		if (session.artifact) {
+			stageArtifacts.push(session.artifact);
+		}
+		if (session.buildEvidence) {
+			({ buildEvidence } = session);
+		}
 
 		context.log(`\n${stage} stage Judge`);
 		const stageFile = context.stageFile(stage);
@@ -477,7 +485,10 @@ export async function runGradedStages(
 	return { workflow, stageScorecards, checkpoints, buildEvidence };
 }
 
-export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
+export async function runBenchmark(
+	config: BenchmarkConfig,
+	rl: Questioner,
+): Promise<void> {
 	const pipeline = await loadPipeline(config.pipelinePath);
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
@@ -490,7 +501,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 	let pendingStage: PendingStage | undefined;
 
 	let abortRecorded: Promise<void> | undefined;
-	const markAborted = (reason: string) => {
+	const markAborted = (reason: string): Promise<void> => {
 		abortRecorded ??= (async () => {
 			try {
 				if (pendingStage) {
@@ -524,22 +535,33 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 		return abortRecorded;
 	};
 	let teardownStarted: Promise<void> | undefined;
-	const teardown = () => {
+	const teardown = (): Promise<void> => {
 		teardownStarted ??= teardownTarget(source, workflowBackup);
 		return teardownStarted;
 	};
-	let aborting: Promise<void> | undefined;
-	const restoreOnSignal = (signal: NodeJS.Signals) => {
-		console.error(`\nReceived ${signal}; restoring the target before exit.`);
-		aborting ??= (teardownStarted ? Promise.resolve() : killActiveCommands())
-			.then(() => markAborted(`run interrupted by ${signal}`))
-			.then(teardown)
-			.catch((error) =>
-				console.error(error instanceof Error ? error.message : String(error)),
-			);
-		aborting.finally(() => process.exit(SIGNAL_EXIT_CODES[signal] ?? 130));
+	let abortStarted = false;
+	const abortAndExit = async (signal: NodeJS.Signals): Promise<void> => {
+		try {
+			if (!teardownStarted) {
+				await killActiveCommands();
+			}
+			await markAborted(`run interrupted by ${signal}`);
+			await teardown();
+		} catch (error) {
+			console.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			process.exit(SIGNAL_EXIT_CODES[signal] ?? 130);
+		}
 	};
-	const releaseSignalHandlers = () => {
+	const restoreOnSignal = (signal: NodeJS.Signals): void => {
+		console.error(`\nReceived ${signal}; restoring the target before exit.`);
+		if (abortStarted) {
+			return;
+		}
+		abortStarted = true;
+		void abortAndExit(signal);
+	};
+	const releaseSignalHandlers = (): void => {
 		process.off("SIGINT", restoreOnSignal);
 		process.off("SIGTERM", restoreOnSignal);
 		process.off("SIGHUP", restoreOnSignal);
@@ -654,14 +676,14 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					trackPendingStage: (pending) => {
 						pendingStage = pending;
 					},
-					calibrateStageFailure: async (stageScorecards) => {
+					calibrateStageFailure: async (scorecards) => {
 						const calibration = await collectCalibration({
 							rl,
 							reviewFile: runFiles.review,
 							targetDir: source.root,
 							originalInstructions: instructions,
 							originalRubric: rubric,
-							stageScorecards,
+							stageScorecards: scorecards,
 							judgeModel: config.judgeModel,
 							judgeEffort: config.judgeEffort,
 							sessionBudgetUsd: config.sessionBudgetUsd,
