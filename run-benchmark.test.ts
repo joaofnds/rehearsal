@@ -4148,7 +4148,10 @@ describe(loadAttempts, () => {
 		]);
 		expect(attempts[0]?.grade).toBe("B");
 		expect(attempts[1]?.grade).toBe("A");
-		expect(attempts[1]?.costUsd).toBeCloseTo(1.2);
+		expect(attempts[0]?.judgeCostUsd).toBeCloseTo(1.1);
+		expect(attempts[0]?.totalCostUsd).toBeUndefined();
+		expect(attempts[1]?.judgeCostUsd).toBeCloseTo(0.3);
+		expect(attempts[1]?.totalCostUsd).toBeCloseTo(1.2);
 	});
 
 	it("skips an original stage file that never reached a grade", async () => {
@@ -4184,7 +4187,7 @@ describe(presentAttempts, () => {
 		grade,
 		verdict: "CONTINUE",
 		dimensions: [{ id: "clarity", grade }],
-		costUsd: 1.25,
+		judgeCostUsd: 1.25,
 		artifact: { path: "backlog/docs/D.md", content },
 	});
 
@@ -4193,17 +4196,17 @@ describe(presentAttempts, () => {
 			"lineage-1",
 			[
 				attempt("original run run1", "B", "old\n"),
-				attempt("replay r2", "A", "new\n"),
+				{ ...attempt("replay r2", "A", "new\n"), totalCostUsd: 2.15 },
 			],
 			async (before, after) => `DIFF(${before.trim()}->${after.trim()})`,
 		);
 
 		expect(output).toContain("Attempts at checkpoint lineage-1:");
 		expect(output).toContain(
-			"1. original run run1 — grade B (CONTINUE), $1.25 [clarity B]",
+			"1. original run run1 — grade B (CONTINUE), judge $1.25 [clarity B]",
 		);
 		expect(output).toContain(
-			"2. replay r2 — grade A (CONTINUE), $1.25 [clarity A]",
+			"2. replay r2 — grade A (CONTINUE), judge $1.25, total $2.15 [clarity A]",
 		);
 		expect(output).toContain("Diff, original run run1 → replay r2:");
 		expect(output).toContain("DIFF(old->new)");

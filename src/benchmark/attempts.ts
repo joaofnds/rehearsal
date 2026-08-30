@@ -20,7 +20,8 @@ export interface Attempt {
 		readonly id: string;
 		readonly grade: string;
 	}[];
-	readonly costUsd: number;
+	readonly judgeCostUsd: number;
+	readonly totalCostUsd?: number | undefined;
 	readonly artifact?: ContextFile | undefined;
 	readonly changedPaths?: readonly string[] | undefined;
 	readonly diff?: string | undefined;
@@ -59,7 +60,7 @@ type AttemptScorecard = z.infer<typeof attemptScorecardSchema>;
 function attemptFromScorecard(
 	label: string,
 	scorecard: AttemptScorecard,
-	costUsd: number,
+	totalCostUsd?: number,
 ): Attempt {
 	const { artifact, changedPaths, diff } = scorecard.input;
 
@@ -68,7 +69,8 @@ function attemptFromScorecard(
 		grade: scorecard.grade.grade,
 		verdict: scorecard.grade.verdict,
 		dimensions: scorecard.grade.dimensions,
-		costUsd,
+		judgeCostUsd: scorecard.costUsd,
+		...(totalCostUsd === undefined ? {} : { totalCostUsd }),
 		...(artifact === undefined ? {} : { artifact }),
 		...(changedPaths === undefined ? {} : { changedPaths }),
 		...(diff === undefined ? {} : { diff }),
@@ -77,7 +79,9 @@ function attemptFromScorecard(
 
 /**
  * The original run's stage file holds its scorecard only when the stage was
- * judged; a pending or failed marker is not an attempt.
+ * judged; a pending or failed marker is not an attempt. The stage session's
+ * own cost lives in the run artifact, not the stage file, so the original
+ * attempt carries no total.
  */
 async function loadOriginalAttempt(
 	runsDirectory: string,
@@ -96,11 +100,7 @@ async function loadOriginalAttempt(
 		return undefined;
 	}
 
-	return attemptFromScorecard(
-		`original run ${runName}`,
-		parsed.data,
-		parsed.data.costUsd,
-	);
+	return attemptFromScorecard(`original run ${runName}`, parsed.data);
 }
 
 /**
@@ -194,8 +194,12 @@ export async function presentAttempts(
 		const dimensions = attempt.dimensions
 			.map(({ id, grade }) => `${id} ${grade}`)
 			.join(", ");
+		const cost =
+			attempt.totalCostUsd === undefined
+				? `judge $${attempt.judgeCostUsd.toFixed(2)}`
+				: `judge $${attempt.judgeCostUsd.toFixed(2)}, total $${attempt.totalCostUsd.toFixed(2)}`;
 		lines.push(
-			`${index + 1}. ${attempt.label} — grade ${attempt.grade} (${attempt.verdict}), $${attempt.costUsd.toFixed(2)}${dimensions ? ` [${dimensions}]` : ""}`,
+			`${index + 1}. ${attempt.label} — grade ${attempt.grade} (${attempt.verdict}), ${cost}${dimensions ? ` [${dimensions}]` : ""}`,
 		);
 		if (attempt.changedPaths?.length) {
 			lines.push(`   changed paths: ${attempt.changedPaths.join(", ")}`);
