@@ -2,6 +2,8 @@
 
 - **Artifact** — durable output of a stage: a spec or plan document, a backlog
   card update, or commits.
+- **Attempt** — one execution of a stage at a checkpoint: the original run's
+  stage result or any replay; the unit a comparison presents.
 - **Calibration** — the human-review step that validates a Judge result and
   turns findings into rubric or instruction changes.
 - **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
