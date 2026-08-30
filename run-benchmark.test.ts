@@ -2816,6 +2816,7 @@ describe(recordCheckpoint, () => {
 			"the spec\n",
 		);
 		await Bun.write(join(targetDir, ".boris", "CONTEXT.md"), "context\n");
+		await mkdir(join(targetDir, "backlog", "drafts"), { recursive: true });
 		await Bun.write(join(targetDir, "ignored.ts"), "not workflow state\n");
 
 		return {
@@ -2861,6 +2862,9 @@ describe(recordCheckpoint, () => {
 		expect(await Bun.file(join(destination, "ignored.ts")).exists()).toBe(
 			false,
 		);
+		expect(
+			(await stat(join(destination, "backlog", "drafts"))).isDirectory(),
+		).toBe(true);
 	});
 
 	it("refuses to materialize a tampered snapshot", async () => {

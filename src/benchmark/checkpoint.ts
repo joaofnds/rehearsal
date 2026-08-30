@@ -227,16 +227,26 @@ export async function materializeCheckpoint(
 		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
 	);
 
-	for (const { path, sha256: expected } of record.workflowState) {
+	// Whole trees, not the recorded files one by one: the workflow tools
+	// expect their empty directories (backlog/docs, backlog/drafts, ...) to
+	// exist, and only a tree copy carries them.
+	for (const path of WORKFLOW_PATHS) {
 		const source = join(directory, SNAPSHOT_DIRECTORY, path);
-		const actual = await hashFile(source);
+		const exists = await stat(source).catch(() => undefined);
+		if (!exists) continue;
+
+		await cp(source, join(destination, path), { recursive: true });
+	}
+
+	for (const { path, sha256: expected } of record.workflowState) {
+		const actual = await hashFile(join(destination, path)).catch(
+			() => "missing",
+		);
 		if (actual !== expected) {
 			throw new Error(
 				`Checkpoint snapshot does not match its record: ${path} hashes ${actual}, recorded ${expected}`,
 			);
 		}
-
-		await cp(source, join(destination, path), { recursive: true });
 	}
 
 	return record;
