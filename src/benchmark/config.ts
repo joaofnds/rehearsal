@@ -34,10 +34,7 @@ export interface BenchmarkConfig {
 	readonly pipelinePath: string;
 }
 
-export function parseArgs(
-	args: readonly string[],
-	env: Record<string, string | undefined> = Bun.env,
-): BenchmarkConfig {
+function flagValues(args: readonly string[]) {
 	const values = new Map<string, string>();
 
 	for (let index = 0; index < args.length; index += 2) {
@@ -52,6 +49,15 @@ export function parseArgs(
 
 		values.set(key, value);
 	}
+
+	return values;
+}
+
+export function parseArgs(
+	args: readonly string[],
+	env: Record<string, string | undefined> = Bun.env,
+): BenchmarkConfig {
+	const values = flagValues(args);
 
 	const sourceDir = values.get("--target") ?? env.BENCHMARK_TARGET_DIR;
 	const model = values.get("--model") ?? env.BENCHMARK_MODEL;
@@ -94,6 +100,68 @@ export function parseArgs(
 				env.BENCHMARK_PIPELINE ??
 				DEFAULT_PIPELINE_PATH,
 		),
+	};
+}
+
+export interface ReplayCliConfig {
+	readonly runName: string;
+	readonly stage: string;
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
+	readonly sessionBudgetUsd: number;
+}
+
+/**
+ * Replay shares the run's model, effort, judge, and budget knobs and their
+ * environment fallbacks; what it adds is naming the recorded run and the
+ * stage to replay from it.
+ */
+export function parseReplayArgs(
+	args: readonly string[],
+	env: Record<string, string | undefined> = Bun.env,
+): ReplayCliConfig {
+	const values = flagValues(args);
+
+	const runName = values.get("--run");
+	const stage = values.get("--stage");
+	const model = values.get("--model") ?? env.BENCHMARK_MODEL;
+	const budgetText =
+		values.get("--session-budget-usd") ?? env.BENCHMARK_SESSION_BUDGET_USD;
+
+	if (!runName) throw new Error("Provide --run with the run's name");
+	if (!stage) throw new Error("Provide --stage with the stage to replay");
+	if (!model) throw new Error("Provide --model or BENCHMARK_MODEL");
+	if (!budgetText) {
+		throw new Error(
+			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
+		);
+	}
+
+	const effort = parseEffort(
+		values.get("--effort") ?? env.BENCHMARK_EFFORT,
+		"workflow",
+	);
+	const judgeEffort = parseEffort(
+		values.get("--judge-effort") ?? env.BENCHMARK_JUDGE_EFFORT ?? effort,
+		"Judge",
+	);
+	const sessionBudgetUsd = Number(budgetText);
+
+	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
+		throw new Error("Session budget must be a positive number");
+	}
+
+	return {
+		runName,
+		stage,
+		model,
+		effort,
+		judgeModel:
+			values.get("--judge-model") ?? env.BENCHMARK_JUDGE_MODEL ?? model,
+		judgeEffort,
+		sessionBudgetUsd,
 	};
 }
 

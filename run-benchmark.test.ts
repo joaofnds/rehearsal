@@ -41,7 +41,11 @@ import {
 	killActiveCommands,
 	runCommand,
 } from "./src/benchmark/command";
-import { MAX_CONTEXT_FILE_BYTES, parseArgs } from "./src/benchmark/config";
+import {
+	MAX_CONTEXT_FILE_BYTES,
+	parseArgs,
+	parseReplayArgs,
+} from "./src/benchmark/config";
 import type {
 	CalibrationResult,
 	HumanReview,
@@ -236,6 +240,63 @@ describe(parseArgs, () => {
 		expect(() =>
 			parseArgs(["--target", "./target", "--model", "claude-opus-4-8"], {}),
 		).toThrow("Provide --session-budget-usd");
+	});
+});
+
+describe(parseReplayArgs, () => {
+	it("resolves the replay knobs and defaults the judge to the model", () => {
+		const config = parseReplayArgs(
+			[
+				"--run",
+				"2026-08-30T10-00-00.000Z",
+				"--stage",
+				"discuss",
+				"--model",
+				"sonnet",
+				"--effort",
+				"high",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
+
+		expect(config).toEqual({
+			runName: "2026-08-30T10-00-00.000Z",
+			stage: "discuss",
+			model: "sonnet",
+			effort: "high",
+			judgeModel: "sonnet",
+			judgeEffort: "high",
+			sessionBudgetUsd: 5,
+		});
+	});
+
+	it("falls back to the benchmark environment variables", () => {
+		const config = parseReplayArgs(["--run", "r", "--stage", "build"], {
+			BENCHMARK_MODEL: "sonnet",
+			BENCHMARK_JUDGE_MODEL: "opus",
+			BENCHMARK_SESSION_BUDGET_USD: "3",
+		});
+
+		expect(config.model).toBe("sonnet");
+		expect(config.judgeModel).toBe("opus");
+		expect(config.sessionBudgetUsd).toBe(3);
+	});
+
+	it("requires the run and the stage", () => {
+		expect(() =>
+			parseReplayArgs(
+				["--stage", "build", "--model", "m", "--session-budget-usd", "5"],
+				{},
+			),
+		).toThrow("Provide --run");
+		expect(() =>
+			parseReplayArgs(
+				["--run", "r", "--model", "m", "--session-budget-usd", "5"],
+				{},
+			),
+		).toThrow("Provide --stage");
 	});
 });
 

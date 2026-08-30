@@ -5,6 +5,7 @@
 	"packageManager": "bun@1.4.0",
 	"scripts": {
 		"benchmark": "bun run run-benchmark.ts",
+		"replay": "bun run replay-stage.ts",
 		"check": "biome check .",
 		"check:apply": "biome check --write .",
 		"test": "bun test",
@@ -16,6 +17,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.5.10",
 		"@types/bun": "^1.4.0",
+		"oxlint": "^1.80.0",
 		"typescript": "^7.0.2"
 	}
 }
