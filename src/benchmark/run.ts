@@ -12,6 +12,7 @@ import { collectCalibration, type Questioner } from "./calibration";
 import {
 	type CheckpointRecord,
 	captureStageCorpus,
+	type HashedFile,
 	hashArtifacts,
 	hashWorkflowState,
 	INITIAL_CHECKPOINT_STAGE,
@@ -46,7 +47,11 @@ import type {
 } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
-import { loadPipeline, type PipelineDefinition } from "./pipeline";
+import {
+	loadPipeline,
+	type PipelineDefinition,
+	type StageDefinition,
+} from "./pipeline";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
@@ -93,7 +98,7 @@ const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
 	SIGHUP: 129,
 };
 
-interface BuildEvidence {
+export interface BuildEvidence {
 	readonly resultSha: string;
 	readonly diff: string;
 	readonly changedPaths: readonly string[];
@@ -189,9 +194,8 @@ export function retainedCheckpointRecorder(
 	};
 }
 
-export interface StageDependencies {
+export interface StageSessionDependencies {
 	readonly runWorkflowStage: typeof runWorkflowStage;
-	readonly runStageJudge: typeof runStageJudge;
 	readonly readTaskOutput: typeof readTaskOutput;
 	readonly captureBuildCandidate: typeof captureBuildCandidate;
 	readonly assertPlanningStageCompleted: typeof assertPlanningStageCompleted;
@@ -199,8 +203,12 @@ export interface StageDependencies {
 	readonly changedPathsBetween: typeof changedPathsBetween;
 	readonly captureCheckIntegrity: typeof captureCheckIntegrity;
 	readonly captureTreatmentChecks: typeof captureTreatmentChecks;
-	readonly resolveSkillDirectory: typeof resolveSkillDirectory;
 	readonly captureStageCorpus: typeof captureStageCorpus;
+}
+
+export interface StageDependencies extends StageSessionDependencies {
+	readonly runStageJudge: typeof runStageJudge;
+	readonly resolveSkillDirectory: typeof resolveSkillDirectory;
 	readonly recordCheckpoint: typeof recordCheckpoint;
 }
 
@@ -244,6 +252,144 @@ export interface StageOutcome {
 	readonly buildEvidence?: BuildEvidence;
 }
 
+export interface StageSessionEnvironment {
+	readonly targetDir: string;
+	readonly productOwnerDirectory: string;
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly sessionBudgetUsd: number;
+	readonly productOwner: ProductOwnerSession;
+	readonly task: string;
+	readonly productBrief: string;
+	readonly instructions: string;
+	readonly baselineContext: readonly ContextFile[];
+	readonly baselineHashes: ReadonlyMap<string, string>;
+	readonly taskId: string;
+	readonly taskSha: string;
+	readonly skillRoots: readonly string[];
+	readonly log: (message: string) => void;
+}
+
+export interface StageSessionResult {
+	readonly corpusFiles: readonly HashedFile[];
+	readonly transcript: StageTranscript;
+	readonly input: StageJudgeInput;
+	readonly artifact?: ContextFile;
+	readonly buildEvidence?: BuildEvidence;
+}
+
+/**
+ * One stage session up to its judge-ready evidence: run the skill, read the
+ * task state, and validate the stage's delivery. Shared by the run's stage
+ * loop and by replay, which differ in what happens to the evidence, never in
+ * how a stage produces it.
+ */
+export async function executeStageSession(
+	dependencies: StageSessionDependencies,
+	environment: StageSessionEnvironment,
+	definition: StageDefinition,
+	priorArtifacts: readonly ContextFile[],
+): Promise<StageSessionResult> {
+	const stage = definition.name;
+	const corpusFiles = await dependencies.captureStageCorpus(
+		definition.skill,
+		environment.instructions,
+		environment.skillRoots,
+	);
+	environment.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
+	const transcript = await dependencies.runWorkflowStage(
+		environment.targetDir,
+		environment.productOwnerDirectory,
+		environment.model,
+		environment.effort,
+		environment.sessionBudgetUsd,
+		environment.productOwner,
+		environment.task,
+		environment.productBrief,
+		environment.taskId,
+		stage,
+		definition.skill,
+	);
+
+	const currentTaskOutput = await dependencies.readTaskOutput(
+		environment.targetDir,
+		environment.taskId,
+	);
+	const buildCandidate =
+		definition.kind === "delivery"
+			? await dependencies.captureBuildCandidate(
+					environment.targetDir,
+					environment.taskSha,
+				)
+			: undefined;
+	const baseInput: StageJudgeInput = {
+		stage,
+		kind: definition.kind,
+		task: environment.task,
+		productBrief: environment.productBrief,
+		instructions: environment.instructions,
+		baselineContext: environment.baselineContext,
+		taskState: currentTaskOutput,
+		transcript,
+		priorArtifacts: [...priorArtifacts],
+		diff: buildCandidate?.diff,
+		changedPaths: buildCandidate?.changedPaths,
+	};
+	let artifact: ContextFile | undefined;
+	let buildEvidence: BuildEvidence | undefined;
+	const input = await captureStageJudgeInput(baseInput, async () => {
+		if (definition.kind === "planning") {
+			const currentTask = parseTaskState(currentTaskOutput);
+			const planning = await dependencies.assertPlanningStageCompleted(
+				environment.targetDir,
+				environment.taskSha,
+				definition,
+				currentTask,
+			);
+			artifact = planning.artifact;
+
+			return {
+				...baseInput,
+				taskState: planning.taskState,
+				artifact: planning.artifact,
+			};
+		}
+
+		const build = await dependencies.assertBuildCommitted(
+			environment.targetDir,
+			environment.taskSha,
+		);
+		buildEvidence = {
+			resultSha: build.resultSha,
+			diff: build.diff,
+			changedPaths: await dependencies.changedPathsBetween(
+				environment.targetDir,
+				environment.taskSha,
+				build.resultSha,
+			),
+			checkIntegrity: await dependencies.captureCheckIntegrity(
+				environment.targetDir,
+				environment.baselineHashes,
+			),
+			localChecks: await dependencies.captureTreatmentChecks(
+				environment.targetDir,
+			),
+			taskState: currentTaskOutput,
+		};
+
+		return {
+			...baseInput,
+			taskState: buildEvidence.taskState,
+			diff: buildEvidence.diff,
+			changedPaths: buildEvidence.changedPaths,
+			checkIntegrity: buildEvidence.checkIntegrity,
+			localChecks: buildEvidence.localChecks,
+		};
+	});
+
+	return { corpusFiles, transcript, input, artifact, buildEvidence };
+}
+
 export async function runGradedStages(
 	dependencies: StageDependencies,
 	context: StageContext,
@@ -266,100 +412,16 @@ export async function runGradedStages(
 
 	for (const definition of context.pipeline.stages) {
 		const stage = definition.name;
-		const corpusFiles = await dependencies.captureStageCorpus(
-			definition.skill,
-			context.instructions,
-			skillRoots,
+		const session = await executeStageSession(
+			dependencies,
+			{ ...context, skillRoots },
+			definition,
+			stageArtifacts,
 		);
-		context.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
-		const transcript = await dependencies.runWorkflowStage(
-			context.targetDir,
-			context.productOwnerDirectory,
-			context.model,
-			context.effort,
-			context.sessionBudgetUsd,
-			context.productOwner,
-			context.task,
-			context.productBrief,
-			context.taskId,
-			stage,
-			definition.skill,
-		);
-		workflow.push(transcript);
-
-		const currentTaskOutput = await dependencies.readTaskOutput(
-			context.targetDir,
-			context.taskId,
-		);
-		const buildCandidate =
-			definition.kind === "delivery"
-				? await dependencies.captureBuildCandidate(
-						context.targetDir,
-						context.taskSha,
-					)
-				: undefined;
-		const baseInput: StageJudgeInput = {
-			stage,
-			kind: definition.kind,
-			task: context.task,
-			productBrief: context.productBrief,
-			instructions: context.instructions,
-			baselineContext: context.baselineContext,
-			taskState: currentTaskOutput,
-			transcript,
-			priorArtifacts: [...stageArtifacts],
-			diff: buildCandidate?.diff,
-			changedPaths: buildCandidate?.changedPaths,
-		};
-		const input = await captureStageJudgeInput(baseInput, async () => {
-			if (definition.kind === "planning") {
-				const currentTask = parseTaskState(currentTaskOutput);
-				const planning = await dependencies.assertPlanningStageCompleted(
-					context.targetDir,
-					context.taskSha,
-					definition,
-					currentTask,
-				);
-				stageArtifacts.push(planning.artifact);
-
-				return {
-					...baseInput,
-					taskState: planning.taskState,
-					artifact: planning.artifact,
-				};
-			}
-
-			const build = await dependencies.assertBuildCommitted(
-				context.targetDir,
-				context.taskSha,
-			);
-			buildEvidence = {
-				resultSha: build.resultSha,
-				diff: build.diff,
-				changedPaths: await dependencies.changedPathsBetween(
-					context.targetDir,
-					context.taskSha,
-					build.resultSha,
-				),
-				checkIntegrity: await dependencies.captureCheckIntegrity(
-					context.targetDir,
-					context.baselineHashes,
-				),
-				localChecks: await dependencies.captureTreatmentChecks(
-					context.targetDir,
-				),
-				taskState: currentTaskOutput,
-			};
-
-			return {
-				...baseInput,
-				taskState: buildEvidence.taskState,
-				diff: buildEvidence.diff,
-				changedPaths: buildEvidence.changedPaths,
-				checkIntegrity: buildEvidence.checkIntegrity,
-				localChecks: buildEvidence.localChecks,
-			};
-		});
+		const { corpusFiles, input } = session;
+		workflow.push(session.transcript);
+		if (session.artifact) stageArtifacts.push(session.artifact);
+		if (session.buildEvidence) buildEvidence = session.buildEvidence;
 
 		context.log(`\n${stage} stage Judge`);
 		const stageFile = context.stageFile(stage);
