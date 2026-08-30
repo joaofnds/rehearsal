@@ -53,6 +53,7 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
+import { parsePipeline } from "./src/benchmark/pipeline";
 import { runGradedStages } from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
@@ -1892,3 +1893,115 @@ async function commitAll(directory: string, message: string) {
 	await runCommand(["git", "add", "."], directory);
 	await runCommand(["git", "commit", "-m", message], directory);
 }
+
+describe(parsePipeline, () => {
+	function stageEntry(overrides: Record<string, unknown> = {}) {
+		return {
+			name: "discuss",
+			kind: "planning",
+			skill: "discuss",
+			artifact: "spec",
+			rubric: "rubrics/discuss.json",
+			...overrides,
+		};
+	}
+
+	function pipeline(stages: readonly unknown[]) {
+		return JSON.stringify({ stages });
+	}
+
+	const availableRubrics = [
+		"rubrics/discuss.json",
+		"rubrics/grill.json",
+		"rubrics/plan.json",
+		"rubrics/build.json",
+	];
+
+	function parse(stages: readonly unknown[]) {
+		return parsePipeline(pipeline(stages), availableRubrics);
+	}
+
+	const deliveryStage = stageEntry({
+		name: "build",
+		kind: "delivery",
+		skill: "build",
+		artifact: undefined,
+		rubric: "rubrics/build.json",
+	});
+
+	it("parses the four-stage default into ordered stages", () => {
+		const parsed = parse([
+			stageEntry(),
+			stageEntry({
+				name: "grill",
+				skill: "grill",
+				artifact: "grilled",
+				rubric: "rubrics/grill.json",
+			}),
+			stageEntry({
+				name: "plan",
+				skill: "plan",
+				artifact: "plan",
+				rubric: "rubrics/plan.json",
+			}),
+			deliveryStage,
+		]);
+
+		expect(parsed.stages.map(({ name }) => name)).toEqual([
+			"discuss",
+			"grill",
+			"plan",
+			"build",
+		]);
+		expect(parsed.stages[0]?.kind).toBe("planning");
+		expect(parsed.stages[3]?.kind).toBe("delivery");
+	});
+
+	it("accepts a stage name absent from the original four", () => {
+		const parsed = parse([
+			stageEntry({
+				name: "research",
+				skill: "research",
+				artifact: "findings",
+				rubric: "rubrics/discuss.json",
+			}),
+			deliveryStage,
+		]);
+
+		expect(parsed.stages[0]?.name).toBe("research");
+	});
+
+	it("rejects a stage missing a required field", () => {
+		expect(() =>
+			parse([stageEntry({ skill: undefined }), deliveryStage]),
+		).toThrow(/discuss.*skill/s);
+	});
+
+	it("rejects a stage naming a rubric file that does not exist", () => {
+		expect(() =>
+			parse([stageEntry({ rubric: "rubrics/missing.json" }), deliveryStage]),
+		).toThrow(/discuss.*rubric/s);
+	});
+
+	it("rejects a repeated stage name", () => {
+		expect(() => parse([stageEntry(), stageEntry(), deliveryStage])).toThrow(
+			/discuss.*name/s,
+		);
+	});
+
+	it("rejects a pipeline with no delivery stage", () => {
+		expect(() => parse([stageEntry()])).toThrow(/delivery/);
+	});
+
+	it("rejects a pipeline with more than one delivery stage", () => {
+		expect(() =>
+			parse([deliveryStage, { ...deliveryStage, name: "ship", skill: "ship" }]),
+		).toThrow(/delivery/);
+	});
+
+	it("rejects a delivery stage that is not last", () => {
+		expect(() => parse([deliveryStage, stageEntry()])).toThrow(
+			/build.*last|last.*build/s,
+		);
+	});
+});
