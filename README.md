@@ -330,9 +330,12 @@ Completed runs are written to:
 ```text
 .benchmark-runs/<ISO timestamp>.json
 .benchmark-runs/<ISO timestamp>.<stage>.json
+.benchmark-runs/<ISO timestamp>.checkpoints/<stage>/
 ```
 
 Each stage file first records the frozen Judge input, so a Judge timeout or invalid response does not erase the stage evidence. A successful Judge replaces that preliminary record with the scorecard, including when the grade stops the workflow. Successful end-to-end runs also include all stage scorecards in the main artifact.
+
+Each checkpoint directory freezes the state the next stage consumed, written the moment the stage's Judge accepts, so a run that fails at a later stage keeps every accepted checkpoint for replay. It holds a `checkpoint.json` record — target SHA, per-file hashes, the corpus files that fed the stage, and the lineage key chaining back to the run's initial state — beside a byte-faithful copy of the workflow state (`backlog/`, `.boris/`).
 
 The directory is ignored by Git. Each artifact records:
 
@@ -343,6 +346,7 @@ The directory is ignored by Git. Each artifact records:
 - the pipeline definition the run executed and the path it was loaded from
 - each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
 - each stage rubric, frozen Judge input, prompt, evidence, grade, and stop decision
+- each accepted stage's checkpoint record with its lineage key
 - final Backlog.md task state
 - baseline context supplied to Judge
 - complete implementation diff
