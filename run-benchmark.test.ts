@@ -15,7 +15,6 @@ import {
 } from "./src/benchmark/calibration";
 import {
 	captureStageCorpus,
-	hashWorkflowState,
 	initialCheckpointInputs,
 	lineageKey,
 	materializeCheckpoint,
