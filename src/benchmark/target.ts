@@ -205,9 +205,17 @@ export async function recordRetentionRef(
 	await git(targetDir, "update-ref", `refs/rehearsal/${runName}`, sha);
 }
 
+/**
+ * A run's stages work on main; a replay's stage works on the worktree's
+ * detached HEAD. `null` expects the detached checkout, where
+ * `branch --show-current` prints nothing.
+ */
+export type ExpectedBranch = string | null;
+
 export async function assertWorkspaceCleanAt(
 	targetDir: string,
 	expectedSha: string,
+	expectedBranch: ExpectedBranch = "main",
 ) {
 	const branch = await git(targetDir, "branch", "--show-current");
 	const sha = await git(targetDir, "rev-parse", "HEAD");
@@ -218,7 +226,7 @@ export async function assertWorkspaceCleanAt(
 		"--untracked-files=all",
 	);
 
-	if (branch !== "main" || sha !== expectedSha || status) {
+	if (branch !== (expectedBranch ?? "") || sha !== expectedSha || status) {
 		throw new StageValidationError("Target baseline changed unexpectedly");
 	}
 }
@@ -259,10 +267,17 @@ export async function captureBuildCandidate(
 	};
 }
 
-export async function assertBuildCommitted(targetDir: string, taskSha: string) {
+export async function assertBuildCommitted(
+	targetDir: string,
+	taskSha: string,
+	expectedBranch: ExpectedBranch = "main",
+) {
 	const branch = await git(targetDir, "branch", "--show-current");
-	if (branch !== "main")
-		throw new StageValidationError("Build phase left main");
+	if (branch !== (expectedBranch ?? "")) {
+		throw new StageValidationError(
+			`Build phase left ${expectedBranch ?? "its detached checkout"}`,
+		);
+	}
 
 	const status = await git(
 		targetDir,
@@ -321,6 +336,19 @@ export function assertConventionalCommitSubjects(subjects: readonly string[]) {
 			`Build used non-conventional commit subjects: ${invalidSubjects.join(", ")}`,
 		);
 	}
+}
+
+export async function addWorktree(
+	repositoryRoot: string,
+	sha: string,
+	path: string,
+) {
+	await git(repositoryRoot, "worktree", "add", "--detach", path, sha);
+}
+
+// --force: a replay worktree holds untracked workflow state by design.
+export async function removeWorktree(repositoryRoot: string, path: string) {
+	await git(repositoryRoot, "worktree", "remove", "--force", path);
 }
 
 export async function changedPathsBetween(

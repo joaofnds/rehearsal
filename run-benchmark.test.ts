@@ -81,12 +81,15 @@ import {
 	validateStageJudgeEvidence,
 } from "./src/benchmark/stage-grading";
 import {
+	addWorktree,
 	assertBuildCommitted,
 	assertConventionalCommitSubjects,
 	assertSourceReady,
+	assertWorkspaceCleanAt,
 	captureBuildCandidate,
 	captureWorkflowBackup,
 	claimTarget,
+	removeWorktree,
 	restoreTarget,
 	teardownTarget,
 } from "./src/benchmark/target";
@@ -1798,6 +1801,24 @@ describe(assertConventionalCommitSubjects, () => {
 });
 
 describe(assertBuildCommitted, () => {
+	it("accepts a build committed on a detached replay worktree", async () => {
+		const source = await createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		temporaryDirectories.push(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await Bun.write(join(worktree, "feature.ts"), "export const built = 1;\n");
+		await commitAll(worktree, "feat: build in replay worktree");
+
+		const build = await assertBuildCommitted(worktree, source.sha, null);
+
+		expect(build.diff).toContain("feature.ts");
+		await expect(
+			assertBuildCommitted(worktree, source.sha),
+		).rejects.toBeInstanceOf(StageValidationError);
+		await removeWorktree(source.directory, worktree);
+	});
+
 	it("classifies rewritten task history as candidate validation failure", async () => {
 		const source = await createRepository();
 		await runCommand(
@@ -1810,6 +1831,74 @@ describe(assertBuildCommitted, () => {
 
 		await expect(
 			assertBuildCommitted(source.directory, source.sha),
+		).rejects.toBeInstanceOf(StageValidationError);
+	});
+});
+
+describe(addWorktree, () => {
+	it("gives a replay a detached checkout without touching the primary", async () => {
+		const source = await createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		temporaryDirectories.push(parent);
+		const worktree = join(parent, "worktree");
+
+		await addWorktree(source.directory, source.sha, worktree);
+
+		expect(await Bun.file(join(worktree, "base.txt")).text()).toBe("base\n");
+		expect(
+			(await runCommand(["git", "branch", "--show-current"], worktree)).trim(),
+		).toBe("");
+		expect(
+			(
+				await runCommand(["git", "branch", "--show-current"], source.directory)
+			).trim(),
+		).toBe("main");
+
+		await removeWorktree(source.directory, worktree);
+
+		expect(await Bun.file(join(worktree, "base.txt")).exists()).toBe(false);
+	});
+
+	it("removes a worktree that holds uncommitted replay state", async () => {
+		const source = await createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		temporaryDirectories.push(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await Bun.write(join(worktree, "backlog", "task.md"), "workflow state\n");
+
+		await removeWorktree(source.directory, worktree);
+
+		expect(await Bun.file(join(worktree, "base.txt")).exists()).toBe(false);
+	});
+});
+
+describe(assertWorkspaceCleanAt, () => {
+	it("accepts a clean detached worktree when no branch is expected", async () => {
+		const source = await createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		temporaryDirectories.push(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+
+		await expect(
+			assertWorkspaceCleanAt(worktree, source.sha, null),
+		).resolves.toBeUndefined();
+		await expect(
+			assertWorkspaceCleanAt(worktree, source.sha),
+		).rejects.toBeInstanceOf(StageValidationError);
+	});
+
+	it("rejects a workspace that left its detached checkout for a branch", async () => {
+		const source = await createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		temporaryDirectories.push(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await runCommand(["git", "switch", "-c", "stray"], worktree);
+
+		await expect(
+			assertWorkspaceCleanAt(worktree, source.sha, null),
 		).rejects.toBeInstanceOf(StageValidationError);
 	});
 });

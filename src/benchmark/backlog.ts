@@ -4,7 +4,7 @@ import { z } from "zod";
 import { runCommand } from "./command";
 import { StageValidationError } from "./contracts";
 import type { PlanningStageDefinition } from "./pipeline";
-import { assertWorkspaceCleanAt, git } from "./target";
+import { assertWorkspaceCleanAt, type ExpectedBranch, git } from "./target";
 
 const taskViewSchema = z
 	.object({
@@ -165,8 +165,9 @@ export async function assertPlanningStageCompleted(
 	taskSha: string,
 	stage: PlanningStageDefinition,
 	taskState: { output: string; view: TaskView },
+	expectedBranch: ExpectedBranch = "main",
 ) {
-	await assertWorkspaceCleanAt(targetDir, taskSha);
+	await assertWorkspaceCleanAt(targetDir, taskSha, expectedBranch);
 	const { output, view } = taskState;
 	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
