@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema, WORKFLOW_PATHS } from "./config";
+import type { Immutable } from "./contracts";
 
 export interface HashedFile {
 	readonly path: string;
@@ -118,7 +119,7 @@ export async function resolveSkillDirectory(
 	for (const root of roots) {
 		const directory = join(root, skill);
 		const directoryStats = await statIfExists(directory);
-		if (directoryStats?.isDirectory()) {
+		if (directoryStats?.isDirectory() === true) {
 			return directory;
 		}
 	}
@@ -224,7 +225,9 @@ const checkpointRecordSchema = z
 	})
 	.strict();
 
-export type CheckpointRecord = z.infer<typeof checkpointRecordSchema>;
+export type CheckpointRecord = Immutable<
+	z.infer<typeof checkpointRecordSchema>
+>;
 
 export interface CheckpointInputs {
 	readonly stage: string;
@@ -337,7 +340,7 @@ export async function materializeCheckpoint(
 		recorded.delete(file.path);
 	}
 	const missing = recorded.keys().next();
-	if (!missing.done) {
+	if (missing.done !== true) {
 		throw new Error(
 			`Checkpoint snapshot does not match its record: ${missing.value} is recorded but missing`,
 		);

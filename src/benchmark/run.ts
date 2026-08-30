@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -63,8 +62,8 @@ import {
 	recordRetentionRef,
 	teardownTarget,
 } from "./target";
-import type { ProductOwnerSession } from "./workflow";
-import { runWorkflowStage } from "./workflow";
+import type { ProductOwner, ProductOwnerSnapshot } from "./workflow";
+import { createProductOwner, runWorkflowStage } from "./workflow";
 
 async function createRunFiles(timestamp: string): Promise<{
 	name: string;
@@ -98,17 +97,13 @@ async function writeArtifact(
 }
 
 function signalExitCode(signal: NodeJS.Signals): number {
-	switch (signal) {
-		case "SIGTERM": {
-			return 143;
-		}
-		case "SIGHUP": {
-			return 129;
-		}
-		default: {
-			return 130;
-		}
+	if (signal === "SIGTERM") {
+		return 143;
 	}
+	if (signal === "SIGHUP") {
+		return 129;
+	}
+	return 130;
 }
 
 export interface BuildEvidence {
@@ -139,7 +134,7 @@ export interface RunArtifactInputs {
 	readonly rubricIds: readonly string[];
 	readonly baselineContext: readonly ContextFile[];
 	readonly taskId: string;
-	readonly productOwner: ProductOwnerSession;
+	readonly productOwner: ProductOwnerSnapshot;
 	readonly workflow: readonly StageTranscript[];
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly checkpoints: readonly CheckpointRecord[];
@@ -234,13 +229,12 @@ export interface PendingStage {
 export interface StageContext {
 	readonly targetDir: string;
 	readonly initialLineage: string;
-	readonly productOwnerDirectory: string;
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
-	readonly productOwner: ProductOwnerSession;
+	readonly productOwner: ProductOwner;
 	readonly task: string;
 	readonly productBrief: string;
 	readonly instructions: string;
@@ -267,11 +261,10 @@ export interface StageOutcome {
 
 export interface StageSessionEnvironment {
 	readonly targetDir: string;
-	readonly productOwnerDirectory: string;
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
-	readonly productOwner: ProductOwnerSession;
+	readonly productOwner: ProductOwner;
 	readonly task: string;
 	readonly productBrief: string;
 	readonly instructions: string;
@@ -312,13 +305,10 @@ export async function executeStageSession(
 	environment.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 	const transcript = await dependencies.runWorkflowStage(
 		environment.targetDir,
-		environment.productOwnerDirectory,
 		environment.model,
 		environment.effort,
 		environment.sessionBudgetUsd,
 		environment.productOwner,
-		environment.task,
-		environment.productBrief,
 		environment.taskId,
 		stage,
 		definition.skill,
@@ -640,11 +630,14 @@ export async function runBenchmark(
 				config.effort,
 			),
 		);
-		const productOwner: ProductOwnerSession = {
-			sessionId: randomUUID(),
-			spentUsd: 0,
-			started: false,
-		};
+		const productOwner = createProductOwner({
+			directory: productOwnerDirectory,
+			model: config.model,
+			effort: config.effort,
+			sessionBudgetUsd: config.sessionBudgetUsd,
+			task,
+			productBrief,
+		});
 		const { workflow, stageScorecards, checkpoints, buildEvidence } =
 			await runGradedStages(
 				{
@@ -664,7 +657,6 @@ export async function runBenchmark(
 				{
 					targetDir: source.root,
 					initialLineage: initialCheckpoint.lineage,
-					productOwnerDirectory,
 					model: config.model,
 					effort: config.effort,
 					judgeModel: config.judgeModel,
@@ -738,7 +730,7 @@ export async function runBenchmark(
 			rubricIds,
 			baselineContext,
 			taskId,
-			productOwner,
+			productOwner: productOwner.snapshot(),
 			workflow,
 			stageScorecards,
 			checkpoints: [initialCheckpoint, ...checkpoints],

@@ -119,7 +119,7 @@ export function applyAuthoritativeStageResults(
 		string,
 		StageJudgeOutput["hardBlockers"][number]["evidence"]
 	>();
-	if (input.harnessFailure) {
+	if (input.harnessFailure !== undefined && input.harnessFailure !== "") {
 		forcedFailures.set("invalid-stage-delivery", [
 			{
 				source: "harness-failure",
@@ -179,7 +179,10 @@ export function validateStageJudgeEvidence(
 		diff: input.changedPaths ?? [],
 		"check-integrity": input.checkIntegrity ? ["harness"] : [],
 		"local-checks": input.localChecks ? ["harness"] : [],
-		"harness-failure": input.harnessFailure ? ["harness"] : [],
+		"harness-failure":
+			input.harnessFailure === undefined || input.harnessFailure === ""
+				? []
+				: ["harness"],
 	} satisfies Record<
 		StageJudgeOutput["requirements"][number]["evidence"][number]["source"],
 		readonly string[]
@@ -246,7 +249,11 @@ export async function runStageJudge(
 	effort: Effort | undefined,
 	sessionBudgetUsd: number,
 	input: StageJudgeInput,
-	source: { rubricPath: string; content: string; rubric: StageRubric },
+	source: {
+		readonly rubricPath: string;
+		readonly content: string;
+		readonly rubric: StageRubric;
+	},
 ): Promise<StageScorecard> {
 	const judgeDirectory = await mkdtemp(
 		join(tmpdir(), `rehearsal-${input.stage}-judge-`),

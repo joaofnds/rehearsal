@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { effortSchema } from "./config";
 import { pipelineDefinitionSchema } from "./pipeline";
+import type { Immutable } from "./contracts";
 
 export const RUN_MANIFEST_FILE = "manifest.json";
 
@@ -30,7 +31,7 @@ const runManifestSchema = z
 	})
 	.strict();
 
-export type RunManifest = z.infer<typeof runManifestSchema>;
+export type RunManifest = Immutable<z.infer<typeof runManifestSchema>>;
 
 export async function writeRunManifest(
 	runDirectory: string,

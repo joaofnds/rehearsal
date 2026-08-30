@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,7 +28,7 @@ import type { StageSessionDependencies } from "./run";
 import { executeStageSession } from "./run";
 import type { loadStageRubric, runStageJudge } from "./stage-grading";
 import type { addWorktree, removeWorktree } from "./target";
-import type { ProductOwnerSession } from "./workflow";
+import { createProductOwner } from "./workflow";
 
 export class ReplayError extends Error {
 	public override name = "ReplayError";
@@ -207,9 +206,9 @@ export const replayRecordSchema = z
 						grade: stageLetterGradeSchema,
 						verdict: z.enum(["CONTINUE", "STOP"]),
 					})
-					.passthrough(),
+					.loose(),
 			})
-			.passthrough(),
+			.loose(),
 	})
 	.strict();
 
@@ -315,17 +314,19 @@ export async function runReplay(
 		const baselineHashes = await dependencies.captureFileHashes(worktreeDir);
 		const baselineContext =
 			await dependencies.captureBaselineContext(worktreeDir);
-		const productOwner: ProductOwnerSession = {
-			sessionId: randomUUID(),
-			spentUsd: 0,
-			started: false,
-		};
+		const productOwner = createProductOwner({
+			directory: productOwnerDirectory,
+			model: request.model,
+			effort: request.effort,
+			sessionBudgetUsd: request.sessionBudgetUsd,
+			task: manifest.task,
+			productBrief: manifest.productBrief,
+		});
 
 		const session = await executeStageSession(
 			detachedStageDependencies(dependencies.stageSession),
 			{
 				targetDir: worktreeDir,
-				productOwnerDirectory,
 				model: request.model,
 				effort: request.effort,
 				sessionBudgetUsd: request.sessionBudgetUsd,
@@ -379,7 +380,7 @@ export async function runReplay(
 			sessionBudgetUsd: request.sessionBudgetUsd,
 			controlSha: request.controlSha,
 			stageCostUsd: session.transcript.costUsd,
-			productOwnerCostUsd: productOwner.spentUsd,
+			productOwnerCostUsd: productOwner.snapshot().spentUsd,
 			judgeCostUsd: scorecard.costUsd,
 			resultSha: session.buildEvidence?.resultSha,
 			scorecard,

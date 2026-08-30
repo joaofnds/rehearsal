@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 import {
 	diffTexts,
 	loadAttempts,
@@ -120,7 +121,7 @@ import {
 	restoreTarget,
 	teardownTarget,
 } from "./src/benchmark/target";
-import type { ProductOwnerSession } from "./src/benchmark/workflow";
+import type { ProductOwner } from "./src/benchmark/workflow";
 
 const RUBRIC_IDS = [
 	"tests",
@@ -139,7 +140,7 @@ afterEach(async () => {
 	);
 });
 
-describe(parseArgs, () => {
+describe(parseArgs.name, () => {
 	it("resolves explicit configuration", () => {
 		const config = parseArgs(
 			[
@@ -260,7 +261,7 @@ describe(parseArgs, () => {
 	});
 });
 
-describe(parseReplayArgs, () => {
+describe(parseReplayArgs.name, () => {
 	it("resolves the replay knobs and defaults the judge to the model", () => {
 		const config = parseReplayArgs(
 			[
@@ -317,7 +318,7 @@ describe(parseReplayArgs, () => {
 	});
 });
 
-describe(validateJudgeGrade, () => {
+describe(validateJudgeGrade.name, () => {
 	it("accepts a complete consistent grade", () => {
 		const grade = completeGrade("PASS");
 
@@ -325,8 +326,10 @@ describe(validateJudgeGrade, () => {
 	});
 
 	it("rejects a verdict that contradicts requirement results", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
+		const grade = withFirstRequirement(
+			completeGrade("PASS"),
+			requirement(RUBRIC_IDS[0], "FAIL"),
+		);
 
 		expect(() => validateJudgeGrade(grade, RUBRIC_IDS)).toThrow(
 			"contradicts requirement results",
@@ -334,8 +337,8 @@ describe(validateJudgeGrade, () => {
 	});
 
 	it("rejects an incomplete grade", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements.pop();
+		const base = completeGrade("PASS");
+		const grade = { ...base, requirements: base.requirements.slice(0, -1) };
 
 		expect(() => validateJudgeGrade(grade, RUBRIC_IDS)).toThrow(
 			"every rubric requirement exactly once",
@@ -343,8 +346,11 @@ describe(validateJudgeGrade, () => {
 	});
 
 	it("accepts requirements added to the rubric without a code change", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements.push(requirement("human-review", "PASS"));
+		const base = completeGrade("PASS");
+		const grade = {
+			...base,
+			requirements: [...base.requirements, requirement("human-review", "PASS")],
+		};
 
 		const validated = validateJudgeGrade(grade, [
 			...RUBRIC_IDS,
@@ -355,7 +361,7 @@ describe(validateJudgeGrade, () => {
 	});
 });
 
-describe(readClaudeEnvelope, () => {
+describe(readClaudeEnvelope.name, () => {
 	it("returns the parsed session envelope", () => {
 		const envelope = readClaudeEnvelope(
 			JSON.stringify({ session_id: "session-1", total_cost_usd: 0.5 }),
@@ -378,7 +384,7 @@ describe(readClaudeEnvelope, () => {
 	});
 });
 
-describe(readStructuredOutput, () => {
+describe(readStructuredOutput.name, () => {
 	it("reads the structured output field", () => {
 		const envelope = readClaudeEnvelope(
 			JSON.stringify({
@@ -416,7 +422,7 @@ describe(readStructuredOutput, () => {
 	});
 });
 
-describe(parseRubricIds, () => {
+describe(parseRubricIds.name, () => {
 	it("derives requirement IDs from the rubric", () => {
 		const ids = parseRubricIds(
 			"1. `first`: First requirement.\n2. `new-check`: New requirement.\n",
@@ -432,7 +438,7 @@ describe(parseRubricIds, () => {
 	});
 });
 
-describe(parseHumanReview, () => {
+describe(parseHumanReview.name, () => {
 	it("parses a structured human review", () => {
 		const review = parseHumanReview(
 			JSON.stringify({
@@ -479,7 +485,7 @@ describe(parseHumanReview, () => {
 	});
 });
 
-describe(collectCalibration, () => {
+describe(collectCalibration.name, () => {
 	it("re-prompts after invalid review JSON and accepts the corrected review", async () => {
 		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
 		temporaryDirectories.push(reviewDirectory);
@@ -609,102 +615,109 @@ describe(collectCalibration, () => {
 	});
 });
 
-describe(validateCalibration, () => {
+describe(validateCalibration.name, () => {
 	it("throws a calibration-incomplete error for inconsistent findings", () => {
 		const review = humanReview("ACCEPT", "MISSED", "worker-metadata");
 
-		expect(() => validateCalibration(review, completeGrade("PASS"))).toThrow(
-			CalibrationIncompleteError,
-		);
+		expect(() => {
+			validateCalibration(review, completeGrade("PASS"));
+		}).toThrow(CalibrationIncompleteError);
 	});
 
 	it("accepts a missed defect caught by the revised rubric", () => {
 		const original = completeGrade("PASS");
-		const revised = completeGrade("PASS");
-		revised.requirements.push(requirement("worker-metadata", "FAIL"));
-		revised.verdict = "FAIL";
+		const revisedBase = completeGrade("PASS");
+		const revised: JudgeGrade = {
+			...revisedBase,
+			requirements: [
+				...revisedBase.requirements,
+				requirement("worker-metadata", "FAIL"),
+			],
+			verdict: "FAIL",
+		};
 		const review = humanReview("REJECT", "MISSED", "worker-metadata");
 
-		expect(() => validateCalibration(review, original, revised)).not.toThrow();
+		expect(() => {
+			validateCalibration(review, original, revised);
+		}).not.toThrow();
 	});
 
 	it("rejects a missed defect that the revised rubric still passes", () => {
 		const original = completeGrade("PASS");
-		const revised = completeGrade("PASS");
-		revised.requirements.push(requirement("worker-metadata", "PASS"));
+		const revisedBase = completeGrade("PASS");
+		const revised: JudgeGrade = {
+			...revisedBase,
+			requirements: [
+				...revisedBase.requirements,
+				requirement("worker-metadata", "PASS"),
+			],
+		};
 		const review = humanReview("REJECT", "MISSED", "worker-metadata");
 
-		expect(() => validateCalibration(review, original, revised)).toThrow(
-			"does not catch",
-		);
+		expect(() => {
+			validateCalibration(review, original, revised);
+		}).toThrow("does not catch");
 	});
 
 	it("rejects a missed classification for a defect already caught", () => {
-		const original = completeGrade("PASS");
-		original.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
-		original.verdict = "FAIL";
+		const original = withFailedFirstRequirement(RUBRIC_IDS[0]);
 		const revised = completeGrade("FAIL");
 		const review = humanReview("REJECT", "MISSED", RUBRIC_IDS[0]);
 
-		expect(() => validateCalibration(review, original, revised)).toThrow(
-			"already caught",
-		);
+		expect(() => {
+			validateCalibration(review, original, revised);
+		}).toThrow("already caught");
 	});
 
 	it("accepts a corrected false positive", () => {
-		const original = completeGrade("PASS");
-		original.requirements[0] = requirement(RUBRIC_IDS[0], "FAIL");
-		original.verdict = "FAIL";
+		const original = withFailedFirstRequirement(RUBRIC_IDS[0]);
 		const revised = completeGrade("PASS");
 		const review = humanReview("ACCEPT", "FALSE_POSITIVE", RUBRIC_IDS[0]);
 
-		expect(() => validateCalibration(review, original, revised)).not.toThrow();
+		expect(() => {
+			validateCalibration(review, original, revised);
+		}).not.toThrow();
 	});
 
 	it("rejects acceptance when a real defect was found", () => {
 		const review = humanReview("ACCEPT", "CAUGHT", RUBRIC_IDS[0]);
 
-		expect(() => validateCalibration(review, completeGrade("FAIL"))).toThrow(
-			"cannot accept",
-		);
+		expect(() => {
+			validateCalibration(review, completeGrade("FAIL"));
+		}).toThrow("cannot accept");
 	});
 
 	it("validates a missed stage requirement against the revised stage rubric", () => {
-		const review = humanReview("REJECT", "MISSED", "scope");
-		const [finding] = review.findings;
-		if (!finding) {
-			throw new Error("Expected a finding");
-		}
-		finding.stage = "discuss";
+		const review = humanReview("REJECT", "MISSED", "scope", "discuss");
 
-		expect(() =>
+		expect(() => {
 			validateCalibration(
 				review,
 				undefined,
 				undefined,
 				[stageScorecard("PASS")],
 				[stageScorecard("FAIL")],
-			),
-		).not.toThrow();
+			);
+		}).not.toThrow();
 	});
 
 	it("accepts a missed stage defect added as a new rubric requirement", () => {
-		const review = humanReview("REJECT", "MISSED", "worker-metadata");
-		const [finding] = review.findings;
-		if (!finding) {
-			throw new Error("Expected a finding");
-		}
-		finding.stage = "discuss";
+		const review = humanReview(
+			"REJECT",
+			"MISSED",
+			"worker-metadata",
+			"discuss",
+		);
 
-		expect(() =>
+		expect(() => {
 			validateCalibration(
 				review,
 				undefined,
 				undefined,
 				[stageScorecard("PASS")],
 				[stageScorecard("FAIL", "worker-metadata")],
-			),
-		).not.toThrow();
+			);
+		}).not.toThrow();
 	});
 });
 
@@ -732,7 +745,7 @@ describe("the default pipeline", () => {
 	});
 });
 
-describe(claudeArgs, () => {
+describe(claudeArgs.name, () => {
 	it("grants a workflow session native customizations without permission prompts", () => {
 		const command = claudeArgs({
 			settings: { model: "sonnet", effort: "high", budgetUsd: 5 },
@@ -803,13 +816,13 @@ describe(claudeArgs, () => {
 	});
 });
 
-describe(claudeJsonSchema, () => {
+describe(claudeJsonSchema.name, () => {
 	it("omits the $schema key Claude rejects", () => {
 		expect(claudeJsonSchema(stageTurnSchema)).not.toContain('"$schema"');
 	});
 });
 
-describe(applyHarnessResults, () => {
+describe(applyHarnessResults.name, () => {
 	it("forces a failed verdict when local checks fail", () => {
 		const result = applyHarnessResults(
 			completeGrade("PASS"),
@@ -824,22 +837,21 @@ describe(applyHarnessResults, () => {
 	});
 });
 
-describe(validateJudgeEvidence, () => {
+describe(validateJudgeEvidence.name, () => {
 	it("accepts citations to supplied diff and context paths", () => {
 		const grade = completeGrade("PASS");
 
-		expect(() =>
+		expect(() => {
 			validateJudgeEvidence(
 				grade,
 				["src/audit/example.ts"],
 				["src/app.module.ts"],
-			),
-		).not.toThrow();
+			);
+		}).not.toThrow();
 	});
 
 	it("accepts citations carrying a location fragment", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements[0] = {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
@@ -848,20 +860,19 @@ describe(validateJudgeEvidence, () => {
 					claim: "the worker persists metadata",
 				},
 			],
-		};
+		});
 
-		expect(() =>
+		expect(() => {
 			validateJudgeEvidence(
 				grade,
 				["src/audit/example.ts"],
 				["src/app.module.ts"],
-			),
-		).not.toThrow();
+			);
+		}).not.toThrow();
 	});
 
 	it("accepts glob citations that resolve to supplied paths", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements[0] = {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
@@ -870,20 +881,19 @@ describe(validateJudgeEvidence, () => {
 					claim: "audit-log implementation files changed",
 				},
 			],
-		};
+		});
 
-		expect(() =>
+		expect(() => {
 			validateJudgeEvidence(
 				grade,
 				["src/audit/example.ts", "src/audit-log/audit-log.module.ts"],
 				["src/app.module.ts"],
-			),
-		).not.toThrow();
+			);
+		}).not.toThrow();
 	});
 
 	it("rejects glob citations that do not resolve to supplied paths", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements[0] = {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
@@ -892,20 +902,19 @@ describe(validateJudgeEvidence, () => {
 					claim: "unsupported",
 				},
 			],
-		};
+		});
 
-		expect(() =>
+		expect(() => {
 			validateJudgeEvidence(
 				grade,
 				["src/audit/example.ts", "src/audit-log/audit-log.module.ts"],
 				["src/app.module.ts"],
-			),
-		).toThrow("cited unavailable evidence");
+			);
+		}).toThrow("cited unavailable evidence");
 	});
 
 	it("rejects citations to unavailable paths", () => {
-		const grade = completeGrade("PASS");
-		grade.requirements[0] = {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
@@ -914,19 +923,19 @@ describe(validateJudgeEvidence, () => {
 					claim: "unsupported",
 				},
 			],
-		};
+		});
 
-		expect(() =>
+		expect(() => {
 			validateJudgeEvidence(
 				grade,
 				["src/audit/example.ts"],
 				["src/app.module.ts"],
-			),
-		).toThrow("cited unavailable evidence");
+			);
+		}).toThrow("cited unavailable evidence");
 	});
 });
 
-describe(assertStageArtifactState, () => {
+describe(assertStageArtifactState.name, () => {
 	const view = {
 		task: {
 			acceptanceCriteria: [{}],
@@ -1001,13 +1010,13 @@ describe(assertStageArtifactState, () => {
 	});
 });
 
-describe(parseTaskState, () => {
+describe(parseTaskState.name, () => {
 	it("classifies malformed Backlog output as candidate validation failure", () => {
 		expect(() => parseTaskState("not json")).toThrow(StageValidationError);
 	});
 });
 
-describe(deriveStageGrade, () => {
+describe(deriveStageGrade.name, () => {
 	const rubric = parseStageRubric(
 		JSON.stringify({
 			stage: "discuss",
@@ -1160,7 +1169,7 @@ describe(deriveStageGrade, () => {
 	});
 });
 
-describe(applyAuthoritativeStageResults, () => {
+describe(applyAuthoritativeStageResults.name, () => {
 	it("forces a delivery stage under any name to F when local checks fail", async () => {
 		const rubric = parseStageRubric(
 			await Bun.file(join(import.meta.dir, "rubrics", "build.json")).text(),
@@ -1250,7 +1259,7 @@ describe(applyAuthoritativeStageResults, () => {
 	});
 });
 
-describe(captureStageJudgeInput, () => {
+describe(captureStageJudgeInput.name, () => {
 	it("turns invalid stage delivery into Judge evidence", async () => {
 		const fallback = stageJudgeInput("discuss");
 
@@ -1271,16 +1280,16 @@ describe(captureStageJudgeInput, () => {
 		});
 	});
 
-	it("propagates infrastructure failures", async () => {
+	it("propagates infrastructure failures", () => {
 		const result = captureStageJudgeInput(stageJudgeInput("discuss"), () =>
 			Promise.reject(new Error("git executable unavailable")),
 		);
 
-		await expect(result).rejects.toThrow("git executable unavailable");
+		expect(result).rejects.toThrow("git executable unavailable");
 	});
 });
 
-describe(validateStageJudgeEvidence, () => {
+describe(validateStageJudgeEvidence.name, () => {
 	it("accepts a fragment within a frozen JSON source", () => {
 		const rubric = parseStageRubric(
 			JSON.stringify({
@@ -1302,18 +1311,24 @@ describe(validateStageJudgeEvidence, () => {
 				],
 			}),
 		);
-		const output = passingStageOutput(rubric);
-		output.requirements[0] = {
-			id: "scope",
-			status: "PASS",
-			evidence: [
-				stageEvidence("transcript", "discuss.transcript.json#exchanges"),
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [
+						stageEvidence("transcript", "discuss.transcript.json#exchanges"),
+					],
+				},
+				...base.requirements.slice(1),
 			],
 		};
 
-		expect(() =>
-			validateStageJudgeEvidence(output, stageJudgeInput("discuss")),
-		).not.toThrow();
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("discuss"));
+		}).not.toThrow();
 	});
 
 	it("rejects citations outside the frozen stage input", () => {
@@ -1337,20 +1352,26 @@ describe(validateStageJudgeEvidence, () => {
 				],
 			}),
 		);
-		const output = passingStageOutput(rubric);
-		output.requirements[0] = {
-			id: "scope",
-			status: "PASS",
-			evidence: [stageEvidence("artifact", "backlog/docs/missing-spec.md")],
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("artifact", "backlog/docs/missing-spec.md")],
+				},
+				...base.requirements.slice(1),
+			],
 		};
 
-		expect(() =>
-			validateStageJudgeEvidence(output, stageJudgeInput("discuss")),
-		).toThrow("cited unavailable evidence");
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("discuss"));
+		}).toThrow("cited unavailable evidence");
 	});
 });
 
-describe(killActiveCommands, () => {
+describe(killActiveCommands.name, () => {
 	it("kills a running command's whole process group", async () => {
 		const running = (async () => {
 			try {
@@ -1390,32 +1411,36 @@ describe(killActiveCommands, () => {
 	});
 });
 
-describe(assertStageGradePassed, () => {
+describe(assertStageGradePassed.name, () => {
 	it("stops the workflow on a failed stage grade", () => {
-		expect(() => assertStageGradePassed(stageScorecard("FAIL"))).toThrow(
-			"minimum grade is B",
-		);
+		expect(() => {
+			assertStageGradePassed(stageScorecard("FAIL"));
+		}).toThrow("minimum grade is B");
 	});
 
 	it("continues past a passing stage grade", () => {
-		expect(() => assertStageGradePassed(stageScorecard("PASS"))).not.toThrow();
+		expect(() => {
+			assertStageGradePassed(stageScorecard("PASS"));
+		}).not.toThrow();
 	});
 });
 
-describe(runGradedStages, () => {
+describe(runGradedStages.name, () => {
 	interface StageHarness {
 		readonly scorecardFor: (
 			input: StageJudgeInput,
 			verdict: "CONTINUE" | "STOP",
 		) => StageScorecard;
 		readonly dependencies: StageDependencies;
+		readonly judged: StageJudgeInput[];
+		readonly executed: string[];
+		readonly rubricsUsed: string[];
 	}
 
-	function fakeStageDependencies(
-		judged: StageJudgeInput[],
-		executed: string[],
-		rubricsUsed: string[] = [],
-	): StageHarness {
+	function fakeStageDependencies(): StageHarness {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const rubricsUsed: string[] = [];
 		const scorecardFor = (
 			input: StageJudgeInput,
 			verdict: "CONTINUE" | "STOP",
@@ -1454,16 +1479,16 @@ describe(runGradedStages, () => {
 
 		return {
 			scorecardFor,
+			judged,
+			executed,
+			rubricsUsed,
 			dependencies: {
 				runWorkflowStage: (
 					_targetDir: string,
-					_productOwnerDirectory: string,
 					_model: string,
 					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 					_budget: number,
-					_productOwner: ProductOwnerSession,
-					_task: string,
-					_productBrief: string,
+					_productOwner: ProductOwner,
 					_taskId: string,
 					stage: string,
 					skill: string,
@@ -1482,7 +1507,7 @@ describe(runGradedStages, () => {
 					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 					_budget: number,
 					input: StageJudgeInput,
-					source: { rubricPath: string },
+					source: { readonly rubricPath: string },
 				) => {
 					judged.push(input);
 					rubricsUsed.push(source.rubricPath);
@@ -1504,7 +1529,7 @@ describe(runGradedStages, () => {
 				assertPlanningStageCompleted: (
 					_targetDir: string,
 					_taskSha: string,
-					stage: { name: string },
+					stage: { readonly name: string },
 				) =>
 					Promise.resolve({
 						taskState: `${stage.name}-state`,
@@ -1541,11 +1566,13 @@ describe(runGradedStages, () => {
 		return {
 			targetDir: stageDirectory,
 			initialLineage: "initial-lineage",
-			productOwnerDirectory: stageDirectory,
 			model: "sonnet",
 			judgeModel: "sonnet",
 			sessionBudgetUsd: 5,
-			productOwner: { sessionId: "po", spentUsd: 0, started: false },
+			productOwner: {
+				ask: () => Promise.reject(new Error("no product owner in this test")),
+				snapshot: () => ({ sessionId: "po", spentUsd: 0 }),
+			},
 			task: "Task",
 			productBrief: "Brief",
 			instructions: "Instructions",
@@ -1565,9 +1592,7 @@ describe(runGradedStages, () => {
 	}
 
 	it("runs the stages in order and carries evidence forward", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies, judged, executed } = fakeStageDependencies();
 		const context = await stageContext();
 
 		const outcome = await runGradedStages(dependencies, context);
@@ -1604,9 +1629,7 @@ describe(runGradedStages, () => {
 	};
 
 	it("executes a pipeline with plan removed and carries grill forward", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies, judged, executed } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
@@ -1628,9 +1651,7 @@ describe(runGradedStages, () => {
 	});
 
 	it("executes a pipeline with grill and plan swapped", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies, executed } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
@@ -1649,9 +1670,7 @@ describe(runGradedStages, () => {
 	});
 
 	it("labels a transcript with the stage name, not the skill it ran", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies, executed } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
@@ -1683,14 +1702,8 @@ describe(runGradedStages, () => {
 	});
 
 	it("executes a fifth stage under a name the harness never knew", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const rubricsUsed: string[] = [];
-		const { dependencies } = fakeStageDependencies(
-			judged,
-			executed,
-			rubricsUsed,
-		);
+		const { dependencies, judged, executed, rubricsUsed } =
+			fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
@@ -1711,9 +1724,7 @@ describe(runGradedStages, () => {
 	});
 
 	it("writes a checkpoint for every accepted stage and chains lineage", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies } = fakeStageDependencies();
 		const context = await stageContext();
 		await mkdir(join(context.targetDir, "backlog"), { recursive: true });
 		await Bun.write(
@@ -1739,7 +1750,7 @@ describe(runGradedStages, () => {
 			"backlog/docs/discuss.md",
 		]);
 		for (const record of outcome.checkpoints) {
-			const written = JSON.parse(
+			const written: unknown = JSON.parse(
 				await Bun.file(
 					join(context.checkpointDirectory(record.stage), "checkpoint.json"),
 				).text(),
@@ -1749,12 +1760,7 @@ describe(runGradedStages, () => {
 	});
 
 	it("keeps accepted checkpoints when a later stage is rejected", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies, scorecardFor } = fakeStageDependencies(
-			judged,
-			executed,
-		);
+		const { dependencies, scorecardFor } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			calibrateStageFailure: (): Promise<CalibrationResult> =>
@@ -1772,14 +1778,18 @@ describe(runGradedStages, () => {
 				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 				_budget: number,
 				input: StageJudgeInput,
-				_source: { rubricPath: string; content: string; rubric: StageRubric },
+				_source: {
+					readonly rubricPath: string;
+					readonly content: string;
+					readonly rubric: StageRubric;
+				},
 			) =>
 				Promise.resolve(
 					scorecardFor(input, input.stage === "grill" ? "STOP" : "CONTINUE"),
 				),
 		};
 
-		await expect(runGradedStages(failing, context)).rejects.toThrow(
+		expect(runGradedStages(failing, context)).rejects.toThrow(
 			"minimum grade is B",
 		);
 
@@ -1796,9 +1806,7 @@ describe(runGradedStages, () => {
 	});
 
 	it("fails before any stage runs when a skill's corpus is missing", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies, executed } = fakeStageDependencies();
 		const missing = {
 			...dependencies,
 			resolveSkillDirectory: (skill: string) => {
@@ -1812,16 +1820,14 @@ describe(runGradedStages, () => {
 			},
 		};
 
-		await expect(
-			runGradedStages(missing, await stageContext()),
-		).rejects.toThrow("build skill is not installed");
+		expect(runGradedStages(missing, await stageContext())).rejects.toThrow(
+			"build skill is not installed",
+		);
 		expect(executed).toEqual([]);
 	});
 
 	it("hashes a stage's corpus when the stage starts, not at run start", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies } = fakeStageDependencies(judged, executed);
+		const { dependencies } = fakeStageDependencies();
 		const log: string[] = [];
 		const timed = {
 			...dependencies,
@@ -1830,19 +1836,19 @@ describe(runGradedStages, () => {
 
 				return Promise.resolve(`/skills/${skill}`);
 			},
-			captureStageCorpus: async (
-				...args: Parameters<StageDependencies["captureStageCorpus"]>
+			captureStageCorpus: (
+				...args: Readonly<Parameters<StageDependencies["captureStageCorpus"]>>
 			) => {
 				log.push(`corpus:${args[0]}`);
 
-				return await dependencies.captureStageCorpus(...args);
+				return dependencies.captureStageCorpus(...args);
 			},
-			runWorkflowStage: async (
-				...args: Parameters<(typeof dependencies)["runWorkflowStage"]>
+			runWorkflowStage: (
+				...args: Readonly<Parameters<(typeof dependencies)["runWorkflowStage"]>>
 			) => {
-				log.push(`run:${args[10]}`);
+				log.push(`run:${args[6]}`);
 
-				return await dependencies.runWorkflowStage(...args);
+				return dependencies.runWorkflowStage(...args);
 			},
 		};
 
@@ -1865,12 +1871,8 @@ describe(runGradedStages, () => {
 	});
 
 	it("stops after a failing grade and calibrates the failed stage", async () => {
-		const judged: StageJudgeInput[] = [];
-		const executed: string[] = [];
-		const { dependencies, scorecardFor } = fakeStageDependencies(
-			judged,
-			executed,
-		);
+		const { dependencies, scorecardFor, judged, executed } =
+			fakeStageDependencies();
 		const context = await stageContext();
 		let calibrations = 0;
 		const failing = {
@@ -1880,7 +1882,11 @@ describe(runGradedStages, () => {
 				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 				_budget: number,
 				input: StageJudgeInput,
-				_source: { rubricPath: string; content: string; rubric: StageRubric },
+				_source: {
+					readonly rubricPath: string;
+					readonly content: string;
+					readonly rubric: StageRubric;
+				},
 			) => {
 				judged.push(input);
 
@@ -1909,34 +1915,38 @@ describe(runGradedStages, () => {
 
 		const outcome = runGradedStages(failing, calibrating);
 
-		await expect(outcome).rejects.toThrow("minimum grade is B");
+		expect(outcome).rejects.toThrow("minimum grade is B");
 		expect(executed).toEqual(["discuss", "grill"]);
 		expect(calibrations).toBe(1);
-		const grillRecord = JSON.parse(
-			await Bun.file(calibrating.stageFile("grill")).text(),
-		);
+		const grillRecord = z
+			.looseObject({
+				calibration: z.looseObject({
+					humanReview: z.looseObject({ verdict: z.string() }),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(calibrating.stageFile("grill")).text()));
 		expect(grillRecord.calibration.humanReview.verdict).toBe("REJECT");
 	});
 });
 
-describe(assertConventionalCommitSubjects, () => {
+describe(assertConventionalCommitSubjects.name, () => {
 	it("accepts conventional commit subjects", () => {
-		expect(() =>
+		expect(() => {
 			assertConventionalCommitSubjects([
 				"feat(audit): add worker",
 				"fix: wire persistence",
-			]),
-		).not.toThrow();
+			]);
+		}).not.toThrow();
 	});
 
 	it("rejects free-form commit subjects", () => {
-		expect(() => assertConventionalCommitSubjects(["Implement audit"])).toThrow(
-			"non-conventional commit subjects",
-		);
+		expect(() => {
+			assertConventionalCommitSubjects(["Implement audit"]);
+		}).toThrow("non-conventional commit subjects");
 	});
 });
 
-describe(assertBuildCommitted, () => {
+describe(assertBuildCommitted.name, () => {
 	it("accepts a build committed on a detached replay worktree", async () => {
 		const source = await createRepository();
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
@@ -1949,9 +1959,9 @@ describe(assertBuildCommitted, () => {
 		const build = await assertBuildCommitted(worktree, source.sha, null);
 
 		expect(build.diff).toContain("feature.ts");
-		await expect(
-			assertBuildCommitted(worktree, source.sha),
-		).rejects.toBeInstanceOf(StageValidationError);
+		expect(assertBuildCommitted(worktree, source.sha)).rejects.toBeInstanceOf(
+			StageValidationError,
+		);
 		await removeWorktree(source.directory, worktree);
 	});
 
@@ -1965,13 +1975,13 @@ describe(assertBuildCommitted, () => {
 		await commitAll(source.directory, "feat: rewrite history");
 		await runCommand(["git", "branch", "-M", "main"], source.directory);
 
-		await expect(
+		expect(
 			assertBuildCommitted(source.directory, source.sha),
 		).rejects.toBeInstanceOf(StageValidationError);
 	});
 });
 
-describe(addWorktree, () => {
+describe(addWorktree.name, () => {
 	it("gives a replay a detached checkout without touching the primary", async () => {
 		const source = await createRepository();
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
@@ -2011,7 +2021,7 @@ describe(addWorktree, () => {
 	});
 });
 
-describe(assertWorkspaceCleanAt, () => {
+describe(assertWorkspaceCleanAt.name, () => {
 	it("accepts a clean detached worktree when no branch is expected", async () => {
 		const source = await createRepository();
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
@@ -2019,12 +2029,12 @@ describe(assertWorkspaceCleanAt, () => {
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
 
-		await expect(
+		expect(
 			assertWorkspaceCleanAt(worktree, source.sha, null),
 		).resolves.toBeUndefined();
-		await expect(
-			assertWorkspaceCleanAt(worktree, source.sha),
-		).rejects.toBeInstanceOf(StageValidationError);
+		expect(assertWorkspaceCleanAt(worktree, source.sha)).rejects.toBeInstanceOf(
+			StageValidationError,
+		);
 	});
 
 	it("rejects a workspace that left its detached checkout for a branch", async () => {
@@ -2035,13 +2045,13 @@ describe(assertWorkspaceCleanAt, () => {
 		await addWorktree(source.directory, source.sha, worktree);
 		await runCommand(["git", "switch", "-c", "stray"], worktree);
 
-		await expect(
+		expect(
 			assertWorkspaceCleanAt(worktree, source.sha, null),
 		).rejects.toBeInstanceOf(StageValidationError);
 	});
 });
 
-describe(runBenchmark, () => {
+describe(runBenchmark.name, () => {
 	it("rejects a malformed pipeline before claiming the target", async () => {
 		const source = await createRepository();
 		const badPipeline = join("pipelines", `invalid-${randomUUID()}.json`);
@@ -2052,7 +2062,7 @@ describe(runBenchmark, () => {
 		);
 
 		try {
-			await expect(
+			expect(
 				runBenchmark(
 					{
 						sourceDir: source.directory,
@@ -2076,7 +2086,7 @@ describe(runBenchmark, () => {
 	});
 });
 
-describe(buildRunArtifact, () => {
+describe(buildRunArtifact.name, () => {
 	function artifactInputs(
 		pipeline: PipelineDefinition,
 		pipelinePath: string,
@@ -2102,7 +2112,7 @@ describe(buildRunArtifact, () => {
 			rubricIds: ["scope"],
 			baselineContext: [],
 			taskId: "TASK-1",
-			productOwner: { sessionId: "po", spentUsd: 0, started: false },
+			productOwner: { sessionId: "po", spentUsd: 0 },
 			workflow: [],
 			stageScorecards: [],
 			checkpoints: [],
@@ -2153,9 +2163,7 @@ describe(buildRunArtifact, () => {
 		try {
 			const pipeline = await loadPipeline(pipelinePath);
 
-			const artifact = buildRunArtifact(
-				await artifactInputs(pipeline, pipelinePath),
-			);
+			const artifact = buildRunArtifact(artifactInputs(pipeline, pipelinePath));
 
 			expect(artifact.pipelinePath).toBe(pipelinePath);
 			expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
@@ -2171,7 +2179,7 @@ describe(buildRunArtifact, () => {
 		const pipeline = await loadDefaultPipeline();
 
 		const artifact = buildRunArtifact(
-			await artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, "pipelines/default.json"),
 		);
 
 		expect(artifact.pipelinePath).toBe("pipelines/default.json");
@@ -2200,17 +2208,14 @@ describe(buildRunArtifact, () => {
 			).pipelinePath;
 
 		const pipeline = await loadDefaultPipeline();
-		const recorded = await Promise.all(
-			[
-				"pipelines/default.json",
-				join(import.meta.dir, "pipelines/default.json"),
-				"rubrics/../pipelines/default.json",
-			].map(
-				async (argument) =>
-					buildRunArtifact(
-						await artifactInputs(pipeline, asConfigured(argument)),
-					).pipelinePath,
-			),
+		const recorded = [
+			"pipelines/default.json",
+			join(import.meta.dir, "pipelines/default.json"),
+			"rubrics/../pipelines/default.json",
+		].map(
+			(argument) =>
+				buildRunArtifact(artifactInputs(pipeline, asConfigured(argument)))
+					.pipelinePath,
 		);
 
 		expect(recorded).toEqual([
@@ -2221,11 +2226,9 @@ describe(buildRunArtifact, () => {
 	});
 });
 
-describe(loadPipeline, () => {
-	it("refuses a definition outside the control repository", async () => {
-		await expect(loadPipeline("../../../../etc/hosts")).rejects.toThrow(
-			/outside/u,
-		);
+describe(loadPipeline.name, () => {
+	it("refuses a definition outside the control repository", () => {
+		expect(loadPipeline("../../../../etc/hosts")).rejects.toThrow(/outside/u);
 	});
 
 	it("rejects a delivery stage whose rubric lacks the harness blockers", async () => {
@@ -2246,19 +2249,19 @@ describe(loadPipeline, () => {
 		);
 
 		try {
-			await expect(loadPipeline(path)).rejects.toThrow(/ship/u);
+			expect(loadPipeline(path)).rejects.toThrow(/ship/u);
 		} finally {
 			await rm(absolute, { force: true });
 		}
 	});
 });
 
-describe(assertSourceReady, () => {
+describe(assertSourceReady.name, () => {
 	it("rejects a clean repository off main", async () => {
 		const source = await createRepository();
 		await runCommand(["git", "switch", "-c", "feature"], source.directory);
 
-		await expect(assertSourceReady(source.directory)).rejects.toThrow(
+		expect(assertSourceReady(source.directory)).rejects.toThrow(
 			"Target must be on main",
 		);
 	});
@@ -2268,13 +2271,13 @@ describe(assertSourceReady, () => {
 		const subdirectory = join(source.directory, "nested");
 		await mkdir(subdirectory);
 
-		await expect(assertSourceReady(subdirectory)).rejects.toThrow(
+		expect(assertSourceReady(subdirectory)).rejects.toThrow(
 			"Target must be the repository root",
 		);
 	});
 });
 
-describe(restoreTarget, () => {
+describe(restoreTarget.name, () => {
 	it("restores main after generated commits and files", async () => {
 		const source = await createRepository();
 		const baseline = await assertSourceReady(source.directory);
@@ -2351,13 +2354,13 @@ describe(restoreTarget, () => {
 	});
 });
 
-describe(claimTarget, () => {
+describe(claimTarget.name, () => {
 	it("refuses a target an unrestored run left claimed", async () => {
 		const source = await createRepository();
 		const baseline = await assertSourceReady(source.directory);
 		await claimTarget(baseline);
 
-		await expect(claimTarget(baseline)).rejects.toThrow(
+		expect(claimTarget(baseline)).rejects.toThrow(
 			"previous benchmark run left this target unrestored",
 		);
 	});
@@ -2369,7 +2372,7 @@ describe(claimTarget, () => {
 
 		await restoreTarget(baseline);
 
-		await expect(claimTarget(baseline)).resolves.toBeUndefined();
+		expect(claimTarget(baseline)).resolves.toBeUndefined();
 	});
 
 	it("claims a linked-worktree target whose .git is a file", async () => {
@@ -2386,15 +2389,15 @@ describe(claimTarget, () => {
 
 		await claimTarget(baseline);
 
-		await expect(claimTarget(baseline)).rejects.toThrow(
+		expect(claimTarget(baseline)).rejects.toThrow(
 			"previous benchmark run left this target unrestored",
 		);
 		await restoreTarget(baseline);
-		await expect(claimTarget(baseline)).resolves.toBeUndefined();
+		expect(claimTarget(baseline)).resolves.toBeUndefined();
 	});
 });
 
-describe(teardownTarget, () => {
+describe(teardownTarget.name, () => {
 	it("discards the workflow backup after a verified restore", async () => {
 		const source = await createRepository();
 		const baseline = await assertSourceReady(source.directory);
@@ -2410,7 +2413,7 @@ describe(teardownTarget, () => {
 			source.directory,
 		);
 		expect(finalSha.trim()).toBe(source.sha);
-		await expect(stat(backup.directory)).rejects.toThrow();
+		expect(stat(backup.directory)).rejects.toThrow();
 	});
 
 	it("keeps the workflow backup when the restore fails", async () => {
@@ -2422,12 +2425,12 @@ describe(teardownTarget, () => {
 			sha: "0000000000000000000000000000000000000000",
 		};
 
-		await expect(teardownTarget(broken, backup)).rejects.toThrow();
-		await expect(stat(backup.directory)).resolves.toBeDefined();
+		expect(teardownTarget(broken, backup)).rejects.toThrow();
+		expect(stat(backup.directory)).resolves.toBeDefined();
 	});
 });
 
-describe(captureCheckIntegrity, () => {
+describe(captureCheckIntegrity.name, () => {
 	it("fails when a candidate weakens a check definition", async () => {
 		const source = await createRepository();
 		const baselineHashes = await captureFileHashes(source.directory);
@@ -2446,7 +2449,7 @@ describe(captureCheckIntegrity, () => {
 	});
 });
 
-describe(captureBuildCandidate, () => {
+describe(captureBuildCandidate.name, () => {
 	it("freezes untracked Build files", async () => {
 		const source = await createRepository();
 		await Bun.write(
@@ -2489,7 +2492,7 @@ describe(captureBuildCandidate, () => {
 	});
 });
 
-describe(captureBaselineContext, () => {
+describe(captureBaselineContext.name, () => {
 	it("captures every tracked file except the lockfile", async () => {
 		const source = await createRepository();
 
@@ -2532,6 +2535,20 @@ describe(captureBaselineContext, () => {
 		expect(binary?.content).toBe("[binary file omitted]");
 	});
 });
+
+function withFirstRequirement(
+	grade: JudgeGrade,
+	first: JudgeGrade["requirements"][number],
+): JudgeGrade {
+	return { ...grade, requirements: [first, ...grade.requirements.slice(1)] };
+}
+
+function withFailedFirstRequirement(id: string): JudgeGrade {
+	return {
+		...withFirstRequirement(completeGrade("PASS"), requirement(id, "FAIL")),
+		verdict: "FAIL",
+	};
+}
 
 function completeGrade(verdict: "PASS" | "FAIL"): JudgeGrade {
 	return {
@@ -2731,6 +2748,7 @@ function humanReview(
 	verdict: HumanReview["verdict"],
 	judgeAssessment: HumanReview["findings"][number]["judgeAssessment"],
 	rubricId: string,
+	stage = "final",
 ): HumanReview {
 	return {
 		verdict,
@@ -2739,7 +2757,7 @@ function humanReview(
 			{
 				description: "Finding",
 				paths: ["src/audit/example.ts"],
-				stage: "final",
+				stage,
 				judgeAssessment,
 				rubricId,
 			},
@@ -2791,7 +2809,7 @@ async function commitAll(directory: string, message: string): Promise<void> {
 	await runCommand(["git", "commit", "-m", message], directory);
 }
 
-describe(parsePipeline, () => {
+describe(parsePipeline.name, () => {
 	interface RawStageEntry {
 		readonly name: string | undefined;
 		readonly kind: string | undefined;
@@ -2964,11 +2982,11 @@ describe(parsePipeline, () => {
 	});
 });
 
-async function loadDefaultPipeline(): Promise<PipelineDefinition> {
-	return await loadPipeline("pipelines/default.json");
+function loadDefaultPipeline(): Promise<PipelineDefinition> {
+	return loadPipeline("pipelines/default.json");
 }
 
-describe(lineageKey, () => {
+describe(lineageKey.name, () => {
 	const base = {
 		upstream: "root-key",
 		corpusFiles: [
@@ -3017,7 +3035,7 @@ describe(lineageKey, () => {
 	});
 });
 
-describe(captureStageCorpus, () => {
+describe(captureStageCorpus.name, () => {
 	async function corpusRoots(): Promise<[string, string]> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		temporaryDirectories.push(directory);
@@ -3086,13 +3104,13 @@ describe(captureStageCorpus, () => {
 	it("fails naming the skill and the searched roots when none has it", async () => {
 		const roots = await corpusRoots();
 
-		await expect(
+		expect(
 			captureStageCorpus("discuss", "instructions", roots),
 		).rejects.toThrow(/discuss.*not installed/u);
 	});
 });
 
-describe(recordCheckpoint, () => {
+describe(recordCheckpoint.name, () => {
 	const checkpointInputs = {
 		stage: "discuss",
 		targetSha: "task-sha",
@@ -3182,9 +3200,9 @@ describe(recordCheckpoint, () => {
 		);
 		await mkdir(destination, { recursive: true });
 
-		await expect(
-			materializeCheckpoint(checkpointDir, destination),
-		).rejects.toThrow(/backlog\/config.yml/u);
+		expect(materializeCheckpoint(checkpointDir, destination)).rejects.toThrow(
+			/backlog\/config.yml/u,
+		);
 		expect(await readdir(destination)).toEqual([]);
 	});
 
@@ -3197,9 +3215,9 @@ describe(recordCheckpoint, () => {
 		);
 		await mkdir(destination, { recursive: true });
 
-		await expect(
-			materializeCheckpoint(checkpointDir, destination),
-		).rejects.toThrow(/backlog\/planted.md/u);
+		expect(materializeCheckpoint(checkpointDir, destination)).rejects.toThrow(
+			/backlog\/planted.md/u,
+		);
 		expect(await readdir(destination)).toEqual([]);
 	});
 
@@ -3221,9 +3239,7 @@ describe(recordCheckpoint, () => {
 		);
 		await mkdir(destination, { recursive: true });
 
-		await expect(
-			materializeCheckpoint(checkpointDir, destination),
-		).rejects.toThrow();
+		expect(materializeCheckpoint(checkpointDir, destination)).rejects.toThrow();
 		expect(await readdir(destination)).toEqual([]);
 	});
 
@@ -3232,7 +3248,7 @@ describe(recordCheckpoint, () => {
 		await chmod(targetDir, 0o000);
 
 		try {
-			await expect(
+			expect(
 				recordCheckpoint(targetDir, checkpointDir, checkpointInputs),
 			).rejects.toThrow(/permission denied|EACCES/iu);
 		} finally {
@@ -3270,7 +3286,7 @@ describe(recordCheckpoint, () => {
 	});
 });
 
-describe(loadRunManifest, () => {
+describe(loadRunManifest.name, () => {
 	function manifestFixture(): RunManifest {
 		return {
 			timestamp: "2026-08-30T00:00:00.000Z",
@@ -3322,7 +3338,7 @@ describe(loadRunManifest, () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
 		temporaryDirectories.push(directory);
 
-		await expect(loadRunManifest(directory)).rejects.toThrow(
+		expect(loadRunManifest(directory)).rejects.toThrow(
 			"runs recorded before manifests cannot be replayed",
 		);
 	});
@@ -3336,11 +3352,11 @@ describe(loadRunManifest, () => {
 			`${JSON.stringify(truncated, null, 2)}\n`,
 		);
 
-		await expect(loadRunManifest(directory)).rejects.toThrow();
+		expect(loadRunManifest(directory)).rejects.toThrow();
 	});
 });
 
-describe(initialCheckpointInputs, () => {
+describe(initialCheckpointInputs.name, () => {
 	const root = {
 		taskSha: "task-sha",
 		task: "Task text",
@@ -3364,7 +3380,7 @@ describe(initialCheckpointInputs, () => {
 	});
 });
 
-describe(retainedCheckpointRecorder, () => {
+describe(retainedCheckpointRecorder.name, () => {
 	it("records the checkpoint and pins its commit under refs/rehearsal", async () => {
 		const source = await createRepository();
 		const checkpointDir = join(source.directory, ".checkpoints", "initial");
@@ -3394,7 +3410,7 @@ describe(retainedCheckpointRecorder, () => {
 	});
 });
 
-describe(loadRunCheckpoints, () => {
+describe(loadRunCheckpoints.name, () => {
 	it("loads every recorded checkpoint by its stage name", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-"));
 		temporaryDirectories.push(directory);
@@ -3426,7 +3442,7 @@ describe(loadRunCheckpoints, () => {
 	});
 });
 
-describe(resolveReplay, () => {
+describe(resolveReplay.name, () => {
 	function manifest(): RunManifest {
 		return {
 			timestamp: "2026-08-30T00:00:00.000Z",
@@ -3474,7 +3490,10 @@ describe(resolveReplay, () => {
 		stage: string,
 		lineage: string,
 		upstream: string,
-		artifacts: { path: string; sha256: string }[] = [],
+		artifacts: readonly {
+			readonly path: string;
+			readonly sha256: string;
+		}[] = [],
 	): CheckpointRecord {
 		return {
 			stage,
@@ -3556,7 +3575,7 @@ describe(resolveReplay, () => {
 	});
 });
 
-describe(runReplay, () => {
+describe(runReplay.name, () => {
 	const SPEC_CONTENT = "the spec\n";
 	const SPEC_PATH = "backlog/docs/DOC-1 - spec.md";
 
@@ -3702,13 +3721,10 @@ describe(runReplay, () => {
 			stageSession: {
 				runWorkflowStage: (
 					targetDir,
-					_productOwnerDirectory,
 					_model,
 					_effort,
 					_budget,
 					_productOwner,
-					_task,
-					_productBrief,
 					_taskId,
 					stage,
 				) => {
@@ -3795,9 +3811,18 @@ describe(runReplay, () => {
 				Promise.resolve({
 					rubricPath: "rubrics/stage.json",
 					content: "{}",
-					// SAFETY: scorecardFor builds its rubric from constants and never
-					// reads the input argument, so an empty stand-in is sufficient here.
-					rubric: scorecardFor({} as StageJudgeInput).rubric,
+					rubric: {
+						hardBlockers: [],
+						requirements: [{ id: "scope", description: "Scope is explicit" }],
+						dimensions: [
+							{
+								id: "clarity",
+								description: "Clear",
+								good: "g",
+								excellent: "e",
+							},
+						],
+					},
 				}),
 			addWorktree: (root, sha, path) => {
 				worktrees.push({ root, sha, path });
@@ -3830,7 +3855,9 @@ describe(runReplay, () => {
 
 				return Promise.resolve();
 			},
-			log: (message) => log.push(message),
+			log: (message) => {
+				log.push(message);
+			},
 			...overrides,
 		};
 
@@ -3956,7 +3983,7 @@ describe(runReplay, () => {
 			runStageJudge: () => Promise.reject(new Error("judge died")),
 		};
 
-		await expect(runReplay(failing, request(run, "build"))).rejects.toThrow(
+		expect(runReplay(failing, request(run, "build"))).rejects.toThrow(
 			"judge died",
 		);
 
@@ -3975,7 +4002,7 @@ describe(runReplay, () => {
 		});
 		const fake = fakeReplayDependencies();
 
-		await expect(
+		expect(
 			runReplay(fake.dependencies, request(run, "discuss")),
 		).rejects.toThrow(/no initial checkpoint/u);
 		expect(fake.worktrees).toEqual([]);
@@ -4068,7 +4095,7 @@ describe(runReplay, () => {
 						);
 
 						return {
-							stage: rest[8],
+							stage: rest[5],
 							sessionId: "session",
 							costUsd: 0.9,
 							exchanges: [],
@@ -4182,7 +4209,7 @@ describe(runReplay, () => {
 	});
 });
 
-describe(loadAttempts, () => {
+describe(loadAttempts.name, () => {
 	const LINEAGE = "lineage-1";
 
 	interface ScorecardFixture {
@@ -4339,7 +4366,7 @@ describe(loadAttempts, () => {
 	});
 });
 
-describe(presentAttempts, () => {
+describe(presentAttempts.name, () => {
 	const attempt = (
 		label: string,
 		grade: string,
@@ -4389,7 +4416,7 @@ describe(presentAttempts, () => {
 	});
 });
 
-describe(diffTexts, () => {
+describe(diffTexts.name, () => {
 	it("returns a unified diff when the contents differ and nothing when equal", async () => {
 		expect(await diffTexts("a\n", "a\n")).toBe("");
 		const diff = await diffTexts("a\n", "b\n");
@@ -4398,7 +4425,7 @@ describe(diffTexts, () => {
 	});
 });
 
-describe(rootLineage, () => {
+describe(rootLineage.name, () => {
 	const base = {
 		taskSha: "task-sha",
 		task: "Task text",

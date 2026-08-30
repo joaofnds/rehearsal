@@ -19,7 +19,7 @@ export interface WorkflowBackup {
 
 export async function git(
 	directory: string,
-	...args: string[]
+	...args: readonly string[]
 ): Promise<string> {
 	const output = await runCommand(["git", ...args], directory);
 	return output.trim();
@@ -68,7 +68,7 @@ export async function assertSourceReady(
 
 async function optionalGit(
 	directory: string,
-	...args: string[]
+	...args: readonly string[]
 ): Promise<string | undefined> {
 	try {
 		return await git(directory, ...args);
@@ -90,7 +90,7 @@ export async function assertControlReady(): Promise<string> {
 		);
 	}
 
-	return await git(CONTROL_DIR, "rev-parse", "HEAD");
+	return git(CONTROL_DIR, "rev-parse", "HEAD");
 }
 
 export async function captureWorkflowBackup(

@@ -11,7 +11,10 @@
 	},
 	"ignorePatterns": [".benchmark-runs", "tools/oxlint/anti-slop/**"],
 	"jsPlugins": [
-		{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }
+		{
+			"name": "anti-slop",
+			"specifier": "./tools/oxlint/anti-slop/index.ts"
+		}
 	],
 	"rules": {
 		"anti-slop/no-chained-type-assertions": "error",
@@ -44,10 +47,34 @@
 		"eslint/sort-imports": "off",
 		"eslint/capitalized-comments": "off",
 		"eslint/init-declarations": "off",
-		"eslint/no-use-before-define": ["error", { "functions": false }],
-		"eslint/no-void": ["error", { "allowAsStatement": true }],
+		"eslint/no-use-before-define": [
+			"error",
+			{
+				"functions": false
+			}
+		],
+		"eslint/no-void": [
+			"error",
+			{
+				"allowAsStatement": true
+			}
+		],
+		"typescript/promise-function-async": "off",
+		"typescript/prefer-readonly-parameter-types": [
+			"error",
+			{
+				"treatMethodsAsReadonly": true,
+				"ignoreInferredTypes": true,
+				"allow": ["ZodType", "BunFile", "Subprocess"]
+			}
+		],
 		"eslint/no-duplicate-imports": "off",
-		"eslint/id-length": ["error", { "exceptions": ["T"] }],
+		"eslint/id-length": [
+			"error",
+			{
+				"exceptions": ["T"]
+			}
+		],
 		"unicorn/no-useless-undefined": "off",
 		"unicorn/import-style": "off",
 		"unicorn/no-process-exit": "off",

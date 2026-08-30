@@ -4,6 +4,7 @@ import { z } from "zod";
 import { INITIAL_CHECKPOINT_STAGE } from "./checkpoint";
 import { CONTROL_DIR } from "./config";
 import { loadStageRubric } from "./stage-grading";
+import type { Immutable } from "./contracts";
 
 /**
  * Stage and skill names are interpolated into paths and into the prompt of a
@@ -43,13 +44,15 @@ export const pipelineDefinitionSchema = z.object({
 	stages: z.array(stageDefinitionSchema).min(1),
 });
 
-export type StageDefinition = z.infer<typeof stageDefinitionSchema>;
+export type StageDefinition = Immutable<z.infer<typeof stageDefinitionSchema>>;
 export type StageKind = StageDefinition["kind"];
 export type PlanningStageDefinition = Extract<
 	StageDefinition,
 	{ kind: "planning" }
 >;
-export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
+export type PipelineDefinition = Immutable<
+	z.infer<typeof pipelineDefinitionSchema>
+>;
 
 export class PipelineDefinitionError extends Error {
 	public override name = "PipelineDefinitionError";

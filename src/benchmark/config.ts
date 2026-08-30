@@ -41,7 +41,12 @@ function flagValues(args: readonly string[]): Map<string, string> {
 		const key = args[index];
 		const value = args[index + 1];
 
-		if (!key?.startsWith("--") || !value) {
+		if (
+			key === undefined ||
+			!key.startsWith("--") ||
+			value === undefined ||
+			value === ""
+		) {
 			throw new Error(
 				`Invalid argument sequence near ${key ?? "end of input"}`,
 			);
@@ -55,7 +60,7 @@ function flagValues(args: readonly string[]): Map<string, string> {
 
 export function parseArgs(
 	args: readonly string[],
-	env: Record<string, string | undefined> = Bun.env,
+	env: Readonly<Record<string, string | undefined>> = Bun.env,
 ): BenchmarkConfig {
 	const values = flagValues(args);
 
@@ -64,13 +69,13 @@ export function parseArgs(
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
-	if (!sourceDir) {
+	if (sourceDir === undefined || sourceDir === "") {
 		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
 	}
-	if (!model) {
+	if (model === undefined || model === "") {
 		throw new Error("Provide --model or BENCHMARK_MODEL");
 	}
-	if (!budgetText) {
+	if (budgetText === undefined || budgetText === "") {
 		throw new Error(
 			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
 		);
@@ -124,7 +129,7 @@ export interface ReplayCliConfig {
  */
 export function parseReplayArgs(
 	args: readonly string[],
-	env: Record<string, string | undefined> = Bun.env,
+	env: Readonly<Record<string, string | undefined>> = Bun.env,
 ): ReplayCliConfig {
 	const values = flagValues(args);
 
@@ -134,16 +139,16 @@ export function parseReplayArgs(
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
-	if (!runName) {
+	if (runName === undefined || runName === "") {
 		throw new Error("Provide --run with the run's name");
 	}
-	if (!stage) {
+	if (stage === undefined || stage === "") {
 		throw new Error("Provide --stage with the stage to replay");
 	}
-	if (!model) {
+	if (model === undefined || model === "") {
 		throw new Error("Provide --model or BENCHMARK_MODEL");
 	}
-	if (!budgetText) {
+	if (budgetText === undefined || budgetText === "") {
 		throw new Error(
 			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
 		);

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { CommandError, runCommand } from "./command";
-import type { ContextFile } from "./contracts";
+import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
 
@@ -36,26 +36,24 @@ const attemptScorecardSchema = z
 				grade: stageLetterGradeSchema,
 				verdict: z.enum(["CONTINUE", "STOP"]),
 				dimensions: z.array(
-					z
-						.object({ id: z.string(), grade: stageLetterGradeSchema })
-						.passthrough(),
+					z.object({ id: z.string(), grade: stageLetterGradeSchema }).loose(),
 				),
 			})
-			.passthrough(),
+			.loose(),
 		input: z
 			.object({
 				artifact: z
 					.object({ path: z.string(), content: z.string() })
-					.passthrough()
+					.loose()
 					.optional(),
 				diff: z.string().optional(),
 				changedPaths: z.array(z.string()).optional(),
 			})
-			.passthrough(),
+			.loose(),
 	})
-	.passthrough();
+	.loose();
 
-type AttemptScorecard = z.infer<typeof attemptScorecardSchema>;
+type AttemptScorecard = Immutable<z.infer<typeof attemptScorecardSchema>>;
 
 function attemptFromScorecard(
 	label: string,
@@ -210,7 +208,7 @@ export async function presentAttempts(
 		lines.push(
 			`${index + 1}. ${attempt.label} — grade ${attempt.grade} (${attempt.verdict}), ${cost}${dimensions ? ` [${dimensions}]` : ""}`,
 		);
-		if (attempt.changedPaths?.length) {
+		if (attempt.changedPaths !== undefined && attempt.changedPaths.length > 0) {
 			lines.push(`   changed paths: ${attempt.changedPaths.join(", ")}`);
 		}
 	}

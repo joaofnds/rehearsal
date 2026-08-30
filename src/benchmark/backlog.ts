@@ -6,6 +6,7 @@ import { StageValidationError } from "./contracts";
 import type { PlanningStageDefinition } from "./pipeline";
 import type { ExpectedBranch } from "./target";
 import { assertWorkspaceCleanAt, git } from "./target";
+import type { Immutable } from "./contracts";
 
 const taskViewSchema = z
 	.object({
@@ -14,11 +15,11 @@ const taskViewSchema = z
 				acceptanceCriteria: z.array(z.unknown()),
 				documentation: z.array(z.string()),
 			})
-			.passthrough(),
+			.loose(),
 	})
-	.passthrough();
+	.loose();
 
-type TaskView = z.infer<typeof taskViewSchema>;
+type TaskView = Immutable<z.infer<typeof taskViewSchema>>;
 
 interface TaskSeed {
 	readonly title: string;
@@ -27,7 +28,7 @@ interface TaskSeed {
 
 function parseTaskSeed(task: string): TaskSeed {
 	const [heading, ...body] = task.trim().split("\n");
-	if (!heading?.startsWith("# ")) {
+	if (heading === undefined || !heading.startsWith("# ")) {
 		throw new Error("backlog-seed.md must start with a level-one heading");
 	}
 
@@ -94,7 +95,7 @@ export async function createTaskCommit(
 		targetDir,
 	);
 	const taskId = /Task (?<id>[A-Z]+-\d+)/u.exec(createdTask)?.groups?.["id"];
-	if (!taskId) {
+	if (taskId === undefined) {
 		throw new Error("Backlog did not return the created task ID");
 	}
 
@@ -129,14 +130,14 @@ export async function installInstructions(
 		);
 	}
 
-	return await git(targetDir, "rev-parse", "HEAD");
+	return git(targetDir, "rev-parse", "HEAD");
 }
 
-export async function readTaskOutput(
+export function readTaskOutput(
 	targetDir: string,
 	taskId: string,
 ): Promise<string> {
-	return await runCommand(["backlog", "task", taskId, "--json"], targetDir);
+	return runCommand(["backlog", "task", taskId, "--json"], targetDir);
 }
 
 export interface TaskState {
@@ -182,7 +183,7 @@ export function assertStageArtifactState(
 		);
 	});
 
-	if (!artifactFile) {
+	if (artifactFile === undefined) {
 		throw new StageValidationError(
 			`${stage.name} completed without its durable ${expectedDoc} document`,
 		);
@@ -195,7 +196,7 @@ export async function assertPlanningStageCompleted(
 	targetDir: string,
 	taskSha: string,
 	stage: PlanningStageDefinition,
-	taskState: { output: string; view: TaskView },
+	taskState: { readonly output: string; readonly view: TaskView },
 	expectedBranch: ExpectedBranch = "main",
 ): Promise<{
 	taskState: string;

@@ -1,7 +1,20 @@
 import { z } from "zod";
+
 import type { CheckpointRecord } from "./checkpoint";
 import type { Effort, WorkflowStage } from "./config";
 import type { PipelineDefinition, StageKind } from "./pipeline";
+
+/**
+ * The deep-readonly view of a parsed value. Zod schemas describe the wire
+ * shape; the domain passes their values around as immutable evidence, so
+ * every derived type is wrapped here instead of sprinkling readonly through
+ * each schema.
+ */
+export type Immutable<Value> = Value extends readonly (infer Element)[]
+	? readonly Immutable<Element>[]
+	: Value extends object
+		? { readonly [Key in keyof Value]: Immutable<Value[Key]> }
+		: Value;
 
 export const evidenceSchema = z.object({
 	source: z.enum(["diff", "baseline-context", "local-checks"]),
@@ -115,7 +128,10 @@ export const humanFindingSchema = z
 		rubricId: z.string().min(1).nullable(),
 	})
 	.superRefine((finding, context) => {
-		if (finding.judgeAssessment === "NOT_PROMOTED" || finding.rubricId) {
+		if (
+			finding.judgeAssessment === "NOT_PROMOTED" ||
+			finding.rubricId !== null
+		) {
 			return;
 		}
 
@@ -140,15 +156,17 @@ export const claudeEnvelopeSchema = z
 		result: z.string().optional(),
 		structured_output: z.unknown().optional(),
 	})
-	.passthrough();
+	.loose();
 
-export type JudgeGrade = z.infer<typeof judgeGradeSchema>;
-export type HumanReview = z.infer<typeof humanReviewSchema>;
-export type StageTurn = z.infer<typeof stageTurnSchema>;
-export type ClaudeEnvelope = z.infer<typeof claudeEnvelopeSchema>;
+export type JudgeGrade = Immutable<z.infer<typeof judgeGradeSchema>>;
+export type HumanReview = Immutable<z.infer<typeof humanReviewSchema>>;
+export type StageTurn = Immutable<z.infer<typeof stageTurnSchema>>;
+export type ClaudeEnvelope = Immutable<z.infer<typeof claudeEnvelopeSchema>>;
 export type StageLetterGrade = z.infer<typeof stageLetterGradeSchema>;
-export type StageRubric = z.infer<typeof stageRubricSchema>;
-export type StageJudgeOutput = z.infer<typeof stageJudgeOutputSchema>;
+export type StageRubric = Immutable<z.infer<typeof stageRubricSchema>>;
+export type StageJudgeOutput = Immutable<
+	z.infer<typeof stageJudgeOutputSchema>
+>;
 
 export class StageValidationError extends Error {
 	public override name = "StageValidationError";
@@ -161,7 +179,7 @@ export interface ContextFile {
 
 export interface LocalCheckResult {
 	readonly status: "PASS" | "FAIL";
-	readonly evidence: z.infer<typeof evidenceSchema>[];
+	readonly evidence: readonly Immutable<z.infer<typeof evidenceSchema>>[];
 }
 
 export interface StageExchange {
@@ -268,7 +286,7 @@ export function citationMatchesPath(
 	availablePaths: readonly string[],
 ): boolean {
 	for (const candidate of new Set([citation, citation.split("#", 1)[0]])) {
-		if (!candidate) {
+		if (candidate === undefined || candidate === "") {
 			continue;
 		}
 

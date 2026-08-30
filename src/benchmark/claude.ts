@@ -40,7 +40,7 @@ export function claudeArgs(invocation: ClaudeInvocation): string[] {
 		...(access === "sealed"
 			? ["--tools", ""]
 			: ["--dangerously-skip-permissions"]),
-		...(systemPrompt ? ["--system-prompt", systemPrompt] : []),
+		...(systemPrompt === undefined ? [] : ["--system-prompt", systemPrompt]),
 		...(session
 			? [session.resume ? "--resume" : "--session-id", session.id]
 			: ["--no-session-persistence"]),
@@ -49,7 +49,7 @@ export function claudeArgs(invocation: ClaudeInvocation): string[] {
 
 export function readClaudeEnvelope(output: string): ClaudeEnvelope {
 	const envelope = claudeEnvelopeSchema.parse(JSON.parse(output));
-	if (envelope.is_error) {
+	if (envelope.is_error === true) {
 		throw new Error(envelope.result ?? "Claude session failed");
 	}
 
@@ -64,7 +64,7 @@ export function readStructuredOutput<T>(
 		return schema.parse(envelope.structured_output);
 	}
 
-	if (envelope.result) {
+	if (envelope.result !== undefined && envelope.result !== "") {
 		return schema.parse(JSON.parse(envelope.result));
 	}
 

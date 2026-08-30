@@ -6,10 +6,23 @@ import { CLAUDE_TIMEOUT_MS, MAX_STAGE_TURNS } from "./config";
 import type { StageTranscript } from "./contracts";
 import { productAnswerSchema, stageTurnSchema } from "./contracts";
 
-export interface ProductOwnerSession {
-	sessionId: string;
-	spentUsd: number;
-	started: boolean;
+export interface ProductOwnerSnapshot {
+	readonly sessionId: string;
+	readonly spentUsd: number;
+}
+
+export interface ProductOwner {
+	readonly ask: (stage: WorkflowStage, question: string) => Promise<string>;
+	readonly snapshot: () => ProductOwnerSnapshot;
+}
+
+export interface ProductOwnerConfiguration {
+	readonly directory: string;
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+	readonly task: string;
+	readonly productBrief: string;
 }
 
 function remainingBudget(limitUsd: number, spentUsd: number): number {
@@ -32,57 +45,63 @@ function continueStagePrompt(
 	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${skill} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
 }
 
-async function askProductOwner(
-	directory: string,
-	model: string,
-	effort: Effort | undefined,
-	sessionBudgetUsd: number,
-	session: ProductOwnerSession,
-	task: string,
-	productBrief: string,
-	stage: WorkflowStage,
-	question: string,
-): Promise<string> {
-	const prompt = session.started
-		? `The ${stage} session asks:\n\n${question}`
-		: `Feature request:\n\n${task}\n\nProduct brief:\n\n${productBrief}\n\nThe ${stage} session asks:\n\n${question}`;
-	const output = await runCommand(
-		[
-			...claudeArgs({
-				settings: {
-					model,
-					effort,
-					budgetUsd: remainingBudget(sessionBudgetUsd, session.spentUsd),
-				},
-				schema: productAnswerSchema,
-				access: "sealed",
-				systemPrompt:
-					"You are the Product Owner for one software feature. Answer the current question directly and make a concrete decision. Keep every answer consistent with prior answers in this session. Prefer the smallest coherent product scope, preserve the task's required behavior, and defer implementation mechanics to the engineering agent. Do not discuss evaluation, grading, or this protocol.",
-				session: { id: session.sessionId, resume: session.started },
-			}),
-			prompt,
-		],
-		directory,
-		{ timeoutMs: CLAUDE_TIMEOUT_MS },
-	);
-	const envelope = readClaudeEnvelope(output);
+/**
+ * One Product Owner session answers every question in a run, so later
+ * answers retain earlier decisions. The session state lives only in this
+ * closure; callers receive answers and a cost snapshot, never the mutation.
+ */
+export function createProductOwner(
+	configuration: ProductOwnerConfiguration,
+): ProductOwner {
+	let sessionId: string = randomUUID();
+	let spentUsd = 0;
+	let started = false;
 
-	session.sessionId = envelope.session_id;
-	session.spentUsd += envelope.total_cost_usd ?? 0;
-	session.started = true;
+	return {
+		ask: async (stage, question) => {
+			const prompt = started
+				? `The ${stage} session asks:\n\n${question}`
+				: `Feature request:\n\n${configuration.task}\n\nProduct brief:\n\n${configuration.productBrief}\n\nThe ${stage} session asks:\n\n${question}`;
+			const output = await runCommand(
+				[
+					...claudeArgs({
+						settings: {
+							model: configuration.model,
+							effort: configuration.effort,
+							budgetUsd: remainingBudget(
+								configuration.sessionBudgetUsd,
+								spentUsd,
+							),
+						},
+						schema: productAnswerSchema,
+						access: "sealed",
+						systemPrompt:
+							"You are the Product Owner for one software feature. Answer the current question directly and make a concrete decision. Keep every answer consistent with prior answers in this session. Prefer the smallest coherent product scope, preserve the task's required behavior, and defer implementation mechanics to the engineering agent. Do not discuss evaluation, grading, or this protocol.",
+						session: { id: sessionId, resume: started },
+					}),
+					prompt,
+				],
+				configuration.directory,
+				{ timeoutMs: CLAUDE_TIMEOUT_MS },
+			);
+			const envelope = readClaudeEnvelope(output);
 
-	return readStructuredOutput(envelope, productAnswerSchema).answer;
+			sessionId = envelope.session_id;
+			spentUsd += envelope.total_cost_usd ?? 0;
+			started = true;
+
+			return readStructuredOutput(envelope, productAnswerSchema).answer;
+		},
+		snapshot: () => ({ sessionId, spentUsd }),
+	};
 }
 
 export async function runWorkflowStage(
 	targetDir: string,
-	productOwnerDirectory: string,
 	model: string,
 	effort: Effort | undefined,
 	sessionBudgetUsd: number,
-	productOwner: ProductOwnerSession,
-	task: string,
-	productBrief: string,
+	productOwner: ProductOwner,
 	taskId: string,
 	stage: WorkflowStage,
 	skill: string,
@@ -122,17 +141,7 @@ export async function runWorkflowStage(
 			return { stage, sessionId, costUsd: spentUsd, exchanges };
 		}
 
-		const productOwnerAnswer = await askProductOwner(
-			productOwnerDirectory,
-			model,
-			effort,
-			sessionBudgetUsd,
-			productOwner,
-			task,
-			productBrief,
-			stage,
-			agent.message,
-		);
+		const productOwnerAnswer = await productOwner.ask(stage, agent.message);
 		console.log(`Product Owner: ${productOwnerAnswer}`);
 		exchanges.push({ agent, productOwnerAnswer });
 		prompt = continueStagePrompt(skill, productOwnerAnswer);

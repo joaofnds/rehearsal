@@ -15,7 +15,7 @@ import { runJudge, validateRubricDefinition } from "./judge";
 import { parseStageRubric, runStageJudge } from "./stage-grading";
 
 export interface Questioner {
-	question: (prompt: string) => Promise<string>;
+	readonly question: (prompt: string) => Promise<string>;
 }
 
 export interface FinalCandidate {
@@ -190,7 +190,7 @@ function assertFindingMatchesGrades(
 		);
 	}
 
-	if (assessment === "MISSED" && originalFailure) {
+	if (assessment === "MISSED" && originalFailure === true) {
 		throw new CalibrationIncompleteError(
 			`Original ${label}Judge already caught ${rubricId}`,
 		);

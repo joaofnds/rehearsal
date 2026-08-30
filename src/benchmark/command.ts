@@ -1,7 +1,7 @@
 import { COMMAND_TIMEOUT_MS } from "./config";
 
 interface CommandOptions {
-	readonly env?: Record<string, string> | undefined;
+	readonly env?: Readonly<Record<string, string>> | undefined;
 	readonly input?: string | undefined;
 	readonly timeoutMs?: number | undefined;
 }
@@ -23,7 +23,12 @@ export class CommandError extends Error {
 
 const activeProcesses = new Set<ReturnType<typeof Bun.spawn>>();
 
-function killProcessGroup(child: ReturnType<typeof Bun.spawn>): void {
+interface KillableProcess {
+	readonly pid: number;
+	readonly kill: (signal: NodeJS.Signals) => void;
+}
+
+function killProcessGroup(child: KillableProcess): void {
 	try {
 		process.kill(-child.pid, "SIGKILL");
 	} catch {
@@ -45,10 +50,9 @@ export async function runCommand(
 		detached: true,
 	});
 	activeProcesses.add(child);
-	const timeout = setTimeout(
-		() => killProcessGroup(child),
-		options.timeoutMs ?? COMMAND_TIMEOUT_MS,
-	);
+	const timeout = setTimeout(() => {
+		killProcessGroup(child);
+	}, options.timeoutMs ?? COMMAND_TIMEOUT_MS);
 
 	try {
 		const [exitCode, stdout, stderr] = await Promise.all([
