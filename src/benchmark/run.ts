@@ -10,6 +10,16 @@ import {
 } from "./backlog";
 import { collectCalibration, type Questioner } from "./calibration";
 import {
+	type CheckpointRecord,
+	captureStageCorpus,
+	type HashedFile,
+	hashArtifacts,
+	hashWorkflowState,
+	recordCheckpoint,
+	rootLineage,
+	skillSearchRoots,
+} from "./checkpoint";
+import {
 	captureBaselineContext,
 	captureCheckIntegrity,
 	captureFileHashes,
@@ -64,6 +74,8 @@ async function createRunFiles(timestamp: string) {
 		artifact: join(directory, `${name}.json`),
 		review: join(directory, `${name}.review.json`),
 		stage: (stage: string) => join(directory, `${name}.${stage}.json`),
+		checkpoint: (stage: string) =>
+			join(directory, `${name}.checkpoints`, stage),
 	};
 }
 
@@ -107,6 +119,7 @@ export interface RunArtifactInputs {
 	readonly productOwner: ProductOwnerSession;
 	readonly workflow: readonly StageTranscript[];
 	readonly stageScorecards: readonly StageScorecard[];
+	readonly checkpoints: readonly CheckpointRecord[];
 	readonly evidence: BuildEvidence;
 	readonly judge: { readonly prompt: string; readonly grade: JudgeGrade };
 	readonly reviewFile: string;
@@ -144,6 +157,7 @@ export function buildRunArtifact(inputs: RunArtifactInputs): RunArtifact {
 		productOwnerCostUsd: productOwner.spentUsd,
 		workflow: inputs.workflow,
 		stageScorecards: inputs.stageScorecards,
+		checkpoints: inputs.checkpoints,
 		taskState: evidence.taskState,
 		judgePrompt: judge.prompt,
 		diff: evidence.diff,
@@ -164,6 +178,8 @@ export interface StageDependencies {
 	readonly changedPathsBetween: typeof changedPathsBetween;
 	readonly captureCheckIntegrity: typeof captureCheckIntegrity;
 	readonly captureTreatmentChecks: typeof captureTreatmentChecks;
+	readonly captureStageCorpus: typeof captureStageCorpus;
+	readonly recordCheckpoint: typeof recordCheckpoint;
 }
 
 export interface PendingStage {
@@ -190,6 +206,7 @@ export interface StageContext {
 	readonly taskSha: string;
 	readonly pipeline: PipelineDefinition;
 	readonly stageFile: (stage: WorkflowStage) => string;
+	readonly checkpointDirectory: (stage: WorkflowStage) => string;
 	readonly log: (message: string) => void;
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly calibrateStageFailure: (
@@ -200,6 +217,7 @@ export interface StageContext {
 export interface StageOutcome {
 	readonly workflow: readonly StageTranscript[];
 	readonly stageScorecards: readonly StageScorecard[];
+	readonly checkpoints: readonly CheckpointRecord[];
 	readonly buildEvidence?: BuildEvidence;
 }
 
@@ -210,9 +228,33 @@ export async function runGradedStages(
 	const workflow: StageTranscript[] = [];
 	const stageScorecards: StageScorecard[] = [];
 	const stageArtifacts: ContextFile[] = [];
+	const checkpoints: CheckpointRecord[] = [];
 	let buildEvidence: BuildEvidence | undefined;
 
+	// Captured for every stage before any stage runs: a missing skill fails
+	// the run before the first session is paid for.
+	const stages: {
+		definition: PipelineDefinition["stages"][number];
+		corpusFiles: readonly HashedFile[];
+	}[] = [];
 	for (const definition of context.pipeline.stages) {
+		stages.push({
+			definition,
+			corpusFiles: await dependencies.captureStageCorpus(
+				definition.skill,
+				context.instructions,
+				skillSearchRoots(context.targetDir),
+			),
+		});
+	}
+	let upstream = rootLineage({
+		taskSha: context.taskSha,
+		task: context.task,
+		productBrief: context.productBrief,
+		workflowFiles: await hashWorkflowState(context.targetDir),
+	});
+
+	for (const { definition, corpusFiles } of stages) {
 		const stage = definition.name;
 		context.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 		const transcript = await dependencies.runWorkflowStage(
@@ -334,9 +376,28 @@ export async function runGradedStages(
 			);
 		}
 		assertStageGradePassed(scorecard);
+
+		const checkpoint = await dependencies.recordCheckpoint(
+			context.targetDir,
+			context.checkpointDirectory(stage),
+			{
+				stage,
+				targetSha:
+					definition.kind === "delivery" && buildEvidence
+						? buildEvidence.resultSha
+						: context.taskSha,
+				upstream,
+				model: context.model,
+				effort: context.effort,
+				corpusFiles,
+				artifacts: hashArtifacts(input.artifact ? [input.artifact] : []),
+			},
+		);
+		checkpoints.push(checkpoint);
+		upstream = checkpoint.lineage;
 	}
 
-	return { workflow, stageScorecards, buildEvidence };
+	return { workflow, stageScorecards, checkpoints, buildEvidence };
 }
 
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
@@ -444,58 +505,62 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			spentUsd: 0,
 			started: false,
 		};
-		const { workflow, stageScorecards, buildEvidence } = await runGradedStages(
-			{
-				runWorkflowStage,
-				runStageJudge,
-				readTaskOutput,
-				captureBuildCandidate,
-				assertPlanningStageCompleted,
-				assertBuildCommitted,
-				changedPathsBetween,
-				captureCheckIntegrity,
-				captureTreatmentChecks,
-			},
-			{
-				targetDir: source.root,
-				productOwnerDirectory,
-				model: config.model,
-				effort: config.effort,
-				judgeModel: config.judgeModel,
-				judgeEffort: config.judgeEffort,
-				sessionBudgetUsd: config.sessionBudgetUsd,
-				productOwner,
-				task,
-				productBrief,
-				instructions,
-				baselineContext,
-				baselineHashes,
-				taskId,
-				taskSha,
-				pipeline,
-				stageFile: runFiles.stage,
-				log: console.log,
-				trackPendingStage: (pending) => {
-					pendingStage = pending;
+		const { workflow, stageScorecards, checkpoints, buildEvidence } =
+			await runGradedStages(
+				{
+					runWorkflowStage,
+					runStageJudge,
+					readTaskOutput,
+					captureBuildCandidate,
+					assertPlanningStageCompleted,
+					assertBuildCommitted,
+					changedPathsBetween,
+					captureCheckIntegrity,
+					captureTreatmentChecks,
+					captureStageCorpus,
+					recordCheckpoint,
 				},
-				calibrateStageFailure: async (stageScorecards) => {
-					const calibration = await collectCalibration({
-						rl,
-						reviewFile: runFiles.review,
-						targetDir: source.root,
-						originalInstructions: instructions,
-						originalRubric: rubric,
-						stageScorecards,
-						judgeModel: config.judgeModel,
-						judgeEffort: config.judgeEffort,
-						sessionBudgetUsd: config.sessionBudgetUsd,
-					});
-					stageFailureCalibrated = true;
+				{
+					targetDir: source.root,
+					productOwnerDirectory,
+					model: config.model,
+					effort: config.effort,
+					judgeModel: config.judgeModel,
+					judgeEffort: config.judgeEffort,
+					sessionBudgetUsd: config.sessionBudgetUsd,
+					productOwner,
+					task,
+					productBrief,
+					instructions,
+					baselineContext,
+					baselineHashes,
+					taskId,
+					taskSha,
+					pipeline,
+					stageFile: runFiles.stage,
+					checkpointDirectory: runFiles.checkpoint,
+					log: console.log,
+					trackPendingStage: (pending) => {
+						pendingStage = pending;
+					},
+					calibrateStageFailure: async (stageScorecards) => {
+						const calibration = await collectCalibration({
+							rl,
+							reviewFile: runFiles.review,
+							targetDir: source.root,
+							originalInstructions: instructions,
+							originalRubric: rubric,
+							stageScorecards,
+							judgeModel: config.judgeModel,
+							judgeEffort: config.judgeEffort,
+							sessionBudgetUsd: config.sessionBudgetUsd,
+						});
+						stageFailureCalibrated = true;
 
-					return calibration;
+						return calibration;
+					},
 				},
-			},
-		);
+			);
 
 		if (!buildEvidence) {
 			throw new Error("Build stage did not run");
@@ -534,6 +599,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			productOwner,
 			workflow,
 			stageScorecards,
+			checkpoints,
 			evidence,
 			judge,
 			reviewFile: runFiles.review,

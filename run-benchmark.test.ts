@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +15,7 @@ import {
 } from "./src/benchmark/calibration";
 import {
 	captureStageCorpus,
+	hashWorkflowState,
 	lineageKey,
 	materializeCheckpoint,
 	recordCheckpoint,
@@ -1386,6 +1387,13 @@ describe(runGradedStages, () => {
 				captureCheckIntegrity: async () =>
 					harnessResult("PASS", "checks match"),
 				captureTreatmentChecks: async () => harnessResult("PASS", "all green"),
+				captureStageCorpus: async (skill: string) => [
+					{
+						path: `skills/${skill}/SKILL.md`,
+						sha256: createHash("sha256").update(skill).digest("hex"),
+					},
+				],
+				recordCheckpoint,
 			},
 		};
 	}
@@ -1410,6 +1418,8 @@ describe(runGradedStages, () => {
 			taskSha: "task-sha",
 			pipeline: await loadDefaultPipeline(),
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
+			checkpointDirectory: (stage: string) =>
+				join(stageDirectory, "checkpoints", stage),
 			log: () => {},
 			trackPendingStage: () => {},
 			calibrateStageFailure: async (): Promise<CalibrationResult> => {
@@ -1558,6 +1568,114 @@ describe(runGradedStages, () => {
 		expect(executed).toEqual(["discuss", "research", "plan", "build"]);
 		expect(judged[1]?.stage).toBe("research");
 		expect(rubricsUsed[1]?.endsWith("rubrics/grill.json")).toBe(true);
+	});
+
+	it("writes a checkpoint for every accepted stage and chains lineage", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const context = await stageContext();
+		await mkdir(join(context.targetDir, "backlog"), { recursive: true });
+		await Bun.write(
+			join(context.targetDir, "backlog", "config.yml"),
+			"statuses: []\n",
+		);
+
+		const outcome = await runGradedStages(dependencies, context);
+
+		expect(outcome.checkpoints.map(({ stage }) => stage)).toEqual([
+			"discuss",
+			"grill",
+			"plan",
+			"build",
+		]);
+		expect(outcome.checkpoints[0]?.upstream).toBe(
+			rootLineage({
+				taskSha: "task-sha",
+				task: "Task",
+				productBrief: "Brief",
+				workflowFiles: await hashWorkflowState(context.targetDir),
+			}),
+		);
+		expect(outcome.checkpoints[1]?.upstream).toBe(
+			outcome.checkpoints[0]?.lineage,
+		);
+		expect(outcome.checkpoints[0]?.targetSha).toBe("task-sha");
+		expect(outcome.checkpoints[3]?.targetSha).toBe("result-sha");
+		expect(outcome.checkpoints[0]?.artifacts.map(({ path }) => path)).toEqual([
+			"backlog/docs/discuss.md",
+		]);
+		for (const record of outcome.checkpoints) {
+			const written = JSON.parse(
+				await Bun.file(
+					join(context.checkpointDirectory(record.stage), "checkpoint.json"),
+				).text(),
+			);
+			expect(written).toEqual(record);
+		}
+	});
+
+	it("keeps accepted checkpoints when a later stage is rejected", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies, scorecardFor } = fakeStageDependencies(
+			judged,
+			executed,
+		);
+		const context = {
+			...(await stageContext()),
+			calibrateStageFailure: async (): Promise<CalibrationResult> => ({
+				humanReview: { verdict: "REJECT", summary: "failed", findings: [] },
+				instructionsChanged: false,
+				rubricChanged: false,
+				stageRubricsChanged: [],
+			}),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: async (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+				_source: unknown,
+			) => scorecardFor(input, input.stage === "grill" ? "STOP" : "CONTINUE"),
+		};
+
+		await expect(runGradedStages(failing, context)).rejects.toThrow(
+			"minimum grade is B",
+		);
+
+		expect(
+			await Bun.file(
+				join(context.checkpointDirectory("discuss"), "checkpoint.json"),
+			).exists(),
+		).toBe(true);
+		expect(
+			await Bun.file(
+				join(context.checkpointDirectory("grill"), "checkpoint.json"),
+			).exists(),
+		).toBe(false);
+	});
+
+	it("fails before any stage runs when a skill's corpus is missing", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const missing = {
+			...dependencies,
+			captureStageCorpus: async (skill: string) => {
+				if (skill === "build")
+					throw new Error(`The ${skill} skill is not installed`);
+
+				return [{ path: `skills/${skill}/SKILL.md`, sha256: "ab".repeat(32) }];
+			},
+		};
+
+		await expect(
+			runGradedStages(missing, await stageContext()),
+		).rejects.toThrow("build skill is not installed");
+		expect(executed).toEqual([]);
 	});
 
 	it("stops after a failing grade and calibrates the failed stage", async () => {
@@ -1714,6 +1832,7 @@ describe(buildRunArtifact, () => {
 			productOwner: { sessionId: "po", spentUsd: 0, started: false },
 			workflow: [],
 			stageScorecards: [],
+			checkpoints: [],
 			evidence: {
 				resultSha: "result-sha",
 				diff: "the-diff",

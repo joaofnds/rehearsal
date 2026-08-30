@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CheckpointRecord } from "./checkpoint";
 import type { Effort, WorkflowStage } from "./config";
 import type { PipelineDefinition, StageKind } from "./pipeline";
 
@@ -245,6 +246,7 @@ export interface RunArtifact {
 	readonly productOwnerCostUsd: number;
 	readonly workflow: readonly StageTranscript[];
 	readonly stageScorecards: readonly StageScorecard[];
+	readonly checkpoints: readonly CheckpointRecord[];
 	readonly taskState: string;
 	readonly judgePrompt: string;
 	readonly diff: string;

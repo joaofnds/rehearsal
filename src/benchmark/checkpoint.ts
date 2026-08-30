@@ -121,6 +121,15 @@ export function rootLineage(inputs: RootLineageInputs) {
 	);
 }
 
+export function hashArtifacts(
+	artifacts: readonly { readonly path: string; readonly content: string }[],
+): readonly HashedFile[] {
+	return artifacts.map(({ path, content }) => ({
+		path,
+		sha256: sha256(content),
+	}));
+}
+
 const hashedFileSchema = z.object({
 	path: z.string().min(1),
 	sha256: z.string().regex(/^[0-9a-f]{64}$/),
