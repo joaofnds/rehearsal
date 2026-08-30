@@ -21,6 +21,8 @@
   rubric-scored LLM with rationale.
 - **Lineage** — hash of everything that produced a checkpoint: upstream
   checkpoint, corpus files feeding the stage, model, effort.
+- **Materialize** — write a checkpoint's frozen state into a directory,
+  byte-faithfully, so a stage can run from it.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
   data.
 - **Pipeline definition** — the declared, user-authored data the harness reads
