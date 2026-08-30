@@ -1,11 +1,11 @@
 ---
 id: ACT-1
 title: declare the pipeline as data
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 17:03'
+updated_date: '2026-08-30 17:37'
 labels: []
 dependencies: []
 references:
@@ -41,39 +41,58 @@ The stage sequence is a JSON file the harness reads, not code. `pipelines/defaul
 Three things had to move before the loop could be driven by data:
 
 1. `WorkflowStage` was a closed union of the four names, baked into `stageRubricSchema` and `humanFindingSchema`. A user-authored stage name could not be expressed. It is now an open string; `WORKFLOW_STAGES` is gone.
-2. Per-stage behavior branched on the literal `"build"` in three places (mandatory rubric blockers, forced check failures, build-candidate capture) and on `"discuss"` in one (acceptance criteria). All four now key off the stage's declared kind or a declared flag, so a delivery stage keeps the harness's guarantees under any name.
-3. A rubric declared its own `stage` name and was refused for any other stage, so a rubric belonged to one stage name. The definition already names each stage's rubric, so the field was a second answer to the same question; it is removed from the schema and the four rubric files. The guarantee it appeared to give is now enforced by kind: a delivery stage pointed at a planning rubric is still refused.
+2. Per-stage behavior branched on the literal `"build"` in three places (mandatory rubric blockers, forced check failures, build-candidate capture) and on `"discuss"` in one (acceptance criteria). All four now key off the stage's declared kind or a declared flag.
+3. A rubric declared its own `stage` name and was refused for any other stage. The definition already names each stage's rubric, so the field was a second answer to the same question; it is removed from the schema and the four rubric files. What it actually protected is enforced by kind instead.
 
-`runStageJudge` no longer finds a rubric by stage name; callers pass the one the definition points at.
+## What opening the type cost, and what closes it
+
+Opening a type that five files relied on created a class of defect: values that were safe because they could only be one of four identifiers are now user-authored. Six were found and fixed, three by me and three by independent review.
+
+- A stage named `final` collided with the marker human review uses for findings against the final Judge, making a correct finding about that stage unrecordable. Reserved.
+- A stage named `review` collided with the human-review file's path, so a scorecard and the human's findings overwrote each other. Reserved.
+- A stage name was interpolated into scorecard file paths, so `../../escaped` wrote outside the run directory and `a/b` created a silent subdirectory. Names are constrained to one plain identifier.
+- The `skill` field was interpolated into the prompt of the one session that runs with `access: "unrestricted"`. A newline put arbitrary instructions in that prompt. Same identifier constraint.
+- Unknown fields were accepted, so `requiresAcceptanceCritera` parsed cleanly and silently disabled the acceptance-criteria check. Both stage schemas are strict.
+- `runWorkflowStage` used one value as both the skill to invoke and the transcript's label. A stage whose name differed from its skill produced a run artifact whose transcript and scorecard disagreed about which stage ran. The two are now separate parameters.
+
+Two further gaps closed: `loadPipeline` now parses every rubric against its stage's kind, so a delivery stage pointed at a planning rubric is refused before the target is claimed rather than mid-run; and the `--pipeline` value is confined to the control repository.
 
 ## Observed, this session
 
-Ran `runGradedStages` against four definitions and read the executed order, the rubric each Judge received, and the build stage's `priorArtifacts`:
+Ran `runGradedStages` against four definitions on the final code and read the judged order, transcript labels, skills invoked, rubrics applied, and the delivery stage's priorArtifacts:
 
-- default: discuss, grill, plan, build; prior artifacts discuss, grill, plan
-- plan removed: discuss, grill, build; prior artifacts discuss, grill
+- default: discuss, grill, plan, build; priors discuss, grill, plan
+- plan removed: discuss, grill, build; priors discuss, grill
 - grill/plan swapped: discuss, plan, grill, build
-- fifth stage `research` (a name the harness never knew), judged against the grill rubric its definition names: discuss, research, grill, plan, build
+- fifth stage `research` running the `discuss` skill: judged and transcribed as `research`, skill `discuss` invoked, graded against the grill rubric its definition names
 
 No TypeScript differs between these cases. Build evidence attached only to the delivery stage in all four.
 
-Ran the harness itself: `--pipeline pipelines/bogus.json` fails with "Pipeline definition not found: pipelines/bogus.json" before the target is touched, and `BENCHMARK_PIPELINE` is read the same way. Both documented invocation forms verified.
+Verified each rejection by construction, reading the actual message: reserved names, unsafe names, injecting skills, unknown fields, missing rubric, duplicate name, no delivery stage, two delivery stages, delivery not last, rubric that does not fit its kind, and a path outside the control repository. Each names the offending stage and field.
 
-Full suite 101 pass / 0 fail, typecheck clean, Biome clean, from a fresh run after the last commit.
+Ran the harness binary: a missing definition is rejected before the target is touched, via both the flag and the environment variable.
+
+Mutation-checked the acceptance-criteria guard: deleting it left the suite green before, and fails a test now.
+
+112 pass / 0 fail, typecheck clean, Biome clean.
 
 ## Not verified
 
-No live end-to-end run against a real target with real Claude sessions. The stage loop was exercised with fakes for the Claude-invoking dependencies; everything else in the loop is the real code. A live run costs money and was not directed.
+No live end-to-end run against a real target with real Claude sessions. The Claude-invoking dependencies were faked; the rest of the loop is real code. A live run costs money and was not directed.
+
+Note: this machine's `bun` is 1.3.13, not the 1.4.0 the project pins. The suite passes on both; the earlier runs in this task were on 1.4.0.
+
+## Deliberately left
+
+A planning stage may still adopt the delivery rubric. It fails every requirement and stops the run at its first Judge, so it is loud rather than silent, and refusing it would also refuse two planning stages sharing one rubric, which a pipeline should be able to do.
+
+`parsePipeline` reports only the first schema issue, so fixing a broken definition can take more than one pass.
 
 ## Carried forward
 
-ACT-9 is filed: the run artifact records the model, efforts, budget, rubric, and every SHA, but not the pipeline. That was harmless when the sequence was a constant in the harness; now that it varies per run, two artifacts can differ in which stages ran with nothing in either saying so. ACT-6 (paired comparisons) and ACT-2 (checkpoint lineage) both need this.
+ACT-9: the run artifact records the model, efforts, budget, rubric, and every SHA, but not the pipeline. Harmless when the sequence was a constant; now that it varies per run, two artifacts can differ in which stages ran with nothing saying so. ACT-6 and ACT-2 both need it.
 
-Nothing is built-but-unwired. Every caller is on the new path; there is no old path left.
-
-## Review
-
-Due. The change removes a validation (`parseStageRubric`'s stage-name check) and opens a type that previously constrained five files. Both are deliberate and argued in the commit messages, and both deserve a second reader.
+Nothing is built-but-unwired. Every caller is on the new path.
 <!-- SECTION:NOTES:END -->
 
 ## Shaping
