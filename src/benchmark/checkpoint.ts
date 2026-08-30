@@ -54,6 +54,20 @@ export function lineageKey(inputs: LineageInputs) {
 	);
 }
 
+// Only a missing path may read as absent; any other failure (EACCES, EIO)
+// must surface, or a checkpoint would silently record partial state as truth.
+async function statIfExists(path: string) {
+	try {
+		return await stat(path);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return undefined;
+		}
+
+		throw error;
+	}
+}
+
 async function hashFile(path: string) {
 	return createHash("sha256")
 		.update(await Bun.file(path).bytes())
@@ -92,10 +106,7 @@ export async function captureStageCorpus(
 ): Promise<readonly HashedFile[]> {
 	for (const root of roots) {
 		const directory = join(root, skill);
-		const exists = await stat(directory)
-			.then((entry) => entry.isDirectory())
-			.catch(() => false);
-		if (!exists) continue;
+		if (!(await statIfExists(directory))?.isDirectory()) continue;
 
 		return [
 			{ path: "CLAUDE.md", sha256: sha256(instructions) },
@@ -171,8 +182,7 @@ async function existingWorkflowPaths(root: string) {
 	const present: string[] = [];
 
 	for (const path of WORKFLOW_PATHS) {
-		const exists = await stat(join(root, path)).catch(() => undefined);
-		if (exists) present.push(path);
+		if (await statIfExists(join(root, path))) present.push(path);
 	}
 
 	return present;

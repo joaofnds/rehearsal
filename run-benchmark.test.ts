@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -2879,6 +2879,19 @@ describe(recordCheckpoint, () => {
 		await expect(
 			materializeCheckpoint(checkpointDir, destination),
 		).rejects.toThrow(/backlog\/config.yml/);
+	});
+
+	it("fails on an unreadable workflow path instead of recording it absent", async () => {
+		const { targetDir, checkpointDir } = await checkpointFixture();
+		await chmod(targetDir, 0o000);
+
+		try {
+			await expect(
+				recordCheckpoint(targetDir, checkpointDir, checkpointInputs),
+			).rejects.toThrow(/permission denied|EACCES/i);
+		} finally {
+			await chmod(targetDir, 0o755);
+		}
 	});
 
 	it("orders recorded files by codepoint, not locale", async () => {
