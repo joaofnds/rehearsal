@@ -16,11 +16,11 @@ One run uses:
 rehearsal/CLAUDE.md       project instructions under evaluation
 rehearsal/backlog-seed.md known feature request
 rehearsal/product-brief.md stable product facts available to the PO
-rehearsal/pipelines/*.json which stages run, in what order, with what rubric
+rehearsal/pipelines/*.json the workflow: board columns, stages, skills, rubrics
 rehearsal/rubrics/*.json  process-quality rubrics a stage adopts
 rehearsal/rubric.md       external binary acceptance rubric
 target repository            real application and real main branch
-installed Claude skills      discuss, grill, plan, and build
+installed Claude skills      whichever skills the pipeline names
 ```
 
 The executing sessions never receive `rubric.md` and are not told that their work is being graded. Only normal project instructions, backlog artifacts, and Product Owner decisions enter the target workflow.
@@ -40,31 +40,15 @@ run baseline typecheck, Biome, and unit tests
 create a real Backlog.md card and install CLAUDE.md
         |
         v
-fresh /discuss session <-> dynamic Product Owner
+for each pipeline stage:
+  fresh /<skill> session <-> shared dynamic Product Owner
         |
         v
-independent Discuss Judge; stop below B
+  independent stage Judge; stop below B
         |
         v
-fresh /grill session   <-> same Product Owner
-        |
-        v
-independent Grill Judge; stop below B
-        |
-        v
-fresh /plan session    <-> same Product Owner
-        |
-        v
-independent Plan Judge; stop below B
-        |
-        v
-fresh /build session   <-> same Product Owner
-        |
-        v
-verify commits, clean worktree, checks, and check integrity
-        |
-        v
-independent Build Judge; stop below B
+delivery stage additionally: verify commits, clean
+worktree, checks, and check integrity
         |
         v
 independent final Judge applies the external product rubric
@@ -85,9 +69,9 @@ validate and record calibration
 reset main to the original SHA and restore workflow artifacts
 ```
 
-The stages above are the default pipeline, declared in `pipelines/default.json` and selected with `--pipeline`. A definition names each stage, its kind, its skill, the artifact it must leave, and the rubric its Judge applies, so stages can be added, removed, or reordered without changing the harness. A pipeline must declare exactly one delivery stage and place it last.
+The pipeline is configuration, not harness code: every user brings their own workflow. A definition, selected with `--pipeline` and defaulting to `pipelines/default.json`, declares the board columns the target's Backlog.md uses, each stage's name, kind, and skill, the rubric its Judge applies, and optionally the durable document a planning stage must attach. A stage that records its output only on the task card declares no artifact. Stages can be added, removed, renamed, or reordered without changing the harness; a pipeline must declare exactly one delivery stage and place it last.
 
-The installed skills currently require Grill before Plan: Grill hardens the approach, Plan writes that ratified approach for a cold Build session, and Build consumes the plan. Running Plan before Grill would leave Build with a stale plan.
+The default pipeline follows the currently installed workflow: a `shape` stage that turns the request into acceptance observations on the card, then a `build` stage that delivers the implementation.
 
 Each engineering stage starts a distinct Claude session. A stage may take multiple turns when it needs product input, but no stage inherits another stage's conversation. Durable Backlog.md documents carry the work forward instead. A separate fresh Judge grades each completed stage before its output can become the next stage's input.
 
@@ -95,7 +79,7 @@ Each engineering stage starts a distinct Claude session. A stage may take multip
 
 There is no predetermined answer file.
 
-When an engineering stage needs a decision, it returns one question and recommendation. A separate Product Owner agent answers the actual question. The same PO session handles every question in the run, so later answers retain earlier decisions and remain coherent across Discuss, Grill, Plan, and Build.
+When an engineering stage needs a decision, it returns one question and recommendation. A separate Product Owner agent answers the actual question. The same PO session handles every question in the run, so later answers retain earlier decisions and remain coherent across every stage.
 
 The PO receives the feature request, `product-brief.md`, and the questions. It does not receive the rubric or candidate diff. The brief supplies stable product facts without predicting which questions will be asked or scripting their answers. The PO's standing policy is to preserve those facts, choose the smallest coherent product scope where the brief is silent, and leave implementation mechanics to engineering.
 
@@ -118,25 +102,21 @@ This is intentionally less isolated than a disposable benchmark. Run it only aga
 
 ## Target Setup
 
-The harness initializes a Backlog.md board when the target does not have one. It creates a feature card from `backlog-seed.md` and configures these workflow columns:
+The harness initializes a Backlog.md board when the target does not have one. It creates a feature card from `backlog-seed.md` in the pipeline's first declared column and configures the board with the pipeline's `statuses`. The default pipeline declares:
 
 ```text
-To Do, Spec, Grill, Plan, Build, Done
+To Do, Shape, Build, Review, Ship, Done
 ```
 
 It writes the control repository's `CLAUDE.md` into the target and commits that tracked instruction change before the workflow starts. Backlog.md and Boris artifacts remain personal workflow state and are carried between fresh sessions.
 
-After Discuss, Grill, and Plan, the harness verifies that application Git history and tracked files are still unchanged. It also verifies that:
-
-- Discuss wrote acceptance criteria and attached a spec document.
-- Grill attached a grilled-design document.
-- Plan attached a plan document.
+After every planning stage, the harness verifies that application Git history and tracked files are still unchanged. It also verifies that the stage wrote acceptance criteria when its definition requires them, and attached its durable document when its definition declares an artifact.
 
 Build must create at least one conventional commit directly on `main`, leave a clean worktree, and preserve descendant history from the task setup commit.
 
 ## Stage Grading
 
-Discuss, Grill, Plan, and Build each have a rubric under `rubrics/`. Executing agents never receive these rubrics. Each rubric defines:
+Every stage names a rubric under `rubrics/`. Executing agents never receive these rubrics. Each rubric defines:
 
 - hard blockers whose presence makes the stage grade `F`
 - binary requirements that cap the grade at `C` when any are missing
@@ -201,7 +181,7 @@ Each finding has one Judge assessment:
 - `FALSE_POSITIVE`: the original Judge failed a correct implementation because the rubric was wrong or ambiguous.
 - `NOT_PROMOTED`: record the observation, but do not turn it into a reusable Judge rule.
 
-`stage` identifies `discuss`, `grill`, `plan`, `build`, or `final`; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
+`stage` names the pipeline stage the finding belongs to, or `final` for the final Judge; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
 
 If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under `rubrics/`; for a final finding, edit `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading. Press Enter when the review and control-file edits are ready.
 
@@ -240,7 +220,7 @@ The instruction corpus being tuned. Change it only in response to observed behav
 
 ### `backlog-seed.md`
 
-The rough product request. It must start with one level-one heading followed by a non-empty description. Discuss turns it into a spec and acceptance criteria through dynamic PO questions.
+The rough product request. It must start with one level-one heading followed by a non-empty description. The first planning stage turns it into acceptance criteria through dynamic PO questions.
 
 ### `product-brief.md`
 
@@ -258,7 +238,7 @@ IDs are parsed at runtime, so adding a newly discovered requirement does not req
 
 ### `rubrics/*.json`
 
-The independent process-quality contracts for Discuss, Grill, Plan, and Build. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
+The independent process-quality contracts the pipeline's stages adopt. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
 
 ### `run-benchmark.ts`
 
@@ -276,12 +256,12 @@ Unit and filesystem integration tests for configuration parsing, stage and final
 
 - Bun `1.4.0`
 - authenticated `claude` CLI
-- installed `/discuss`, `/grill`, `/plan`, and `/build` skills
+- the skills the selected pipeline names (the default needs `/shape` and `/build`)
 - installed `backlog` CLI
 - target dependencies already installed
 - clean, committed control repository
 - clean target repository on `main`
-- enough budget for four engineering sessions, the shared PO, four stage Judges, the final Judge, and any calibration rejudges
+- enough budget for one engineering session and one stage Judge per pipeline stage, the shared PO, the final Judge, and any calibration rejudges
 
 Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
 

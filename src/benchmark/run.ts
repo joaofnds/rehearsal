@@ -597,6 +597,7 @@ export async function runBenchmark(
 			source.root,
 			task,
 			instructions,
+			pipeline.statuses,
 		);
 		const recordRetainedCheckpoint = retainedCheckpointRecorder(runFiles.name);
 		await writeRunManifest(runFiles.checkpointsRoot, {

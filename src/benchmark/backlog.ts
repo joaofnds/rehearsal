@@ -40,7 +40,10 @@ function parseTaskSeed(task: string): TaskSeed {
 	return { title: heading.slice(2).trim(), description };
 }
 
-async function configureBacklog(targetDir: string): Promise<void> {
+async function configureBacklog(
+	targetDir: string,
+	statuses: readonly string[],
+): Promise<void> {
 	const configPath = join(targetDir, "backlog", "config.yml");
 	const configFile = Bun.file(configPath);
 
@@ -61,10 +64,11 @@ async function configureBacklog(targetDir: string): Promise<void> {
 	}
 
 	const config = await Bun.file(configPath).text();
-	const statuses =
-		'statuses: ["To Do", "Spec", "Grill", "Plan", "Build", "Done"]';
-	const configured = config.replace(/^statuses:.*$/mu, statuses);
-	if (configured === config && !config.includes(statuses)) {
+	const statusesLine = `statuses: [${statuses
+		.map((status) => JSON.stringify(status))
+		.join(", ")}]`;
+	const configured = config.replace(/^statuses:.*$/mu, statusesLine);
+	if (configured === config && !config.includes(statusesLine)) {
 		throw new Error("Backlog configuration does not declare statuses");
 	}
 
@@ -75,8 +79,14 @@ export async function createTaskCommit(
 	targetDir: string,
 	task: string,
 	instructions: string,
+	statuses: readonly string[],
 ): Promise<{ taskId: string; taskSha: string }> {
-	await configureBacklog(targetDir);
+	const [entryStatus] = statuses;
+	if (entryStatus === undefined) {
+		throw new Error("The pipeline must declare at least one board status");
+	}
+
+	await configureBacklog(targetDir, statuses);
 	const { title, description } = parseTaskSeed(task);
 	const createdTask = await runCommand(
 		[
@@ -89,7 +99,7 @@ export async function createTaskCommit(
 			"--type",
 			"feature",
 			"--status",
-			"To Do",
+			entryStatus,
 			"--plain",
 		],
 		targetDir,
@@ -157,7 +167,7 @@ export function assertStageArtifactState(
 	stage: PlanningStageDefinition,
 	view: TaskView,
 	documentFiles: readonly string[],
-): string {
+): string | undefined {
 	if (
 		stage.requiresAcceptanceCriteria &&
 		view.task.acceptanceCriteria.length === 0
@@ -168,6 +178,10 @@ export function assertStageArtifactState(
 	}
 
 	const expectedDoc = stage.artifact;
+	if (expectedDoc === undefined) {
+		return undefined;
+	}
+
 	const attachedReferences = view.task.documentation.map((reference) =>
 		basename(reference),
 	);
@@ -200,12 +214,15 @@ export async function assertPlanningStageCompleted(
 	expectedBranch: ExpectedBranch = "main",
 ): Promise<{
 	taskState: string;
-	artifact: { path: string; content: string };
+	artifact: { path: string; content: string } | undefined;
 }> {
 	await assertWorkspaceCleanAt(targetDir, taskSha, expectedBranch);
 	const { output, view } = taskState;
 	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
+	if (artifactFile === undefined) {
+		return { taskState: output, artifact: undefined };
+	}
 	const artifactPath = join("backlog", "docs", artifactFile);
 
 	return {

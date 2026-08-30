@@ -722,13 +722,11 @@ describe(validateCalibration.name, () => {
 });
 
 describe("the default pipeline", () => {
-	it("hardens the design before planning and building", async () => {
+	it("shapes the task before building it", async () => {
 		const definition = await loadDefaultPipeline();
 
 		expect(definition.stages.map(({ name }) => name)).toEqual([
-			"discuss",
-			"grill",
-			"plan",
+			"shape",
 			"build",
 		]);
 	});
@@ -950,6 +948,24 @@ describe(assertStageArtifactState.name, () => {
 		rubric: "rubrics/plan.json",
 		requiresAcceptanceCriteria: false,
 	} as const;
+
+	it("requires no document from a stage that declares no artifact", () => {
+		const { artifact: _artifact, ...cardOnlyStage } = planStage;
+
+		expect(assertStageArtifactState(cardOnlyStage, view, [])).toBeUndefined();
+	});
+
+	it("still requires acceptance criteria from a stage without an artifact", () => {
+		const { artifact: _artifact, ...cardOnlyStage } = planStage;
+
+		expect(() =>
+			assertStageArtifactState(
+				{ ...cardOnlyStage, requiresAcceptanceCriteria: true },
+				{ task: { acceptanceCriteria: [], documentation: [] } },
+				[],
+			),
+		).toThrow("without acceptance criteria");
+	});
 
 	it("rejects a stage that requires acceptance criteria and has none", () => {
 		expect(() =>
@@ -1239,7 +1255,7 @@ describe(applyAuthoritativeStageResults.name, () => {
 
 	it("forces a malformed stage delivery to F", async () => {
 		const rubric = parseStageRubric(
-			await Bun.file(join(import.meta.dir, "rubrics", "discuss.json")).text(),
+			await Bun.file(join(import.meta.dir, "rubrics", "shape.json")).text(),
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("discuss", {
@@ -1597,13 +1613,13 @@ describe(runGradedStages.name, () => {
 
 		const outcome = await runGradedStages(dependencies, context);
 
-		expect(executed).toEqual(["discuss", "grill", "plan", "build"]);
+		expect(executed).toEqual(["shape", "build"]);
 		expect(judged[1]?.priorArtifacts.map(({ path }) => path)).toEqual([
-			"backlog/docs/discuss.md",
+			"backlog/docs/shape.md",
 		]);
-		expect(judged[3]?.diff).toBe("the-diff");
+		expect(judged[1]?.diff).toBe("the-diff");
 		expect(outcome.buildEvidence?.resultSha).toBe("result-sha");
-		expect(outcome.workflow).toHaveLength(4);
+		expect(outcome.workflow).toHaveLength(2);
 	});
 
 	function planningStage(
@@ -1628,14 +1644,15 @@ describe(runGradedStages.name, () => {
 		rubric: "rubrics/build.json",
 	};
 
-	it("executes a pipeline with plan removed and carries grill forward", async () => {
+	it("carries every earlier artifact through a multi-stage pipeline", async () => {
 		const { dependencies, judged, executed } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
-					planningStage("discuss", "spec", "rubrics/discuss.json"),
-					planningStage("grill", "grilled", "rubrics/grill.json"),
+					planningStage("discuss", "spec", "rubrics/shape.json"),
+					planningStage("grill", "grilled", "rubrics/shape.json"),
 					deliveryStage,
 				],
 			},
@@ -1650,15 +1667,16 @@ describe(runGradedStages.name, () => {
 		]);
 	});
 
-	it("executes a pipeline with grill and plan swapped", async () => {
+	it("executes stages in their declared order, not a known one", async () => {
 		const { dependencies, executed } = fakeStageDependencies();
 		const context = {
 			...(await stageContext()),
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
-					planningStage("discuss", "spec", "rubrics/discuss.json"),
-					planningStage("plan", "plan", "rubrics/plan.json"),
-					planningStage("grill", "grilled", "rubrics/grill.json"),
+					planningStage("discuss", "spec", "rubrics/shape.json"),
+					planningStage("plan", "plan", "rubrics/shape.json"),
+					planningStage("grill", "grilled", "rubrics/shape.json"),
 					deliveryStage,
 				],
 			},
@@ -1674,13 +1692,14 @@ describe(runGradedStages.name, () => {
 		const context = {
 			...(await stageContext()),
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "research",
 						kind: "planning" as const,
 						skill: "discuss",
 						artifact: "findings",
-						rubric: "rubrics/discuss.json",
+						rubric: "rubrics/shape.json",
 						requiresAcceptanceCriteria: false,
 					},
 					deliveryStage,
@@ -1707,10 +1726,11 @@ describe(runGradedStages.name, () => {
 		const context = {
 			...(await stageContext()),
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
-					planningStage("discuss", "spec", "rubrics/discuss.json"),
-					planningStage("research", "findings", "rubrics/grill.json"),
-					planningStage("plan", "plan", "rubrics/plan.json"),
+					planningStage("discuss", "spec", "rubrics/shape.json"),
+					planningStage("research", "findings", "rubrics/shape.json"),
+					planningStage("plan", "plan", "rubrics/shape.json"),
 					deliveryStage,
 				],
 			},
@@ -1720,7 +1740,7 @@ describe(runGradedStages.name, () => {
 
 		expect(executed).toEqual(["discuss", "research", "plan", "build"]);
 		expect(judged[1]?.stage).toBe("research");
-		expect(rubricsUsed[1]?.endsWith("rubrics/grill.json")).toBe(true);
+		expect(rubricsUsed[1]?.endsWith("rubrics/shape.json")).toBe(true);
 	});
 
 	it("writes a checkpoint for every accepted stage and chains lineage", async () => {
@@ -1735,9 +1755,7 @@ describe(runGradedStages.name, () => {
 		const outcome = await runGradedStages(dependencies, context);
 
 		expect(outcome.checkpoints.map(({ stage }) => stage)).toEqual([
-			"discuss",
-			"grill",
-			"plan",
+			"shape",
 			"build",
 		]);
 		expect(outcome.checkpoints[0]?.upstream).toBe(context.initialLineage);
@@ -1745,9 +1763,9 @@ describe(runGradedStages.name, () => {
 			outcome.checkpoints[0]?.lineage,
 		);
 		expect(outcome.checkpoints[0]?.targetSha).toBe("task-sha");
-		expect(outcome.checkpoints[3]?.targetSha).toBe("result-sha");
+		expect(outcome.checkpoints[1]?.targetSha).toBe("result-sha");
 		expect(outcome.checkpoints[0]?.artifacts.map(({ path }) => path)).toEqual([
-			"backlog/docs/discuss.md",
+			"backlog/docs/shape.md",
 		]);
 		for (const record of outcome.checkpoints) {
 			const written: unknown = JSON.parse(
@@ -1785,7 +1803,7 @@ describe(runGradedStages.name, () => {
 				},
 			) =>
 				Promise.resolve(
-					scorecardFor(input, input.stage === "grill" ? "STOP" : "CONTINUE"),
+					scorecardFor(input, input.stage === "build" ? "STOP" : "CONTINUE"),
 				),
 		};
 
@@ -1795,12 +1813,12 @@ describe(runGradedStages.name, () => {
 
 		expect(
 			await Bun.file(
-				join(context.checkpointDirectory("discuss"), "checkpoint.json"),
+				join(context.checkpointDirectory("shape"), "checkpoint.json"),
 			).exists(),
 		).toBe(true);
 		expect(
 			await Bun.file(
-				join(context.checkpointDirectory("grill"), "checkpoint.json"),
+				join(context.checkpointDirectory("build"), "checkpoint.json"),
 			).exists(),
 		).toBe(false);
 	});
@@ -1855,16 +1873,10 @@ describe(runGradedStages.name, () => {
 		await runGradedStages(timed, await stageContext());
 
 		expect(log).toEqual([
-			"resolve:discuss",
-			"resolve:grill",
-			"resolve:plan",
+			"resolve:shape",
 			"resolve:build",
-			"corpus:discuss",
-			"run:discuss",
-			"corpus:grill",
-			"run:grill",
-			"corpus:plan",
-			"run:plan",
+			"corpus:shape",
+			"run:shape",
 			"corpus:build",
 			"run:build",
 		]);
@@ -1891,7 +1903,7 @@ describe(runGradedStages.name, () => {
 				judged.push(input);
 
 				return Promise.resolve(
-					scorecardFor(input, input.stage === "grill" ? "STOP" : "CONTINUE"),
+					scorecardFor(input, input.stage === "shape" ? "STOP" : "CONTINUE"),
 				);
 			},
 		};
@@ -1903,7 +1915,7 @@ describe(runGradedStages.name, () => {
 				return Promise.resolve({
 					humanReview: {
 						verdict: "REJECT",
-						summary: "The grill stage failed.",
+						summary: "The shape stage failed.",
 						findings: [],
 					},
 					instructionsChanged: false,
@@ -1916,16 +1928,16 @@ describe(runGradedStages.name, () => {
 		const outcome = runGradedStages(failing, calibrating);
 
 		expect(outcome).rejects.toThrow("minimum grade is B");
-		expect(executed).toEqual(["discuss", "grill"]);
+		expect(executed).toEqual(["shape"]);
 		expect(calibrations).toBe(1);
-		const grillRecord = z
+		const stageRecord = z
 			.looseObject({
 				calibration: z.looseObject({
 					humanReview: z.looseObject({ verdict: z.string() }),
 				}),
 			})
-			.parse(JSON.parse(await Bun.file(calibrating.stageFile("grill")).text()));
-		expect(grillRecord.calibration.humanReview.verdict).toBe("REJECT");
+			.parse(JSON.parse(await Bun.file(calibrating.stageFile("shape")).text()));
+		expect(stageRecord.calibration.humanReview.verdict).toBe("REJECT");
 	});
 });
 
@@ -2058,7 +2070,10 @@ describe(runBenchmark.name, () => {
 		const absolutePipeline = join(import.meta.dir, badPipeline);
 		await Bun.write(
 			absolutePipeline,
-			JSON.stringify({ stages: [{ name: "discuss", kind: "planning" }] }),
+			JSON.stringify({
+				statuses: ["To Do", "Done"],
+				stages: [{ name: "discuss", kind: "planning" }],
+			}),
 		);
 
 		try {
@@ -2142,13 +2157,14 @@ describe(buildRunArtifact.name, () => {
 		await Bun.write(
 			absolute,
 			JSON.stringify({
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "sketch",
 						kind: "planning",
 						skill: "discuss",
 						artifact: "backlog/docs/sketch.md",
-						rubric: "rubrics/discuss.json",
+						rubric: "rubrics/shape.json",
 					},
 					{
 						name: "build",
@@ -2184,9 +2200,7 @@ describe(buildRunArtifact.name, () => {
 
 		expect(artifact.pipelinePath).toBe("pipelines/default.json");
 		expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
-			"discuss",
-			"grill",
-			"plan",
+			"shape",
 			"build",
 		]);
 	});
@@ -2237,12 +2251,13 @@ describe(loadPipeline.name, () => {
 		await Bun.write(
 			absolute,
 			JSON.stringify({
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "ship",
 						kind: "delivery",
 						skill: "build",
-						rubric: "rubrics/discuss.json",
+						rubric: "rubrics/shape.json",
 					},
 				],
 			}),
@@ -2830,7 +2845,7 @@ describe(parsePipeline.name, () => {
 	}
 
 	function pipeline(stages: readonly unknown[]): string {
-		return JSON.stringify({ stages });
+		return JSON.stringify({ statuses: ["To Do", "Done"], stages });
 	}
 
 	const availableRubrics = [
@@ -3303,6 +3318,7 @@ describe(loadRunManifest.name, () => {
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "discuss",
@@ -3375,8 +3391,11 @@ describe(initialCheckpointInputs.name, () => {
 		expect(inputs.effort).toBe("high");
 	});
 
-	it("omits effort when the run declared none", () => {
-		expect("effort" in initialCheckpointInputs(root, "sonnet")).toBe(false);
+	it("serializes without an effort key when the run declared none", () => {
+		const inputs = initialCheckpointInputs(root, "sonnet");
+
+		expect(inputs.effort).toBeUndefined();
+		expect(JSON.stringify(inputs)).not.toContain('"effort"');
 	});
 });
 
@@ -3458,6 +3477,7 @@ describe(resolveReplay.name, () => {
 			sessionBudgetUsd: 5,
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "discuss",
@@ -3638,6 +3658,7 @@ describe(runReplay.name, () => {
 			sessionBudgetUsd: 5,
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "discuss",
@@ -4059,13 +4080,14 @@ describe(runReplay.name, () => {
 			sessionBudgetUsd: 5,
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
+				statuses: ["To Do", "Done"],
 				stages: [
 					{
 						name: "discuss",
 						kind: "planning",
 						skill: "discuss",
 						artifact: "spec",
-						rubric: "rubrics/discuss.json",
+						rubric: "rubrics/shape.json",
 						requiresAcceptanceCriteria: false,
 					},
 					{
@@ -4137,7 +4159,7 @@ describe(runReplay.name, () => {
 							kind: "planning",
 							skill: "discuss",
 							artifact: "spec",
-							rubric: "rubrics/discuss.json",
+							rubric: "rubrics/shape.json",
 							requiresAcceptanceCriteria: false,
 						},
 					);

@@ -5,8 +5,8 @@
 			"description": "FAIL when harness validation shows that the stage did not leave the required committed repository state."
 		},
 		{
-			"id": "spec-or-plan-violation",
-			"description": "FAIL when the implementation contradicts an accepted requirement or material plan decision."
+			"id": "spec-violation",
+			"description": "FAIL when the implementation contradicts a recorded acceptance criterion or confirmed Product Owner decision."
 		},
 		{
 			"id": "prohibited-technology",
@@ -24,11 +24,7 @@
 	"requirements": [
 		{
 			"id": "requirements-implemented",
-			"description": "Implement every accepted requirement without unrelated scope."
-		},
-		{
-			"id": "plan-conformance",
-			"description": "Follow the approved design and task sequence, recording justified deviations."
+			"description": "Implement every recorded acceptance criterion without unrelated scope."
 		},
 		{
 			"id": "behavior-tests",
@@ -39,16 +35,26 @@
 			"description": "Complete required persistence, migration, queue, worker, HTTP, and application wiring."
 		},
 		{
-			"id": "acceptance-evidence",
-			"description": "Provide objective passing evidence for every acceptance criterion and authoritative local check."
+			"id": "observed-result",
+			"description": "Record one direct observation of the delivered behavior running, beyond a passing test suite."
+		},
+		{
+			"id": "handoff-recorded",
+			"description": "Write onto the task record what changed, what was observed and how, what was not verified, and anything left unwired or deferred."
 		}
 	],
 	"dimensions": [
 		{
 			"id": "correctness",
-			"description": "How completely and accurately the implementation realizes the accepted behavior.",
+			"description": "How completely and accurately the implementation realizes the recorded acceptance behavior.",
 			"good": "B requires all specified behavior to work with no known material defect.",
-			"excellent": "A requires complete behavior with robust handling of the approved edge and failure cases."
+			"excellent": "A requires complete behavior with robust handling of the recorded edge and failure cases."
+		},
+		{
+			"id": "delivery-discipline",
+			"description": "How the work advances: test first, small verified steps, each commit a safe unit of progress.",
+			"good": "B requires small coherent commits whose tests cover the behavior they introduce.",
+			"excellent": "A requires a commit sequence where each step is independently revertable and the tests visibly drove the design."
 		},
 		{
 			"id": "maintainability",

@@ -1,26 +1,12 @@
 {
+	"statuses": ["To Do", "Shape", "Build", "Review", "Ship", "Done"],
 	"stages": [
 		{
-			"name": "discuss",
+			"name": "shape",
 			"kind": "planning",
-			"skill": "discuss",
-			"artifact": "spec",
-			"rubric": "rubrics/discuss.json",
+			"skill": "shape",
+			"rubric": "rubrics/shape.json",
 			"requiresAcceptanceCriteria": true
-		},
-		{
-			"name": "grill",
-			"kind": "planning",
-			"skill": "grill",
-			"artifact": "grilled",
-			"rubric": "rubrics/grill.json"
-		},
-		{
-			"name": "plan",
-			"kind": "planning",
-			"skill": "plan",
-			"artifact": "plan",
-			"rubric": "rubrics/plan.json"
 		},
 		{
 			"name": "build",

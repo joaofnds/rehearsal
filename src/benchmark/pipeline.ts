@@ -25,7 +25,7 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 			name: identifierSchema,
 			kind: z.literal("planning"),
 			skill: identifierSchema,
-			artifact: z.string().min(1),
+			artifact: z.string().min(1).optional(),
 			rubric: z.string().min(1),
 			requiresAcceptanceCriteria: z.boolean().default(false),
 		})
@@ -41,6 +41,7 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const pipelineDefinitionSchema = z.object({
+	statuses: z.array(z.string().min(1)).min(1),
 	stages: z.array(stageDefinitionSchema).min(1),
 });
 
@@ -92,13 +93,13 @@ export function parsePipeline(
 	const parsed = pipelineDefinitionSchema.safeParse(document);
 	if (!parsed.success) {
 		const [issue] = parsed.error.issues;
-		const [, indexCandidate, ...rest] = issue?.path ?? [];
+		const [head, indexCandidate, ...rest] = issue?.path ?? [];
 		const message = issue?.message ?? "invalid definition";
 
 		const index = z.int().safeParse(indexCandidate);
-		if (!index.success) {
+		if (head !== "stages" || !index.success) {
 			throw new PipelineDefinitionError(
-				`Pipeline definition has an invalid stages list: ${message}`,
+				`Pipeline definition has an invalid ${String(head ?? "definition")}: ${message}`,
 			);
 		}
 

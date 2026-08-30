@@ -1,0 +1,72 @@
+{
+	"hardBlockers": [
+		{
+			"id": "invalid-stage-delivery",
+			"description": "FAIL when harness validation shows that the stage did not leave the required task state or valid repository state."
+		},
+		{
+			"id": "contradicts-source",
+			"description": "FAIL when the shaped task contradicts the feature request, product brief, or confirmed Product Owner decisions."
+		},
+		{
+			"id": "material-decision-open",
+			"description": "FAIL when a product decision that materially changes scope or observable behavior remains unresolved while the stage claims completion."
+		},
+		{
+			"id": "invented-scope",
+			"description": "FAIL when the shaped task adds material scope without an explicit requirement or Product Owner decision."
+		},
+		{
+			"id": "implementation-started",
+			"description": "FAIL when the stage wrote or changed application code instead of shaping the task."
+		}
+	],
+	"requirements": [
+		{
+			"id": "goal-stated",
+			"description": "The task record states the goal of the work in one clear sentence."
+		},
+		{
+			"id": "acceptance-observations",
+			"description": "Acceptance criteria are stated as directly observable outcomes: a test that will pass, a command with its expected output, or a screen in a state; never a bare claim that something works."
+		},
+		{
+			"id": "unknowns-resolved",
+			"description": "Every material unknown was surfaced as a product decision with a recommendation, and each resolution is recorded on the task; when nothing needed asking, no questions were manufactured."
+		},
+		{
+			"id": "behavior-contract",
+			"description": "The recorded acceptance covers the required success, rejection, and failure behavior of the feature."
+		},
+		{
+			"id": "first-test-named",
+			"description": "The task record names the first test the delivery stage will write."
+		}
+	],
+	"dimensions": [
+		{
+			"id": "decision-quality",
+			"description": "How well unknowns are framed as product decisions rather than implementation choices, with sound recommendations.",
+			"good": "B requires each question to be a genuine product decision carrying a defensible recommendation.",
+			"excellent": "A requires questions ordered by architectural consequence, each answerable without reading code, with recommendations grounded in the brief."
+		},
+		{
+			"id": "observability",
+			"description": "How precisely the acceptance criteria pin observable behavior, including edge and failure paths.",
+			"good": "B requires criteria a fresh session could verify without interpretation.",
+			"excellent": "A requires criteria that also pin boundary and failure behavior so the delivery cannot pass while materially incomplete."
+		},
+		{
+			"id": "scope-discipline",
+			"description": "How tightly the shaped task holds the smallest coherent scope with explicit exclusions.",
+			"good": "B requires no invented scope and a clear boundary around the work.",
+			"excellent": "A requires adjacent behavior that could be inferred to be explicitly included or excluded, with the reasoning recorded."
+		},
+		{
+			"id": "carry-forward",
+			"description": "How completely the task record alone equips a fresh session to build.",
+			"good": "B requires the record to stand alone without this stage's conversation.",
+			"excellent": "A requires the record to also settle the language, note what is deliberately unplanned, and leave no question a builder would need answered."
+		}
+	]
+}
