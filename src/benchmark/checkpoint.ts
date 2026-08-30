@@ -145,7 +145,13 @@ export function hashArtifacts(
 }
 
 const hashedFileSchema = z.object({
-	path: z.string().min(1),
+	path: z
+		.string()
+		.min(1)
+		.refine(
+			(path) => !path.startsWith("/") && !path.split("/").includes(".."),
+			"must be a relative path without traversal",
+		),
 	sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
@@ -246,21 +252,38 @@ export async function materializeCheckpoint(
 		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
 	);
 
+	// The snapshot must match the record exactly — a modified, missing, or
+	// planted file all void it — and nothing is copied until it does.
+	const snapshot = join(directory, SNAPSHOT_DIRECTORY);
+	const recorded = new Map(
+		record.workflowState.map(({ path, sha256 }) => [path, sha256]),
+	);
+	for (const { path, sha256 } of await hashWorkflowState(snapshot)) {
+		const expected = recorded.get(path);
+		if (expected === undefined) {
+			throw new Error(
+				`Checkpoint snapshot does not match its record: ${path} is not recorded`,
+			);
+		}
+		if (sha256 !== expected) {
+			throw new Error(
+				`Checkpoint snapshot does not match its record: ${path} hashes ${sha256}, recorded ${expected}`,
+			);
+		}
+
+		recorded.delete(path);
+	}
+	const missing = recorded.keys().next();
+	if (!missing.done) {
+		throw new Error(
+			`Checkpoint snapshot does not match its record: ${missing.value} is recorded but missing`,
+		);
+	}
+
 	// Whole trees, not the recorded files one by one: the workflow tools
 	// expect their empty directories (backlog/docs, backlog/drafts, ...) to
 	// exist, and only a tree copy carries them.
-	await copyWorkflowTrees(join(directory, SNAPSHOT_DIRECTORY), destination);
-
-	for (const { path, sha256: expected } of record.workflowState) {
-		const actual = await hashFile(join(destination, path)).catch(
-			() => "missing",
-		);
-		if (actual !== expected) {
-			throw new Error(
-				`Checkpoint snapshot does not match its record: ${path} hashes ${actual}, recorded ${expected}`,
-			);
-		}
-	}
+	await copyWorkflowTrees(snapshot, destination);
 
 	return record;
 }

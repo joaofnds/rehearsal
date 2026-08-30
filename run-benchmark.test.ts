@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -2867,7 +2867,7 @@ describe(recordCheckpoint, () => {
 		).toBe(true);
 	});
 
-	it("refuses to materialize a tampered snapshot", async () => {
+	it("refuses to materialize a tampered snapshot, copying nothing", async () => {
 		const { targetDir, checkpointDir, destination } = await checkpointFixture();
 		await recordCheckpoint(targetDir, checkpointDir, checkpointInputs);
 		await Bun.write(
@@ -2879,6 +2879,46 @@ describe(recordCheckpoint, () => {
 		await expect(
 			materializeCheckpoint(checkpointDir, destination),
 		).rejects.toThrow(/backlog\/config.yml/);
+		expect(await readdir(destination)).toEqual([]);
+	});
+
+	it("refuses a snapshot carrying a file the record does not list", async () => {
+		const { targetDir, checkpointDir, destination } = await checkpointFixture();
+		await recordCheckpoint(targetDir, checkpointDir, checkpointInputs);
+		await Bun.write(
+			join(checkpointDir, "workflow-state", "backlog", "planted.md"),
+			"planted\n",
+		);
+		await mkdir(destination, { recursive: true });
+
+		await expect(
+			materializeCheckpoint(checkpointDir, destination),
+		).rejects.toThrow(/backlog\/planted.md/);
+		expect(await readdir(destination)).toEqual([]);
+	});
+
+	it("refuses a record whose paths escape the destination", async () => {
+		const { targetDir, checkpointDir, destination } = await checkpointFixture();
+		const record = await recordCheckpoint(
+			targetDir,
+			checkpointDir,
+			checkpointInputs,
+		);
+		await Bun.write(
+			join(checkpointDir, "checkpoint.json"),
+			JSON.stringify({
+				...record,
+				workflowState: [
+					{ path: "../../../etc/hosts", sha256: "aa11".repeat(16) },
+				],
+			}),
+		);
+		await mkdir(destination, { recursive: true });
+
+		await expect(
+			materializeCheckpoint(checkpointDir, destination),
+		).rejects.toThrow();
+		expect(await readdir(destination)).toEqual([]);
 	});
 
 	it("fails on an unreadable workflow path instead of recording it absent", async () => {
@@ -2905,10 +2945,7 @@ describe(recordCheckpoint, () => {
 			],
 		});
 
-		expect(record.artifacts.map(({ path }) => path)).toEqual([
-			"B.md",
-			"a.md",
-		]);
+		expect(record.artifacts.map(({ path }) => path)).toEqual(["B.md", "a.md"]);
 	});
 
 	it("snapshots only the workflow paths that exist", async () => {
