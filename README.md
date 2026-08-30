@@ -16,7 +16,8 @@ One run uses:
 rehearsal/CLAUDE.md       project instructions under evaluation
 rehearsal/backlog-seed.md known feature request
 rehearsal/product-brief.md stable product facts available to the PO
-rehearsal/rubrics/*.json  stage-specific process-quality rubrics
+rehearsal/pipelines/*.json which stages run, in what order, with what rubric
+rehearsal/rubrics/*.json  process-quality rubrics a stage adopts
 rehearsal/rubric.md       external binary acceptance rubric
 target repository            real application and real main branch
 installed Claude skills      discuss, grill, plan, and build
@@ -83,6 +84,8 @@ validate and record calibration
         v
 reset main to the original SHA and restore workflow artifacts
 ```
+
+The stages above are the default pipeline, declared in `pipelines/default.json` and selected with `--pipeline`. A definition names each stage, its kind, its skill, the artifact it must leave, and the rubric its Judge applies, so stages can be added, removed, or reordered without changing the harness. A pipeline must declare exactly one delivery stage and place it last.
 
 The installed skills currently require Grill before Plan: Grill hardens the approach, Plan writes that ratified approach for a cold Build session, and Build consumes the plan. Running Plan before Grill would leave Build with a stale plan.
 
@@ -294,7 +297,8 @@ bun run benchmark \
   --target /Users/joaofnds/code/nest/template \
   --model sonnet \
   --effort high \
-  --session-budget-usd 10
+  --session-budget-usd 10 \
+  --pipeline pipelines/default.json
 ```
 
 Equivalent environment variables are available:
@@ -304,10 +308,13 @@ export BENCHMARK_TARGET_DIR=/Users/joaofnds/code/nest/template
 export BENCHMARK_MODEL=sonnet
 export BENCHMARK_EFFORT=high
 export BENCHMARK_SESSION_BUDGET_USD=10
+export BENCHMARK_PIPELINE=pipelines/default.json
 bun run benchmark
 ```
 
-`--model` and `--effort` apply to Discuss, Grill, Plan, Build, and the shared PO. Judge defaults to the same values. Override it with `--judge-model` and `--judge-effort`, or `BENCHMARK_JUDGE_MODEL` and `BENCHMARK_JUDGE_EFFORT`.
+`--pipeline` selects the pipeline definition and defaults to `pipelines/default.json`. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
+
+`--model` and `--effort` apply to every engineering stage and the shared PO. Judge defaults to the same values. Override it with `--judge-model` and `--judge-effort`, or `BENCHMARK_JUDGE_MODEL` and `BENCHMARK_JUDGE_EFFORT`.
 
 Native Claude model aliases such as `sonnet` and `opus` are accepted. Use a full model ID only when a comparison must remain pinned to one exact model release. Supported effort values are `low`, `medium`, `high`, `xhigh`, and `max`.
 
