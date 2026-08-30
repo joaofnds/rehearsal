@@ -12,6 +12,9 @@
   the installed `CLAUDE.md`, the stage skills, and related agent configuration.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
+- **Delivery stage** — a stage whose artifact is committed code; its
+  evidence is a diff, changed paths, check integrity, and local check results.
+  Today, `build`.
 - **End-to-end mode** — running the whole pipeline and judging only the final
   code; the integration test.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
@@ -20,6 +23,12 @@
   checkpoint, corpus files feeding the stage, model, effort.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
   data.
+- **Pipeline definition** — the declared, user-authored data the harness reads
+  to know which stages to run, in what order, and with what skill, expected
+  artifact, and rubric.
+- **Planning stage** — a stage whose artifact is a durable document attached to
+  the backlog card; it is carried forward as a prior artifact to later stages.
+  Today, `discuss`, `grill`, and `plan`.
 - **Product Owner (PO)** — the dynamic agent that answers stage questions from
   the product brief; one session per run.
 - **Rep** — one repetition of a run; scores are distributions over reps, never
@@ -33,6 +42,8 @@
   judges.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own.
+- **Stage kind** — which validation and evidence strategy a stage uses:
+  planning or delivery. Declared per stage, independent of the stage's name.
 - **Stage mode** — running one stage against frozen upstream artifacts; the
   unit test, with clean attribution and a proxy score.
 - **Target repository (template project)** — the real application repository,
