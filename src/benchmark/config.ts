@@ -17,12 +17,12 @@ export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
 export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
 export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 
-export const WORKFLOW_STAGES = ["discuss", "grill", "plan", "build"] as const;
+export const DEFAULT_PIPELINE_PATH = "pipelines/default.json";
 
 export const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 
 export type Effort = z.infer<typeof effortSchema>;
-export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
+export type WorkflowStage = string;
 
 export interface BenchmarkConfig {
 	readonly sourceDir: string;
@@ -31,6 +31,7 @@ export interface BenchmarkConfig {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort;
 	readonly sessionBudgetUsd: number;
+	readonly pipelinePath: string;
 }
 
 export function parseArgs(
@@ -88,6 +89,10 @@ export function parseArgs(
 		judgeModel,
 		judgeEffort,
 		sessionBudgetUsd,
+		pipelinePath:
+			values.get("--pipeline") ??
+			env.BENCHMARK_PIPELINE ??
+			DEFAULT_PIPELINE_PATH,
 	};
 }
 

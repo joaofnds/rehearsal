@@ -21,7 +21,6 @@ import {
 	type BenchmarkConfig,
 	CONTROL_DIR,
 	type Effort,
-	WORKFLOW_STAGES,
 	type WorkflowStage,
 } from "./config";
 import type {
@@ -34,9 +33,11 @@ import type {
 	StageTranscript,
 } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
+import { loadPipeline, type PipelineDefinition } from "./pipeline";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
+	loadStageRubric,
 	runStageJudge,
 } from "./stage-grading";
 import {
@@ -117,6 +118,7 @@ export interface StageContext {
 	readonly baselineHashes: ReadonlyMap<string, string>;
 	readonly taskId: string;
 	readonly taskSha: string;
+	readonly pipeline: PipelineDefinition;
 	readonly stageFile: (stage: WorkflowStage) => string;
 	readonly log: (message: string) => void;
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
@@ -140,7 +142,8 @@ export async function runGradedStages(
 	const stageArtifacts: ContextFile[] = [];
 	let buildEvidence: BuildEvidence | undefined;
 
-	for (const stage of WORKFLOW_STAGES) {
+	for (const definition of context.pipeline.stages) {
+		const stage = definition.name;
 		context.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 		const transcript = await dependencies.runWorkflowStage(
 			context.targetDir,
@@ -152,7 +155,7 @@ export async function runGradedStages(
 			context.task,
 			context.productBrief,
 			context.taskId,
-			stage,
+			definition.skill,
 		);
 		workflow.push(transcript);
 
@@ -161,7 +164,7 @@ export async function runGradedStages(
 			context.taskId,
 		);
 		const buildCandidate =
-			stage === "build"
+			definition.kind === "delivery"
 				? await dependencies.captureBuildCandidate(
 						context.targetDir,
 						context.taskSha,
@@ -169,6 +172,7 @@ export async function runGradedStages(
 				: undefined;
 		const baseInput: StageJudgeInput = {
 			stage,
+			kind: definition.kind,
 			task: context.task,
 			productBrief: context.productBrief,
 			instructions: context.instructions,
@@ -180,12 +184,12 @@ export async function runGradedStages(
 			changedPaths: buildCandidate?.changedPaths,
 		};
 		const input = await captureStageJudgeInput(baseInput, async () => {
-			if (stage !== "build") {
+			if (definition.kind === "planning") {
 				const currentTask = parseTaskState(currentTaskOutput);
 				const planning = await dependencies.assertPlanningStageCompleted(
 					context.targetDir,
 					context.taskSha,
-					stage,
+					definition,
 					currentTask,
 				);
 				stageArtifacts.push(planning.artifact);
@@ -245,6 +249,7 @@ export async function runGradedStages(
 			context.judgeEffort,
 			context.sessionBudgetUsd,
 			input,
+			await loadStageRubric(definition),
 		);
 		context.trackPendingStage(undefined);
 		stageScorecards.push(scorecard);
@@ -264,6 +269,7 @@ export async function runGradedStages(
 }
 
 export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
+	const pipeline = await loadPipeline(config.pipelinePath);
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
 	const workflowBackup = await captureWorkflowBackup(source.root);
@@ -395,6 +401,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 				baselineHashes,
 				taskId,
 				taskSha,
+				pipeline,
 				stageFile: runFiles.stage,
 				log: console.log,
 				trackPendingStage: (pending) => {

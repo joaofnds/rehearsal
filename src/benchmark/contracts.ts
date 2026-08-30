@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Effort, WorkflowStage } from "./config";
+import type { StageKind } from "./pipeline";
 
 export const evidenceSchema = z.object({
 	source: z.enum(["diff", "baseline-context", "local-checks"]),
@@ -45,7 +46,7 @@ const stageRubricItemSchema = z.object({
 });
 
 export const stageRubricSchema = z.object({
-	stage: z.enum(["discuss", "grill", "plan", "build"]),
+	stage: z.string().min(1),
 	hardBlockers: z.array(stageRubricItemSchema),
 	requirements: z.array(stageRubricItemSchema).min(1),
 	dimensions: z
@@ -102,9 +103,7 @@ export const humanFindingSchema = z
 	.object({
 		description: z.string().min(1),
 		paths: z.array(z.string().min(1)),
-		stage: z
-			.enum(["discuss", "grill", "plan", "build", "final"])
-			.default("final"),
+		stage: z.string().min(1).default("final"),
 		judgeAssessment: z.enum([
 			"CAUGHT",
 			"MISSED",
@@ -173,6 +172,7 @@ export interface StageTranscript {
 
 export interface StageJudgeInput {
 	readonly stage: WorkflowStage;
+	readonly kind: StageKind;
 	readonly task: string;
 	readonly productBrief: string;
 	readonly instructions: string;

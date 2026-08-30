@@ -1,4 +1,7 @@
+import { readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { z } from "zod";
+import { CONTROL_DIR } from "./config";
 
 const stageDefinitionSchema = z.discriminatedUnion("kind", [
 	z.object({
@@ -7,6 +10,7 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 		skill: z.string().min(1),
 		artifact: z.string().min(1),
 		rubric: z.string().min(1),
+		requiresAcceptanceCriteria: z.boolean().default(false),
 	}),
 	z.object({
 		name: z.string().min(1),
@@ -21,6 +25,11 @@ const pipelineDefinitionSchema = z.object({
 });
 
 export type StageDefinition = z.infer<typeof stageDefinitionSchema>;
+export type StageKind = StageDefinition["kind"];
+export type PlanningStageDefinition = Extract<
+	StageDefinition,
+	{ kind: "planning" }
+>;
 export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
 
 export class PipelineDefinitionError extends Error {}
@@ -109,4 +118,24 @@ export function parsePipeline(
 	}
 
 	return parsed.data;
+}
+
+export async function loadPipeline(
+	pipelinePath: string,
+): Promise<PipelineDefinition> {
+	const absolutePath = join(CONTROL_DIR, pipelinePath);
+	const file = Bun.file(absolutePath);
+
+	if (!(await file.exists())) {
+		throw new PipelineDefinitionError(
+			`Pipeline definition not found: ${pipelinePath}`,
+		);
+	}
+
+	const rubricsDirectory = join(CONTROL_DIR, "rubrics");
+	const availableRubrics = (await readdir(rubricsDirectory)).map((entry) =>
+		relative(CONTROL_DIR, join(rubricsDirectory, entry)),
+	);
+
+	return parsePipeline(await file.text(), availableRubrics);
 }

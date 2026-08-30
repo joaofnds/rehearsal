@@ -27,11 +27,7 @@ import {
 	killActiveCommands,
 	runCommand,
 } from "./src/benchmark/command";
-import {
-	MAX_CONTEXT_FILE_BYTES,
-	parseArgs,
-	WORKFLOW_STAGES,
-} from "./src/benchmark/config";
+import { MAX_CONTEXT_FILE_BYTES, parseArgs } from "./src/benchmark/config";
 import type {
 	CalibrationResult,
 	HumanReview,
@@ -53,7 +49,7 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
-import { parsePipeline } from "./src/benchmark/pipeline";
+import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
 import { runGradedStages } from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
@@ -113,7 +109,42 @@ describe(parseArgs, () => {
 			judgeModel: "sonnet",
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
 		});
+	});
+
+	it("selects a pipeline definition file", () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+				"--pipeline",
+				"pipelines/three-stage.json",
+			],
+			{},
+		);
+
+		expect(config.pipelinePath).toBe("pipelines/three-stage.json");
+	});
+
+	it("defaults the pipeline to the four-stage definition", () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
+
+		expect(config.pipelinePath).toBe("pipelines/default.json");
 	});
 
 	it("defaults Judge effort to workflow effort", () => {
@@ -402,6 +433,7 @@ describe(collectCalibration, () => {
 			rubric,
 			input: {
 				stage: "discuss",
+				kind: "planning",
 				task: "Task",
 				productBrief: "Brief",
 				instructions: "Instructions",
@@ -558,9 +590,29 @@ describe(validateCalibration, () => {
 	});
 });
 
-describe("workflow stages", () => {
-	it("hardens the design before planning and building", () => {
-		expect(WORKFLOW_STAGES).toEqual(["discuss", "grill", "plan", "build"]);
+describe("the default pipeline", () => {
+	it("hardens the design before planning and building", async () => {
+		const definition = await loadDefaultPipeline();
+
+		expect(definition.stages.map(({ name }) => name)).toEqual([
+			"discuss",
+			"grill",
+			"plan",
+			"build",
+		]);
+	});
+
+	it("names a rubric that parses for every declared stage", async () => {
+		const definition = await loadDefaultPipeline();
+
+		for (const stage of definition.stages) {
+			const content = await Bun.file(
+				join(import.meta.dir, stage.rubric),
+			).text();
+			expect(() =>
+				parseStageRubric(content, stage.name, stage.kind),
+			).not.toThrow();
+		}
 	});
 });
 
@@ -765,10 +817,18 @@ describe(assertStageArtifactState, () => {
 			documentation: ["doc-1", "doc-2", "doc-3"],
 		},
 	};
+	const planStage = {
+		name: "plan",
+		kind: "planning",
+		skill: "plan",
+		artifact: "plan",
+		rubric: "rubrics/plan.json",
+		requiresAcceptanceCriteria: false,
+	} as const;
 
 	it("resolves attached document IDs to titled artifact files", () => {
 		expect(() =>
-			assertStageArtifactState("plan", view, [
+			assertStageArtifactState(planStage, view, [
 				"doc-1 - Asynchronous-audit-log-module-spec.md",
 				"doc-2 - Asynchronous-audit-log-module-grilled.md",
 				"doc-3 - Asynchronous-audit-log-module-plan.md",
@@ -778,14 +838,21 @@ describe(assertStageArtifactState, () => {
 
 	it("rejects an unattached document with the expected suffix", () => {
 		expect(() =>
-			assertStageArtifactState("plan", view, ["doc-4 - Unattached-plan.md"]),
+			assertStageArtifactState(planStage, view, ["doc-4 - Unattached-plan.md"]),
 		).toThrow("without its durable plan document");
 	});
 
 	it("accepts Backlog documentation paths as attachment references", () => {
 		expect(() =>
 			assertStageArtifactState(
-				"discuss",
+				{
+					name: "discuss",
+					kind: "planning",
+					skill: "discuss",
+					artifact: "spec",
+					rubric: "rubrics/discuss.json",
+					requiresAcceptanceCriteria: true,
+				},
 				{
 					task: {
 						acceptanceCriteria: [{}],
@@ -868,15 +935,6 @@ describe(deriveStageGrade, () => {
 		expect(grade.verdict).toBe("STOP");
 	});
 
-	it("loads a complete rubric for every workflow stage", async () => {
-		for (const stage of WORKFLOW_STAGES) {
-			const content = await Bun.file(
-				join(import.meta.dir, "rubrics", `${stage}.json`),
-			).text();
-			expect(() => parseStageRubric(content, stage)).not.toThrow();
-		}
-	});
-
 	it("rejects IDs reused across rubric sections", () => {
 		expect(() =>
 			parseStageRubric(
@@ -904,6 +962,53 @@ describe(deriveStageGrade, () => {
 		).toThrow("IDs must be unique");
 	});
 
+	it("parses a rubric for a stage name absent from the original four", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				stage: "research",
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "sources", description: "Cites sources" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+			"research",
+		);
+
+		expect(rubric.stage).toBe("research");
+	});
+
+	it("requires delivery-only blockers of a delivery stage under any name", () => {
+		expect(() =>
+			parseStageRubric(
+				JSON.stringify({
+					stage: "ship",
+					hardBlockers: [
+						{ id: "invalid-stage-delivery", description: "Valid delivery" },
+					],
+					requirements: [{ id: "scope", description: "Scope" }],
+					dimensions: [
+						{
+							id: "clarity",
+							description: "Clarity",
+							good: "Good",
+							excellent: "Excellent",
+						},
+					],
+				}),
+				"ship",
+				"delivery",
+			),
+		).toThrow("false-test-safety");
+	});
+
 	it("rejects removal of a harness-owned blocker", () => {
 		expect(() =>
 			parseStageRubric(
@@ -927,6 +1032,35 @@ describe(deriveStageGrade, () => {
 });
 
 describe(applyAuthoritativeStageResults, () => {
+	it("forces a delivery stage under any name to F when local checks fail", async () => {
+		const buildRubric = await Bun.file(
+			join(import.meta.dir, "rubrics", "build.json"),
+		).text();
+		const rubric = parseStageRubric(
+			buildRubric.replace('"stage": "build"', '"stage": "ship"'),
+			"ship",
+			"delivery",
+		);
+		const input = {
+			...stageJudgeInput("build", {
+				localChecks: harnessResult("FAIL", "unit tests exited 1"),
+				checkIntegrity: harnessResult("PASS", "check definitions match"),
+			}),
+			stage: "ship",
+			kind: "delivery" as const,
+		};
+
+		const grade = deriveStageGrade(
+			applyAuthoritativeStageResults(passingStageOutput(rubric), input),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(
+			grade.hardBlockers.find(({ id }) => id === "unfinished-delivery")?.status,
+		).toBe("FAIL");
+	});
+
 	it("forces Build to F when local checks fail", async () => {
 		const rubric = parseStageRubric(
 			await Bun.file(join(import.meta.dir, "rubrics", "build.json")).text(),
@@ -1165,6 +1299,7 @@ describe(runGradedStages, () => {
 					],
 				}),
 				input.stage,
+				input.kind,
 			),
 			input,
 			prompt: "prompt",
@@ -1189,7 +1324,7 @@ describe(runGradedStages, () => {
 					_task: string,
 					_productBrief: string,
 					_taskId: string,
-					stage: (typeof WORKFLOW_STAGES)[number],
+					stage: string,
 				) => {
 					executed.push(stage);
 
@@ -1200,6 +1335,7 @@ describe(runGradedStages, () => {
 					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 					_budget: number,
 					input: StageJudgeInput,
+					_source: unknown,
 				) => {
 					judged.push(input);
 
@@ -1217,12 +1353,12 @@ describe(runGradedStages, () => {
 				assertPlanningStageCompleted: async (
 					_targetDir: string,
 					_taskSha: string,
-					stage: string,
+					stage: { name: string },
 				) => ({
-					taskState: `${stage}-state`,
+					taskState: `${stage.name}-state`,
 					artifact: {
-						path: `backlog/docs/${stage}.md`,
-						content: `${stage} artifact`,
+						path: `backlog/docs/${stage.name}.md`,
+						content: `${stage.name} artifact`,
 					},
 				}),
 				assertBuildCommitted: async () => ({
@@ -1255,6 +1391,7 @@ describe(runGradedStages, () => {
 			baselineHashes: new Map<string, string>(),
 			taskId: "TASK-1",
 			taskSha: "task-sha",
+			pipeline: await loadDefaultPipeline(),
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
 			log: () => {},
 			trackPendingStage: () => {},
@@ -1297,6 +1434,7 @@ describe(runGradedStages, () => {
 				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 				_budget: number,
 				input: StageJudgeInput,
+				_source: unknown,
 			) => {
 				judged.push(input);
 
@@ -1723,6 +1861,7 @@ function stageScorecard(
 		rubric,
 		input: {
 			stage: "discuss",
+			kind: "planning",
 			task: "Task",
 			productBrief: "Brief",
 			instructions: "Instructions",
@@ -1790,6 +1929,7 @@ function stageJudgeInput(
 ): StageScorecard["input"] {
 	return {
 		stage,
+		kind: stage === "build" ? "delivery" : "planning",
 		task: "Task",
 		productBrief: "Brief",
 		instructions: "Instructions",
@@ -2005,3 +2145,7 @@ describe(parsePipeline, () => {
 		);
 	});
 });
+
+async function loadDefaultPipeline() {
+	return await loadPipeline("pipelines/default.json");
+}

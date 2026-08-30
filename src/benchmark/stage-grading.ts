@@ -21,6 +21,7 @@ import {
 	stageJudgeOutputSchema,
 	stageRubricSchema,
 } from "./contracts";
+import type { StageDefinition, StageKind } from "./pipeline";
 
 const GRADE_ORDER: readonly StageLetterGrade[] = ["A", "B", "C", "D", "F"];
 
@@ -43,6 +44,7 @@ export async function captureStageJudgeInput(
 export function parseStageRubric(
 	content: string,
 	expectedStage: WorkflowStage,
+	kind: StageKind = "planning",
 ): StageRubric {
 	const rubric = stageRubricSchema.parse(JSON.parse(content));
 	if (rubric.stage !== expectedStage) {
@@ -60,7 +62,7 @@ export function parseStageRubric(
 		throw new Error(`${expectedStage} rubric IDs must be unique`);
 	}
 	const requiredHarnessBlockers =
-		expectedStage === "build"
+		kind === "delivery"
 			? ["invalid-stage-delivery", "false-test-safety", "unfinished-delivery"]
 			: ["invalid-stage-delivery"];
 	const missingHarnessBlockers = requiredHarnessBlockers.filter(
@@ -131,7 +133,7 @@ export function applyAuthoritativeStageResults(
 			},
 		]);
 	}
-	if (input.stage === "build" && input.checkIntegrity?.status === "FAIL") {
+	if (input.kind === "delivery" && input.checkIntegrity?.status === "FAIL") {
 		forcedFailures.set("false-test-safety", [
 			{
 				source: "check-integrity",
@@ -142,7 +144,7 @@ export function applyAuthoritativeStageResults(
 			},
 		]);
 	}
-	if (input.stage === "build" && input.localChecks?.status === "FAIL") {
+	if (input.kind === "delivery" && input.localChecks?.status === "FAIL") {
 		forcedFailures.set("unfinished-delivery", [
 			{
 				source: "local-checks",
@@ -225,14 +227,14 @@ function worstGrade(grades: readonly StageLetterGrade[]): StageLetterGrade {
 	);
 }
 
-export async function loadStageRubric(stage: WorkflowStage) {
-	const rubricPath = join(CONTROL_DIR, "rubrics", `${stage}.json`);
+export async function loadStageRubric(stage: StageDefinition) {
+	const rubricPath = join(CONTROL_DIR, stage.rubric);
 	const content = await Bun.file(rubricPath).text();
 
 	return {
 		rubricPath,
 		content,
-		rubric: parseStageRubric(content, stage),
+		rubric: parseStageRubric(content, stage.name, stage.kind),
 	};
 }
 
@@ -241,9 +243,8 @@ export async function runStageJudge(
 	effort: Effort | undefined,
 	sessionBudgetUsd: number,
 	input: StageJudgeInput,
-	rubricSource?: { rubricPath: string; content: string; rubric: StageRubric },
+	source: { rubricPath: string; content: string; rubric: StageRubric },
 ): Promise<StageScorecard> {
-	const source = rubricSource ?? (await loadStageRubric(input.stage));
 	const judgeDirectory = await mkdtemp(
 		join(tmpdir(), `rehearsal-${input.stage}-judge-`),
 	);

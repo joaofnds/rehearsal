@@ -1,0 +1,32 @@
+{
+	"stages": [
+		{
+			"name": "discuss",
+			"kind": "planning",
+			"skill": "discuss",
+			"artifact": "spec",
+			"rubric": "rubrics/discuss.json",
+			"requiresAcceptanceCriteria": true
+		},
+		{
+			"name": "grill",
+			"kind": "planning",
+			"skill": "grill",
+			"artifact": "grilled",
+			"rubric": "rubrics/grill.json"
+		},
+		{
+			"name": "plan",
+			"kind": "planning",
+			"skill": "plan",
+			"artifact": "plan",
+			"rubric": "rubrics/plan.json"
+		},
+		{
+			"name": "build",
+			"kind": "delivery",
+			"skill": "build",
+			"rubric": "rubrics/build.json"
+		}
+	]
+}

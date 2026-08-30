@@ -2,8 +2,8 @@ import { readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { runCommand } from "./command";
-import type { WorkflowStage } from "./config";
 import { StageValidationError } from "./contracts";
+import type { PlanningStageDefinition } from "./pipeline";
 import { assertWorkspaceCleanAt, git } from "./target";
 
 const taskViewSchema = z
@@ -122,21 +122,20 @@ export function parseTaskState(output: string) {
 }
 
 export function assertStageArtifactState(
-	stage: Exclude<WorkflowStage, "build">,
+	stage: PlanningStageDefinition,
 	view: TaskView,
 	documentFiles: readonly string[],
 ) {
-	if (stage === "discuss" && view.task.acceptanceCriteria.length === 0) {
+	if (
+		stage.requiresAcceptanceCriteria &&
+		view.task.acceptanceCriteria.length === 0
+	) {
 		throw new StageValidationError(
-			"Discuss completed without acceptance criteria",
+			`${stage.name} completed without acceptance criteria`,
 		);
 	}
 
-	const expectedDoc = {
-		discuss: "spec",
-		grill: "grilled",
-		plan: "plan",
-	}[stage];
+	const expectedDoc = stage.artifact;
 	const attachedReferences = view.task.documentation.map((reference) =>
 		basename(reference),
 	);
@@ -154,7 +153,7 @@ export function assertStageArtifactState(
 
 	if (!artifactFile) {
 		throw new StageValidationError(
-			`${stage} completed without its durable ${expectedDoc} document`,
+			`${stage.name} completed without its durable ${expectedDoc} document`,
 		);
 	}
 
@@ -164,7 +163,7 @@ export function assertStageArtifactState(
 export async function assertPlanningStageCompleted(
 	targetDir: string,
 	taskSha: string,
-	stage: Exclude<WorkflowStage, "build">,
+	stage: PlanningStageDefinition,
 	taskState: { output: string; view: TaskView },
 ) {
 	await assertWorkspaceCleanAt(targetDir, taskSha);

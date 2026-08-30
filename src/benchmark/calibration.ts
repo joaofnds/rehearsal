@@ -272,7 +272,11 @@ export async function collectCalibration(
 
 						return {
 							updatedContent: content,
-							updatedStageRubric: parseStageRubric(content, scorecard.stage),
+							updatedStageRubric: parseStageRubric(
+								content,
+								scorecard.stage,
+								scorecard.input.kind,
+							),
 						};
 					},
 				);
