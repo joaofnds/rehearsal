@@ -3739,7 +3739,7 @@ describe(runReplay, () => {
 			instructions: "Current instructions",
 			controlSha: "control-sha",
 			model: "sonnet",
-			judgeModel: "sonnet",
+			judgeModel: "opus",
 			sessionBudgetUsd: 5,
 		};
 	}
@@ -4034,7 +4034,7 @@ describe(runReplay, () => {
 				instructions: "Replayed instructions\n",
 				controlSha: "control-sha",
 				model: "sonnet",
-				judgeModel: "sonnet",
+				judgeModel: "opus",
 				sessionBudgetUsd: 5,
 			},
 		);
