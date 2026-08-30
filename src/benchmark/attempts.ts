@@ -157,7 +157,16 @@ export async function diffTexts(
 		await Bun.write(join(directory, "before"), before);
 		await Bun.write(join(directory, "after"), after);
 		await runCommand(
-			["git", "diff", "--no-index", "--", "before", "after"],
+			[
+				"git",
+				"diff",
+				"--no-ext-diff",
+				"--no-color",
+				"--no-index",
+				"--",
+				"before",
+				"after",
+			],
 			directory,
 		);
 
