@@ -164,15 +164,29 @@ export interface CheckpointInputs {
 const RECORD_FILE = "checkpoint.json";
 const SNAPSHOT_DIRECTORY = "workflow-state";
 
+async function existingWorkflowPaths(root: string) {
+	const present: string[] = [];
+
+	for (const path of WORKFLOW_PATHS) {
+		const exists = await stat(join(root, path)).catch(() => undefined);
+		if (exists) present.push(path);
+	}
+
+	return present;
+}
+
+async function copyWorkflowTrees(from: string, to: string) {
+	for (const path of await existingWorkflowPaths(from)) {
+		await cp(join(from, path), join(to, path), { recursive: true });
+	}
+}
+
 export async function hashWorkflowState(
 	targetDir: string,
 ): Promise<readonly HashedFile[]> {
 	const files: HashedFile[] = [];
 
-	for (const path of WORKFLOW_PATHS) {
-		const exists = await stat(join(targetDir, path)).catch(() => undefined);
-		if (!exists) continue;
-
+	for (const path of await existingWorkflowPaths(targetDir)) {
 		files.push(...(await hashDirectory(join(targetDir, path), path)));
 	}
 
@@ -190,15 +204,7 @@ export async function recordCheckpoint(
 	inputs: CheckpointInputs,
 ): Promise<CheckpointRecord> {
 	const workflowState = await hashWorkflowState(targetDir);
-
-	for (const path of WORKFLOW_PATHS) {
-		const exists = await stat(join(targetDir, path)).catch(() => undefined);
-		if (!exists) continue;
-
-		await cp(join(targetDir, path), join(directory, SNAPSHOT_DIRECTORY, path), {
-			recursive: true,
-		});
-	}
+	await copyWorkflowTrees(targetDir, join(directory, SNAPSHOT_DIRECTORY));
 
 	const record: CheckpointRecord = {
 		stage: inputs.stage,
@@ -230,13 +236,7 @@ export async function materializeCheckpoint(
 	// Whole trees, not the recorded files one by one: the workflow tools
 	// expect their empty directories (backlog/docs, backlog/drafts, ...) to
 	// exist, and only a tree copy carries them.
-	for (const path of WORKFLOW_PATHS) {
-		const source = join(directory, SNAPSHOT_DIRECTORY, path);
-		const exists = await stat(source).catch(() => undefined);
-		if (!exists) continue;
-
-		await cp(source, join(destination, path), { recursive: true });
-	}
+	await copyWorkflowTrees(join(directory, SNAPSHOT_DIRECTORY), destination);
 
 	for (const { path, sha256: expected } of record.workflowState) {
 		const actual = await hashFile(join(destination, path)).catch(
