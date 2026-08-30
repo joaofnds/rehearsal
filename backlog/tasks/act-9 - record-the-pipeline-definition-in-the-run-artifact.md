@@ -4,7 +4,7 @@ title: record the pipeline definition in the run artifact
 status: Done
 assignee: []
 created_date: '2026-08-30 17:02'
-updated_date: '2026-08-30 17:55'
+updated_date: '2026-08-30 17:59'
 labels: []
 dependencies: []
 type: feature
@@ -69,33 +69,36 @@ In run-benchmark.test.ts, against the run artifact assembly: a run configured wi
 <!-- SECTION:NOTES:BEGIN -->
 ## What changed
 
-The run artifact now carries two fields next to `rubric`/`rubricIds`: `pipelinePath` (the path as configured, relative to the control repository) and `pipeline` (the parsed `PipelineDefinition`, defaults applied). Both are populated from values `runBenchmark` already had in scope: the definition `loadPipeline` returns as the function's first statement, and `config.pipelinePath`. No plumbing was needed, as the shaping predicted.
+The run artifact now carries two fields next to `rubric`/`rubricIds`: `pipelinePath` (the path relative to the control repository) and `pipeline` (the parsed `PipelineDefinition`, defaults applied). Both come from values `runBenchmark` already had in scope.
 
-Assembling the artifact was a thirty-field object literal inside `runBenchmark`, which cannot run under test because everything past `claimTarget` calls real Claude sessions. It is now `buildRunArtifact` in src/benchmark/run.ts, a pure function over the pieces the run holds. That extraction was not in the shaping notes; it is what made a test-first step possible at all. The shaping notes proposed testing through `runGradedStages`, but that function never sees the run artifact, so the test would not have covered the behavior.
+Assembling the artifact was a thirty-field object literal inside `runBenchmark`, which cannot run under test because everything past `claimTarget` calls live Claude sessions. It is now `buildRunArtifact`, a pure function. That extraction was not in the shaping notes; it is what made a test-first step possible. The notes proposed testing through `runGradedStages`, but that function never sees the run artifact.
+
+`parseArgs` now reduces `--pipeline` to its path relative to the control repository. Criterion 3 was not met without this: an absolute `--pipeline` was stored verbatim, so the same pipeline recorded a machine-specific string, and a path through ".." recorded a third string for the same file. Paths that escape the repository still reduce to one starting with "..", which `loadPipeline`'s containment check rejects as before.
 
 ## What became possible but is not wired up
 
-Nothing consumes the new fields yet. ACT-6's paired comparison and ACT-2's checkpoint lineage are the intended readers; both can now tell whether two artifacts ran the same pipeline. No existing reader was changed, because no code outside run.ts reads `RunArtifact`.
+Nothing consumes the new fields. ACT-6's paired comparison and ACT-2's checkpoint lineage are the intended readers; both can now tell whether two artifacts ran the same pipeline. No existing reader changed, because nothing outside run.ts reads `RunArtifact`; there is no `readArtifact` and no schema on read.
 
-Artifacts written before this change do not have the fields. Nothing validates a run artifact on read today, so no reader breaks; a future reader must treat both fields as possibly absent on an old file.
+Artifacts written before this change lack the fields. No reader breaks today, but a future reader must treat both as possibly absent on an old file.
 
 ## What was observed, and how
 
-- Wrote the failing test first and watched it fail for the predicted reason: `Export named 'buildRunArtifact' not found`.
-- Direct observation of the deliverable: ran a script that calls `buildRunArtifact` with the default pipeline and serializes the result exactly as `writeArtifact` does, then read the file back. It contains `"pipelinePath": "pipelines/default.json"` and the four default stages with `requiresAcceptanceCriteria` defaults applied. This is the artifact's real serialized form, not an in-memory assertion.
-- `bun test`: 115 pass, 0 fail, fresh run.
-- `bun run typecheck`: clean.
-- `bun run check:apply`: fixed one file's formatting, included in the commit.
+- Wrote each test first and watched it fail for the predicted reason: `Export named 'buildRunArtifact' not found`, then the three path forms disagreeing.
+- Direct observation: ran a script calling `buildRunArtifact` and serializing the result as `writeArtifact` does, then read the file back. It contains the relative path and the four default stages with `requiresAcceptanceCriteria` defaults applied.
+- Ran `--pipeline` as an absolute path, a traversal, and `/etc/passwd` through `parseArgs` into `loadPipeline`: the in-repo absolute reduces to `pipelines/default.json` and loads; both escapes are refused as outside the control repository.
+- `bun test`: 115 pass, 0 fail, fresh run. `bun run typecheck`: clean. `bun run check:apply`: formatting fixed and committed.
 
 ## What was not verified
 
-No end-to-end benchmark run was executed; that costs real money and calls live Claude sessions. The claim that `runBenchmark` reaches `buildRunArtifact` with the loaded pipeline rests on reading the call site, not on watching a run. The three tests and the observation script exercise `buildRunArtifact` directly.
+No end-to-end benchmark run; that costs real money and calls live Claude sessions. That `runBenchmark` reaches `buildRunArtifact` with the loaded pipeline rests on reading the call site, not on watching a run. Recorded on ACT-10, which owns making that function testable.
+
+## Independent review
+
+Run, by the reviewer agent, on the first commit. It found two defects, both now fixed in their own commits: the pipeline path was not normalised, so criterion 3 failed for absolute and non-canonical arguments; and the test asserting that failed to catch it, because it asserted a relative string it had written itself was relative. The replacement goes through `parseArgs` and fails without the fix. The reviewer also verified field-by-field that the `buildRunArtifact` extraction preserves all 33 original fields in order, and that both the FAILED and COMPLETE spread paths carry the new fields.
+
+The README's artifact field list did not mention the pipeline; fixed.
 
 ## Stopped on
 
-`runBenchmark` is 253 lines and mixes benchmark orchestration with process-lifecycle handling: signal registration, abort recording, and five mutable variables. The abort path has no test coverage at all. Filed as ACT-10 with the target structure and the case; not fixed here, because it is behavior-sensitive and outside this task's scope.
-
-## Review
-
-Due. The change alters a persisted artifact's shape, which is a contract other tasks will read, and it moved a thirty-field literal that no end-to-end test covers.
+`runBenchmark` is 253 lines and mixes orchestration with process-lifecycle handling: signal registration, abort recording, five mutable variables, no test coverage of the abort path. Filed as ACT-10.
 <!-- SECTION:NOTES:END -->

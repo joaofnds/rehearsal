@@ -4,6 +4,7 @@ title: separate run abort handling from run orchestration
 status: To Do
 assignee: []
 created_date: '2026-08-30 17:54'
+updated_date: '2026-08-30 17:59'
 labels: []
 dependencies: []
 ordinal: 2008
@@ -38,3 +39,9 @@ The abort path is the harness's only guarantee that an interrupted run leaves a 
 - [ ] #2 Signal registration and release are exercised by a test rather than only by a real interrupt
 - [ ] #3 runBenchmark no longer holds the pending-run mutable state
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Review of ACT-9 found a concrete consequence of this structure: nothing tests that `runBenchmark` passes the pipeline it loaded, and the config it was given, into `buildRunArtifact`. The only `runBenchmark` test covers the pre-claim rejection path; everything after `claimTarget` calls live Claude sessions and cannot run under test. Wiring at src/benchmark/run.ts:519-540 was confirmed by reading only. Making `runBenchmark` testable past `claimTarget` would close that gap too.
+<!-- SECTION:NOTES:END -->
