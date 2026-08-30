@@ -1,10 +1,11 @@
 ---
 id: ACT-2
 title: record a checkpoint at every accepted stage transition
-status: Build
-assignee: []
+status: Review
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 20:04'
+updated_date: '2026-08-30 20:16'
 labels: []
 dependencies: []
 references:
@@ -20,9 +21,9 @@ After a stage passes its Judge, freeze the state the next stage consumes: the ta
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every accepted stage transition writes a checkpoint record: target SHA, workflow-state snapshot, stage artifacts, lineage key.
-- [ ] #2 The lineage key changes when and only when an input changes: upstream checkpoint, any corpus file feeding the stage, model, or effort.
-- [ ] #3 A test materializes a recorded checkpoint into an empty directory and the result matches the state the next stage consumed.
+- [x] #1 Every accepted stage transition writes a checkpoint record: target SHA, workflow-state snapshot, stage artifacts, lineage key.
+- [x] #2 The lineage key changes when and only when an input changes: upstream checkpoint, any corpus file feeding the stage, model, or effort.
+- [x] #3 A test materializes a recorded checkpoint into an empty directory and the result matches the state the next stage consumed.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,3 +57,21 @@ Decisions (Joao, 2026-08-30):
 1. The lineage hash reads each stage's skill files from the standard installed locations, the target's .claude/skills/<skill> first, then ~/.claude/skills/<skill>, and fails the run loudly when a stage's skill is found in neither. Moving the corpus into the control repository stays a possible separate task; not this one.
 2. The workflow snapshot is written as plain files under .benchmark-runs/<run>.checkpoints/<stage>/ and referenced from the run-artifact JSON with per-file sha256. Byte-faithful, survives runs that fail at a later stage, human-readable.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Handoff (build, 2026-08-30):
+
+What changed: a new checkpoint module owns lineage hashing, corpus capture, snapshot recording, and materialization; the stage loop records a checkpoint after every accepted judge verdict into .benchmark-runs/<run>.checkpoints/<stage>/ (checkpoint.json + byte-faithful workflow-state copy), chained by lineage from a root key over the initial state; the run artifact lists the records; corpus for all stages is captured before the first session so a missing skill fails the run before any stage is paid for. README documents the new output.
+
+Possible but not wired: materializeCheckpoint has no harness caller yet; ACT-3 (replay) is its consumer. Nothing reads the checkpoints from the run artifact yet; ACT-4 (invalidation) will.
+
+Observed: full suite fresh run, 130 pass, plus typecheck and biome clean. Directly observed one real round-trip outside the suite: recorded a checkpoint of this control repository's own backlog/ and .boris/ with the real installed build skill resolved from ~/.claude/skills, materialized it into an empty directory, and recursive diff showed identical trees. That observation caught a defect the suite had missed: file-by-file materialization dropped empty directories that backlog tooling requires (planning validation reads backlog/docs); fixed to copy whole trees and verify hashes after.
+
+Not verified: a full benchmark run against a real target (costs real sessions); checkpoint behavior when the target has large or binary workflow files.
+
+Stopped on: ACT-11 filed to converge target.ts's workflow backup/restore with the new tree-copy code.
+
+Review: due; new subsystem plus a change to the core stage loop, and ACT-3/ACT-4 build on its contract.
+<!-- SECTION:NOTES:END -->
