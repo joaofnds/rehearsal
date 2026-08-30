@@ -79,8 +79,16 @@ export function parsePipeline(
 		);
 	}
 
-	const { stages } = parsed.data;
+	assertUniqueNames(parsed.data.stages);
+	assertRubricsExist(parsed.data.stages, availableRubrics);
+	assertOneDeliveryStageLast(parsed.data.stages);
+
+	return parsed.data;
+}
+
+function assertUniqueNames(stages: readonly StageDefinition[]) {
 	const seen = new Set<string>();
+
 	for (const stage of stages) {
 		if (seen.has(stage.name)) {
 			throw new PipelineDefinitionError(
@@ -89,7 +97,12 @@ export function parsePipeline(
 		}
 		seen.add(stage.name);
 	}
+}
 
+function assertRubricsExist(
+	stages: readonly StageDefinition[],
+	availableRubrics: readonly string[],
+) {
 	for (const stage of stages) {
 		if (!availableRubrics.includes(stage.rubric)) {
 			throw new PipelineDefinitionError(
@@ -97,9 +110,13 @@ export function parsePipeline(
 			);
 		}
 	}
+}
 
+function assertOneDeliveryStageLast(stages: readonly StageDefinition[]) {
 	const deliveryStages = stages.filter(({ kind }) => kind === "delivery");
-	if (deliveryStages.length === 0) {
+	const delivery = deliveryStages[0];
+
+	if (!delivery) {
 		throw new PipelineDefinitionError(
 			"Pipeline must declare exactly one delivery stage; it declares none",
 		);
@@ -109,15 +126,11 @@ export function parsePipeline(
 			`Pipeline must declare exactly one delivery stage; it declares ${deliveryStages.map(({ name }) => name).join(", ")}`,
 		);
 	}
-
-	const delivery = deliveryStages[0];
-	if (delivery && stages[stages.length - 1] !== delivery) {
+	if (stages[stages.length - 1] !== delivery) {
 		throw new PipelineDefinitionError(
 			`Pipeline delivery stage ${delivery.name} must be last`,
 		);
 	}
-
-	return parsed.data;
 }
 
 export async function loadPipeline(
