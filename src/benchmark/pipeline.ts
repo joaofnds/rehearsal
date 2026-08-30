@@ -34,6 +34,13 @@ export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
 
 export class PipelineDefinitionError extends Error {}
 
+/**
+ * Human review marks a finding against the final Judge, which grades the whole
+ * candidate rather than any one stage, by naming this stage. A pipeline stage
+ * under the same name would make those findings indistinguishable.
+ */
+const RESERVED_STAGE_NAMES: readonly string[] = ["final"];
+
 function stageLabel(stage: unknown, index: number) {
 	const name =
 		typeof stage === "object" && stage !== null && "name" in stage
@@ -90,6 +97,11 @@ function assertUniqueNames(stages: readonly StageDefinition[]) {
 	const seen = new Set<string>();
 
 	for (const stage of stages) {
+		if (RESERVED_STAGE_NAMES.includes(stage.name)) {
+			throw new PipelineDefinitionError(
+				`Pipeline stage ${stage.name} has a reserved name; ${RESERVED_STAGE_NAMES.join(", ")} cannot name a stage`,
+			);
+		}
 		if (seen.has(stage.name)) {
 			throw new PipelineDefinitionError(
 				`Pipeline stage ${stage.name} has a duplicate name; every stage name must be unique`,

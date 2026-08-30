@@ -2238,6 +2238,12 @@ describe(parsePipeline, () => {
 		);
 	});
 
+	it("rejects a stage named final, which marks the final Judge", () => {
+		expect(() =>
+			parse([stageEntry({ name: "final", skill: "final" }), deliveryStage]),
+		).toThrow(/final.*name|name.*final/s);
+	});
+
 	it("rejects a pipeline with no delivery stage", () => {
 		expect(() => parse([stageEntry()])).toThrow(/delivery/);
 	});
