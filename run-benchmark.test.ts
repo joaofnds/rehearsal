@@ -1674,6 +1674,12 @@ describe(runBenchmark, () => {
 });
 
 describe(loadPipeline, () => {
+	it("refuses a definition outside the control repository", async () => {
+		await expect(loadPipeline("../../../../etc/hosts")).rejects.toThrow(
+			/outside/,
+		);
+	});
+
 	it("rejects a delivery stage whose rubric lacks the harness blockers", async () => {
 		const path = join("pipelines", `invalid-${randomUUID()}.json`);
 		const absolute = join(import.meta.dir, path);

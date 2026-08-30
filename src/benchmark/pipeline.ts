@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { CONTROL_DIR } from "./config";
 import { loadStageRubric } from "./stage-grading";
@@ -167,7 +167,13 @@ function assertOneDeliveryStageLast(stages: readonly StageDefinition[]) {
 export async function loadPipeline(
 	pipelinePath: string,
 ): Promise<PipelineDefinition> {
-	const absolutePath = join(CONTROL_DIR, pipelinePath);
+	const absolutePath = resolve(CONTROL_DIR, pipelinePath);
+	if (!absolutePath.startsWith(`${CONTROL_DIR}/`)) {
+		throw new PipelineDefinitionError(
+			`Pipeline definition is outside the control repository: ${pipelinePath}`,
+		);
+	}
+
 	const file = Bun.file(absolutePath);
 
 	if (!(await file.exists())) {
