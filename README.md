@@ -287,7 +287,10 @@ Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BE
 
 ## Running
 
+The toolchain is pinned in `mise.toml`: Bun, the `claude` CLI, and `backlog`. Install it with `mise install`. The harness refuses to start on a Bun other than the pinned one, and records the `claude` version in every run artifact, because the agent is part of what a run measures and a floating version makes two runs incomparable.
+
 ```sh
+mise install
 bun install --frozen-lockfile
 bun run typecheck
 bun run check
