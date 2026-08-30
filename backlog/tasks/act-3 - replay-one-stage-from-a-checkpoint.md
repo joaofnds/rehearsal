@@ -1,11 +1,11 @@
 ---
 id: ACT-3
 title: replay one stage from a checkpoint
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 21:27'
+updated_date: '2026-08-30 21:51'
 labels: []
 dependencies:
   - ACT-2
@@ -93,4 +93,36 @@ Known gaps, deliberate:
 Coordination: a parallel session is hardening tsconfig/oxlint across the repo. My files conform to exactOptionalPropertyTypes already; run.ts lines ~325/390/460/633 still need their mechanical spreads, agreed to land with their pass.
 
 Independent review due: new subsystem touching git state in the target repository; review skill triggers apply.
+
+Independent review, 2026-08-30
+------------------------------
+Reviewed at 16e91c2 (patch of 33d5cc3..16e91c2, 18 files, all examined by the reviewer). Suite run fresh on a clean export of 16e91c2: 169 pass, 0 fail. Axes: style, architecture, spec, security, testing, refactoring — none skipped. Security: nothing found (reviewer checked --run/--stage path traversal (operator authority only), zod parses at record boundaries, hashedFileSchema path refusal).
+
+Findings and dispositions, worst first:
+
+1. [correctness, should-fix, FIXED 767f0fa] The side-by-side compared the original attempt's judge-only cost (scorecard.costUsd, set from the judge envelope in stage-grading.ts) against the replay's stage+PO+judge sum, e.g. $0.50 vs $4.70 for identical real costs. Verified by reading run.ts/stage-grading.ts/attempts.ts. Attempts now carry judgeCostUsd (comparable across all) and a labeled totalCostUsd only where the record holds one. Suite green after.
+
+2. [style, blocking at reviewed commit, FIXED by 0e2a3a6 (parallel lint session)] biome check failed at 16e91c2 on a claude.ts line this diff edited (formatter wrap). Verified red on the export of 16e91c2 and green on the export of 0e2a3a6, both this session.
+
+3. [testing, should-fix, FIXED 54bf324] Every replay fixture set model and judgeModel to the same string, so swapping model for judgeModel in the record or lineage inputs left the suite green — the comparability lineage exists to pin. Verified by mutation: with distinct fixture values, changing replay.ts lineage input to request.judgeModel fails one test; before the fix it passed.
+
+4. [architecture, should-fix, TRACKED ACT-14] .benchmark-runs layout knowledge duplicated across run.ts createRunFiles, replay-stage.ts resolveRunDirectory, and attempts.ts; divergence silently drops the original attempt from the side-by-side. Change created two of the three sites.
+
+5. [refactoring, TRACKED already as ACT-12] parseArgs/parseReplayArgs duplicate the session-knob resolution block in config.ts.
+
+6. [spec, REFUTED by later history] oxlint dependency added in d9d62b7 with nothing consuming it. Overtaken: 0e2a3a6 (coordinated parallel session, recorded above under Coordination) landed .oxlintrc.json and the lint script; verified consumed at current HEAD.
+
+7. [style, FIXED d84bcf9] diffTexts ran git diff --no-index without --no-ext-diff/--no-color, unlike its siblings in target.ts; user diff.external or color.ui could corrupt the presentation. Flags added.
+
+Notes, no action:
+- Replay bypasses the .git/benchmark-run.json marker claimTarget honors; a replay during a live run is unguarded (temporal coupling, concurrency form). Worktree isolation makes most interleavings benign. Revisit with ACT-5 (parallel reps).
+- Replay record path keyed by ISO timestamp collides at millisecond granularity; matters only for parallel replays (ACT-5).
+- removeWorktree/rm(parent) after a successful record sit outside the try/catch, so a cleanup failure propagates without the evidence-preserved message; on the failure path the whole parent tmpdir is kept, not just the worktree.
+- loadOriginalAttempt returns undefined on any schema failure, so a corrupt real scorecard is indistinguishable from never-graded.
+- tsconfig strictness upgrade rode along in this range; coordination with the parallel lint session is recorded above, but it belonged in its own commit.
+- Test maintainability aggregate: RunManifest literal repeated 4x (builder justified); first runReplay test asserts ~12 behaviors (Eager Test).
+
+Reviewer cross-checked acceptance criteria 1-5 against the tests and recorded deferrals; all present, deferrals confirmed as recorded. Paid real-run replay remains unobserved, as the handoff records.
+
+Verdict: proceed. Fixes 767f0fa, 54bf324, d84bcf9 verified with fresh suite runs (169 pass), tsc, biome, and oxlint this session.
 <!-- SECTION:NOTES:END -->
