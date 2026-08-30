@@ -89,6 +89,20 @@ they would replace the host environment the corpus is being tuned for.
 5. **The corpus under evaluation stays clean.** The target-facing instruction
    files carry nothing about the harness; tool documentation lives here, in
    the control repository, outside the installed corpus.
+6. **Comparisons are paired and reliability-first.** Corpus A/B runs execute
+   both variants from identical checkpoints and report paired per-task deltas
+   with standard errors; pass^k is the headline metric for the unattended
+   goal; confirmation runs default to 5 reps. Evidence in
+   [research.md](research.md).
+7. **The control arm is mandatory.** Every comparison includes a
+   no-corpus (or minimal-corpus) baseline, and cost and trajectory length
+   are reported beside quality, so verbosity can never score as improvement.
+8. **Judges are validated, not trusted.** The judge model defaults to a
+   different family than the workflow model; calibration findings accumulate
+   into a per-rubric judge-vs-human agreement figure that is re-baselined on
+   every judge-model change.
+9. **The pruning unit is the logical block** — an instruction bullet or skill
+   section — never a line or token; smaller effects drown in run variance.
 
 ## Path from today
 
@@ -104,9 +118,10 @@ Ordered so every step is observable on its own; each is a ticket candidate.
 4. **Invalidation** — corpus-to-stage map; stale marking; lineage-mismatch
    refusal in comparisons.
 5. **Reps** — N parallel replays of a stage or pipeline; per-stage score
-   distributions, cost, tokens, wall-clock.
-6. **Comparison reporting** — stage-by-stage deltas between corpus versions
-   on the same task.
+   distributions with standard errors, pass^k, cost, tokens, trajectory
+   steps, wall-clock.
+6. **Comparison reporting** — paired stage-by-stage deltas between corpus
+   versions from identical checkpoints, always beside the control arm.
 
 Later: variant matrices (model × effort), projected-cost preview before large
 matrices, migration mode with ablation-based pruning.
