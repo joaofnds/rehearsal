@@ -1,10 +1,11 @@
 ---
 id: ACT-1
 title: declare the pipeline as data
-status: Build
-assignee: []
+status: Review
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 16:05'
+updated_date: '2026-08-30 17:03'
 labels: []
 dependencies: []
 references:
@@ -20,15 +21,60 @@ The Discuss → Grill → Plan → Build sequence, each stage's skill, artifact 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The four-stage run executes discuss, grill, plan, build in order from the definition, carrying each planning artifact into later stages' priorArtifacts and attaching build evidence only to the delivery stage; the existing runGradedStages tests pass unchanged in intent.
-- [ ] #2 A definition with plan removed executes exactly discuss, grill, build, with grill's artifact in build's priorArtifacts, and no TypeScript differs between the four- and three-stage cases.
-- [ ] #3 A definition with grill and plan swapped executes discuss, plan, grill, build.
-- [ ] #4 A definition adding a fifth planning stage under a name absent from today's union executes it and judges it against the rubric the definition names.
-- [ ] #5 The pipeline definition is JSON at pipelines/default.json, parsed with zod, naming each stage's kind, skill, expected artifact, and rubric path.
-- [ ] #6 A --pipeline flag selects the definition file and defaults to pipelines/default.json, alongside the existing --target and --model flags.
-- [ ] #7 A definition that omits a required field, names a missing rubric file, repeats a stage name, declares no delivery stage, declares more than one, or does not place the delivery stage last is rejected with an error naming the offending stage and field, one test per defect class.
-- [ ] #8 Definition rejection happens before the target repository is claimed, so a malformed definition cannot leave a target dirty.
+- [x] #1 The four-stage run executes discuss, grill, plan, build in order from the definition, carrying each planning artifact into later stages' priorArtifacts and attaching build evidence only to the delivery stage; the existing runGradedStages tests pass unchanged in intent.
+- [x] #2 A definition with plan removed executes exactly discuss, grill, build, with grill's artifact in build's priorArtifacts, and no TypeScript differs between the four- and three-stage cases.
+- [x] #3 A definition with grill and plan swapped executes discuss, plan, grill, build.
+- [x] #4 A definition adding a fifth planning stage under a name absent from today's union executes it and judges it against the rubric the definition names.
+- [x] #5 The pipeline definition is JSON at pipelines/default.json, parsed with zod, naming each stage's kind, skill, expected artifact, and rubric path.
+- [x] #6 A --pipeline flag selects the definition file and defaults to pipelines/default.json, alongside the existing --target and --model flags.
+- [x] #7 A definition that omits a required field, names a missing rubric file, repeats a stage name, declares no delivery stage, declares more than one, or does not place the delivery stage last is rejected with an error naming the offending stage and field, one test per defect class.
+- [x] #8 Definition rejection happens before the target repository is claimed, so a malformed definition cannot leave a target dirty.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## What changed
+
+The stage sequence is a JSON file the harness reads, not code. `pipelines/default.json` declares the four stages; `--pipeline` (or `BENCHMARK_PIPELINE`) selects another, defaulting to that file.
+
+Three things had to move before the loop could be driven by data:
+
+1. `WorkflowStage` was a closed union of the four names, baked into `stageRubricSchema` and `humanFindingSchema`. A user-authored stage name could not be expressed. It is now an open string; `WORKFLOW_STAGES` is gone.
+2. Per-stage behavior branched on the literal `"build"` in three places (mandatory rubric blockers, forced check failures, build-candidate capture) and on `"discuss"` in one (acceptance criteria). All four now key off the stage's declared kind or a declared flag, so a delivery stage keeps the harness's guarantees under any name.
+3. A rubric declared its own `stage` name and was refused for any other stage, so a rubric belonged to one stage name. The definition already names each stage's rubric, so the field was a second answer to the same question; it is removed from the schema and the four rubric files. The guarantee it appeared to give is now enforced by kind: a delivery stage pointed at a planning rubric is still refused.
+
+`runStageJudge` no longer finds a rubric by stage name; callers pass the one the definition points at.
+
+## Observed, this session
+
+Ran `runGradedStages` against four definitions and read the executed order, the rubric each Judge received, and the build stage's `priorArtifacts`:
+
+- default: discuss, grill, plan, build; prior artifacts discuss, grill, plan
+- plan removed: discuss, grill, build; prior artifacts discuss, grill
+- grill/plan swapped: discuss, plan, grill, build
+- fifth stage `research` (a name the harness never knew), judged against the grill rubric its definition names: discuss, research, grill, plan, build
+
+No TypeScript differs between these cases. Build evidence attached only to the delivery stage in all four.
+
+Ran the harness itself: `--pipeline pipelines/bogus.json` fails with "Pipeline definition not found: pipelines/bogus.json" before the target is touched, and `BENCHMARK_PIPELINE` is read the same way. Both documented invocation forms verified.
+
+Full suite 101 pass / 0 fail, typecheck clean, Biome clean, from a fresh run after the last commit.
+
+## Not verified
+
+No live end-to-end run against a real target with real Claude sessions. The stage loop was exercised with fakes for the Claude-invoking dependencies; everything else in the loop is the real code. A live run costs money and was not directed.
+
+## Carried forward
+
+ACT-9 is filed: the run artifact records the model, efforts, budget, rubric, and every SHA, but not the pipeline. That was harmless when the sequence was a constant in the harness; now that it varies per run, two artifacts can differ in which stages ran with nothing in either saying so. ACT-6 (paired comparisons) and ACT-2 (checkpoint lineage) both need this.
+
+Nothing is built-but-unwired. Every caller is on the new path; there is no old path left.
+
+## Review
+
+Due. The change removes a validation (`parseStageRubric`'s stage-name check) and opens a type that previously constrained five files. Both are deliberate and argued in the commit messages, and both deserve a second reader.
+<!-- SECTION:NOTES:END -->
 
 ## Shaping
 
