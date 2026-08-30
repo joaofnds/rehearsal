@@ -46,6 +46,9 @@
   judges.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own.
+- **Stale checkpoint** — a checkpoint whose recorded inputs (corpus files,
+  model, effort, or an upstream checkpoint) no longer match the current
+  state; still replayable for exploration, refused in comparisons.
 - **Stage kind** — which validation and evidence strategy a stage uses:
   planning or delivery. Declared per stage, independent of the stage's name.
 - **Stage mode** — running one stage against frozen upstream artifacts; the
