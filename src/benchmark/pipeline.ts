@@ -17,20 +17,24 @@ const identifierSchema = z
 	);
 
 const stageDefinitionSchema = z.discriminatedUnion("kind", [
-	z.object({
-		name: identifierSchema,
-		kind: z.literal("planning"),
-		skill: identifierSchema,
-		artifact: z.string().min(1),
-		rubric: z.string().min(1),
-		requiresAcceptanceCriteria: z.boolean().default(false),
-	}).strict(),
-	z.object({
-		name: identifierSchema,
-		kind: z.literal("delivery"),
-		skill: identifierSchema,
-		rubric: z.string().min(1),
-	}).strict(),
+	z
+		.object({
+			name: identifierSchema,
+			kind: z.literal("planning"),
+			skill: identifierSchema,
+			artifact: z.string().min(1),
+			rubric: z.string().min(1),
+			requiresAcceptanceCriteria: z.boolean().default(false),
+		})
+		.strict(),
+	z
+		.object({
+			name: identifierSchema,
+			kind: z.literal("delivery"),
+			skill: identifierSchema,
+			rubric: z.string().min(1),
+		})
+		.strict(),
 ]);
 
 const pipelineDefinitionSchema = z.object({
