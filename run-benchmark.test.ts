@@ -1387,6 +1387,7 @@ describe(runGradedStages, () => {
 				captureCheckIntegrity: async () =>
 					harnessResult("PASS", "checks match"),
 				captureTreatmentChecks: async () => harnessResult("PASS", "all green"),
+				resolveSkillDirectory: async (skill: string) => `/skills/${skill}`,
 				captureStageCorpus: async (skill: string) => [
 					{
 						path: `skills/${skill}/SKILL.md`,
@@ -1664,11 +1665,11 @@ describe(runGradedStages, () => {
 		const { dependencies } = fakeStageDependencies(judged, executed);
 		const missing = {
 			...dependencies,
-			captureStageCorpus: async (skill: string) => {
+			resolveSkillDirectory: async (skill: string) => {
 				if (skill === "build")
 					throw new Error(`The ${skill} skill is not installed`);
 
-				return [{ path: `skills/${skill}/SKILL.md`, sha256: "ab".repeat(32) }];
+				return `/skills/${skill}`;
 			},
 		};
 
@@ -1676,6 +1677,50 @@ describe(runGradedStages, () => {
 			runGradedStages(missing, await stageContext()),
 		).rejects.toThrow("build skill is not installed");
 		expect(executed).toEqual([]);
+	});
+
+	it("hashes a stage's corpus when the stage starts, not at run start", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const log: string[] = [];
+		const timed = {
+			...dependencies,
+			resolveSkillDirectory: async (skill: string) => {
+				log.push(`resolve:${skill}`);
+
+				return `/skills/${skill}`;
+			},
+			captureStageCorpus: async (skill: string) => {
+				log.push(`corpus:${skill}`);
+
+				return await dependencies.captureStageCorpus(skill);
+			},
+			runWorkflowStage: async (
+				...args: Parameters<(typeof dependencies)["runWorkflowStage"]>
+			) => {
+				log.push(`run:${args[10]}`);
+
+				return await dependencies.runWorkflowStage(...args);
+			},
+		};
+
+		await runGradedStages(timed, await stageContext());
+
+		expect(log).toEqual([
+			"resolve:discuss",
+			"resolve:grill",
+			"resolve:plan",
+			"resolve:build",
+			"corpus:discuss",
+			"run:discuss",
+			"corpus:grill",
+			"run:grill",
+			"corpus:plan",
+			"run:plan",
+			"corpus:build",
+			"run:build",
+		]);
 	});
 
 	it("stops after a failing grade and calibrates the failed stage", async () => {

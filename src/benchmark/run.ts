@@ -12,10 +12,10 @@ import { collectCalibration, type Questioner } from "./calibration";
 import {
 	type CheckpointRecord,
 	captureStageCorpus,
-	type HashedFile,
 	hashArtifacts,
 	hashWorkflowState,
 	recordCheckpoint,
+	resolveSkillDirectory,
 	rootLineage,
 	skillSearchRoots,
 } from "./checkpoint";
@@ -178,6 +178,7 @@ export interface StageDependencies {
 	readonly changedPathsBetween: typeof changedPathsBetween;
 	readonly captureCheckIntegrity: typeof captureCheckIntegrity;
 	readonly captureTreatmentChecks: typeof captureTreatmentChecks;
+	readonly resolveSkillDirectory: typeof resolveSkillDirectory;
 	readonly captureStageCorpus: typeof captureStageCorpus;
 	readonly recordCheckpoint: typeof recordCheckpoint;
 }
@@ -231,21 +232,13 @@ export async function runGradedStages(
 	const checkpoints: CheckpointRecord[] = [];
 	let buildEvidence: BuildEvidence | undefined;
 
-	// Captured for every stage before any stage runs: a missing skill fails
-	// the run before the first session is paid for.
-	const stages: {
-		definition: PipelineDefinition["stages"][number];
-		corpusFiles: readonly HashedFile[];
-	}[] = [];
+	// Every skill is resolved before any stage runs, so a missing one fails
+	// the run before the first session is paid for. Hashing waits for each
+	// stage's start: the lineage must record the corpus that fed the stage,
+	// and a skill can change while earlier stages run.
+	const skillRoots = skillSearchRoots(context.targetDir);
 	for (const definition of context.pipeline.stages) {
-		stages.push({
-			definition,
-			corpusFiles: await dependencies.captureStageCorpus(
-				definition.skill,
-				context.instructions,
-				skillSearchRoots(context.targetDir),
-			),
-		});
+		await dependencies.resolveSkillDirectory(definition.skill, skillRoots);
 	}
 	let upstream = rootLineage({
 		taskSha: context.taskSha,
@@ -254,8 +247,13 @@ export async function runGradedStages(
 		workflowFiles: await hashWorkflowState(context.targetDir),
 	});
 
-	for (const { definition, corpusFiles } of stages) {
+	for (const definition of context.pipeline.stages) {
 		const stage = definition.name;
+		const corpusFiles = await dependencies.captureStageCorpus(
+			definition.skill,
+			context.instructions,
+			skillRoots,
+		);
 		context.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 		const transcript = await dependencies.runWorkflowStage(
 			context.targetDir,
@@ -517,6 +515,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					changedPathsBetween,
 					captureCheckIntegrity,
 					captureTreatmentChecks,
+					resolveSkillDirectory,
 					captureStageCorpus,
 					recordCheckpoint,
 				},

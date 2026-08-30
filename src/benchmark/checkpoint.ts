@@ -95,6 +95,20 @@ export function skillSearchRoots(targetDir: string) {
 	];
 }
 
+export async function resolveSkillDirectory(
+	skill: string,
+	roots: readonly string[],
+) {
+	for (const root of roots) {
+		const directory = join(root, skill);
+		if ((await statIfExists(directory))?.isDirectory()) return directory;
+	}
+
+	throw new Error(
+		`The ${skill} skill is not installed; searched ${roots.join(", ")}`,
+	);
+}
+
 /**
  * Corpus file paths are recorded relative to the corpus, not the machine, so
  * the same skill bytes produce the same lineage wherever they are installed.
@@ -104,19 +118,12 @@ export async function captureStageCorpus(
 	instructions: string,
 	roots: readonly string[],
 ): Promise<readonly HashedFile[]> {
-	for (const root of roots) {
-		const directory = join(root, skill);
-		if (!(await statIfExists(directory))?.isDirectory()) continue;
+	const directory = await resolveSkillDirectory(skill, roots);
 
-		return [
-			{ path: "CLAUDE.md", sha256: sha256(instructions) },
-			...(await hashDirectory(directory, join("skills", skill))),
-		];
-	}
-
-	throw new Error(
-		`The ${skill} skill is not installed; searched ${roots.join(", ")}`,
-	);
+	return [
+		{ path: "CLAUDE.md", sha256: sha256(instructions) },
+		...(await hashDirectory(directory, join("skills", skill))),
+	];
 }
 
 /**
