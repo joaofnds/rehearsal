@@ -67,7 +67,7 @@ function stageLabel(stage: unknown, index: number) {
 			: undefined;
 
 	return typeof name === "string" && name.length > 0
-		? name
+		? `stage ${name}`
 		: `stage at index ${index}`;
 }
 
@@ -101,7 +101,7 @@ export function parsePipeline(
 		const field = rest.length > 0 ? rest.join(".") : "definition";
 
 		throw new PipelineDefinitionError(
-			`Pipeline stage ${stageLabel(stage, index)} has an invalid ${field}: ${message}`,
+			`Pipeline ${stageLabel(stage, index)} has an invalid ${field}: ${message}`,
 		);
 	}
 
