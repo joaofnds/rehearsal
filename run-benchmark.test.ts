@@ -2769,10 +2769,13 @@ describe(lineageKey, () => {
 });
 
 describe(captureStageCorpus, () => {
-	async function corpusRoots() {
+	async function corpusRoots(): Promise<[string, string]> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		temporaryDirectories.push(directory);
-		const roots = [join(directory, "target"), join(directory, "home")];
+		const roots: [string, string] = [
+			join(directory, "target"),
+			join(directory, "home"),
+		];
 		await Promise.all(roots.map((root) => mkdir(root, { recursive: true })));
 
 		return roots;
@@ -2787,7 +2790,7 @@ describe(captureStageCorpus, () => {
 
 	it("hashes the installed instructions and every skill file", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1] as string, "discuss", "discuss skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
 
 		const corpus = await captureStageCorpus("discuss", "instructions", roots);
 
@@ -2801,14 +2804,14 @@ describe(captureStageCorpus, () => {
 
 	it("records the same corpus wherever the same skill files live", async () => {
 		const [targetRoot, homeRoot] = await corpusRoots();
-		await installSkill(targetRoot as string, "discuss", "discuss skill");
-		await installSkill(homeRoot as string, "discuss", "discuss skill");
+		await installSkill(targetRoot, "discuss", "discuss skill");
+		await installSkill(homeRoot, "discuss", "discuss skill");
 
 		const fromTarget = await captureStageCorpus("discuss", "instructions", [
-			targetRoot as string,
+			targetRoot,
 		]);
 		const fromHome = await captureStageCorpus("discuss", "instructions", [
-			homeRoot as string,
+			homeRoot,
 		]);
 
 		expect(fromTarget).toEqual(fromHome);
@@ -2816,12 +2819,12 @@ describe(captureStageCorpus, () => {
 
 	it("prefers the first root that has the skill", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[0] as string, "discuss", "target copy");
-		await installSkill(roots[1] as string, "discuss", "home copy");
+		await installSkill(roots[0], "discuss", "target copy");
+		await installSkill(roots[1], "discuss", "home copy");
 
 		const corpus = await captureStageCorpus("discuss", "instructions", roots);
 		const homeOnly = await captureStageCorpus("discuss", "instructions", [
-			roots[1] as string,
+			roots[1],
 		]);
 
 		expect(corpus).not.toEqual(homeOnly);
