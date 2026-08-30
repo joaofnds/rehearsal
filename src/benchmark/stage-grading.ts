@@ -3,12 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
-import {
-	CLAUDE_TIMEOUT_MS,
-	CONTROL_DIR,
-	type Effort,
-	type WorkflowStage,
-} from "./config";
+import { CLAUDE_TIMEOUT_MS, CONTROL_DIR, type Effort } from "./config";
 import {
 	citationMatchesPath,
 	type StageGrade,
