@@ -2238,6 +2238,23 @@ describe(parsePipeline, () => {
 		);
 	});
 
+	it("rejects a stage name that is not a plain identifier", () => {
+		for (const name of ["../../escaped", "a/b", "with space", "dot.dot"]) {
+			expect(() =>
+				parse([stageEntry({ name, skill: "s" }), deliveryStage]),
+			).toThrow(/name/);
+		}
+	});
+
+	it("accepts a stage name with letters, digits, dashes, and underscores", () => {
+		const parsed = parse([
+			stageEntry({ name: "deep_research-2", skill: "s" }),
+			deliveryStage,
+		]);
+
+		expect(parsed.stages[0]?.name).toBe("deep_research-2");
+	});
+
 	it("rejects a stage named final, which marks the final Judge", () => {
 		expect(() =>
 			parse([stageEntry({ name: "final", skill: "final" }), deliveryStage]),

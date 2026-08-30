@@ -3,9 +3,21 @@ import { join, relative } from "node:path";
 import { z } from "zod";
 import { CONTROL_DIR } from "./config";
 
+/**
+ * A stage name is interpolated into the run artifact's file names, so it must
+ * be a single safe path segment: no separators, no traversal, no spaces.
+ */
+const stageNameSchema = z
+	.string()
+	.min(1)
+	.regex(
+		/^[a-z0-9][a-z0-9_-]*$/i,
+		"must be letters, digits, dashes, or underscores",
+	);
+
 const stageDefinitionSchema = z.discriminatedUnion("kind", [
 	z.object({
-		name: z.string().min(1),
+		name: stageNameSchema,
 		kind: z.literal("planning"),
 		skill: z.string().min(1),
 		artifact: z.string().min(1),
@@ -13,7 +25,7 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 		requiresAcceptanceCriteria: z.boolean().default(false),
 	}),
 	z.object({
-		name: z.string().min(1),
+		name: stageNameSchema,
 		kind: z.literal("delivery"),
 		skill: z.string().min(1),
 		rubric: z.string().min(1),
