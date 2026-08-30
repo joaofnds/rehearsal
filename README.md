@@ -4,6 +4,8 @@ This repository controls an authentic rehearsal of the development workflow used
 
 The benchmark runs directly in the target repository on `main`. It does not use a clone, branch, or worktree. That is deliberate: the goal is to measure behavior in the same repository, path, instruction hierarchy, settings, skills, hooks, memories, and tool environment used for real work.
 
+Where this is heading — a stage-replay corpus-tuning tool — is written in [docs/vision.md](docs/vision.md) and [docs/design.md](docs/design.md). Domain terms live in [GLOSSARY.md](GLOSSARY.md).
+
 ## What The Benchmark Measures
 
 The benchmark tests whether the current instruction corpus and workflow can turn a rough backlog item into production-quality committed code with almost no human intervention.

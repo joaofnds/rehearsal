@@ -1,0 +1,40 @@
+# Glossary
+
+- **Artifact** — durable output of a stage: a spec or plan document, a backlog
+  card update, or commits.
+- **Calibration** — the human-review step that validates a Judge result and
+  turns findings into rubric or instruction changes.
+- **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
+  state, artifacts, and lineage.
+- **Control repository** — this repository: harness, corpus under evaluation,
+  rubrics, and run artifacts.
+- **Corpus (instruction corpus)** — the instruction files under evaluation:
+  the installed `CLAUDE.md`, the stage skills, and related agent configuration.
+- **Corpus tier** — stage-local (a skill; testable in stage mode) or global
+  (`CLAUDE.md`, doctrine; validated only end-to-end).
+- **End-to-end mode** — running the whole pipeline and judging only the final
+  code; the integration test.
+- **Judge** — evaluator attached to a stage transition: deterministic check or
+  rubric-scored LLM with rationale.
+- **Lineage** — hash of everything that produced a checkpoint: upstream
+  checkpoint, corpus files feeding the stage, model, effort.
+- **Pipeline** — the ordered stages and their judge attachments, declared as
+  data.
+- **Product Owner (PO)** — the dynamic agent that answers stage questions from
+  the product brief; one session per run.
+- **Rep** — one repetition of a run; scores are distributions over reps, never
+  a single rep.
+- **Replay** — re-running one stage from a checkpoint with the current corpus,
+  in a fresh worktree.
+- **Rubric** — the frozen grading contract a Judge applies; per-stage under
+  `rubrics/`, final in `rubric.md`.
+- **Run artifact** — the recorded evidence of a run under `.benchmark-runs/`.
+- **Sealed session** — a Claude session with safe mode and no tools, used for
+  judges.
+- **Stage** — one pipeline step: a skill invocation consuming upstream
+  artifacts and emitting its own.
+- **Stage mode** — running one stage against frozen upstream artifacts; the
+  unit test, with clean attribution and a proxy score.
+- **Target repository (template project)** — the real application repository,
+  kept at a stable baseline, that tasks run against.
+- **Variant** — a named configuration: corpus version, model, and effort.
