@@ -1,10 +1,10 @@
 ---
 id: ACT-1
 title: declare the pipeline as data
-status: Shape
+status: Build
 assignee: []
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 15:25'
+updated_date: '2026-08-30 16:05'
 labels: []
 dependencies: []
 references:
@@ -20,13 +20,14 @@ The Discuss → Grill → Plan → Build sequence, each stage's skill, artifact 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A parsed pipeline definition, authored as data outside TypeScript, names each stage with its kind, skill, expected artifact, and rubric path.
-- [ ] #2 The four-stage run executes discuss, grill, plan, build in order from the definition, carrying each planning artifact into later stages' priorArtifacts and attaching build evidence only to the delivery stage; the existing runGradedStages tests pass unchanged in intent.
-- [ ] #3 A definition with plan removed executes exactly discuss, grill, build, with grill's artifact in build's priorArtifacts, and no TypeScript differs between the four- and three-stage cases.
-- [ ] #4 A definition with grill and plan swapped executes discuss, plan, grill, build.
-- [ ] #5 A definition adding a fifth planning stage under a name absent from today's union executes it and judges it against the rubric the definition names.
-- [ ] #6 A definition that omits a required field, names a missing rubric file, repeats a stage name, or declares no delivery stage is rejected with an error naming the offending stage and field, one test per defect class.
-- [ ] #7 The rejection happens before the target repository is claimed, so a malformed definition cannot leave a target dirty.
+- [ ] #1 The four-stage run executes discuss, grill, plan, build in order from the definition, carrying each planning artifact into later stages' priorArtifacts and attaching build evidence only to the delivery stage; the existing runGradedStages tests pass unchanged in intent.
+- [ ] #2 A definition with plan removed executes exactly discuss, grill, build, with grill's artifact in build's priorArtifacts, and no TypeScript differs between the four- and three-stage cases.
+- [ ] #3 A definition with grill and plan swapped executes discuss, plan, grill, build.
+- [ ] #4 A definition adding a fifth planning stage under a name absent from today's union executes it and judges it against the rubric the definition names.
+- [ ] #5 The pipeline definition is JSON at pipelines/default.json, parsed with zod, naming each stage's kind, skill, expected artifact, and rubric path.
+- [ ] #6 A --pipeline flag selects the definition file and defaults to pipelines/default.json, alongside the existing --target and --model flags.
+- [ ] #7 A definition that omits a required field, names a missing rubric file, repeats a stage name, declares no delivery stage, declares more than one, or does not place the delivery stage last is rejected with an error naming the offending stage and field, one test per defect class.
+- [ ] #8 Definition rejection happens before the target repository is claimed, so a malformed definition cannot leave a target dirty.
 <!-- AC:END -->
 
 ## Shaping
@@ -95,9 +96,10 @@ readable; older artifacts remain parseable because the enums only widen.
 
 ### Where the definition lives
 
-A file in the control repository, beside the rubrics it references. TypeScript
-that exports a literal is not data: it fails criterion #3, which says a change
-must need no TypeScript change. Question 1 below asks which format.
+JSON at `pipelines/default.json`, beside the rubrics it references, parsed with
+zod, selected by a `--pipeline` flag that defaults to that path. TypeScript that
+exports a literal is not data: it fails the criterion that a pipeline change
+must need no TypeScript change.
 
 Whichever format, the definition names for each stage: `name`, `kind`, the
 skill to invoke, the expected artifact (document suffix for planning stages),
@@ -133,24 +135,28 @@ acceptance-criteria requirement that only `discuss` carries today.
 
 ### First test to write
 
-Test #2 above: `runGradedStages` executes `discuss, grill, build` from a
+Acceptance #2: `runGradedStages` executes `discuss, grill, build` from a
 definition with `plan` removed. It fails today because the loop cannot see a
-definition at all, it forces the sequence parameter into existence, and it does
-not depend on any decision below. Write it before touching the schemas.
+definition at all, and it forces the sequence parameter into existence. Write it
+before touching the schemas.
 
 ### Order of work
 
 The type widening is the risky part and everything else rests on it, so do it
 first and keep the suite green at each step:
 
-1. Introduce the definition type and its parser with the validation tests (#5),
-   nothing consuming it yet.
-2. Thread the sequence into `runGradedStages` (#2, #3), still with the closed
-   union.
-3. Widen `WorkflowStage` and the two Zod enums; add the new-stage test (#4).
+1. Introduce the definition type and its zod parser with the rejection tests
+   (acceptance #7), nothing consuming it yet.
+2. Thread the sequence into `runGradedStages` (acceptance #2, #3), still with
+   the closed union.
+3. Widen `WorkflowStage` and the two zod enums; add the new-stage test
+   (acceptance #4).
 4. Replace the `stage === "build"` branches with the `kind` strategies.
 5. Move skill, document suffix, and rubric path out of code into the
-   definition.
+   definition, and write `pipelines/default.json` describing today's four
+   stages (acceptance #5).
+6. Add the `--pipeline` flag to `parseArgs`, and parse the definition before
+   `claimTarget` so a bad file cannot dirty a target (acceptance #6, #8).
 
 ### Unknowns resolved without asking
 
@@ -175,19 +181,18 @@ first and keep the suite green at each step:
 
 <!-- SECTION:OPEN-QUESTIONS:BEGIN -->
 
-Answers go here; Build reads them from this section.
+All three are answered; Build treats them as settled constraints.
 
-1. **Definition format.** Recommendation: JSON at `pipelines/default.json`,
-   beside `rubrics/`, parsed with zod. Rejected: YAML (adds a dependency this
-   repository does not have), and a TypeScript module (fails criterion #3).
-   Answer: _pending_
-2. **Configurability.** Recommendation: a `--pipeline` flag defaulting to the
-   built-in path, matching how `--target` and `--model` already work; without
-   it, a second pipeline means editing the default file in place.
-   Answer: _pending_
-3. **Fixed first and last stage?** Recommendation: require exactly one delivery
-   stage and require it last, since the final Judge and the run artifact both
-   assume a single committed result. Relaxing this belongs with checkpoints.
-   Answer: _pending_
+1. **Definition format.** JSON at `pipelines/default.json`, beside `rubrics/`,
+   parsed with zod. Rejected: YAML (adds a dependency this repository does not
+   have), and a TypeScript module (fails criterion #3).
+   Answer: agreed.
+2. **Configurability.** A `--pipeline` flag defaulting to the built-in path,
+   matching how `--target` and `--model` already work.
+   Answer: agreed.
+3. **Fixed first and last stage?** Require exactly one delivery stage and
+   require it last, since the final Judge and the run artifact both assume a
+   single committed result. Relaxing this belongs with checkpoints.
+   Answer: agreed.
 
 <!-- SECTION:OPEN-QUESTIONS:END -->
