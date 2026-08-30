@@ -65,7 +65,14 @@ import {
 } from "./src/benchmark/manifest";
 import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
-import { loadRunCheckpoints, resolveReplay } from "./src/benchmark/replay";
+import {
+	loadRunCheckpoints,
+	type ReplayDependencies,
+	type ReplayRequest,
+	readReplayRecord,
+	resolveReplay,
+	runReplay,
+} from "./src/benchmark/replay";
 import {
 	buildRunArtifact,
 	retainedCheckpointRecorder,
@@ -3388,6 +3395,392 @@ describe(resolveReplay, () => {
 		expect(() => resolveReplay(manifest(), forged, "build")).toThrow(
 			/chain is broken at the plan stage/,
 		);
+	});
+});
+
+describe(runReplay, () => {
+	const SPEC_CONTENT = "the spec\n";
+	const SPEC_PATH = "backlog/docs/DOC-1 - spec.md";
+
+	async function recordedRun() {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replayrun-"));
+		temporaryDirectories.push(directory);
+		const stateDir = join(directory, "state");
+		await mkdir(join(stateDir, "backlog", "docs"), { recursive: true });
+		await Bun.write(join(stateDir, "backlog", "config.yml"), "statuses: []\n");
+		const runDirectory = join(directory, "run.checkpoints");
+		const initial = await recordCheckpoint(
+			stateDir,
+			join(runDirectory, "initial"),
+			{
+				stage: "initial",
+				targetSha: "task-sha",
+				upstream: "root-key",
+				model: "sonnet",
+				corpusFiles: [],
+				artifacts: [],
+			},
+		);
+		await Bun.write(join(stateDir, SPEC_PATH), SPEC_CONTENT);
+		const discuss = await recordCheckpoint(
+			stateDir,
+			join(runDirectory, "discuss"),
+			{
+				stage: "discuss",
+				targetSha: "task-sha",
+				upstream: initial.lineage,
+				model: "sonnet",
+				corpusFiles: [],
+				artifacts: [
+					{
+						path: SPEC_PATH,
+						sha256: createHash("sha256").update(SPEC_CONTENT).digest("hex"),
+					},
+				],
+			},
+		);
+		const manifest: RunManifest = {
+			timestamp: "2026-08-30T00:00:00.000Z",
+			controlSha: "run-control-sha",
+			sourceRoot: join(directory, "primary"),
+			sourceSha: "source-sha",
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+			pipeline: {
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+					{
+						name: "build",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/build.json",
+					},
+				],
+			},
+		};
+		await writeRunManifest(runDirectory, manifest);
+
+		return {
+			runDirectory,
+			manifest,
+			initial,
+			discuss,
+			replaysRoot: join(directory, "replays"),
+		};
+	}
+
+	function scorecardFor(
+		input: StageJudgeInput,
+		verdict: "CONTINUE" | "STOP" = "CONTINUE",
+	): StageScorecard {
+		return {
+			stage: input.stage,
+			rubricPath: "rubrics/stage.json",
+			rubric: {
+				hardBlockers: [],
+				requirements: [{ id: "scope", description: "Scope is explicit" }],
+				dimensions: [
+					{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
+				],
+			},
+			input,
+			prompt: "prompt",
+			costUsd: 0.5,
+			grade: {
+				hardBlockers: [],
+				requirements: [],
+				dimensions: [],
+				summary: "graded",
+				grade: verdict === "CONTINUE" ? "B" : "F",
+				verdict,
+			},
+		};
+	}
+
+	function fakeReplayDependencies(overrides: Partial<ReplayDependencies> = {}) {
+		const stageDirs: string[] = [];
+		const branchExpectations: (string | null | undefined)[] = [];
+		const worktrees: { root: string; sha: string; path: string }[] = [];
+		const removed: string[] = [];
+		const installed: string[] = [];
+		const judged: StageJudgeInput[] = [];
+		const log: string[] = [];
+
+		const dependencies: ReplayDependencies = {
+			stageSession: {
+				runWorkflowStage: async (
+					targetDir,
+					_productOwnerDirectory,
+					_model,
+					_effort,
+					_budget,
+					_productOwner,
+					_task,
+					_productBrief,
+					_taskId,
+					stage,
+				) => {
+					stageDirs.push(targetDir);
+
+					return { stage, sessionId: "session", costUsd: 1.25, exchanges: [] };
+				},
+				readTaskOutput: async (targetDir) => {
+					stageDirs.push(targetDir);
+
+					return JSON.stringify({
+						task: { acceptanceCriteria: ["done"], documentation: [] },
+					});
+				},
+				captureBuildCandidate: async (targetDir) => {
+					stageDirs.push(targetDir);
+
+					return { resultSha: "candidate-sha", diff: "diff", changedPaths: [] };
+				},
+				assertPlanningStageCompleted: async (
+					targetDir,
+					_taskSha,
+					stage,
+					_taskState,
+					expectedBranch,
+				) => {
+					stageDirs.push(targetDir);
+					branchExpectations.push(expectedBranch);
+
+					return {
+						taskState: `${stage.name}-state`,
+						artifact: {
+							path: `backlog/docs/${stage.name}.md`,
+							content: `${stage.name} artifact`,
+						},
+					};
+				},
+				assertBuildCommitted: async (targetDir, _taskSha, expectedBranch) => {
+					stageDirs.push(targetDir);
+					branchExpectations.push(expectedBranch);
+
+					return { resultSha: "result-sha", diff: "the-diff" };
+				},
+				changedPathsBetween: async (targetDir) => {
+					stageDirs.push(targetDir);
+
+					return ["src/example.ts"];
+				},
+				captureCheckIntegrity: async (targetDir) => {
+					stageDirs.push(targetDir);
+
+					return harnessResult("PASS", "checks match");
+				},
+				captureTreatmentChecks: async (targetDir) => {
+					stageDirs.push(targetDir);
+
+					return harnessResult("PASS", "all green");
+				},
+				captureStageCorpus: async (skill) => [
+					{
+						path: `skills/${skill}/SKILL.md`,
+						sha256: createHash("sha256").update(skill).digest("hex"),
+					},
+				],
+			},
+			runStageJudge: async (_model, _effort, _budget, input) => {
+				judged.push(input);
+
+				return scorecardFor(input);
+			},
+			loadStageRubric: async () => ({
+				rubricPath: "rubrics/stage.json",
+				content: "{}",
+				rubric: scorecardFor({} as StageJudgeInput).rubric,
+			}),
+			addWorktree: async (root, sha, path) => {
+				worktrees.push({ root, sha, path });
+			},
+			removeWorktree: async (_root, path) => {
+				removed.push(path);
+			},
+			materializeCheckpoint,
+			captureFileHashes: async (targetDir) => {
+				stageDirs.push(targetDir);
+
+				return new Map<string, string>();
+			},
+			captureBaselineContext: async (targetDir) => {
+				stageDirs.push(targetDir);
+
+				return [];
+			},
+			installInstructions: async (targetDir) => {
+				stageDirs.push(targetDir);
+
+				return "base-sha";
+			},
+			installDependencies: async (targetDir) => {
+				installed.push(targetDir);
+			},
+			log: (message) => log.push(message),
+			...overrides,
+		};
+
+		return {
+			dependencies,
+			stageDirs,
+			branchExpectations,
+			worktrees,
+			removed,
+			installed,
+			judged,
+			log,
+		};
+	}
+
+	function request(
+		run: Awaited<ReturnType<typeof recordedRun>>,
+		stage: string,
+	): ReplayRequest {
+		return {
+			runName: "run",
+			runDirectory: run.runDirectory,
+			replaysRoot: run.replaysRoot,
+			stage,
+			instructions: "Current instructions",
+			controlSha: "control-sha",
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+		};
+	}
+
+	it("replays a delivery stage in the worktree and never touches the primary", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+
+		const worktree = fake.worktrees[0];
+		expect(worktree?.root).toBe(run.manifest.sourceRoot);
+		expect(worktree?.sha).toBe(run.discuss.targetSha);
+		expect(fake.stageDirs.length).toBeGreaterThan(0);
+		expect(fake.stageDirs.every((dir) => dir === worktree?.path)).toBe(true);
+		expect(fake.branchExpectations).toEqual([null]);
+		expect(fake.installed).toEqual([worktree?.path ?? ""]);
+		expect(fake.removed).toEqual([worktree?.path ?? ""]);
+		expect(fake.judged[0]?.priorArtifacts).toEqual([
+			{ path: SPEC_PATH, content: SPEC_CONTENT },
+		]);
+		expect(outcome.record.consumed).toEqual({
+			stage: "discuss",
+			lineage: run.discuss.lineage,
+			targetSha: "task-sha",
+		});
+		expect(outcome.record.lineage).toBe(
+			lineageKey({
+				upstream: run.discuss.lineage,
+				corpusFiles: [
+					{
+						path: "skills/build/SKILL.md",
+						sha256: createHash("sha256").update("build").digest("hex"),
+					},
+				],
+				model: "sonnet",
+			}),
+		);
+		expect(outcome.record.stageCostUsd).toBe(1.25);
+		expect(outcome.record.judgeCostUsd).toBe(0.5);
+		expect(outcome.record.resultSha).toBe("result-sha");
+		expect(outcome.recordPath.startsWith(run.replaysRoot)).toBe(true);
+		expect(outcome.recordPath).toContain(run.discuss.lineage);
+	});
+
+	it("writes a record that validates against the replay schema", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+
+		const record = await readReplayRecord(outcome.recordPath);
+		expect(record.replay).toBe(true);
+		expect(record.consumed.lineage).toBe(run.discuss.lineage);
+		expect(record.corpusFiles.length).toBeGreaterThan(0);
+		expect(record.scorecard.grade.verdict).toBe("CONTINUE");
+	});
+
+	it("replays the first stage from the initial checkpoint without installing dependencies", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "discuss"));
+
+		expect(outcome.record.consumed.stage).toBe("initial");
+		expect(fake.installed).toEqual([]);
+		expect(fake.branchExpectations).toEqual([null]);
+		expect(fake.judged[0]?.priorArtifacts).toEqual([]);
+	});
+
+	it("records a STOP verdict as a result and still removes the worktree", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+		const stopping = {
+			...fake.dependencies,
+			runStageJudge: async (
+				_model: string | undefined,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => scorecardFor(input, "STOP"),
+		};
+
+		const outcome = await runReplay(stopping, request(run, "build"));
+
+		expect(outcome.record.scorecard.grade.verdict).toBe("STOP");
+		expect(fake.removed).toHaveLength(1);
+	});
+
+	it("keeps the worktree and prints its path when the replay fails before grading", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+		const failing = {
+			...fake.dependencies,
+			runStageJudge: async () => {
+				throw new Error("judge died");
+			},
+		};
+
+		await expect(runReplay(failing, request(run, "build"))).rejects.toThrow(
+			"judge died",
+		);
+
+		expect(fake.removed).toEqual([]);
+		const preserved = fake.log.find((line) =>
+			line.includes("evidence preserved at"),
+		);
+		expect(preserved).toContain(fake.worktrees[0]?.path ?? "missing");
+	});
+
+	it("fails loudly when the run predates initial checkpoints", async () => {
+		const run = await recordedRun();
+		await rm(join(run.runDirectory, "initial"), {
+			force: true,
+			recursive: true,
+		});
+		const fake = fakeReplayDependencies();
+
+		await expect(
+			runReplay(fake.dependencies, request(run, "discuss")),
+		).rejects.toThrow(/no initial checkpoint/);
+		expect(fake.worktrees).toEqual([]);
 	});
 });
 

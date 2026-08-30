@@ -88,6 +88,22 @@ export async function createTaskCommit(
 	const taskId = /Task ([A-Z]+-\d+)/.exec(createdTask)?.[1];
 	if (!taskId) throw new Error("Backlog did not return the created task ID");
 
+	return {
+		taskId,
+		taskSha: await installInstructions(targetDir, instructions),
+	};
+}
+
+/**
+ * Commits the instruction corpus so the session reads it from the tree like
+ * any project file. A replay reuses this to swap the checkpoint-era
+ * CLAUDE.md for the current one; when the content already matches, nothing
+ * is committed and the checkout's SHA stands.
+ */
+export async function installInstructions(
+	targetDir: string,
+	instructions: string,
+) {
 	await Bun.write(join(targetDir, "CLAUDE.md"), instructions);
 	await git(targetDir, "add", "--", "CLAUDE.md");
 	const stagedPaths = await git(targetDir, "diff", "--cached", "--name-only");
@@ -103,10 +119,7 @@ export async function createTaskCommit(
 		);
 	}
 
-	return {
-		taskId,
-		taskSha: await git(targetDir, "rev-parse", "HEAD"),
-	};
+	return await git(targetDir, "rev-parse", "HEAD");
 }
 
 export async function readTaskOutput(targetDir: string, taskId: string) {

@@ -1,13 +1,33 @@
-import { readdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
+import type { installInstructions } from "./backlog";
 import {
 	type CheckpointRecord,
 	type HashedFile,
+	hashArtifacts,
+	hashedFileSchema,
 	INITIAL_CHECKPOINT_STAGE,
+	lineageKey,
+	type materializeCheckpoint,
 	readCheckpointRecord,
+	skillSearchRoots,
 } from "./checkpoint";
-import type { RunManifest } from "./manifest";
+import type { captureBaselineContext, captureFileHashes } from "./checks";
+import { type Effort, effortSchema } from "./config";
+import {
+	type ContextFile,
+	type StageScorecard,
+	stageLetterGradeSchema,
+} from "./contracts";
+import { loadRunManifest, type RunManifest } from "./manifest";
 import type { StageDefinition } from "./pipeline";
+import { executeStageSession, type StageSessionDependencies } from "./run";
+import type { loadStageRubric, runStageJudge } from "./stage-grading";
+import type { addWorktree, removeWorktree } from "./target";
+import type { ProductOwnerSession } from "./workflow";
 
 export class ReplayError extends Error {}
 
@@ -86,4 +106,294 @@ export function resolveReplay(
 	}
 
 	return { definition, consumed, priorArtifacts };
+}
+
+export interface ReplayDependencies {
+	readonly stageSession: StageSessionDependencies;
+	readonly runStageJudge: typeof runStageJudge;
+	readonly loadStageRubric: typeof loadStageRubric;
+	readonly addWorktree: typeof addWorktree;
+	readonly removeWorktree: typeof removeWorktree;
+	readonly materializeCheckpoint: typeof materializeCheckpoint;
+	readonly captureBaselineContext: typeof captureBaselineContext;
+	readonly captureFileHashes: typeof captureFileHashes;
+	readonly installInstructions: typeof installInstructions;
+	readonly installDependencies: (worktreeDir: string) => Promise<void>;
+	readonly log: (message: string) => void;
+}
+
+export interface ReplayRequest {
+	readonly runName: string;
+	readonly runDirectory: string;
+	readonly replaysRoot: string;
+	readonly stage: string;
+	readonly instructions: string;
+	readonly controlSha: string;
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
+	readonly sessionBudgetUsd: number;
+}
+
+export interface ReplayRecord {
+	readonly replay: true;
+	readonly timestamp: string;
+	readonly runName: string;
+	readonly stage: string;
+	readonly consumed: {
+		readonly stage: string;
+		readonly lineage: string;
+		readonly targetSha: string;
+	};
+	readonly baseSha: string;
+	readonly lineage: string;
+	readonly corpusFiles: readonly HashedFile[];
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort;
+	readonly sessionBudgetUsd: number;
+	readonly controlSha: string;
+	readonly stageCostUsd: number;
+	readonly productOwnerCostUsd: number;
+	readonly judgeCostUsd: number;
+	readonly resultSha?: string;
+	readonly scorecard: StageScorecard;
+}
+
+/**
+ * The replay-specific envelope is strict; the scorecard inside it stays open
+ * because its shape belongs to stage grading and is validated there.
+ */
+export const replayRecordSchema = z
+	.object({
+		replay: z.literal(true),
+		timestamp: z.string().min(1),
+		runName: z.string().min(1),
+		stage: z.string().min(1),
+		consumed: z
+			.object({
+				stage: z.string().min(1),
+				lineage: z.string().min(1),
+				targetSha: z.string().min(1),
+			})
+			.strict(),
+		baseSha: z.string().min(1),
+		lineage: z.string().min(1),
+		corpusFiles: z.array(hashedFileSchema),
+		model: z.string().min(1),
+		effort: effortSchema.optional(),
+		judgeModel: z.string().min(1),
+		judgeEffort: effortSchema.optional(),
+		sessionBudgetUsd: z.number().positive(),
+		controlSha: z.string().min(1),
+		stageCostUsd: z.number().nonnegative(),
+		productOwnerCostUsd: z.number().nonnegative(),
+		judgeCostUsd: z.number().nonnegative(),
+		resultSha: z.string().min(1).optional(),
+		scorecard: z
+			.object({
+				stage: z.string().min(1),
+				costUsd: z.number(),
+				grade: z
+					.object({
+						grade: stageLetterGradeSchema,
+						verdict: z.enum(["CONTINUE", "STOP"]),
+					})
+					.passthrough(),
+			})
+			.passthrough(),
+	})
+	.strict();
+
+export async function readReplayRecord(path: string) {
+	return replayRecordSchema.parse(JSON.parse(await Bun.file(path).text()));
+}
+
+export interface ReplayOutcome {
+	readonly record: ReplayRecord;
+	readonly recordPath: string;
+}
+
+/**
+ * A replayed stage validates against the worktree's detached HEAD: main
+ * cannot be checked out twice, and the primary checkout must stay untouched.
+ */
+function detachedStageDependencies(
+	base: StageSessionDependencies,
+): StageSessionDependencies {
+	return {
+		...base,
+		assertPlanningStageCompleted: (targetDir, taskSha, stage, taskState) =>
+			base.assertPlanningStageCompleted(
+				targetDir,
+				taskSha,
+				stage,
+				taskState,
+				null,
+			),
+		assertBuildCommitted: (targetDir, taskSha) =>
+			base.assertBuildCommitted(targetDir, taskSha, null),
+	};
+}
+
+/**
+ * Prior artifacts reach the judge from the materialized snapshot, verified
+ * against the hashes their own checkpoints recorded when they were accepted.
+ */
+async function readPriorArtifacts(
+	worktreeDir: string,
+	recorded: readonly HashedFile[],
+): Promise<ContextFile[]> {
+	const artifacts: ContextFile[] = [];
+
+	for (const { path, sha256 } of recorded) {
+		const file = Bun.file(join(worktreeDir, path));
+		if (!(await file.exists())) {
+			throw new ReplayError(
+				`Prior artifact ${path} is missing from the materialized checkpoint`,
+			);
+		}
+
+		const content = await file.text();
+		if (hashArtifacts([{ path, content }])[0]?.sha256 !== sha256) {
+			throw new ReplayError(
+				`Prior artifact ${path} does not match its checkpoint record`,
+			);
+		}
+
+		artifacts.push({ path, content });
+	}
+
+	return artifacts;
+}
+
+export async function runReplay(
+	dependencies: ReplayDependencies,
+	request: ReplayRequest,
+): Promise<ReplayOutcome> {
+	const manifest = await loadRunManifest(request.runDirectory);
+	const checkpoints = await loadRunCheckpoints(request.runDirectory);
+	const plan = resolveReplay(manifest, checkpoints, request.stage);
+
+	const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-"));
+	const worktreeDir = join(parent, "worktree");
+	const productOwnerDirectory = join(parent, "product-owner");
+	await mkdir(productOwnerDirectory, { recursive: true });
+	await dependencies.addWorktree(
+		manifest.sourceRoot,
+		plan.consumed.targetSha,
+		worktreeDir,
+	);
+
+	let outcome: ReplayOutcome;
+	try {
+		await dependencies.materializeCheckpoint(
+			join(request.runDirectory, plan.consumed.stage),
+			worktreeDir,
+		);
+		const baseSha = await dependencies.installInstructions(
+			worktreeDir,
+			request.instructions,
+		);
+		if (plan.definition.kind === "delivery") {
+			await dependencies.installDependencies(worktreeDir);
+		}
+		const priorArtifacts = await readPriorArtifacts(
+			worktreeDir,
+			plan.priorArtifacts,
+		);
+		const baselineHashes = await dependencies.captureFileHashes(worktreeDir);
+		const baselineContext =
+			await dependencies.captureBaselineContext(worktreeDir);
+		const productOwner: ProductOwnerSession = {
+			sessionId: randomUUID(),
+			spentUsd: 0,
+			started: false,
+		};
+
+		const session = await executeStageSession(
+			detachedStageDependencies(dependencies.stageSession),
+			{
+				targetDir: worktreeDir,
+				productOwnerDirectory,
+				model: request.model,
+				effort: request.effort,
+				sessionBudgetUsd: request.sessionBudgetUsd,
+				productOwner,
+				task: manifest.task,
+				productBrief: manifest.productBrief,
+				instructions: request.instructions,
+				baselineContext,
+				baselineHashes,
+				taskId: manifest.taskId,
+				taskSha: baseSha,
+				skillRoots: skillSearchRoots(worktreeDir),
+				log: dependencies.log,
+			},
+			plan.definition,
+			priorArtifacts,
+		);
+
+		dependencies.log(`\n${request.stage} stage Judge`);
+		const scorecard = await dependencies.runStageJudge(
+			request.judgeModel,
+			request.judgeEffort,
+			request.sessionBudgetUsd,
+			session.input,
+			await dependencies.loadStageRubric(plan.definition),
+		);
+
+		const timestamp = new Date().toISOString();
+		const record: ReplayRecord = {
+			replay: true,
+			timestamp,
+			runName: request.runName,
+			stage: request.stage,
+			consumed: {
+				stage: plan.consumed.stage,
+				lineage: plan.consumed.lineage,
+				targetSha: plan.consumed.targetSha,
+			},
+			baseSha,
+			lineage: lineageKey({
+				upstream: plan.consumed.lineage,
+				corpusFiles: session.corpusFiles,
+				model: request.model,
+				effort: request.effort,
+			}),
+			corpusFiles: session.corpusFiles,
+			model: request.model,
+			...(request.effort === undefined ? {} : { effort: request.effort }),
+			judgeModel: request.judgeModel,
+			...(request.judgeEffort === undefined
+				? {}
+				: { judgeEffort: request.judgeEffort }),
+			sessionBudgetUsd: request.sessionBudgetUsd,
+			controlSha: request.controlSha,
+			stageCostUsd: session.transcript.costUsd,
+			productOwnerCostUsd: productOwner.spentUsd,
+			judgeCostUsd: scorecard.costUsd,
+			...(session.buildEvidence === undefined
+				? {}
+				: { resultSha: session.buildEvidence.resultSha }),
+			scorecard,
+		};
+		const recordPath = join(
+			request.replaysRoot,
+			plan.consumed.lineage,
+			`${timestamp.replaceAll(":", "-")}.json`,
+		);
+		await Bun.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+		outcome = { record, recordPath };
+	} catch (error) {
+		dependencies.log(`Replay failed; evidence preserved at ${worktreeDir}`);
+		throw error;
+	}
+
+	await dependencies.removeWorktree(manifest.sourceRoot, worktreeDir);
+	await rm(parent, { force: true, recursive: true });
+
+	return outcome;
 }

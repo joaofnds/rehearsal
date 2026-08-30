@@ -180,7 +180,7 @@ export function hashArtifacts(
 	}));
 }
 
-const hashedFileSchema = z.object({
+export const hashedFileSchema = z.object({
 	path: z
 		.string()
 		.min(1)
