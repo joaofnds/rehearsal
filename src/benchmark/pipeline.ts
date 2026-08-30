@@ -4,10 +4,11 @@ import { z } from "zod";
 import { CONTROL_DIR } from "./config";
 
 /**
- * A stage name is interpolated into the run artifact's file names, so it must
- * be a single safe path segment: no separators, no traversal, no spaces.
+ * Stage and skill names are interpolated into paths and into the prompt of a
+ * session that runs without permission prompts, so both must be a single plain
+ * identifier: no separators, no traversal, no whitespace, no newlines.
  */
-const stageNameSchema = z
+const identifierSchema = z
 	.string()
 	.min(1)
 	.regex(
@@ -17,17 +18,17 @@ const stageNameSchema = z
 
 const stageDefinitionSchema = z.discriminatedUnion("kind", [
 	z.object({
-		name: stageNameSchema,
+		name: identifierSchema,
 		kind: z.literal("planning"),
-		skill: z.string().min(1),
+		skill: identifierSchema,
 		artifact: z.string().min(1),
 		rubric: z.string().min(1),
 		requiresAcceptanceCriteria: z.boolean().default(false),
 	}),
 	z.object({
-		name: stageNameSchema,
+		name: identifierSchema,
 		kind: z.literal("delivery"),
-		skill: z.string().min(1),
+		skill: identifierSchema,
 		rubric: z.string().min(1),
 	}),
 ]);
