@@ -44,6 +44,7 @@ import type {
 	StageTranscript,
 } from "./contracts";
 import { runJudge, validateRubricDefinition } from "./judge";
+import { writeRunManifest } from "./manifest";
 import { loadPipeline, type PipelineDefinition } from "./pipeline";
 import {
 	assertStageGradePassed,
@@ -71,9 +72,11 @@ async function createRunFiles(timestamp: string) {
 	await mkdir(directory, { recursive: true });
 
 	return {
+		name,
 		artifact: join(directory, `${name}.json`),
 		review: join(directory, `${name}.review.json`),
 		stage: (stage: string) => join(directory, `${name}.${stage}.json`),
+		checkpointsRoot: join(directory, `${name}.checkpoints`),
 		checkpoint: (stage: string) =>
 			join(directory, `${name}.checkpoints`, stage),
 	};
@@ -498,6 +501,23 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			task,
 			instructions,
 		);
+		await writeRunManifest(runFiles.checkpointsRoot, {
+			timestamp,
+			controlSha,
+			sourceRoot: source.root,
+			sourceSha: source.sha,
+			taskId,
+			taskSha,
+			task,
+			productBrief,
+			model: config.model,
+			effort: config.effort,
+			judgeModel: config.judgeModel,
+			judgeEffort: config.judgeEffort,
+			sessionBudgetUsd: config.sessionBudgetUsd,
+			pipelinePath: config.pipelinePath,
+			pipeline,
+		});
 		const productOwner: ProductOwnerSession = {
 			sessionId: randomUUID(),
 			spentUsd: 0,

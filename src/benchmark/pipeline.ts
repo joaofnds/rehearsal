@@ -38,7 +38,7 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 		.strict(),
 ]);
 
-const pipelineDefinitionSchema = z.object({
+export const pipelineDefinitionSchema = z.object({
 	stages: z.array(stageDefinitionSchema).min(1),
 });
 

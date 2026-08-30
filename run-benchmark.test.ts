@@ -58,6 +58,11 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
+import {
+	loadRunManifest,
+	type RunManifest,
+	writeRunManifest,
+} from "./src/benchmark/manifest";
 import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
 import {
@@ -3009,6 +3014,76 @@ describe(recordCheckpoint, () => {
 		expect(
 			record.workflowState.every(({ path }) => path.startsWith("backlog/")),
 		).toBe(true);
+	});
+});
+
+describe(loadRunManifest, () => {
+	function manifestFixture(): RunManifest {
+		return {
+			timestamp: "2026-08-30T00:00:00.000Z",
+			controlSha: "control-sha",
+			sourceRoot: "/tmp/target",
+			sourceSha: "source-sha",
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			effort: "high",
+			judgeModel: "opus",
+			judgeEffort: "high",
+			sessionBudgetUsd: 5,
+			pipeline: {
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+					{
+						name: "build",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/build.json",
+					},
+				],
+			},
+			pipelinePath: "pipelines/default.json",
+		};
+	}
+
+	it("round-trips the manifest a run wrote", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		temporaryDirectories.push(directory);
+		const manifest = manifestFixture();
+
+		await writeRunManifest(directory, manifest);
+
+		expect(await loadRunManifest(directory)).toEqual(manifest);
+	});
+
+	it("names the missing manifest when the run predates manifests", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		temporaryDirectories.push(directory);
+
+		await expect(loadRunManifest(directory)).rejects.toThrow(
+			"runs recorded before manifests cannot be replayed",
+		);
+	});
+
+	it("rejects a manifest that lost a field it later needs", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		temporaryDirectories.push(directory);
+		const { taskSha, ...truncated } = manifestFixture();
+		await Bun.write(
+			join(directory, "manifest.json"),
+			`${JSON.stringify(truncated, null, 2)}\n`,
+		);
+
+		await expect(loadRunManifest(directory)).rejects.toThrow();
 	});
 });
 
