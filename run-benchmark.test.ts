@@ -9,7 +9,9 @@ import {
 	presentAttempts,
 } from "./src/benchmark/attempts";
 import {
+	assertPlanningStageCompleted,
 	assertStageArtifactState,
+	installInstructions,
 	parseTaskState,
 } from "./src/benchmark/backlog";
 import {
@@ -20,6 +22,7 @@ import {
 } from "./src/benchmark/calibration";
 import {
 	captureStageCorpus,
+	hashWorkflowState,
 	initialCheckpointInputs,
 	lineageKey,
 	materializeCheckpoint,
@@ -93,6 +96,7 @@ import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
 	deriveStageGrade,
+	loadStageRubric,
 	parseStageRubric,
 	validateStageJudgeEvidence,
 } from "./src/benchmark/stage-grading";
@@ -110,7 +114,12 @@ import {
 	teardownTarget,
 } from "./src/benchmark/target";
 
-const RUBRIC_IDS = ["tests", "worker", "check-integrity", "local-checks"];
+const RUBRIC_IDS = [
+	"tests",
+	"worker",
+	"check-integrity",
+	"local-checks",
+] as const;
 
 const temporaryDirectories: string[] = [];
 
@@ -819,7 +828,7 @@ describe(validateJudgeEvidence, () => {
 	it("accepts citations carrying a location fragment", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {
-			...grade.requirements[0],
+			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
 					source: "diff",
@@ -841,7 +850,7 @@ describe(validateJudgeEvidence, () => {
 	it("accepts glob citations that resolve to supplied paths", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {
-			...grade.requirements[0],
+			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
 					source: "diff",
@@ -863,7 +872,7 @@ describe(validateJudgeEvidence, () => {
 	it("rejects glob citations that do not resolve to supplied paths", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {
-			...grade.requirements[0],
+			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
 					source: "diff",
@@ -885,7 +894,7 @@ describe(validateJudgeEvidence, () => {
 	it("rejects citations to unavailable paths", () => {
 		const grade = completeGrade("PASS");
 		grade.requirements[0] = {
-			...grade.requirements[0],
+			...requirement(RUBRIC_IDS[0], "PASS"),
 			evidence: [
 				{
 					source: "baseline-context",
@@ -3847,6 +3856,206 @@ describe(runReplay, () => {
 			runReplay(fake.dependencies, request(run, "discuss")),
 		).rejects.toThrow(/no initial checkpoint/);
 		expect(fake.worktrees).toEqual([]);
+	});
+
+	it("replays end to end against a real repository, leaving the primary untouched", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-real-replay-"));
+		temporaryDirectories.push(parent);
+		const primary = join(parent, "primary");
+		await mkdir(primary);
+		await runCommand(["git", "init", "-b", "main"], primary);
+		await runCommand(["git", "config", "user.name", "Benchmark Test"], primary);
+		await runCommand(
+			["git", "config", "user.email", "benchmark@example.com"],
+			primary,
+		);
+		await Bun.write(
+			join(primary, ".gitignore"),
+			"backlog/\n.boris/\nnode_modules/\n",
+		);
+		await Bun.write(join(primary, "base.txt"), "base\n");
+		await commitAll(primary, "chore: base");
+		const taskSha = await installInstructions(
+			primary,
+			"Original instructions\n",
+		);
+		await mkdir(join(primary, "backlog", "docs"), { recursive: true });
+		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
+		const runDirectory = join(parent, "run.checkpoints");
+		await recordCheckpoint(
+			primary,
+			join(runDirectory, "initial"),
+			initialCheckpointInputs(
+				{
+					taskSha,
+					task: "Task text",
+					productBrief: "Brief text",
+					workflowFiles: await hashWorkflowState(primary),
+				},
+				"sonnet",
+			),
+		);
+		const manifest: RunManifest = {
+			timestamp: "2026-08-30T00:00:00.000Z",
+			controlSha: "run-control-sha",
+			sourceRoot: primary,
+			sourceSha: taskSha,
+			taskId: "TASK-1",
+			taskSha,
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+			pipeline: {
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+					{
+						name: "build",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/build.json",
+					},
+				],
+			},
+		};
+		await writeRunManifest(runDirectory, manifest);
+		const before = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], primary),
+			branch: await runCommand(["git", "branch", "--show-current"], primary),
+			status: await runCommand(["git", "status", "--porcelain"], primary),
+		};
+
+		const judged: StageJudgeInput[] = [];
+		const outcome = await runReplay(
+			{
+				stageSession: {
+					runWorkflowStage: async (targetDir, ...rest) => {
+						await Bun.write(
+							join(targetDir, "backlog", "docs", "DOC-1 - replay-spec.md"),
+							"replayed spec\n",
+						);
+
+						return {
+							stage: rest[8],
+							sessionId: "session",
+							costUsd: 0.9,
+							exchanges: [],
+						};
+					},
+					readTaskOutput: async () =>
+						JSON.stringify({
+							task: {
+								acceptanceCriteria: ["done"],
+								documentation: ["DOC-1 - replay-spec.md"],
+							},
+						}),
+					captureBuildCandidate: async () => {
+						throw new Error("not a delivery stage");
+					},
+					assertPlanningStageCompleted,
+					assertBuildCommitted: async () => {
+						throw new Error("not a delivery stage");
+					},
+					changedPathsBetween: async () => [],
+					captureCheckIntegrity: async () =>
+						harnessResult("PASS", "checks match"),
+					captureTreatmentChecks: async () =>
+						harnessResult("PASS", "all green"),
+					captureStageCorpus: async (skill) => [
+						{
+							path: `skills/${skill}/SKILL.md`,
+							sha256: createHash("sha256").update(skill).digest("hex"),
+						},
+					],
+				},
+				runStageJudge: async (_model, _effort, _budget, input) => {
+					judged.push(input);
+
+					return {
+						stage: input.stage,
+						rubricPath: "rubrics/discuss.json",
+						rubric: (
+							await loadStageRubric(
+								manifest.pipeline.stages[0] ?? {
+									name: "discuss",
+									kind: "planning",
+									skill: "discuss",
+									artifact: "spec",
+									rubric: "rubrics/discuss.json",
+									requiresAcceptanceCriteria: false,
+								},
+							)
+						).rubric,
+						input,
+						prompt: "prompt",
+						costUsd: 0.4,
+						grade: {
+							hardBlockers: [],
+							requirements: [],
+							dimensions: [],
+							summary: "graded",
+							grade: "A",
+							verdict: "CONTINUE",
+						},
+					};
+				},
+				loadStageRubric,
+				addWorktree,
+				removeWorktree,
+				materializeCheckpoint,
+				captureBaselineContext,
+				captureFileHashes,
+				installInstructions,
+				installDependencies: async () => {
+					throw new Error("not a delivery stage");
+				},
+				log: () => {},
+			},
+			{
+				runName: "run",
+				runDirectory,
+				replaysRoot: join(parent, "replays"),
+				stage: "discuss",
+				instructions: "Replayed instructions\n",
+				controlSha: "control-sha",
+				model: "sonnet",
+				judgeModel: "sonnet",
+				sessionBudgetUsd: 5,
+			},
+		);
+
+		const after = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], primary),
+			branch: await runCommand(["git", "branch", "--show-current"], primary),
+			status: await runCommand(["git", "status", "--porcelain"], primary),
+		};
+		expect(after).toEqual(before);
+		const worktrees = await runCommand(
+			["git", "worktree", "list", "--porcelain"],
+			primary,
+		);
+		expect(
+			worktrees.split("\n").filter((l) => l.startsWith("worktree ")),
+		).toHaveLength(1);
+		const record = await readReplayRecord(outcome.recordPath);
+		expect(record.consumed.stage).toBe("initial");
+		expect(record.baseSha).not.toBe(taskSha);
+		expect(judged[0]?.artifact?.content).toBe("replayed spec\n");
+		expect(
+			await presentAttempts(
+				record.consumed.lineage,
+				await loadAttempts(parent, "run", "discuss", record.consumed.lineage),
+			),
+		).toContain("replay ");
 	});
 });
 

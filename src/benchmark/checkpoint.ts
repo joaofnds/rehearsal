@@ -14,7 +14,7 @@ export interface LineageInputs {
 	readonly upstream: string;
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 }
 
 export interface RootLineageInputs {
@@ -212,7 +212,7 @@ export interface CheckpointInputs {
 	readonly targetSha: string;
 	readonly upstream: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly corpusFiles: readonly HashedFile[];
 	readonly artifacts: readonly HashedFile[];
 }

@@ -59,10 +59,10 @@ export function parseArgs(
 ): BenchmarkConfig {
 	const values = flagValues(args);
 
-	const sourceDir = values.get("--target") ?? env.BENCHMARK_TARGET_DIR;
-	const model = values.get("--model") ?? env.BENCHMARK_MODEL;
+	const sourceDir = values.get("--target") ?? env["BENCHMARK_TARGET_DIR"];
+	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
 	const budgetText =
-		values.get("--session-budget-usd") ?? env.BENCHMARK_SESSION_BUDGET_USD;
+		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
 	if (!sourceDir) throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
 	if (!model) throw new Error("Provide --model or BENCHMARK_MODEL");
@@ -73,13 +73,13 @@ export function parseArgs(
 	}
 
 	const judgeModel =
-		values.get("--judge-model") ?? env.BENCHMARK_JUDGE_MODEL ?? model;
+		values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model;
 	const effort = parseEffort(
-		values.get("--effort") ?? env.BENCHMARK_EFFORT,
+		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
 		"workflow",
 	);
 	const judgeEffort = parseEffort(
-		values.get("--judge-effort") ?? env.BENCHMARK_JUDGE_EFFORT ?? effort,
+		values.get("--judge-effort") ?? env["BENCHMARK_JUDGE_EFFORT"] ?? effort,
 		"Judge",
 	);
 	const sessionBudgetUsd = Number(budgetText);
@@ -97,7 +97,7 @@ export function parseArgs(
 		sessionBudgetUsd,
 		pipelinePath: controlRelativePath(
 			values.get("--pipeline") ??
-				env.BENCHMARK_PIPELINE ??
+				env["BENCHMARK_PIPELINE"] ??
 				DEFAULT_PIPELINE_PATH,
 		),
 	};
@@ -107,9 +107,9 @@ export interface ReplayCliConfig {
 	readonly runName: string;
 	readonly stage: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 }
 

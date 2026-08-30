@@ -112,7 +112,7 @@ export interface RunArtifactInputs {
 	readonly controlSha: string;
 	readonly source: {
 		readonly root: string;
-		readonly origin?: string;
+		readonly origin?: string | undefined;
 		readonly sha: string;
 	};
 	readonly taskSha: string;
@@ -223,9 +223,9 @@ export interface StageContext {
 	readonly initialLineage: string;
 	readonly productOwnerDirectory: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly productOwner: ProductOwnerSession;
 	readonly task: string;
@@ -249,14 +249,14 @@ export interface StageOutcome {
 	readonly workflow: readonly StageTranscript[];
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly checkpoints: readonly CheckpointRecord[];
-	readonly buildEvidence?: BuildEvidence;
+	readonly buildEvidence?: BuildEvidence | undefined;
 }
 
 export interface StageSessionEnvironment {
 	readonly targetDir: string;
 	readonly productOwnerDirectory: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly productOwner: ProductOwnerSession;
 	readonly task: string;
@@ -274,8 +274,8 @@ export interface StageSessionResult {
 	readonly corpusFiles: readonly HashedFile[];
 	readonly transcript: StageTranscript;
 	readonly input: StageJudgeInput;
-	readonly artifact?: ContextFile;
-	readonly buildEvidence?: BuildEvidence;
+	readonly artifact?: ContextFile | undefined;
+	readonly buildEvidence?: BuildEvidence | undefined;
 }
 
 /**

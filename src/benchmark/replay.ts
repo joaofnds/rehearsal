@@ -158,7 +158,7 @@ export interface ReplayRecord {
 	readonly stageCostUsd: number;
 	readonly productOwnerCostUsd: number;
 	readonly judgeCostUsd: number;
-	readonly resultSha?: string;
+	readonly resultSha?: string | undefined;
 	readonly scorecard: StageScorecard;
 }
 

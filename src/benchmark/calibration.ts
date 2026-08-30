@@ -32,10 +32,10 @@ interface CalibrationContext {
 	readonly targetDir: string;
 	readonly originalInstructions: string;
 	readonly originalRubric: string;
-	readonly finalCandidate?: FinalCandidate;
+	readonly finalCandidate?: FinalCandidate | undefined;
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 }
 

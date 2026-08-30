@@ -1,9 +1,9 @@
 import { COMMAND_TIMEOUT_MS } from "./config";
 
 interface CommandOptions {
-	readonly env?: Record<string, string>;
-	readonly input?: string;
-	readonly timeoutMs?: number;
+	readonly env?: Record<string, string> | undefined;
+	readonly input?: string | undefined;
+	readonly timeoutMs?: number | undefined;
 }
 
 export class CommandError extends Error {

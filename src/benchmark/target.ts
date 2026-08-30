@@ -9,7 +9,7 @@ import { StageValidationError } from "./contracts";
 export interface SourceBaseline {
 	readonly root: string;
 	readonly sha: string;
-	readonly origin?: string;
+	readonly origin?: string | undefined;
 }
 
 export interface WorkflowBackup {

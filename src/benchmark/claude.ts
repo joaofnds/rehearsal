@@ -8,7 +8,7 @@ import {
 
 export interface SessionSettings {
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly budgetUsd: number;
 }
 
@@ -16,8 +16,8 @@ export interface ClaudeInvocation {
 	readonly settings: SessionSettings;
 	readonly schema: z.ZodType;
 	readonly access: "unrestricted" | "sealed";
-	readonly systemPrompt?: string;
-	readonly session?: { readonly id: string; readonly resume: boolean };
+	readonly systemPrompt?: string | undefined;
+	readonly session?: { readonly id: string; readonly resume: boolean } | undefined;
 }
 
 export function claudeArgs(invocation: ClaudeInvocation): string[] {

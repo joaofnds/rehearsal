@@ -160,7 +160,7 @@ export interface LocalCheckResult {
 
 export interface StageExchange {
 	readonly agent: StageTurn;
-	readonly productOwnerAnswer?: string;
+	readonly productOwnerAnswer?: string | undefined;
 }
 
 export interface StageTranscript {
@@ -179,13 +179,13 @@ export interface StageJudgeInput {
 	readonly baselineContext: readonly ContextFile[];
 	readonly taskState: string;
 	readonly transcript: StageTranscript;
-	readonly artifact?: ContextFile;
+	readonly artifact?: ContextFile | undefined;
 	readonly priorArtifacts: readonly ContextFile[];
-	readonly diff?: string;
-	readonly changedPaths?: readonly string[];
-	readonly checkIntegrity?: LocalCheckResult;
-	readonly localChecks?: LocalCheckResult;
-	readonly harnessFailure?: string;
+	readonly diff?: string | undefined;
+	readonly changedPaths?: readonly string[] | undefined;
+	readonly checkIntegrity?: LocalCheckResult | undefined;
+	readonly localChecks?: LocalCheckResult | undefined;
+	readonly harnessFailure?: string | undefined;
 }
 
 export interface StageGrade extends StageJudgeOutput {
@@ -206,15 +206,15 @@ export interface StageScorecard {
 export interface CalibrationResult {
 	readonly humanReview: HumanReview;
 	readonly instructionsChanged: boolean;
-	readonly updatedInstructions?: string;
+	readonly updatedInstructions?: string | undefined;
 	readonly rubricChanged: boolean;
-	readonly updatedRubric?: string;
-	readonly revisedRubricIds?: readonly string[];
-	readonly revisedJudgePrompt?: string;
-	readonly revisedGrade?: JudgeGrade;
-	readonly rejudgeConfirmedByHuman?: boolean;
+	readonly updatedRubric?: string | undefined;
+	readonly revisedRubricIds?: readonly string[] | undefined;
+	readonly revisedJudgePrompt?: string | undefined;
+	readonly revisedGrade?: JudgeGrade | undefined;
+	readonly rejudgeConfirmedByHuman?: boolean | undefined;
 	readonly stageRubricsChanged: readonly WorkflowStage[];
-	readonly revisedStageScorecards?: readonly StageScorecard[];
+	readonly revisedStageScorecards?: readonly StageScorecard[] | undefined;
 }
 
 export interface RunArtifact {
@@ -222,14 +222,14 @@ export interface RunArtifact {
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly sourceRoot: string;
-	readonly sourceOrigin?: string;
+	readonly sourceOrigin?: string | undefined;
 	readonly sourceSha: string;
 	readonly taskSha: string;
 	readonly resultSha: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly bunVersion: string;
 	readonly claudeVersion: string;
@@ -254,7 +254,7 @@ export interface RunArtifact {
 	readonly localChecks: LocalCheckResult;
 	readonly grade: JudgeGrade;
 	readonly reviewFile: string;
-	readonly calibration?: CalibrationResult;
+	readonly calibration?: CalibrationResult | undefined;
 }
 
 export function citationMatchesPath(
