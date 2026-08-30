@@ -1,11 +1,11 @@
 ---
 id: ACT-2
 title: record a checkpoint at every accepted stage transition
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 20:16'
+updated_date: '2026-08-30 20:28'
 labels: []
 dependencies: []
 references:
@@ -74,4 +74,20 @@ Not verified: a full benchmark run against a real target (costs real sessions); 
 Stopped on: ACT-11 filed to converge target.ts's workflow backup/restore with the new tree-copy code.
 
 Review: due; new subsystem plus a change to the core stage loop, and ACT-3/ACT-4 build on its contract.
+
+Independent review (2026-08-30): one reviewer, all axes (style, architecture, security, spec, testing, refactoring; none skipped). Patch at /tmp/act2-review/act2.patch; suite before review: 130 pass, 0 fail. Verdict: no blocking findings; 4 should-fix, 4 notes. All verified against the source; none refuted.
+
+Findings and dispositions:
+1. [should-fix, fixed 68959d1] Corpus hashed once at run start: a skill edited while earlier stages ran would feed a stage while its checkpoint recorded pre-run hashes, violating AC2's "when" direction. Fix: skill existence still resolved for all stages up front (fail before paying), hashing moved to each stage's start; interleaving pinned by a call-order test.
+2. [should-fix, fixed 3266e3f] localeCompare in the canonical sort made the lineage key depend on host collation; identical corpora could mismatch across machines and refuse valid comparisons. Fix: codepoint sort, pinned by a B.md/a.md ordering test.
+3. [should-fix, fixed 8ea8f78] Non-ENOENT stat errors (EACCES, EIO) read as "path absent": a checkpoint could silently record partial state as truth, and an unreadable skill directory was misreported as not installed. Fix: only ENOENT reads as absent; pinned by a chmod-000 test.
+4. [should-fix, fixed 122dd6b] Materialize verified only recorded files, after copying: a planted snapshot file reached the destination unverified and a failed check left the tampered tree behind. Fix: snapshot must equal the record exactly before anything is copied; planted/modified/missing all pinned, destination stays empty on refusal.
+5. [note, fixed 122dd6b] Record paths accepted "../": a tampered checkpoint.json could turn the mismatch error into a sha256 oracle for any readable file (local-only; writes were never affected). Schema now requires relative traversal-free paths.
+6. [note, no action] The delivery checkpoint's artifacts list is empty; the commits are the artifact, reachable via targetSha. ACT-3 decides whether the record should say so explicitly.
+7. [note, fixed 3266e3f] Root-lineage rationale comment sat above the wrong function; moved.
+8. [note, fixed 3060acb] Dead casts in corpus test fixtures; replaced by a tuple type.
+
+Reviewer-named load-bearing property, preserved by all fixes: checkpoint.json is written after the snapshot copy, so the record file is the commit marker and a crash mid-checkpoint fails loudly on materialize.
+
+Fixes observed: fresh suite 135 pass 0 fail, typecheck and biome clean, and a re-run of the real round-trip (record this repository's workflow state with the real installed skill, materialize, recursive diff identical).
 <!-- SECTION:NOTES:END -->
