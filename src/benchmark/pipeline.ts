@@ -24,13 +24,13 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 		artifact: z.string().min(1),
 		rubric: z.string().min(1),
 		requiresAcceptanceCriteria: z.boolean().default(false),
-	}),
+	}).strict(),
 	z.object({
 		name: identifierSchema,
 		kind: z.literal("delivery"),
 		skill: identifierSchema,
 		rubric: z.string().min(1),
-	}),
+	}).strict(),
 ]);
 
 const pipelineDefinitionSchema = z.object({
@@ -48,11 +48,12 @@ export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
 export class PipelineDefinitionError extends Error {}
 
 /**
- * Human review marks a finding against the final Judge, which grades the whole
- * candidate rather than any one stage, by naming this stage. A pipeline stage
- * under the same name would make those findings indistinguishable.
+ * Names the harness has already given to something of its own. "final" marks a
+ * human-review finding against the final Judge, which grades the whole
+ * candidate rather than any one stage. "review" is the human-review file's
+ * suffix in the run directory, which a stage of that name would overwrite.
  */
-const RESERVED_STAGE_NAMES: readonly string[] = ["final"];
+const RESERVED_STAGE_NAMES: readonly string[] = ["final", "review"];
 
 function stageLabel(stage: unknown, index: number) {
 	const name =

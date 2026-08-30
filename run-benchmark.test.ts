@@ -825,6 +825,26 @@ describe(assertStageArtifactState, () => {
 		requiresAcceptanceCriteria: false,
 	} as const;
 
+	it("rejects a stage that requires acceptance criteria and has none", () => {
+		expect(() =>
+			assertStageArtifactState(
+				{ ...planStage, requiresAcceptanceCriteria: true },
+				{ task: { acceptanceCriteria: [], documentation: ["doc-3"] } },
+				["doc-3 - Asynchronous-audit-log-module-plan.md"],
+			),
+		).toThrow("without acceptance criteria");
+	});
+
+	it("accepts an empty acceptance list when the stage does not require it", () => {
+		expect(() =>
+			assertStageArtifactState(
+				{ ...planStage, requiresAcceptanceCriteria: false },
+				{ task: { acceptanceCriteria: [], documentation: ["doc-3"] } },
+				["doc-3 - Asynchronous-audit-log-module-plan.md"],
+			),
+		).not.toThrow();
+	});
+
 	it("resolves attached document IDs to titled artifact files", () => {
 		expect(() =>
 			assertStageArtifactState(planStage, view, [
@@ -2266,6 +2286,23 @@ describe(parsePipeline, () => {
 				/skill/,
 			);
 		}
+	});
+
+	it("rejects a stage whose name collides with a harness artifact file", () => {
+		for (const name of ["final", "review"]) {
+			expect(() =>
+				parse([stageEntry({ name, skill: "s" }), deliveryStage]),
+			).toThrow(/reserved/);
+		}
+	});
+
+	it("rejects an unknown field, so a misspelled flag cannot be ignored", () => {
+		expect(() =>
+			parse([
+				{ ...stageEntry(), requiresAcceptanceCritera: true },
+				deliveryStage,
+			]),
+		).toThrow(/discuss/);
 	});
 
 	it("rejects a stage named final, which marks the final Judge", () => {
