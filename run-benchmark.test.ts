@@ -13,7 +13,11 @@ import {
 	parseHumanReview,
 	validateCalibration,
 } from "./src/benchmark/calibration";
-import { lineageKey, rootLineage } from "./src/benchmark/checkpoint";
+import {
+	captureStageCorpus,
+	lineageKey,
+	rootLineage,
+} from "./src/benchmark/checkpoint";
 import {
 	captureBaselineContext,
 	captureCheckIntegrity,
@@ -2595,6 +2599,74 @@ describe(lineageKey, () => {
 		expect(new Set([lineageKey(base), ...variants]).size).toBe(
 			variants.length + 1,
 		);
+	});
+});
+
+describe(captureStageCorpus, () => {
+	async function corpusRoots() {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		temporaryDirectories.push(directory);
+		const roots = [join(directory, "target"), join(directory, "home")];
+		await Promise.all(roots.map((root) => mkdir(root, { recursive: true })));
+
+		return roots;
+	}
+
+	async function installSkill(root: string, skill: string, body: string) {
+		const directory = join(root, skill, "references");
+		await mkdir(directory, { recursive: true });
+		await Bun.write(join(root, skill, "SKILL.md"), body);
+		await Bun.write(join(directory, "notes.md"), `${body} notes`);
+	}
+
+	it("hashes the installed instructions and every skill file", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1] as string, "discuss", "discuss skill");
+
+		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+
+		expect(corpus.map(({ path }) => path)).toEqual([
+			"CLAUDE.md",
+			"skills/discuss/SKILL.md",
+			"skills/discuss/references/notes.md",
+		]);
+		expect(new Set(corpus.map(({ sha256 }) => sha256)).size).toBe(3);
+	});
+
+	it("records the same corpus wherever the same skill files live", async () => {
+		const [targetRoot, homeRoot] = await corpusRoots();
+		await installSkill(targetRoot as string, "discuss", "discuss skill");
+		await installSkill(homeRoot as string, "discuss", "discuss skill");
+
+		const fromTarget = await captureStageCorpus("discuss", "instructions", [
+			targetRoot as string,
+		]);
+		const fromHome = await captureStageCorpus("discuss", "instructions", [
+			homeRoot as string,
+		]);
+
+		expect(fromTarget).toEqual(fromHome);
+	});
+
+	it("prefers the first root that has the skill", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[0] as string, "discuss", "target copy");
+		await installSkill(roots[1] as string, "discuss", "home copy");
+
+		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+		const homeOnly = await captureStageCorpus("discuss", "instructions", [
+			roots[1] as string,
+		]);
+
+		expect(corpus).not.toEqual(homeOnly);
+	});
+
+	it("fails naming the skill and the searched roots when none has it", async () => {
+		const roots = await corpusRoots();
+
+		await expect(
+			captureStageCorpus("discuss", "instructions", roots),
+		).rejects.toThrow(/discuss.*not installed/);
 	});
 });
 
