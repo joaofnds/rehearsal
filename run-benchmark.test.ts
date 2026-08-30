@@ -1673,6 +1673,32 @@ describe(runBenchmark, () => {
 	});
 });
 
+describe(loadPipeline, () => {
+	it("rejects a delivery stage whose rubric lacks the harness blockers", async () => {
+		const path = join("pipelines", `invalid-${randomUUID()}.json`);
+		const absolute = join(import.meta.dir, path);
+		await Bun.write(
+			absolute,
+			JSON.stringify({
+				stages: [
+					{
+						name: "ship",
+						kind: "delivery",
+						skill: "build",
+						rubric: "rubrics/discuss.json",
+					},
+				],
+			}),
+		);
+
+		try {
+			await expect(loadPipeline(path)).rejects.toThrow(/ship/);
+		} finally {
+			await rm(absolute, { force: true });
+		}
+	});
+});
+
 describe(assertSourceReady, () => {
 	it("rejects a clean repository off main", async () => {
 		const source = await createRepository();

@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { z } from "zod";
 import { CONTROL_DIR } from "./config";
+import { loadStageRubric } from "./stage-grading";
 
 /**
  * Stage and skill names are interpolated into paths and into the prompt of a
@@ -180,5 +181,25 @@ export async function loadPipeline(
 		relative(CONTROL_DIR, join(rubricsDirectory, entry)),
 	);
 
-	return parsePipeline(await file.text(), availableRubrics);
+	const pipeline = parsePipeline(await file.text(), availableRubrics);
+	await assertRubricsFitTheirStages(pipeline);
+
+	return pipeline;
+}
+
+/**
+ * A rubric that does not fit its stage's kind would otherwise surface only when
+ * that stage's Judge runs, with the target already claimed and the earlier
+ * stages already paid for.
+ */
+async function assertRubricsFitTheirStages(pipeline: PipelineDefinition) {
+	for (const stage of pipeline.stages) {
+		try {
+			await loadStageRubric(stage);
+		} catch (error) {
+			throw new PipelineDefinitionError(
+				`Pipeline stage ${stage.name} names a rubric it cannot use: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 }
