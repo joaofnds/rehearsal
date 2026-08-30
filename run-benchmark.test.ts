@@ -2881,6 +2881,23 @@ describe(recordCheckpoint, () => {
 		).rejects.toThrow(/backlog\/config.yml/);
 	});
 
+	it("orders recorded files by codepoint, not locale", async () => {
+		const { targetDir, checkpointDir } = await checkpointFixture();
+
+		const record = await recordCheckpoint(targetDir, checkpointDir, {
+			...checkpointInputs,
+			artifacts: [
+				{ path: "a.md", sha256: "aa11".repeat(16) },
+				{ path: "B.md", sha256: "bb22".repeat(16) },
+			],
+		});
+
+		expect(record.artifacts.map(({ path }) => path)).toEqual([
+			"B.md",
+			"a.md",
+		]);
+	});
+
 	it("snapshots only the workflow paths that exist", async () => {
 		const { targetDir, checkpointDir } = await checkpointFixture();
 		await rm(join(targetDir, ".boris"), { force: true, recursive: true });

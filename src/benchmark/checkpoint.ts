@@ -28,9 +28,12 @@ function sha256(content: string) {
 	return createHash("sha256").update(content).digest("hex");
 }
 
+// Codepoint order, never locale collation: the lineage key must hash the
+// same bytes on every machine, and locale-aware sorting varies with the
+// host's collation rules.
 function canonicalFiles(files: readonly HashedFile[]) {
 	return [...files]
-		.sort((a, b) => a.path.localeCompare(b.path))
+		.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 		.map(({ path, sha256 }) => ({ path, sha256 }));
 }
 
@@ -51,11 +54,6 @@ export function lineageKey(inputs: LineageInputs) {
 	);
 }
 
-/**
- * The first stage has no upstream checkpoint; its upstream is the initial
- * state the run created: the task commit, the task and brief texts that feed
- * every session, and the workflow files present before any stage ran.
- */
 async function hashFile(path: string) {
 	return createHash("sha256")
 		.update(await Bun.file(path).bytes())
@@ -110,6 +108,11 @@ export async function captureStageCorpus(
 	);
 }
 
+/**
+ * The first stage has no upstream checkpoint; its upstream is the initial
+ * state the run created: the task commit, the task and brief texts that feed
+ * every session, and the workflow files present before any stage ran.
+ */
 export function rootLineage(inputs: RootLineageInputs) {
 	return sha256(
 		JSON.stringify({
