@@ -26,12 +26,12 @@ function remainingBudget(limitUsd: number, spentUsd: number) {
 	return remaining;
 }
 
-function stagePrompt(stage: WorkflowStage, taskId: string) {
-	return `/${stage} ${taskId}\n\nRun the native /${stage} skill to completion. A Product Owner is available between turns. Do not call AskUserQuestion. When product input is required, return QUESTION with exactly one question, its recommendation, and enough context to decide. Return COMPLETE only after the skill's durable artifact is saved. Never mention this mediation protocol in project artifacts.`;
+function stagePrompt(skill: string, taskId: string) {
+	return `/${skill} ${taskId}\n\nRun the native /${skill} skill to completion. A Product Owner is available between turns. Do not call AskUserQuestion. When product input is required, return QUESTION with exactly one question, its recommendation, and enough context to decide. Return COMPLETE only after the skill's durable artifact is saved. Never mention this mediation protocol in project artifacts.`;
 }
 
-function continueStagePrompt(stage: WorkflowStage, productOwnerAnswer: string) {
-	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${stage} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
+function continueStagePrompt(skill: string, productOwnerAnswer: string) {
+	return `Product Owner answer:\n\n${productOwnerAnswer}\n\nContinue the native /${skill} skill. Use QUESTION again if another decision is required, or COMPLETE after its durable artifact is saved.`;
 }
 
 async function askProductOwner(
@@ -87,10 +87,11 @@ export async function runWorkflowStage(
 	productBrief: string,
 	taskId: string,
 	stage: WorkflowStage,
+	skill: string,
 ): Promise<StageTranscript> {
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
-	let prompt = stagePrompt(stage, taskId);
+	let prompt = stagePrompt(skill, taskId);
 	const exchanges: StageTranscript["exchanges"][number][] = [];
 
 	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
@@ -136,7 +137,7 @@ export async function runWorkflowStage(
 		);
 		console.log(`Product Owner: ${productOwnerAnswer}`);
 		exchanges.push({ agent, productOwnerAnswer });
-		prompt = continueStagePrompt(stage, productOwnerAnswer);
+		prompt = continueStagePrompt(skill, productOwnerAnswer);
 	}
 
 	throw new Error(`${stage} exceeded ${MAX_STAGE_TURNS} turns`);

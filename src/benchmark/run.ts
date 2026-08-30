@@ -155,6 +155,7 @@ export async function runGradedStages(
 			context.task,
 			context.productBrief,
 			context.taskId,
+			stage,
 			definition.skill,
 		);
 		workflow.push(transcript);

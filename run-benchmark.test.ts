@@ -1328,8 +1328,9 @@ describe(runGradedStages, () => {
 					_productBrief: string,
 					_taskId: string,
 					stage: string,
+					skill: string,
 				) => {
-					executed.push(stage);
+					executed.push(skill);
 
 					return { stage, sessionId: "session", costUsd: 0, exchanges: [] };
 				},
@@ -1483,6 +1484,40 @@ describe(runGradedStages, () => {
 		await runGradedStages(dependencies, context);
 
 		expect(executed).toEqual(["discuss", "plan", "grill", "build"]);
+	});
+
+	it("labels a transcript with the stage name, not the skill it ran", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				stages: [
+					{
+						name: "research",
+						kind: "planning" as const,
+						skill: "discuss",
+						artifact: "findings",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+					deliveryStage,
+				],
+			},
+		};
+
+		const outcome = await runGradedStages(dependencies, context);
+
+		expect(executed).toEqual(["discuss", "build"]);
+		expect(outcome.workflow.map(({ stage }) => stage)).toEqual([
+			"research",
+			"build",
+		]);
+		expect(outcome.stageScorecards.map(({ stage }) => stage)).toEqual([
+			"research",
+			"build",
+		]);
 	});
 
 	it("executes a fifth stage under a name the harness never knew", async () => {
