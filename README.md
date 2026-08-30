@@ -340,6 +340,7 @@ The directory is ignored by Git. Each artifact records:
 - source path and origin
 - requested models, effort levels, budgets, Bun version, and Claude version
 - task, product brief, instructions, rubric, and parsed rubric IDs
+- the pipeline definition the run executed and the path it was loaded from
 - each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
 - each stage rubric, frozen Judge input, prompt, evidence, grade, and stop decision
 - final Backlog.md task state
