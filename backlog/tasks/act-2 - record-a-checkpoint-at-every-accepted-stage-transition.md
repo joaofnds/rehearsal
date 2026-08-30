@@ -1,10 +1,10 @@
 ---
 id: ACT-2
 title: record a checkpoint at every accepted stage transition
-status: Shape
+status: Build
 assignee: []
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 19:45'
+updated_date: '2026-08-30 20:04'
 labels: []
 dependencies: []
 references:
@@ -52,5 +52,7 @@ Acceptance as observations:
 2. The lineage tests above.
 3. Filesystem test: record a checkpoint from a fixture target, materialize it into an empty temp directory, byte-compare the tree against the state the next stage consumed.
 
-Open questions sent to Joao 2026-08-30: (1) where the harness reads the stage skill files for the lineage hash, since the glossary places the corpus in the control repo but the skills are installed on the host; (2) whether the workflow snapshot is embedded in the run-artifact JSON or written as files under .benchmark-runs/<run>.checkpoints/<stage>/ and referenced from the JSON. Recommendations recorded in the questions.
+Decisions (Joao, 2026-08-30):
+1. The lineage hash reads each stage's skill files from the standard installed locations, the target's .claude/skills/<skill> first, then ~/.claude/skills/<skill>, and fails the run loudly when a stage's skill is found in neither. Moving the corpus into the control repository stays a possible separate task; not this one.
+2. The workflow snapshot is written as plain files under .benchmark-runs/<run>.checkpoints/<stage>/ and referenced from the run-artifact JSON with per-file sha256. Byte-faithful, survives runs that fail at a later stage, human-readable.
 <!-- SECTION:PLAN:END -->
