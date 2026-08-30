@@ -4,6 +4,11 @@ import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	diffTexts,
+	loadAttempts,
+	presentAttempts,
+} from "./src/benchmark/attempts";
+import {
 	assertStageArtifactState,
 	parseTaskState,
 } from "./src/benchmark/backlog";
@@ -3781,6 +3786,173 @@ describe(runReplay, () => {
 			runReplay(fake.dependencies, request(run, "discuss")),
 		).rejects.toThrow(/no initial checkpoint/);
 		expect(fake.worktrees).toEqual([]);
+	});
+});
+
+describe(loadAttempts, () => {
+	const LINEAGE = "lineage-1";
+
+	function originalScorecard() {
+		return {
+			stage: "discuss",
+			rubricPath: "rubrics/discuss.json",
+			costUsd: 1.1,
+			prompt: "p",
+			grade: {
+				hardBlockers: [],
+				requirements: [],
+				dimensions: [{ id: "clarity", grade: "B" }],
+				summary: "fine",
+				grade: "B",
+				verdict: "CONTINUE",
+			},
+			input: {
+				stage: "discuss",
+				artifact: { path: "backlog/docs/D.md", content: "old spec\n" },
+			},
+		};
+	}
+
+	function replayRecord(timestamp: string, content: string) {
+		return {
+			replay: true,
+			timestamp,
+			runName: "run1",
+			stage: "discuss",
+			consumed: {
+				stage: "initial",
+				lineage: LINEAGE,
+				targetSha: "task-sha",
+			},
+			baseSha: "base-sha",
+			lineage: "replay-lineage",
+			corpusFiles: [{ path: "CLAUDE.md", sha256: "aa".repeat(32) }],
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			controlSha: "control-sha",
+			stageCostUsd: 0.7,
+			productOwnerCostUsd: 0.2,
+			judgeCostUsd: 0.3,
+			scorecard: {
+				...originalScorecard(),
+				costUsd: 0.3,
+				grade: { ...originalScorecard().grade, grade: "A" },
+				input: {
+					stage: "discuss",
+					artifact: { path: "backlog/docs/D.md", content },
+				},
+			},
+		};
+	}
+
+	async function attemptFixture() {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-attempts-"));
+		temporaryDirectories.push(directory);
+		await Bun.write(
+			join(directory, "run1.discuss.json"),
+			`${JSON.stringify(originalScorecard(), null, 2)}\n`,
+		);
+		await Bun.write(
+			join(directory, "replays", LINEAGE, "2026-08-30T10-00-00.000Z.json"),
+			`${JSON.stringify(replayRecord("2026-08-30T10:00:00.000Z", "new spec\n"), null, 2)}\n`,
+		);
+
+		return directory;
+	}
+
+	it("presents the original result and each replay as one attempt list", async () => {
+		const directory = await attemptFixture();
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(attempts.map(({ label }) => label)).toEqual([
+			"original run run1",
+			"replay 2026-08-30T10:00:00.000Z",
+		]);
+		expect(attempts[0]?.grade).toBe("B");
+		expect(attempts[1]?.grade).toBe("A");
+		expect(attempts[1]?.costUsd).toBeCloseTo(1.2);
+	});
+
+	it("skips an original stage file that never reached a grade", async () => {
+		const directory = await attemptFixture();
+		await Bun.write(
+			join(directory, "run1.discuss.json"),
+			`${JSON.stringify({ status: "AWAITING_STAGE_JUDGE", stage: "discuss" })}\n`,
+		);
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(attempts.map(({ label }) => label)).toEqual([
+			"replay 2026-08-30T10:00:00.000Z",
+		]);
+	});
+
+	it("returns only the original when the checkpoint has no replays yet", async () => {
+		const directory = await attemptFixture();
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", "other");
+
+		expect(attempts).toHaveLength(1);
+	});
+});
+
+describe(presentAttempts, () => {
+	const attempt = (
+		label: string,
+		grade: string,
+		content: string,
+	): Parameters<typeof presentAttempts>[1][number] => ({
+		label,
+		grade,
+		verdict: "CONTINUE",
+		dimensions: [{ id: "clarity", grade }],
+		costUsd: 1.25,
+		artifact: { path: "backlog/docs/D.md", content },
+	});
+
+	it("shows grades side by side and diffs the latest attempt against earlier ones", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				attempt("original run run1", "B", "old\n"),
+				attempt("replay r2", "A", "new\n"),
+			],
+			async (before, after) => `DIFF(${before.trim()}->${after.trim()})`,
+		);
+
+		expect(output).toContain("Attempts at checkpoint lineage-1:");
+		expect(output).toContain(
+			"1. original run run1 — grade B (CONTINUE), $1.25 [clarity B]",
+		);
+		expect(output).toContain(
+			"2. replay r2 — grade A (CONTINUE), $1.25 [clarity A]",
+		);
+		expect(output).toContain("Diff, original run run1 → replay r2:");
+		expect(output).toContain("DIFF(old->new)");
+	});
+
+	it("marks identical artifacts instead of printing an empty diff", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				attempt("original run run1", "B", "same\n"),
+				attempt("replay r2", "B", "same\n"),
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain("(identical)");
+	});
+});
+
+describe(diffTexts, () => {
+	it("returns a unified diff when the contents differ and nothing when equal", async () => {
+		expect(await diffTexts("a\n", "a\n")).toBe("");
+		const diff = await diffTexts("a\n", "b\n");
+		expect(diff).toContain("-a");
+		expect(diff).toContain("+b");
 	});
 });
 
