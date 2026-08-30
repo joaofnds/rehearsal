@@ -1,9 +1,10 @@
 ---
 id: ACT-9
 title: record the pipeline definition in the run artifact
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-30 17:02'
+updated_date: '2026-08-30 17:55'
 labels: []
 dependencies: []
 type: feature
@@ -19,11 +20,82 @@ Before ACT-1 the stage sequence was the WORKFLOW_STAGES constant, so the harness
 
 This blocks reading old artifacts correctly and it blocks the comparison work: ACT-6 reports paired comparisons between corpus versions, and a comparison whose two arms ran different pipelines is not a comparison. ACT-2's checkpoint lineage has the same need.
 
-Add the parsed PipelineDefinition and the pipeline path to RunArtifact and write them alongside the rubric. Consider whether the stage scorecards should carry their stage's declared kind for the same reason.
+## Goal
+
+A run artifact states, on its own, which pipeline the run executed: the parsed PipelineDefinition and the path it was loaded from.
+
+## Shaping notes
+
+### What was read
+
+- `RunArtifact` is assembled once, at src/benchmark/run.ts:449, after the final Judge returns. The only other writes are `{...artifact, status: "COMPLETE", calibration}` after calibration and `{...pendingArtifact, status: "FAILED"}` on abort, both spreading the same object. A run that fails before the final Judge writes no run artifact at all; the abort path has nothing to spread.
+- `loadPipeline(config.pipelinePath)` is the first statement of `runBenchmark` (src/benchmark/run.ts:273), before the target is claimed. Both the definition and the path are in scope where the artifact is built. No plumbing is needed.
+- Per-stage scorecards are written as each stage completes (`context.stageFile`), independently of the run artifact. `StageScorecard` carries `stage` (the name) and `rubricPath`, not `kind`. The kind is already recoverable from a scorecard because `StageJudgeInput.kind` is set from the definition and the whole input is embedded in the scorecard.
+
+### Unknowns and how each was resolved
+
+1. Does the stage scorecard need its own `kind` field? No. `scorecard.input.kind` already carries the declared kind and is written to every scorecard file. Adding a second copy at the top level duplicates a fact the file already states, and two copies can disagree. The card raised this as "consider"; the consideration resolves to no. If a later reader wants the kind at the top level, the pipeline definition on the run artifact gives every stage's kind by name.
+2. Store the definition parsed, or the raw file text? Parsed. `PipelineDefinition` is the shape every downstream reader (ACT-2 lineage, ACT-6 pairing) compares against, defaults are already applied, and the rest of the artifact stores parsed values (`rubricIds`) rather than source text. Raw text would force each reader to re-parse against a schema that may have moved on.
+3. What is `pipelinePath` relative to? The control repository root, as `--pipeline` accepts it and as `loadPipeline` resolves it against `CONTROL_DIR`. Store the configured relative path, not the absolute one, so artifacts compare across machines. This matches `sourceRoot`/`sourceOrigin` being the only absolute paths in the artifact and those being machine facts by intent.
+4. Should a run that fails before the final Judge record its pipeline? Out of scope here, but named so it is not lost: no run artifact exists on that path at all, for any field, and fixing that is a change to when the artifact is first written. That belongs with ACT-2's checkpoint work, which needs a record at every stage transition anyway. Not part of this task.
+
+### Design
+
+Add two fields to `RunArtifact` in src/benchmark/contracts.ts, next to `rubric`/`rubricIds` since they are the same kind of fact (the frozen contract this run ran under):
+
+    readonly pipelinePath: string;
+    readonly pipeline: PipelineDefinition;
+
+Populate them at src/benchmark/run.ts:449 from the `pipeline` already loaded at line 273 and from `config.pipelinePath`. `contracts.ts` already imports from `./pipeline` (`StageKind`), so no new module edge.
+
+### Glossary
+
+No new terms. "Pipeline definition" and "Run artifact" are both already defined in GLOSSARY.md and the task uses them as defined.
+
+### First test to write
+
+In run-benchmark.test.ts, against the run artifact assembly: a run configured with a non-default `--pipeline` produces an artifact whose `pipelinePath` is that path and whose `pipeline.stages` are that file's stages, not the default four. The existing `runGradedStages` tests already build pipelines inline (run-benchmark.test.ts:1450), so a non-default definition is cheap to state. Write the non-default case first: it fails for the right reason today and it subsumes the default case.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A completed run's artifact contains the pipeline definition it executed and the path it was loaded from
-- [ ] #2 A run with a non-default --pipeline records that definition, not the default one
+- [x] #1 A completed run's artifact contains the pipeline definition it executed and the path it was loaded from
+- [x] #2 A run with a non-default --pipeline records that definition, not the default one
+- [x] #3 The recorded pipeline path is the path as configured, relative to the control repository, so two artifacts from different machines compare equal
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## What changed
+
+The run artifact now carries two fields next to `rubric`/`rubricIds`: `pipelinePath` (the path as configured, relative to the control repository) and `pipeline` (the parsed `PipelineDefinition`, defaults applied). Both are populated from values `runBenchmark` already had in scope: the definition `loadPipeline` returns as the function's first statement, and `config.pipelinePath`. No plumbing was needed, as the shaping predicted.
+
+Assembling the artifact was a thirty-field object literal inside `runBenchmark`, which cannot run under test because everything past `claimTarget` calls real Claude sessions. It is now `buildRunArtifact` in src/benchmark/run.ts, a pure function over the pieces the run holds. That extraction was not in the shaping notes; it is what made a test-first step possible at all. The shaping notes proposed testing through `runGradedStages`, but that function never sees the run artifact, so the test would not have covered the behavior.
+
+## What became possible but is not wired up
+
+Nothing consumes the new fields yet. ACT-6's paired comparison and ACT-2's checkpoint lineage are the intended readers; both can now tell whether two artifacts ran the same pipeline. No existing reader was changed, because no code outside run.ts reads `RunArtifact`.
+
+Artifacts written before this change do not have the fields. Nothing validates a run artifact on read today, so no reader breaks; a future reader must treat both fields as possibly absent on an old file.
+
+## What was observed, and how
+
+- Wrote the failing test first and watched it fail for the predicted reason: `Export named 'buildRunArtifact' not found`.
+- Direct observation of the deliverable: ran a script that calls `buildRunArtifact` with the default pipeline and serializes the result exactly as `writeArtifact` does, then read the file back. It contains `"pipelinePath": "pipelines/default.json"` and the four default stages with `requiresAcceptanceCriteria` defaults applied. This is the artifact's real serialized form, not an in-memory assertion.
+- `bun test`: 115 pass, 0 fail, fresh run.
+- `bun run typecheck`: clean.
+- `bun run check:apply`: fixed one file's formatting, included in the commit.
+
+## What was not verified
+
+No end-to-end benchmark run was executed; that costs real money and calls live Claude sessions. The claim that `runBenchmark` reaches `buildRunArtifact` with the loaded pipeline rests on reading the call site, not on watching a run. The three tests and the observation script exercise `buildRunArtifact` directly.
+
+## Stopped on
+
+`runBenchmark` is 253 lines and mixes benchmark orchestration with process-lifecycle handling: signal registration, abort recording, and five mutable variables. The abort path has no test coverage at all. Filed as ACT-10 with the target structure and the case; not fixed here, because it is behavior-sensitive and outside this task's scope.
+
+## Review
+
+Due. The change alters a persisted artifact's shape, which is a contract other tasks will read, and it moved a thirty-field literal that no end-to-end test covers.
+<!-- SECTION:NOTES:END -->
