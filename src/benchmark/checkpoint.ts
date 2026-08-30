@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { readdir, stat } from "node:fs/promises";
+import { cp, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Effort } from "./config";
+import { z } from "zod";
+import { type Effort, effortSchema, WORKFLOW_PATHS } from "./config";
 
 export interface HashedFile {
 	readonly path: string;
@@ -118,4 +119,116 @@ export function rootLineage(inputs: RootLineageInputs) {
 			workflowFiles: canonicalFiles(inputs.workflowFiles),
 		}),
 	);
+}
+
+const hashedFileSchema = z.object({
+	path: z.string().min(1),
+	sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+const checkpointRecordSchema = z
+	.object({
+		stage: z.string().min(1),
+		targetSha: z.string().min(1),
+		lineage: z.string().min(1),
+		upstream: z.string().min(1),
+		model: z.string().min(1),
+		effort: effortSchema.optional(),
+		corpusFiles: z.array(hashedFileSchema),
+		artifacts: z.array(hashedFileSchema),
+		workflowState: z.array(hashedFileSchema),
+	})
+	.strict();
+
+export type CheckpointRecord = z.infer<typeof checkpointRecordSchema>;
+
+export interface CheckpointInputs {
+	readonly stage: string;
+	readonly targetSha: string;
+	readonly upstream: string;
+	readonly model: string;
+	readonly effort?: Effort;
+	readonly corpusFiles: readonly HashedFile[];
+	readonly artifacts: readonly HashedFile[];
+}
+
+const RECORD_FILE = "checkpoint.json";
+const SNAPSHOT_DIRECTORY = "workflow-state";
+
+export async function hashWorkflowState(
+	targetDir: string,
+): Promise<readonly HashedFile[]> {
+	const files: HashedFile[] = [];
+
+	for (const path of WORKFLOW_PATHS) {
+		const exists = await stat(join(targetDir, path)).catch(() => undefined);
+		if (!exists) continue;
+
+		files.push(...(await hashDirectory(join(targetDir, path), path)));
+	}
+
+	return files;
+}
+
+/**
+ * The snapshot is a byte-faithful copy, never the bounded captures used for
+ * judge context: materializing it must reproduce exactly the state the next
+ * stage consumed (ACT-2 decision 2).
+ */
+export async function recordCheckpoint(
+	targetDir: string,
+	directory: string,
+	inputs: CheckpointInputs,
+): Promise<CheckpointRecord> {
+	const workflowState = await hashWorkflowState(targetDir);
+
+	for (const path of WORKFLOW_PATHS) {
+		const exists = await stat(join(targetDir, path)).catch(() => undefined);
+		if (!exists) continue;
+
+		await cp(join(targetDir, path), join(directory, SNAPSHOT_DIRECTORY, path), {
+			recursive: true,
+		});
+	}
+
+	const record: CheckpointRecord = {
+		stage: inputs.stage,
+		targetSha: inputs.targetSha,
+		lineage: lineageKey(inputs),
+		upstream: inputs.upstream,
+		model: inputs.model,
+		...(inputs.effort === undefined ? {} : { effort: inputs.effort }),
+		corpusFiles: canonicalFiles(inputs.corpusFiles),
+		artifacts: canonicalFiles(inputs.artifacts),
+		workflowState: canonicalFiles(workflowState),
+	};
+	await Bun.write(
+		join(directory, RECORD_FILE),
+		`${JSON.stringify(record, null, 2)}\n`,
+	);
+
+	return record;
+}
+
+export async function materializeCheckpoint(
+	directory: string,
+	destination: string,
+): Promise<CheckpointRecord> {
+	const record = checkpointRecordSchema.parse(
+		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
+	);
+
+	for (const { path, sha256: expected } of record.workflowState) {
+		const source = join(directory, SNAPSHOT_DIRECTORY, path);
+		const actual = await hashFile(source);
+		if (actual !== expected) {
+			throw new Error(
+				`Checkpoint snapshot does not match its record: ${path} hashes ${actual}, recorded ${expected}`,
+			);
+		}
+
+		await cp(source, join(destination, path), { recursive: true });
+	}
+
+	return record;
 }

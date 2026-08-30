@@ -16,6 +16,8 @@ import {
 import {
 	captureStageCorpus,
 	lineageKey,
+	materializeCheckpoint,
+	recordCheckpoint,
 	rootLineage,
 } from "./src/benchmark/checkpoint";
 import {
@@ -2667,6 +2669,108 @@ describe(captureStageCorpus, () => {
 		await expect(
 			captureStageCorpus("discuss", "instructions", roots),
 		).rejects.toThrow(/discuss.*not installed/);
+	});
+});
+
+describe(recordCheckpoint, () => {
+	const checkpointInputs = {
+		stage: "discuss",
+		targetSha: "task-sha",
+		upstream: "root-key",
+		model: "sonnet",
+		effort: "high",
+		corpusFiles: [{ path: "CLAUDE.md", sha256: "aa11".repeat(16) }],
+		artifacts: [
+			{ path: "backlog/docs/DOC-1 - spec.md", sha256: "bb22".repeat(16) },
+		],
+	} as const;
+
+	async function checkpointFixture() {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-checkpoint-"));
+		temporaryDirectories.push(directory);
+		const targetDir = join(directory, "target");
+		await mkdir(join(targetDir, "backlog", "docs"), { recursive: true });
+		await mkdir(join(targetDir, ".boris"), { recursive: true });
+		await Bun.write(join(targetDir, "backlog", "config.yml"), "statuses: []\n");
+		await Bun.write(
+			join(targetDir, "backlog", "docs", "DOC-1 - spec.md"),
+			"the spec\n",
+		);
+		await Bun.write(join(targetDir, ".boris", "CONTEXT.md"), "context\n");
+		await Bun.write(join(targetDir, "ignored.ts"), "not workflow state\n");
+
+		return {
+			targetDir,
+			checkpointDir: join(directory, "checkpoint"),
+			destination: join(directory, "materialized"),
+		};
+	}
+
+	it("materializes a recorded checkpoint byte-for-byte", async () => {
+		const { targetDir, checkpointDir, destination } = await checkpointFixture();
+
+		const record = await recordCheckpoint(
+			targetDir,
+			checkpointDir,
+			checkpointInputs,
+		);
+		await mkdir(destination, { recursive: true });
+		const materialized = await materializeCheckpoint(
+			checkpointDir,
+			destination,
+		);
+
+		expect(materialized).toEqual(record);
+		expect(record.lineage).toBe(
+			lineageKey({
+				upstream: "root-key",
+				corpusFiles: checkpointInputs.corpusFiles,
+				model: "sonnet",
+				effort: "high",
+			}),
+		);
+		expect(record.workflowState.map(({ path }) => path).sort()).toEqual([
+			".boris/CONTEXT.md",
+			"backlog/config.yml",
+			"backlog/docs/DOC-1 - spec.md",
+		]);
+		for (const { path } of record.workflowState) {
+			expect(await Bun.file(join(destination, path)).bytes()).toEqual(
+				await Bun.file(join(targetDir, path)).bytes(),
+			);
+		}
+		expect(await Bun.file(join(destination, "ignored.ts")).exists()).toBe(
+			false,
+		);
+	});
+
+	it("refuses to materialize a tampered snapshot", async () => {
+		const { targetDir, checkpointDir, destination } = await checkpointFixture();
+		await recordCheckpoint(targetDir, checkpointDir, checkpointInputs);
+		await Bun.write(
+			join(checkpointDir, "workflow-state", "backlog", "config.yml"),
+			"tampered\n",
+		);
+		await mkdir(destination, { recursive: true });
+
+		await expect(
+			materializeCheckpoint(checkpointDir, destination),
+		).rejects.toThrow(/backlog\/config.yml/);
+	});
+
+	it("snapshots only the workflow paths that exist", async () => {
+		const { targetDir, checkpointDir } = await checkpointFixture();
+		await rm(join(targetDir, ".boris"), { force: true, recursive: true });
+
+		const record = await recordCheckpoint(
+			targetDir,
+			checkpointDir,
+			checkpointInputs,
+		);
+
+		expect(
+			record.workflowState.every(({ path }) => path.startsWith("backlog/")),
+		).toBe(true);
 	});
 });
 
