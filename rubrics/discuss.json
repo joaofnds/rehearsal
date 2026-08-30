@@ -1,5 +1,4 @@
 {
-	"stage": "discuss",
 	"hardBlockers": [
 		{
 			"id": "invalid-stage-delivery",

@@ -274,7 +274,6 @@ export async function collectCalibration(
 							updatedContent: content,
 							updatedStageRubric: parseStageRubric(
 								content,
-								scorecard.stage,
 								scorecard.input.kind,
 							),
 						};

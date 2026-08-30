@@ -46,7 +46,6 @@ const stageRubricItemSchema = z.object({
 });
 
 export const stageRubricSchema = z.object({
-	stage: z.string().min(1),
 	hardBlockers: z.array(stageRubricItemSchema),
 	requirements: z.array(stageRubricItemSchema).min(1),
 	dimensions: z

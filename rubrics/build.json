@@ -1,5 +1,4 @@
 {
-	"stage": "build",
 	"hardBlockers": [
 		{
 			"id": "invalid-stage-delivery",

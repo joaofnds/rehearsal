@@ -426,7 +426,7 @@ describe(collectCalibration, () => {
 			],
 		});
 		await Bun.write(rubricPath, rubricContent);
-		const rubric = parseStageRubric(rubricContent, "discuss");
+		const rubric = parseStageRubric(rubricContent);
 		const scorecard: StageScorecard = {
 			stage: "discuss",
 			rubricPath,
@@ -609,9 +609,7 @@ describe("the default pipeline", () => {
 			const content = await Bun.file(
 				join(import.meta.dir, stage.rubric),
 			).text();
-			expect(() =>
-				parseStageRubric(content, stage.name, stage.kind),
-			).not.toThrow();
+			expect(() => parseStageRubric(content, stage.kind)).not.toThrow();
 		}
 	});
 });
@@ -892,7 +890,6 @@ describe(deriveStageGrade, () => {
 				},
 			],
 		}),
-		"discuss",
 	);
 
 	it("continues when every requirement passes and quality is B", () => {
@@ -957,15 +954,13 @@ describe(deriveStageGrade, () => {
 						},
 					],
 				}),
-				"discuss",
 			),
 		).toThrow("IDs must be unique");
 	});
 
-	it("parses a rubric for a stage name absent from the original four", () => {
+	it("parses a rubric a stage adopts under any name", () => {
 		const rubric = parseStageRubric(
 			JSON.stringify({
-				stage: "research",
 				hardBlockers: [
 					{ id: "invalid-stage-delivery", description: "Valid delivery" },
 				],
@@ -979,17 +974,15 @@ describe(deriveStageGrade, () => {
 					},
 				],
 			}),
-			"research",
 		);
 
-		expect(rubric.stage).toBe("research");
+		expect(rubric.requirements.map(({ id }) => id)).toEqual(["sources"]);
 	});
 
 	it("requires delivery-only blockers of a delivery stage under any name", () => {
 		expect(() =>
 			parseStageRubric(
 				JSON.stringify({
-					stage: "ship",
 					hardBlockers: [
 						{ id: "invalid-stage-delivery", description: "Valid delivery" },
 					],
@@ -1003,7 +996,6 @@ describe(deriveStageGrade, () => {
 						},
 					],
 				}),
-				"ship",
 				"delivery",
 			),
 		).toThrow("false-test-safety");
@@ -1025,7 +1017,6 @@ describe(deriveStageGrade, () => {
 						},
 					],
 				}),
-				"discuss",
 			),
 		).toThrow("must retain harness blockers");
 	});
@@ -1033,12 +1024,8 @@ describe(deriveStageGrade, () => {
 
 describe(applyAuthoritativeStageResults, () => {
 	it("forces a delivery stage under any name to F when local checks fail", async () => {
-		const buildRubric = await Bun.file(
-			join(import.meta.dir, "rubrics", "build.json"),
-		).text();
 		const rubric = parseStageRubric(
-			buildRubric.replace('"stage": "build"', '"stage": "ship"'),
-			"ship",
+			await Bun.file(join(import.meta.dir, "rubrics", "build.json")).text(),
 			"delivery",
 		);
 		const input = {
@@ -1064,7 +1051,6 @@ describe(applyAuthoritativeStageResults, () => {
 	it("forces Build to F when local checks fail", async () => {
 		const rubric = parseStageRubric(
 			await Bun.file(join(import.meta.dir, "rubrics", "build.json")).text(),
-			"build",
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("build", {
@@ -1086,7 +1072,6 @@ describe(applyAuthoritativeStageResults, () => {
 	it("forces Build to F when check definitions change", async () => {
 		const rubric = parseStageRubric(
 			await Bun.file(join(import.meta.dir, "rubrics", "build.json")).text(),
-			"build",
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("build", {
@@ -1108,7 +1093,6 @@ describe(applyAuthoritativeStageResults, () => {
 	it("forces a malformed stage delivery to F", async () => {
 		const rubric = parseStageRubric(
 			await Bun.file(join(import.meta.dir, "rubrics", "discuss.json")).text(),
-			"discuss",
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("discuss", {
@@ -1180,7 +1164,6 @@ describe(validateStageJudgeEvidence, () => {
 					},
 				],
 			}),
-			"discuss",
 		);
 		const output = passingStageOutput(rubric);
 		output.requirements[0] = {
@@ -1216,7 +1199,6 @@ describe(validateStageJudgeEvidence, () => {
 					},
 				],
 			}),
-			"discuss",
 		);
 		const output = passingStageOutput(rubric);
 		output.requirements[0] = {
@@ -1273,6 +1255,7 @@ describe(runGradedStages, () => {
 	function fakeStageDependencies(
 		judged: StageJudgeInput[],
 		executed: string[],
+		rubricsUsed: string[] = [],
 	) {
 		const scorecardFor = (
 			input: StageJudgeInput,
@@ -1298,7 +1281,6 @@ describe(runGradedStages, () => {
 						},
 					],
 				}),
-				input.stage,
 				input.kind,
 			),
 			input,
@@ -1335,9 +1317,10 @@ describe(runGradedStages, () => {
 					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
 					_budget: number,
 					input: StageJudgeInput,
-					_source: unknown,
+					source: { rubricPath: string },
 				) => {
 					judged.push(input);
+					rubricsUsed.push(source.rubricPath);
 
 					return scorecardFor(input, "CONTINUE");
 				},
@@ -1416,6 +1399,97 @@ describe(runGradedStages, () => {
 		expect(judged[3]?.diff).toBe("the-diff");
 		expect(outcome.buildEvidence?.resultSha).toBe("result-sha");
 		expect(outcome.workflow).toHaveLength(4);
+	});
+
+	function planningStage(name: string, artifact: string, rubric: string) {
+		return {
+			name,
+			kind: "planning" as const,
+			skill: name,
+			artifact,
+			rubric,
+			requiresAcceptanceCriteria: false,
+		};
+	}
+
+	const deliveryStage = {
+		name: "build",
+		kind: "delivery" as const,
+		skill: "build",
+		rubric: "rubrics/build.json",
+	};
+
+	it("executes a pipeline with plan removed and carries grill forward", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				stages: [
+					planningStage("discuss", "spec", "rubrics/discuss.json"),
+					planningStage("grill", "grilled", "rubrics/grill.json"),
+					deliveryStage,
+				],
+			},
+		};
+
+		await runGradedStages(dependencies, context);
+
+		expect(executed).toEqual(["discuss", "grill", "build"]);
+		expect(judged[2]?.priorArtifacts.map(({ path }) => path)).toEqual([
+			"backlog/docs/discuss.md",
+			"backlog/docs/grill.md",
+		]);
+	});
+
+	it("executes a pipeline with grill and plan swapped", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const { dependencies } = fakeStageDependencies(judged, executed);
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				stages: [
+					planningStage("discuss", "spec", "rubrics/discuss.json"),
+					planningStage("plan", "plan", "rubrics/plan.json"),
+					planningStage("grill", "grilled", "rubrics/grill.json"),
+					deliveryStage,
+				],
+			},
+		};
+
+		await runGradedStages(dependencies, context);
+
+		expect(executed).toEqual(["discuss", "plan", "grill", "build"]);
+	});
+
+	it("executes a fifth stage under a name the harness never knew", async () => {
+		const judged: StageJudgeInput[] = [];
+		const executed: string[] = [];
+		const rubricsUsed: string[] = [];
+		const { dependencies } = fakeStageDependencies(
+			judged,
+			executed,
+			rubricsUsed,
+		);
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				stages: [
+					planningStage("discuss", "spec", "rubrics/discuss.json"),
+					planningStage("research", "findings", "rubrics/grill.json"),
+					planningStage("plan", "plan", "rubrics/plan.json"),
+					deliveryStage,
+				],
+			},
+		};
+
+		await runGradedStages(dependencies, context);
+
+		expect(executed).toEqual(["discuss", "research", "plan", "build"]);
+		expect(judged[1]?.stage).toBe("research");
+		expect(rubricsUsed[1]?.endsWith("rubrics/grill.json")).toBe(true);
 	});
 
 	it("stops after a failing grade and calibrates the failed stage", async () => {
@@ -1852,7 +1926,6 @@ function stageScorecard(
 				},
 			],
 		}),
-		"discuss",
 	);
 
 	return {

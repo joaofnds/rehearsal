@@ -43,23 +43,16 @@ export async function captureStageJudgeInput(
 
 export function parseStageRubric(
 	content: string,
-	expectedStage: WorkflowStage,
 	kind: StageKind = "planning",
 ): StageRubric {
 	const rubric = stageRubricSchema.parse(JSON.parse(content));
-	if (rubric.stage !== expectedStage) {
-		throw new Error(
-			`Expected ${expectedStage} rubric, received ${rubric.stage} rubric`,
-		);
-	}
-
 	const ids = [
 		...rubric.hardBlockers,
 		...rubric.requirements,
 		...rubric.dimensions,
 	].map(({ id }) => id);
 	if (new Set(ids).size !== ids.length) {
-		throw new Error(`${expectedStage} rubric IDs must be unique`);
+		throw new Error("Stage rubric IDs must be unique");
 	}
 	const requiredHarnessBlockers =
 		kind === "delivery"
@@ -234,7 +227,7 @@ export async function loadStageRubric(stage: StageDefinition) {
 	return {
 		rubricPath,
 		content,
-		rubric: parseStageRubric(content, stage.name, stage.kind),
+		rubric: parseStageRubric(content, stage.kind),
 	};
 }
 

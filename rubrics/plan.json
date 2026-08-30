@@ -1,5 +1,4 @@
 {
-	"stage": "plan",
 	"hardBlockers": [
 		{
 			"id": "invalid-stage-delivery",

@@ -1,5 +1,4 @@
 {
-	"stage": "grill",
 	"hardBlockers": [
 		{
 			"id": "invalid-stage-delivery",
