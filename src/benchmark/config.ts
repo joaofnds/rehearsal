@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { z } from "zod";
 
 export const CONTROL_DIR = resolve(import.meta.dir, "../..");
@@ -89,11 +89,23 @@ export function parseArgs(
 		judgeModel,
 		judgeEffort,
 		sessionBudgetUsd,
-		pipelinePath:
+		pipelinePath: controlRelativePath(
 			values.get("--pipeline") ??
-			env.BENCHMARK_PIPELINE ??
-			DEFAULT_PIPELINE_PATH,
+				env.BENCHMARK_PIPELINE ??
+				DEFAULT_PIPELINE_PATH,
+		),
 	};
+}
+
+/**
+ * A run artifact records the pipeline path so two runs can be compared, which
+ * only works when the same pipeline yields the same string on every machine.
+ * An absolute path and a path through ".." both name a file that a plain
+ * relative path names too, so the path is reduced to that one form here, at the
+ * boundary, rather than left for every later reader to normalise.
+ */
+function controlRelativePath(pipelinePath: string) {
+	return relative(CONTROL_DIR, resolve(CONTROL_DIR, pipelinePath));
 }
 
 function parseEffort(value: string | undefined, role: string) {

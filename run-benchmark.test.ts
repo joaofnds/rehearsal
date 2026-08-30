@@ -1784,15 +1784,41 @@ describe(buildRunArtifact, () => {
 		]);
 	});
 
-	it("records the configured relative path, not an absolute one", async () => {
-		const artifact = buildRunArtifact(
-			await artifactInputs(
-				await loadDefaultPipeline(),
+	it("records the same path whichever way the run named the pipeline", async () => {
+		const asConfigured = (pipelineArgument: string) =>
+			parseArgs(
+				[
+					"--target",
+					"/tmp/target",
+					"--model",
+					"sonnet",
+					"--session-budget-usd",
+					"5",
+					"--pipeline",
+					pipelineArgument,
+				],
+				{},
+			).pipelinePath;
+
+		const pipeline = await loadDefaultPipeline();
+		const recorded = await Promise.all(
+			[
 				"pipelines/default.json",
+				join(import.meta.dir, "pipelines/default.json"),
+				"rubrics/../pipelines/default.json",
+			].map(
+				async (argument) =>
+					buildRunArtifact(
+						await artifactInputs(pipeline, asConfigured(argument)),
+					).pipelinePath,
 			),
 		);
 
-		expect(artifact.pipelinePath.startsWith("/")).toBe(false);
+		expect(recorded).toEqual([
+			"pipelines/default.json",
+			"pipelines/default.json",
+			"pipelines/default.json",
+		]);
 	});
 });
 
