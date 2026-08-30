@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { z } from "zod";
+import { INITIAL_CHECKPOINT_STAGE } from "./checkpoint";
 import { CONTROL_DIR } from "./config";
 import { loadStageRubric } from "./stage-grading";
 
@@ -57,8 +58,14 @@ export class PipelineDefinitionError extends Error {}
  * human-review finding against the final Judge, which grades the whole
  * candidate rather than any one stage. "review" is the human-review file's
  * suffix in the run directory, which a stage of that name would overwrite.
+ * The initial checkpoint's name would collide with a stage's checkpoint
+ * directory.
  */
-const RESERVED_STAGE_NAMES: readonly string[] = ["final", "review"];
+const RESERVED_STAGE_NAMES: readonly string[] = [
+	"final",
+	"review",
+	INITIAL_CHECKPOINT_STAGE,
+];
 
 function stageLabel(stage: unknown, index: number) {
 	const name =

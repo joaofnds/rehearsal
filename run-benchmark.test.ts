@@ -16,6 +16,7 @@ import {
 import {
 	captureStageCorpus,
 	hashWorkflowState,
+	initialCheckpointInputs,
 	lineageKey,
 	materializeCheckpoint,
 	recordCheckpoint,
@@ -67,6 +68,7 @@ import type { PipelineDefinition } from "./src/benchmark/pipeline";
 import { loadPipeline, parsePipeline } from "./src/benchmark/pipeline";
 import {
 	buildRunArtifact,
+	retainedCheckpointRecorder,
 	runBenchmark,
 	runGradedStages,
 } from "./src/benchmark/run";
@@ -1410,6 +1412,7 @@ describe(runGradedStages, () => {
 
 		return {
 			targetDir: stageDirectory,
+			initialLineage: "initial-lineage",
 			productOwnerDirectory: stageDirectory,
 			model: "sonnet",
 			judgeModel: "sonnet",
@@ -1595,14 +1598,7 @@ describe(runGradedStages, () => {
 			"plan",
 			"build",
 		]);
-		expect(outcome.checkpoints[0]?.upstream).toBe(
-			rootLineage({
-				taskSha: "task-sha",
-				task: "Task",
-				productBrief: "Brief",
-				workflowFiles: await hashWorkflowState(context.targetDir),
-			}),
-		);
+		expect(outcome.checkpoints[0]?.upstream).toBe(context.initialLineage);
 		expect(outcome.checkpoints[1]?.upstream).toBe(
 			outcome.checkpoints[0]?.lineage,
 		);
@@ -2681,7 +2677,7 @@ describe(parsePipeline, () => {
 	});
 
 	it("rejects a stage whose name collides with a harness artifact file", () => {
-		for (const name of ["final", "review"]) {
+		for (const name of ["final", "review", "initial"]) {
 			expect(() =>
 				parse([stageEntry({ name, skill: "s" }), deliveryStage]),
 			).toThrow(/reserved/);
@@ -3084,6 +3080,63 @@ describe(loadRunManifest, () => {
 		);
 
 		await expect(loadRunManifest(directory)).rejects.toThrow();
+	});
+});
+
+describe(initialCheckpointInputs, () => {
+	const root = {
+		taskSha: "task-sha",
+		task: "Task text",
+		productBrief: "Brief text",
+		workflowFiles: [{ path: "backlog/config.yml", sha256: "aa11" }],
+	} as const;
+
+	it("checkpoints the run's initial state under the reserved name", () => {
+		const inputs = initialCheckpointInputs(root, "sonnet", "high");
+
+		expect(inputs.stage).toBe("initial");
+		expect(inputs.targetSha).toBe("task-sha");
+		expect(inputs.upstream).toBe(rootLineage(root));
+		expect(inputs.corpusFiles).toEqual([]);
+		expect(inputs.artifacts).toEqual([]);
+		expect(inputs.effort).toBe("high");
+	});
+
+	it("omits effort when the run declared none", () => {
+		expect("effort" in initialCheckpointInputs(root, "sonnet")).toBe(false);
+	});
+});
+
+describe(retainedCheckpointRecorder, () => {
+	it("records the checkpoint and pins its commit under refs/rehearsal", async () => {
+		const source = await createRepository();
+		const checkpointDir = join(source.directory, ".checkpoints", "initial");
+
+		const record = await retainedCheckpointRecorder("run-1")(
+			source.directory,
+			checkpointDir,
+			{
+				stage: "initial",
+				targetSha: source.sha,
+				upstream: "root-key",
+				model: "sonnet",
+				corpusFiles: [],
+				artifacts: [],
+			},
+		);
+
+		expect(record.stage).toBe("initial");
+		expect(
+			await Bun.file(join(checkpointDir, "checkpoint.json")).exists(),
+		).toBe(true);
+		expect(
+			(
+				await runCommand(
+					["git", "rev-parse", "refs/rehearsal/run-1"],
+					source.directory,
+				)
+			).trim(),
+		).toBe(source.sha);
 	});
 });
 

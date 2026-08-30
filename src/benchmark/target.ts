@@ -191,6 +191,20 @@ export async function teardownTarget(
 	console.log(`Target restored to ${source.sha}.`);
 }
 
+/**
+ * Checkpointed commits must outlive the run: restoring main makes the task
+ * and result commits unreachable, and only this ref then keeps gc from
+ * pruning the history a later replay materializes. The ref is harness state
+ * in the target's git directory, never part of the corpus.
+ */
+export async function recordRetentionRef(
+	targetDir: string,
+	runName: string,
+	sha: string,
+) {
+	await git(targetDir, "update-ref", `refs/rehearsal/${runName}`, sha);
+}
+
 export async function assertWorkspaceCleanAt(
 	targetDir: string,
 	expectedSha: string,

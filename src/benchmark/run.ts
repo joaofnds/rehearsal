@@ -14,9 +14,10 @@ import {
 	captureStageCorpus,
 	hashArtifacts,
 	hashWorkflowState,
+	INITIAL_CHECKPOINT_STAGE,
+	initialCheckpointInputs,
 	recordCheckpoint,
 	resolveSkillDirectory,
-	rootLineage,
 	skillSearchRoots,
 } from "./checkpoint";
 import {
@@ -61,6 +62,7 @@ import {
 	captureWorkflowBackup,
 	changedPathsBetween,
 	claimTarget,
+	recordRetentionRef,
 	teardownTarget,
 } from "./target";
 import { type ProductOwnerSession, runWorkflowStage } from "./workflow";
@@ -171,6 +173,22 @@ export function buildRunArtifact(inputs: RunArtifactInputs): RunArtifact {
 	};
 }
 
+/**
+ * Records the checkpoint and then pins its commit under refs/rehearsal, in
+ * that order: an unpinned checkpoint is a gc race, a stray ref without a
+ * checkpoint is only debris.
+ */
+export function retainedCheckpointRecorder(
+	runName: string,
+): typeof recordCheckpoint {
+	return async (targetDir, directory, inputs) => {
+		const record = await recordCheckpoint(targetDir, directory, inputs);
+		await recordRetentionRef(targetDir, runName, inputs.targetSha);
+
+		return record;
+	};
+}
+
 export interface StageDependencies {
 	readonly runWorkflowStage: typeof runWorkflowStage;
 	readonly runStageJudge: typeof runStageJudge;
@@ -194,6 +212,7 @@ export interface PendingStage {
 
 export interface StageContext {
 	readonly targetDir: string;
+	readonly initialLineage: string;
 	readonly productOwnerDirectory: string;
 	readonly model: string;
 	readonly effort?: Effort;
@@ -243,12 +262,7 @@ export async function runGradedStages(
 	for (const definition of context.pipeline.stages) {
 		await dependencies.resolveSkillDirectory(definition.skill, skillRoots);
 	}
-	let upstream = rootLineage({
-		taskSha: context.taskSha,
-		task: context.task,
-		productBrief: context.productBrief,
-		workflowFiles: await hashWorkflowState(context.targetDir),
-	});
+	let upstream = context.initialLineage;
 
 	for (const definition of context.pipeline.stages) {
 		const stage = definition.name;
@@ -501,6 +515,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			task,
 			instructions,
 		);
+		const recordRetainedCheckpoint = retainedCheckpointRecorder(runFiles.name);
 		await writeRunManifest(runFiles.checkpointsRoot, {
 			timestamp,
 			controlSha,
@@ -518,6 +533,20 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			pipelinePath: config.pipelinePath,
 			pipeline,
 		});
+		const initialCheckpoint = await recordRetainedCheckpoint(
+			source.root,
+			runFiles.checkpoint(INITIAL_CHECKPOINT_STAGE),
+			initialCheckpointInputs(
+				{
+					taskSha,
+					task,
+					productBrief,
+					workflowFiles: await hashWorkflowState(source.root),
+				},
+				config.model,
+				config.effort,
+			),
+		);
 		const productOwner: ProductOwnerSession = {
 			sessionId: randomUUID(),
 			spentUsd: 0,
@@ -537,10 +566,11 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 					captureTreatmentChecks,
 					resolveSkillDirectory,
 					captureStageCorpus,
-					recordCheckpoint,
+					recordCheckpoint: recordRetainedCheckpoint,
 				},
 				{
 					targetDir: source.root,
+					initialLineage: initialCheckpoint.lineage,
 					productOwnerDirectory,
 					model: config.model,
 					effort: config.effort,
@@ -618,7 +648,7 @@ export async function runBenchmark(config: BenchmarkConfig, rl: Questioner) {
 			productOwner,
 			workflow,
 			stageScorecards,
-			checkpoints,
+			checkpoints: [initialCheckpoint, ...checkpoints],
 			evidence,
 			judge,
 			reviewFile: runFiles.review,

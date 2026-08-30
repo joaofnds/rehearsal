@@ -127,6 +127,35 @@ export async function captureStageCorpus(
 }
 
 /**
+ * The checkpoint recorded at run start, before any stage runs, so the first
+ * stage replays from a checkpoint like every other stage. The name is
+ * reserved in pipeline definitions; a stage of the same name would claim the
+ * same checkpoint directory.
+ */
+export const INITIAL_CHECKPOINT_STAGE = "initial";
+
+/**
+ * The initial checkpoint consumes no corpus: no skill ran to produce it. Its
+ * upstream is the root lineage, so the chain starts at the initial state the
+ * run created rather than at any stage's output.
+ */
+export function initialCheckpointInputs(
+	root: RootLineageInputs,
+	model: string,
+	effort?: Effort,
+): CheckpointInputs {
+	return {
+		stage: INITIAL_CHECKPOINT_STAGE,
+		targetSha: root.taskSha,
+		upstream: rootLineage(root),
+		model,
+		...(effort === undefined ? {} : { effort }),
+		corpusFiles: [],
+		artifacts: [],
+	};
+}
+
+/**
  * The first stage has no upstream checkpoint; its upstream is the initial
  * state the run created: the task commit, the task and brief texts that feed
  * every session, and the workflow files present before any stage ran.
