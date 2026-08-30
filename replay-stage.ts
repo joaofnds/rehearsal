@@ -114,9 +114,11 @@ async function main() {
 			instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
 			controlSha: await currentControlSha(),
 			model: config.model,
-			effort: config.effort,
+			...(config.effort === undefined ? {} : { effort: config.effort }),
 			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
+			...(config.judgeEffort === undefined
+				? {}
+				: { judgeEffort: config.judgeEffort }),
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		},
 	);

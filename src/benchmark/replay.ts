@@ -130,9 +130,9 @@ export interface ReplayRequest {
 	readonly instructions: string;
 	readonly controlSha: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 }
 
@@ -150,9 +150,9 @@ export interface ReplayRecord {
 	readonly lineage: string;
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly controlSha: string;
 	readonly stageCostUsd: number;
@@ -319,7 +319,7 @@ export async function runReplay(
 				targetDir: worktreeDir,
 				productOwnerDirectory,
 				model: request.model,
-				effort: request.effort,
+				...(request.effort === undefined ? {} : { effort: request.effort }),
 				sessionBudgetUsd: request.sessionBudgetUsd,
 				productOwner,
 				task: manifest.task,
@@ -361,7 +361,7 @@ export async function runReplay(
 				upstream: plan.consumed.lineage,
 				corpusFiles: session.corpusFiles,
 				model: request.model,
-				effort: request.effort,
+				...(request.effort === undefined ? {} : { effort: request.effort }),
 			}),
 			corpusFiles: session.corpusFiles,
 			model: request.model,

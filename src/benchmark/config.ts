@@ -27,9 +27,9 @@ export type WorkflowStage = string;
 export interface BenchmarkConfig {
 	readonly sourceDir: string;
 	readonly model: string;
-	readonly effort?: Effort;
+	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
-	readonly judgeEffort?: Effort;
+	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly pipelinePath: string;
 }
@@ -126,9 +126,9 @@ export function parseReplayArgs(
 
 	const runName = values.get("--run");
 	const stage = values.get("--stage");
-	const model = values.get("--model") ?? env.BENCHMARK_MODEL;
+	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
 	const budgetText =
-		values.get("--session-budget-usd") ?? env.BENCHMARK_SESSION_BUDGET_USD;
+		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
 	if (!runName) throw new Error("Provide --run with the run's name");
 	if (!stage) throw new Error("Provide --stage with the stage to replay");
@@ -140,11 +140,11 @@ export function parseReplayArgs(
 	}
 
 	const effort = parseEffort(
-		values.get("--effort") ?? env.BENCHMARK_EFFORT,
+		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
 		"workflow",
 	);
 	const judgeEffort = parseEffort(
-		values.get("--judge-effort") ?? env.BENCHMARK_JUDGE_EFFORT ?? effort,
+		values.get("--judge-effort") ?? env["BENCHMARK_JUDGE_EFFORT"] ?? effort,
 		"Judge",
 	);
 	const sessionBudgetUsd = Number(budgetText);
@@ -157,10 +157,10 @@ export function parseReplayArgs(
 		runName,
 		stage,
 		model,
-		effort,
+		...(effort === undefined ? {} : { effort }),
 		judgeModel:
-			values.get("--judge-model") ?? env.BENCHMARK_JUDGE_MODEL ?? model,
-		judgeEffort,
+			values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model,
+		...(judgeEffort === undefined ? {} : { judgeEffort }),
 		sessionBudgetUsd,
 	};
 }

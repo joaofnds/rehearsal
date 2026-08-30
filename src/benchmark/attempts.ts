@@ -60,15 +60,17 @@ function attemptFromScorecard(
 	scorecard: AttemptScorecard,
 	costUsd: number,
 ): Attempt {
+	const { artifact, changedPaths, diff } = scorecard.input;
+
 	return {
 		label,
 		grade: scorecard.grade.grade,
 		verdict: scorecard.grade.verdict,
 		dimensions: scorecard.grade.dimensions,
 		costUsd,
-		artifact: scorecard.input.artifact,
-		changedPaths: scorecard.input.changedPaths,
-		diff: scorecard.input.diff,
+		...(artifact === undefined ? {} : { artifact }),
+		...(changedPaths === undefined ? {} : { changedPaths }),
+		...(diff === undefined ? {} : { diff }),
 	};
 }
 
