@@ -5182,6 +5182,7 @@ describe(runReplay.name, () => {
 		readonly manifest: RunManifest;
 		readonly initial: CheckpointRecord;
 		readonly discuss: CheckpointRecord;
+		readonly build: CheckpointRecord;
 		readonly replaysRoot: string;
 	}
 
@@ -5224,6 +5225,23 @@ describe(runReplay.name, () => {
 				],
 			},
 		);
+		const build = await recordCheckpoint(
+			stateDir,
+			join(runDirectory, "build"),
+			{
+				stage: "build",
+				targetSha: "candidate-sha",
+				upstream: discuss.lineage,
+				model: "sonnet",
+				corpusFiles: [
+					{
+						path: "skills/build/SKILL.md",
+						sha256: createHash("sha256").update("build").digest("hex"),
+					},
+				],
+				artifacts: [],
+			},
+		);
 		const manifest: RunManifest = {
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "run-control-sha",
@@ -5254,6 +5272,12 @@ describe(runReplay.name, () => {
 						skill: "build",
 						rubric: "rubrics/build.json",
 					},
+					{
+						name: "review",
+						kind: "delivery",
+						skill: "review",
+						rubric: "rubrics/review.json",
+					},
 				],
 			},
 		};
@@ -5264,6 +5288,7 @@ describe(runReplay.name, () => {
 			manifest,
 			initial,
 			discuss,
+			build,
 			replaysRoot: join(directory, "replays"),
 		};
 	}
@@ -5726,13 +5751,13 @@ describe(runReplay.name, () => {
 		]);
 	});
 
-	it("prints only stale checkpoint lines when the chain is stale", async () => {
+	it("prints every stale checkpoint when the chain is stale", async () => {
 		const run = await recordedRun([
 			{ path: "skills/discuss/SKILL.md", sha256: "aa".repeat(32) },
 		]);
 		const fake = fakeReplayDependencies();
 
-		await runReplay(fake.dependencies, request(run, "build"));
+		await runReplay(fake.dependencies, request(run, "review"));
 
 		expect(
 			fake.log.filter(
@@ -5740,7 +5765,10 @@ describe(runReplay.name, () => {
 					line === "Checkpoint chain is fresh" ||
 					line.startsWith("Stale checkpoint "),
 			),
-		).toEqual(["Stale checkpoint discuss: skills/discuss/SKILL.md changed"]);
+		).toEqual([
+			"Stale checkpoint discuss: skills/discuss/SKILL.md changed",
+			"Stale checkpoint build: upstream stage discuss is stale",
+		]);
 	});
 
 	it("labels the replay stale when the model differs from the recorded run", async () => {
