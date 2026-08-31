@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
-import { cp, readdir, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -172,6 +172,39 @@ export async function captureStageCorpus(
 	}
 
 	return files;
+}
+
+export async function snapshotStageCorpus(
+	skill: string,
+	instructions: string,
+	roots: readonly string[],
+	destination: string,
+): Promise<readonly HashedFile[]> {
+	const skillsDirectory = join(destination, "skills");
+	await mkdir(skillsDirectory, { recursive: true });
+	await Bun.write(join(destination, "CLAUDE.md"), instructions);
+
+	const skills = new Set([...GLOBAL_SKILLS, skill]);
+	for (const name of skills) {
+		await cp(
+			await resolveSkillDirectory(name, roots),
+			join(skillsDirectory, name),
+			{ recursive: true },
+		);
+	}
+
+	return captureStageCorpus(skill, instructions, [skillsDirectory]);
+}
+
+export async function installStageCorpusSnapshot(
+	snapshotDirectory: string,
+	targetDirectory: string,
+): Promise<void> {
+	const targetSkills = join(targetDirectory, ".claude", "skills");
+	await mkdir(join(targetDirectory, ".claude"), { recursive: true });
+	await cp(join(snapshotDirectory, "skills"), targetSkills, {
+		recursive: true,
+	});
 }
 
 /**

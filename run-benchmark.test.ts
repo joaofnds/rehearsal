@@ -47,11 +47,13 @@ import {
 	deriveStaleness,
 	hashWorkflowState,
 	initialCheckpointInputs,
+	installStageCorpusSnapshot,
 	lineageKey,
 	materializeCheckpoint,
 	recordCheckpoint,
 	rootLineage,
 	skillSearchRoots,
+	snapshotStageCorpus,
 } from "./src/benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -5646,6 +5648,47 @@ describe(captureStageCorpus.name, () => {
 		]);
 
 		expect(fromTarget).toEqual(fromHome);
+	});
+
+	it("installs frozen skill bytes after their source changes", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		temporaryDirectories.push(parent);
+		const snapshotDirectory = join(parent, "snapshot");
+		const firstWorktree = join(parent, "first");
+		const secondWorktree = join(parent, "second");
+		await Promise.all([
+			mkdir(firstWorktree, { recursive: true }),
+			mkdir(secondWorktree, { recursive: true }),
+		]);
+		const frozen = await snapshotStageCorpus(
+			"discuss",
+			"instructions",
+			roots,
+			snapshotDirectory,
+		);
+
+		await Bun.write(join(roots[1], "discuss", "SKILL.md"), "changed skill");
+		await Promise.all([
+			installStageCorpusSnapshot(snapshotDirectory, firstWorktree),
+			installStageCorpusSnapshot(snapshotDirectory, secondWorktree),
+		]);
+
+		const first = await captureStageCorpus("discuss", "instructions", [
+			join(firstWorktree, ".claude", "skills"),
+		]);
+		const second = await captureStageCorpus("discuss", "instructions", [
+			join(secondWorktree, ".claude", "skills"),
+		]);
+		expect(first).toEqual(frozen);
+		expect(second).toEqual(frozen);
+		expect(
+			await Bun.file(
+				join(firstWorktree, ".claude", "skills", "discuss", "SKILL.md"),
+			).text(),
+		).toBe("discuss skill");
 	});
 
 	it("prefers the first root that has the skill", async () => {
