@@ -74,6 +74,7 @@ import {
 import {
 	applyHarnessResults,
 	parseRubricIds,
+	runJudge,
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
@@ -428,6 +429,78 @@ describe(readStructuredOutput.name, () => {
 		expect(() => readStructuredOutput(envelope, productAnswerSchema)).toThrow(
 			"did not contain structured output",
 		);
+	});
+});
+
+describe(runJudge.name, () => {
+	const rubric = RUBRIC_IDS.map(
+		(id, index) => `${index + 1}. \`${id}\`: ${id} requirement.`,
+	).join("\n");
+	const passingChecks = harnessResult("PASS", "passes");
+
+	function response(grade: JudgeGrade): string {
+		return JSON.stringify({
+			session_id: "judge-session",
+			total_cost_usd: 0.1,
+			structured_output: grade,
+		});
+	}
+
+	it("retries rejected output against the same evidence and records both attempts", async () => {
+		const validGrade = completeGrade("PASS");
+		const invalidGrade = withFirstRequirement(validGrade, {
+			...requirement(RUBRIC_IDS[0], "PASS"),
+			evidence: [
+				{
+					source: "diff",
+					path: "src/missing.ts",
+					claim: "unavailable evidence",
+				},
+			],
+		});
+		const responses = [response(invalidGrade), response(validGrade)];
+		const prompts: string[] = [];
+
+		const result = await runJudge(
+			"sonnet",
+			undefined,
+			5,
+			rubric,
+			[],
+			"candidate diff",
+			["src/audit/example.ts"],
+			passingChecks,
+			passingChecks,
+			(prompt) => {
+				prompts.push(prompt);
+				const next = responses.shift();
+				if (next === undefined) {
+					throw new Error("no scripted response left");
+				}
+
+				return Promise.resolve(next);
+			},
+		);
+
+		expect(prompts).toHaveLength(2);
+		expect(prompts[1]?.startsWith(prompts[0] ?? "")).toBe(true);
+		expect(prompts[1]).toContain("src/missing.ts");
+		expect(result.attempts).toEqual([
+			{
+				payload: invalidGrade,
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error:
+					"Judge cited unavailable evidence for tests: diff:src/missing.ts",
+			},
+			{
+				payload: validGrade,
+				costUsd: 0.1,
+				outcome: "ACCEPTED",
+			},
+		]);
+		expect(result.costUsd).toBeCloseTo(0.2);
+		expect(result.grade.verdict).toBe("PASS");
 	});
 });
 

@@ -1,3 +1,5 @@
+export type JudgeInvoker = (prompt: string) => Promise<string>;
+
 export type JudgeAttempt =
 	| {
 			readonly payload: unknown;

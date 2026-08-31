@@ -19,7 +19,7 @@ import {
 	stageJudgeOutputSchema,
 	stageRubricSchema,
 } from "./contracts";
-import type { JudgeAttempt } from "./judge-attempt";
+import type { JudgeAttempt, JudgeInvoker } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { StageDefinition, StageKind } from "./pipeline";
 
@@ -263,8 +263,6 @@ export async function loadStageRubric(stage: StageDefinition): Promise<{
 		rubric: parseStageRubric(content, stage.kind),
 	};
 }
-
-export type JudgeInvoker = (prompt: string) => Promise<string>;
 
 /**
  * One retry, with the rejection quoted back: a Judge that misformats a
