@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
 	formatProjectedCost,
 	projectConfirmationCost,
+	requireConfirmationApproval,
 } from "./src/benchmark/confirmation";
 import {
 	diffTexts,
@@ -435,6 +436,74 @@ describe(projectConfirmationCost.name, () => {
 		expect(formatProjectedCost(replay)).toBe(
 			"Projected maximum cost: $100.00 (5 reps x $20.00)",
 		);
+	});
+});
+
+describe(requireConfirmationApproval.name, () => {
+	it("shows the ceiling before prompting for approval", async () => {
+		const events: string[] = [];
+
+		await requireConfirmationApproval(
+			{
+				reps: 5,
+				perRepMaximumUsd: 20,
+				totalMaximumUsd: 100,
+			},
+			false,
+			{
+				output: (message) => {
+					events.push(`output: ${message}`);
+				},
+				prompt: (message) => {
+					events.push(`prompt: ${message}`);
+					return Promise.resolve("yes");
+				},
+			},
+		);
+
+		expect(events).toEqual([
+			"output: Projected maximum cost: $100.00 (5 reps x $20.00)",
+			"prompt: Start confirmation? [y/N] ",
+		]);
+	});
+
+	it("stops when interactive approval is declined", () => {
+		expect(
+			requireConfirmationApproval(
+				{
+					reps: 2,
+					perRepMaximumUsd: 4,
+					totalMaximumUsd: 8,
+				},
+				false,
+				{
+					output: () => undefined,
+					prompt: () => Promise.resolve("no"),
+				},
+			),
+		).rejects.toThrow("Confirmation declined");
+	});
+
+	it("uses noninteractive approval without prompting", async () => {
+		let prompts = 0;
+
+		await requireConfirmationApproval(
+			{
+				reps: 2,
+				perRepMaximumUsd: 4,
+				totalMaximumUsd: 8,
+			},
+			true,
+			{
+				output: () => undefined,
+				prompt: () => {
+					prompts += 1;
+					return Promise.resolve("no");
+				},
+			},
+		);
+
+		expect(prompts).toBe(0);
 	});
 });
 
