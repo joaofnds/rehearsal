@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { stdin as input, stdout as output } from "node:process";
+import { createInterface } from "node:readline/promises";
 import {
 	loadAttempts,
 	LineageMismatchError,
@@ -14,6 +17,7 @@ import {
 import {
 	captureStageCorpus,
 	materializeCheckpoint,
+	skillSearchRoots,
 } from "./src/benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -22,6 +26,10 @@ import {
 	captureTreatmentChecks,
 } from "./src/benchmark/checks";
 import { runCommand } from "./src/benchmark/command";
+import {
+	projectConfirmationCost,
+	runRequestedExecution,
+} from "./src/benchmark/confirmation";
 import type {
 	ConfirmationConfig,
 	ReplayCliConfig,
@@ -32,8 +40,12 @@ import {
 	REQUIRED_BUN_VERSION,
 } from "./src/benchmark/config";
 import { runReplay } from "./src/benchmark/replay";
-import type { ReplayRequest } from "./src/benchmark/replay";
-import type { ReplayConfirmationRequest } from "./src/benchmark/replay-confirmation";
+import type { ReplayDependencies, ReplayRequest } from "./src/benchmark/replay";
+import type {
+	ReplayConfirmationOutcome,
+	ReplayConfirmationRequest,
+} from "./src/benchmark/replay-confirmation";
+import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
@@ -73,21 +85,49 @@ export interface ReplayStageExecutionDependencies<
 	readonly corpusRoots: readonly string[];
 }
 
-export async function executeReplayStage<DebugEvidence, ConfirmationEvidence>(
-	config: { readonly confirmation: ConfirmationConfig | undefined },
+export function executeReplayStage<DebugEvidence, ConfirmationEvidence>(
+	config: { readonly confirmation?: ConfirmationConfig | undefined },
 	request: ReplayRequest,
 	dependencies: ReplayStageExecutionDependencies<
 		DebugEvidence,
 		ConfirmationEvidence
 	>,
 ): Promise<ReplayStageOutcome<DebugEvidence, ConfirmationEvidence>> {
-	if (config.confirmation !== undefined) {
-		throw new Error("Stage confirmation is not wired");
-	}
+	const { confirmation } = config;
 
-	dependencies.approval.output("single-rep evidence, not a score");
+	return runRequestedExecution<
+		ReplayStageOutcome<DebugEvidence, ConfirmationEvidence>
+	>({
+		confirmation,
+		projectCost: () =>
+			projectConfirmationCost({
+				mode: "stage",
+				reps: confirmation?.reps ?? 1,
+				sessionBudgetUsd: request.sessionBudgetUsd,
+			}),
+		approval: dependencies.approval,
+		runDebug: async () => ({
+			kind: "debug" as const,
+			evidence: await dependencies.runDebug(request),
+		}),
+		runConfirmed: async (projectedCost) => {
+			if (confirmation === undefined) {
+				throw new Error("Confirmation configuration is required");
+			}
 
-	return { kind: "debug", evidence: await dependencies.runDebug(request) };
+			return {
+				kind: "confirmation" as const,
+				evidence: await dependencies.runConfirmed({
+					...request,
+					groupId: dependencies.groupId(),
+					reps: confirmation.reps,
+					corpusRoots: dependencies.corpusRoots,
+					projectedCost,
+					approvalMethod: confirmation.approved ? "yes" : "interactive",
+				}),
+			};
+		},
+	});
 }
 
 async function resolveRunDirectory(paths: BenchmarkRunPaths): Promise<string> {
@@ -138,58 +178,84 @@ async function main(): Promise<void> {
 	const config: ReplayCliConfig = parseReplayArgs(Bun.argv.slice(2));
 	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
 	await resolveRunDirectory(paths);
-
-	const outcome = await runReplay(
-		{
-			stageSession: {
-				runWorkflowStage,
-				readTaskOutput,
-				readTaskCard,
-				captureBuildCandidate,
-				assertPlanningStageCompleted,
-				assertBuildCommitted,
-				changedPathsBetween,
-				captureCheckIntegrity,
-				captureTreatmentChecks,
-				captureStageCorpus,
-			},
-			runStageJudge,
-			loadStageRubric,
-			addWorktree,
-			removeWorktree,
-			materializeCheckpoint,
-			captureBaselineContext,
-			captureFileHashes,
-			installInstructions,
-			installDependencies: async (worktreeDir) => {
-				await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
-			},
-			log: console.log,
+	const replayDependencies: ReplayDependencies = {
+		stageSession: {
+			runWorkflowStage,
+			readTaskOutput,
+			readTaskCard,
+			captureBuildCandidate,
+			assertPlanningStageCompleted,
+			assertBuildCommitted,
+			changedPathsBetween,
+			captureCheckIntegrity,
+			captureTreatmentChecks,
+			captureStageCorpus,
 		},
-		{
-			paths,
-			stage: config.stage,
-			instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-			controlSha: await currentControlSha(),
-			model: config.model,
-			effort: config.effort,
-			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
-			sessionBudgetUsd: config.sessionBudgetUsd,
+		runStageJudge,
+		loadStageRubric,
+		addWorktree,
+		removeWorktree,
+		materializeCheckpoint,
+		captureBaselineContext,
+		captureFileHashes,
+		installInstructions,
+		installDependencies: async (worktreeDir) => {
+			await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
 		},
-	);
+		log: console.log,
+	};
+	const request: ReplayRequest = {
+		paths,
+		stage: config.stage,
+		instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+		controlSha: await currentControlSha(),
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+	};
+	const rl = createInterface({ input, output });
+	let outcome: ReplayStageOutcome<
+		Awaited<ReturnType<typeof runReplay>>,
+		ReplayConfirmationOutcome
+	>;
+	try {
+		outcome = await executeReplayStage(config, request, {
+			approval: {
+				output: console.log,
+				prompt: (message) => rl.question(message),
+			},
+			runDebug: (debugRequest) => runReplay(replayDependencies, debugRequest),
+			runConfirmed: (confirmationRequest) =>
+				runReplayConfirmation(replayDependencies, confirmationRequest),
+			groupId: randomUUID,
+			corpusRoots: skillSearchRoots(CONTROL_DIR),
+		});
+	} finally {
+		rl.close();
+	}
+	if (outcome.kind === "confirmation") {
+		console.log(`\nConfirmation group: ${outcome.evidence.groupRecordFile}`);
+		console.log(`Confirmation report: ${outcome.evidence.reportFile}`);
+		for (const recordFile of outcome.evidence.repRecordFiles) {
+			console.log(`Confirmation rep: ${recordFile}`);
+		}
 
-	console.log(`\nReplay record: ${outcome.recordPath}`);
+		return;
+	}
+
+	console.log(`\nReplay record: ${outcome.evidence.recordPath}`);
 	// The replay itself is already recorded and paid for, so a refusal to
 	// compare is reported rather than thrown away with the command.
 	try {
 		console.log(
 			await presentAttempts(
-				outcome.record.consumed.lineage,
+				outcome.evidence.record.consumed.lineage,
 				await loadAttempts(
 					paths,
 					config.stage,
-					outcome.record.consumed.lineage,
+					outcome.evidence.record.consumed.lineage,
 				),
 			),
 		);

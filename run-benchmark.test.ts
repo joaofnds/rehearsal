@@ -120,6 +120,7 @@ import {
 	resolveReplay,
 	runReplay,
 } from "./src/benchmark/replay";
+import type { ReplayConfirmationRequest } from "./src/benchmark/replay-confirmation";
 import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
 import type {
 	RunArtifactBaseInputs,
@@ -633,6 +634,82 @@ describe(executeReplayStage.name, () => {
 		expect(output).toEqual(["single-rep evidence, not a score"]);
 		expect(requests).toEqual([replayRequest]);
 		expect(outcome).toEqual({ kind: "debug", evidence: { judge: "B" } });
+	});
+
+	it("gets projected-cost approval before starting three confirmation reps", async () => {
+		const approval = Promise.withResolvers<string>();
+		const events: string[] = [];
+		const confirmations: ReplayConfirmationRequest[] = [];
+		const replayRequest: ReplayRequest = {
+			paths: benchmarkRunPaths("/runs", "run"),
+			stage: "build",
+			instructions: "instructions",
+			controlSha: "control-sha",
+			model: "sonnet",
+			effort: "high",
+			judgeModel: "opus",
+			judgeEffort: "high",
+			sessionBudgetUsd: 5,
+		};
+		const execution = executeReplayStage(
+			{ confirmation: { reps: 3, approved: false } },
+			replayRequest,
+			{
+				approval: {
+					output: (message) => {
+						events.push(`output:${message}`);
+					},
+					prompt: (message) => {
+						events.push(`prompt:${message}`);
+
+						return approval.promise;
+					},
+				},
+				runDebug: () => {
+					throw new Error("debug must not run");
+				},
+				runConfirmed: (request) => {
+					confirmations.push(request);
+					events.push(`start:${request.reps}`);
+
+					return Promise.resolve({ group: request.groupId });
+				},
+				groupId: () => "confirmation-1",
+				corpusRoots: ["/corpus"],
+			},
+		);
+
+		await Promise.resolve();
+		expect(confirmations).toEqual([]);
+		expect(events).toEqual([
+			"output:Projected maximum cost: $60.00 (3 reps x $20.00)",
+			"prompt:Start confirmation? [y/N] ",
+		]);
+		approval.resolve("yes");
+
+		expect(await execution).toEqual({
+			kind: "confirmation",
+			evidence: { group: "confirmation-1" },
+		});
+		expect(events).toEqual([
+			"output:Projected maximum cost: $60.00 (3 reps x $20.00)",
+			"prompt:Start confirmation? [y/N] ",
+			"start:3",
+		]);
+		expect(confirmations).toEqual([
+			{
+				...replayRequest,
+				groupId: "confirmation-1",
+				reps: 3,
+				corpusRoots: ["/corpus"],
+				projectedCost: {
+					reps: 3,
+					perRepMaximumUsd: 20,
+					totalMaximumUsd: 60,
+				},
+				approvalMethod: "interactive",
+			},
+		]);
 	});
 });
 
