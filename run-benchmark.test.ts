@@ -1856,11 +1856,16 @@ describe(killActiveCommands.name, () => {
 });
 
 describe(runStageJudge.name, () => {
-	function judgeResponse(evidencePath: string): string {
+	function judgeResponse(
+		evidencePath: string,
+		evidenceSource: StageJudgeOutput["requirements"][number]["evidence"][number]["source"] = "task",
+	): string {
 		const item = (id: string): StageJudgeOutput["requirements"][number] => ({
 			id,
 			status: "PASS",
-			evidence: [{ source: "task", path: evidencePath, claim: "grounded" }],
+			evidence: [
+				{ source: evidenceSource, path: evidencePath, claim: "grounded" },
+			],
 		});
 
 		return JSON.stringify({
@@ -1874,7 +1879,11 @@ describe(runStageJudge.name, () => {
 						id: "clarity",
 						grade: "A",
 						evidence: [
-							{ source: "task", path: evidencePath, claim: "grounded" },
+							{
+								source: evidenceSource,
+								path: evidencePath,
+								claim: "grounded",
+							},
 						],
 					},
 				],
@@ -1896,6 +1905,43 @@ describe(runStageJudge.name, () => {
 			],
 		},
 	};
+
+	it("accepts commit subjects as citable stage evidence", async () => {
+		let prompt = "";
+		const input = stageJudgeInput("build", {
+			commitSubjects: ["add audit event"],
+		});
+
+		const scorecard = await runStageJudge(
+			"sonnet",
+			undefined,
+			5,
+			input,
+			rubricSource,
+			(judgePrompt) => {
+				prompt = judgePrompt;
+
+				return Promise.resolve(
+					judgeResponse("commitSubjects", "commit-subjects"),
+				);
+			},
+		);
+
+		expect(scorecard.grade.grade).toBe("A");
+		expect(prompt).toContain("commitSubjects for commit-subjects");
+		expect(() => {
+			validateStageJudgeEvidence(
+				{
+					...scorecard.grade,
+					requirements: scorecard.grade.requirements.map((requirement) => ({
+						...requirement,
+						evidence: [stageEvidence("commit-subjects", "commit-subjects")],
+					})),
+				},
+				input,
+			);
+		}).not.toThrow();
+	});
 
 	it("retries once with the rejection quoted and sums the costs", async () => {
 		const prompts: string[] = [];

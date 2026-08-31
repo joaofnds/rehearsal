@@ -86,6 +86,7 @@ const stageEvidenceListSchema = z
 				"prior-artifact",
 				"baseline-context",
 				"diff",
+				"commit-subjects",
 				"check-integrity",
 				"local-checks",
 				"harness-failure",
