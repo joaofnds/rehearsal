@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { CorpusDifferenceWording, HashedFile } from "./checkpoint";
-import { corpusDifferences } from "./checkpoint";
+import { corpusDifferences, hashedFileSchema } from "./checkpoint";
 import { CommandError, runCommand } from "./command";
 import type { Effort } from "./config";
+import { effortSchema } from "./config";
 import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
@@ -69,6 +70,9 @@ const attemptScorecardSchema = z
 				changedPaths: z.array(z.string()).optional(),
 			})
 			.loose(),
+		corpusFiles: z.array(hashedFileSchema).optional(),
+		model: z.string().min(1).optional(),
+		effort: effortSchema.optional(),
 	})
 	.loose();
 
@@ -100,8 +104,8 @@ function attemptFromScorecard(
  * The original run's stage file holds its scorecard only when the stage was
  * judged; a pending or failed marker is not an attempt. The stage session's
  * own cost lives in the run artifact, not the stage file, so the original
- * attempt carries neither a total nor lineage inputs: the guard compares the
- * replays it can see rather than assuming the original's inputs.
+ * attempt carries no total. Older stage files also carry no lineage inputs,
+ * so the comparison guard skips those attempts rather than assuming inputs.
  */
 async function loadOriginalAttempt(
 	runsDirectory: string,
@@ -120,7 +124,18 @@ async function loadOriginalAttempt(
 		return undefined;
 	}
 
-	return attemptFromScorecard(`original run ${runName}`, parsed.data);
+	const { corpusFiles, model, effort } = parsed.data;
+	const lineageInputs =
+		corpusFiles !== undefined && model !== undefined
+			? { corpusFiles, model, effort }
+			: undefined;
+
+	return attemptFromScorecard(
+		`original run ${runName}`,
+		parsed.data,
+		undefined,
+		lineageInputs,
+	);
 }
 
 /**

@@ -5272,6 +5272,27 @@ describe(loadAttempts.name, () => {
 		});
 	});
 
+	it("carries a current original stage file's corpus, model, and effort for the comparison guard", async () => {
+		const directory = await attemptFixture();
+		await Bun.write(
+			join(directory, "run1.discuss.json"),
+			`${JSON.stringify({
+				...originalScorecard(),
+				corpusFiles: [{ path: "CLAUDE.md", sha256: "bb".repeat(32) }],
+				model: "opus",
+				effort: "high",
+			})}\n`,
+		);
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(attempts[0]?.lineageInputs).toEqual({
+			corpusFiles: [{ path: "CLAUDE.md", sha256: "bb".repeat(32) }],
+			model: "opus",
+			effort: "high",
+		});
+	});
+
 	it("leaves the original run's attempt without lineage inputs the stage file never held", async () => {
 		const directory = await attemptFixture();
 
