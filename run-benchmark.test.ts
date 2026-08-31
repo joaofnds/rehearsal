@@ -11,6 +11,7 @@ import {
 	requireConfirmationApproval,
 	runConfirmation,
 } from "./src/benchmark/confirmation";
+import { buildReliabilityReport } from "./src/benchmark/confirmation-report";
 import {
 	diffTexts,
 	loadAttempts,
@@ -629,6 +630,122 @@ describe(validateJudgeGrade.name, () => {
 		]);
 
 		expect(validated).toEqual(grade);
+	});
+});
+
+describe(buildReliabilityReport.name, () => {
+	it("reports reliability for every stage and the final outcome", () => {
+		const report = buildReliabilityReport(
+			["shape", "build"],
+			[
+				{
+					stages: [
+						{
+							stage: "shape",
+							status: "JUDGED",
+							grade: "A",
+							verdict: "CONTINUE",
+						},
+						{
+							stage: "build",
+							status: "JUDGED",
+							grade: "B",
+							verdict: "CONTINUE",
+						},
+					],
+					finalOutcome: { status: "JUDGED", verdict: "PASS" },
+				},
+				{
+					stages: [
+						{
+							stage: "shape",
+							status: "JUDGED",
+							grade: "B",
+							verdict: "CONTINUE",
+						},
+						{
+							stage: "build",
+							status: "JUDGED",
+							grade: "C",
+							verdict: "STOP",
+						},
+					],
+					finalOutcome: { status: "JUDGED", verdict: "FAIL" },
+				},
+				{
+					stages: [
+						{
+							stage: "shape",
+							status: "JUDGED",
+							grade: "D",
+							verdict: "STOP",
+						},
+						{ stage: "build", status: "NOT_REACHED" },
+					],
+					finalOutcome: { status: "NOT_REACHED" },
+				},
+				{
+					stages: [
+						{ stage: "shape", status: "EXECUTION_FAILED" },
+						{ stage: "build", status: "NOT_REACHED" },
+					],
+					finalOutcome: { status: "NOT_REACHED" },
+				},
+				{
+					stages: [
+						{ stage: "shape", status: "METRICS_MISSING" },
+						{ stage: "build", status: "NOT_REACHED" },
+					],
+					finalOutcome: { status: "NOT_REACHED" },
+				},
+			],
+		);
+
+		expect(report).toEqual([
+			{
+				name: "shape",
+				requested: 5,
+				attempted: 5,
+				notReached: 0,
+				failed: 3,
+				successful: 2,
+				gradeDistribution: Object.fromEntries([
+					["A", 1],
+					["B", 1],
+					["D", 1],
+				]),
+				successRate: 0.4,
+				standardError: Math.sqrt((0.4 * 0.6) / 5),
+				passK: 0.4 ** 5,
+			},
+			{
+				name: "build",
+				requested: 5,
+				attempted: 2,
+				notReached: 3,
+				failed: 1,
+				successful: 1,
+				gradeDistribution: Object.fromEntries([
+					["B", 1],
+					["C", 1],
+				]),
+				successRate: 0.2,
+				standardError: Math.sqrt((0.2 * 0.8) / 5),
+				passK: 0.2 ** 5,
+			},
+			{
+				name: "final",
+				requested: 5,
+				attempted: 2,
+				notReached: 3,
+				failed: 1,
+				successful: 1,
+				gradeDistribution: { PASS: 1, FAIL: 1 },
+				successRate: 0.2,
+				standardError: Math.sqrt((0.2 * 0.8) / 5),
+				passK: 0.2 ** 5,
+			},
+		]);
 	});
 });
 
