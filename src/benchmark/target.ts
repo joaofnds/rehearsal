@@ -259,7 +259,12 @@ export async function capturePlanningAdvance(
 	targetDir: string,
 	baselineSha: string,
 	expectedBranch: ExpectedBranch = "main",
-): Promise<{ resultSha: string; diff: string; changedPaths: string[] }> {
+): Promise<{
+	resultSha: string;
+	diff: string;
+	changedPaths: string[];
+	commitSubjects?: string[] | undefined;
+}> {
 	const branch = await git(targetDir, "branch", "--show-current");
 	const status = await git(
 		targetDir,
@@ -295,6 +300,11 @@ export async function capturePlanningAdvance(
 			targetDir,
 		),
 		changedPaths: await changedPathsBetween(targetDir, baselineSha, resultSha),
+		commitSubjects: await commitSubjectsBetween(
+			targetDir,
+			baselineSha,
+			resultSha,
+		),
 	};
 }
 
@@ -383,20 +393,32 @@ export async function assertBuildCommitted(
 		throw new StageValidationError("Build commit contains no changes");
 	}
 
-	const commitSubjects = (
-		await git(
-			targetDir,
-			"log",
-			"--reverse",
-			"--format=%s",
-			`${taskSha}..${resultSha}`,
-		)
-	).split("\n");
+	const commitSubjects = await commitSubjectsBetween(
+		targetDir,
+		taskSha,
+		resultSha,
+	);
 	if (commitSubjectPattern !== undefined) {
 		assertCommitSubjects(commitSubjects, commitSubjectPattern);
 	}
 
 	return { resultSha, diff, commitSubjects };
+}
+
+async function commitSubjectsBetween(
+	targetDir: string,
+	baselineSha: string,
+	resultSha: string,
+): Promise<string[]> {
+	const subjects = await git(
+		targetDir,
+		"log",
+		"--reverse",
+		"--format=%s",
+		`${baselineSha}..${resultSha}`,
+	);
+
+	return subjects.split("\n");
 }
 
 export function assertCommitSubjects(

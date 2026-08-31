@@ -240,6 +240,7 @@ export async function assertPlanningStageCompleted(
 	resultSha: string;
 	diff: string;
 	changedPaths: string[];
+	commitSubjects?: string[] | undefined;
 }> {
 	const advance = await capturePlanningAdvance(
 		targetDir,

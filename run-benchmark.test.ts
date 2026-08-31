@@ -2952,6 +2952,7 @@ describe(capturePlanningAdvance.name, () => {
 		expect(advance.resultSha).toBe(head.trim());
 		expect(advance.changedPaths).toEqual(["GLOSSARY.md"]);
 		expect(advance.diff).toContain("audit log");
+		expect(advance.commitSubjects).toEqual(["add project glossary"]);
 	});
 
 	it("captures an empty advance when the stage committed nothing", async () => {
