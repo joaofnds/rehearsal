@@ -46,6 +46,9 @@
   judges.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own.
+- **Stage scorecard** — persisted Judge result for one stage: its frozen input
+  and rubric, citations, grade, prompt, and Judge cost; a rejected scorecard
+  also carries its calibration.
 - **Stale checkpoint** — a checkpoint whose recorded inputs (corpus files,
   model, effort, or an upstream checkpoint) no longer match the current
   state; still replayable for exploration, refused in comparisons.
