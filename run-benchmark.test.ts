@@ -69,6 +69,7 @@ import {
 	judgeGradeSchema,
 	productAnswerSchema,
 	StageValidationError,
+	stageJudgeOutputSchema,
 	stageTurnSchema,
 } from "./src/benchmark/contracts";
 import {
@@ -1928,7 +1929,9 @@ describe(runStageJudge.name, () => {
 		);
 
 		expect(scorecard.grade.grade).toBe("A");
-		expect(prompt).toContain("commitSubjects for commit-subjects");
+		expect(prompt).toContain(
+			"commitSubjects (or commit-subjects) as the whole-source path for commit-subjects",
+		);
 		expect(() => {
 			validateStageJudgeEvidence(
 				{
@@ -1944,6 +1947,19 @@ describe(runStageJudge.name, () => {
 				input,
 			);
 		}).not.toThrow();
+	});
+
+	it("rejects commit subject citations when the stage has no history", () => {
+		const output = readStructuredOutput(
+			readClaudeEnvelope(judgeResponse("commitSubjects", "commit-subjects")),
+			stageJudgeOutputSchema,
+		);
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("build"));
+		}).toThrow(
+			"cited unavailable evidence for invalid-stage-delivery: commit-subjects:commitSubjects",
+		);
 	});
 
 	it("retries once with the rejection quoted and sums the costs", async () => {
