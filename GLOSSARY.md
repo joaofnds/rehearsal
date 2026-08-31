@@ -21,6 +21,9 @@
   code; the integration test.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
   rubric-scored LLM with rationale.
+- **Judge attempt** — one Judge call against frozen evidence and a rubric,
+  recording its returned payload, call cost, and whether harness validation
+  accepted or rejected it.
 - **Lineage** — hash of everything that produced a checkpoint: upstream
   checkpoint, corpus files feeding the stage, model, effort.
 - **Materialize** — write a checkpoint's frozen state into a directory,
