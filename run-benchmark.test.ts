@@ -107,6 +107,7 @@ import {
 	deriveStageGrade,
 	loadStageRubric,
 	parseStageRubric,
+	runStageJudge,
 	validateStageJudgeEvidence,
 } from "./src/benchmark/stage-grading";
 import {
@@ -892,6 +893,27 @@ describe(validateJudgeEvidence.name, () => {
 		}).not.toThrow();
 	});
 
+	it("accepts a citation naming a directory of supplied paths", () => {
+		const grade = withFirstRequirement(completeGrade("PASS"), {
+			...requirement(RUBRIC_IDS[0], "PASS"),
+			evidence: [
+				{
+					source: "diff",
+					path: "src/audit-log",
+					claim: "the module directory is new",
+				},
+			],
+		});
+
+		expect(() => {
+			validateJudgeEvidence(
+				grade,
+				["src/audit/example.ts", "src/audit-log/audit-log.module.ts"],
+				["src/app.module.ts"],
+			);
+		}).not.toThrow();
+	});
+
 	it("rejects glob citations that do not resolve to supplied paths", () => {
 		const grade = withFirstRequirement(completeGrade("PASS"), {
 			...requirement(RUBRIC_IDS[0], "PASS"),
@@ -1572,6 +1594,91 @@ describe(killActiveCommands.name, () => {
 
 		expect(await running).toBe("killed");
 		expect(await pgrepMatches("sleep 987653")).toBe("");
+	});
+});
+
+describe(runStageJudge.name, () => {
+	function judgeResponse(evidencePath: string): string {
+		const item = (id: string): unknown => ({
+			id,
+			status: "PASS",
+			evidence: [{ source: "task", path: evidencePath, claim: "grounded" }],
+		});
+
+		return JSON.stringify({
+			session_id: "judge-session",
+			total_cost_usd: 0.1,
+			structured_output: {
+				hardBlockers: [item("invalid-stage-delivery")],
+				requirements: [item("scope")],
+				dimensions: [
+					{
+						id: "clarity",
+						grade: "A",
+						evidence: [
+							{ source: "task", path: evidencePath, claim: "grounded" },
+						],
+					},
+				],
+				summary: "graded",
+			},
+		});
+	}
+
+	const rubricSource = {
+		rubricPath: "rubrics/shape.json",
+		content: "{}",
+		rubric: {
+			hardBlockers: [
+				{ id: "invalid-stage-delivery", description: "Valid delivery" },
+			],
+			requirements: [{ id: "scope", description: "Scope" }],
+			dimensions: [
+				{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
+			],
+		},
+	};
+
+	it("retries once with the rejection quoted and sums the costs", async () => {
+		const prompts: string[] = [];
+		const responses = [
+			judgeResponse("not-a-path"),
+			judgeResponse("backlog-seed.md"),
+		];
+		const scorecard = await runStageJudge(
+			"sonnet",
+			undefined,
+			5,
+			stageJudgeInput("shape"),
+			rubricSource,
+			(prompt) => {
+				prompts.push(prompt);
+				const next = responses.shift();
+				if (next === undefined) {
+					throw new Error("no scripted response left");
+				}
+				return Promise.resolve(next);
+			},
+		);
+
+		expect(prompts).toHaveLength(2);
+		expect(prompts[1]).toContain("Your previous response was rejected");
+		expect(prompts[1]).toContain("not-a-path");
+		expect(scorecard.costUsd).toBeCloseTo(0.2);
+		expect(scorecard.grade.grade).toBe("A");
+	});
+
+	it("fails after the second invalid response", () => {
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => Promise.resolve(judgeResponse("not-a-path")),
+			),
+		).rejects.toThrow("cited unavailable evidence");
 	});
 });
 

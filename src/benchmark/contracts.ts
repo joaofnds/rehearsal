@@ -293,7 +293,13 @@ export function citationMatchesPath(
 		try {
 			const glob = new Bun.Glob(candidate);
 			if (
-				availablePaths.some((path) => path === candidate || glob.match(path))
+				availablePaths.some(
+					(path) =>
+						path === candidate ||
+						// A directory that contains supplied paths names them all.
+						path.startsWith(`${candidate}/`) ||
+						glob.match(path),
+				)
 			) {
 				return true;
 			}
