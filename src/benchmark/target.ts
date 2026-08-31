@@ -335,7 +335,11 @@ export async function assertBuildCommitted(
 	taskSha: string,
 	expectedBranch: ExpectedBranch = "main",
 	commitSubjectPattern?: string,
-): Promise<{ resultSha: string; diff: string }> {
+): Promise<{
+	resultSha: string;
+	diff: string;
+	commitSubjects: string[];
+}> {
 	const branch = await git(targetDir, "branch", "--show-current");
 	if (branch !== (expectedBranch ?? "")) {
 		throw new StageValidationError(
@@ -379,17 +383,20 @@ export async function assertBuildCommitted(
 		throw new StageValidationError("Build commit contains no changes");
 	}
 
-	if (commitSubjectPattern !== undefined) {
-		const subjects = await git(
+	const commitSubjects = (
+		await git(
 			targetDir,
 			"log",
+			"--reverse",
 			"--format=%s",
 			`${taskSha}..${resultSha}`,
-		);
-		assertCommitSubjects(subjects.split("\n"), commitSubjectPattern);
+		)
+	).split("\n");
+	if (commitSubjectPattern !== undefined) {
+		assertCommitSubjects(commitSubjects, commitSubjectPattern);
 	}
 
-	return { resultSha, diff };
+	return { resultSha, diff, commitSubjects };
 }
 
 export function assertCommitSubjects(

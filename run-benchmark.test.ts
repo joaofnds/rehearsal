@@ -2206,7 +2206,11 @@ describe(runGradedStages.name, () => {
 						changedPaths: [],
 					}),
 				assertBuildCommitted: () =>
-					Promise.resolve({ resultSha: "result-sha", diff: "the-diff" }),
+					Promise.resolve({
+						resultSha: "result-sha",
+						diff: "the-diff",
+						commitSubjects: ["build commit"],
+					}),
 				changedPathsBetween: () => Promise.resolve(["src/example.ts"]),
 				captureCheckIntegrity: () =>
 					Promise.resolve(harnessResult("PASS", "checks match")),
@@ -2518,7 +2522,11 @@ describe(runGradedStages.name, () => {
 			assertBuildCommitted: (_targetDir: string, baselineSha: string) => {
 				buildBaselines.push(baselineSha);
 
-				return Promise.resolve({ resultSha: "result-sha", diff: "the-diff" });
+				return Promise.resolve({
+					resultSha: "result-sha",
+					diff: "the-diff",
+					commitSubjects: ["build commit"],
+				});
 			},
 		};
 
@@ -2834,6 +2842,27 @@ describe(assertCommitSubjects.name, () => {
 });
 
 describe(assertBuildCommitted.name, () => {
+	it("returns only the stage's commit subjects oldest first", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, "first.ts"),
+			"export const first = 1;\n",
+		);
+		await commitAll(source.directory, "add first change");
+		await Bun.write(
+			join(source.directory, "second.ts"),
+			"export const second = 2;\n",
+		);
+		await commitAll(source.directory, "add second change");
+
+		const build = await assertBuildCommitted(source.directory, source.sha);
+
+		expect(build.commitSubjects).toEqual([
+			"add first change",
+			"add second change",
+		]);
+	});
+
 	it("accepts a build committed on a detached replay worktree", async () => {
 		const source = await createRepository();
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
@@ -5185,7 +5214,11 @@ describe(runReplay.name, () => {
 					stageDirs.push(targetDir);
 					branchExpectations.push(expectedBranch);
 
-					return Promise.resolve({ resultSha: "result-sha", diff: "the-diff" });
+					return Promise.resolve({
+						resultSha: "result-sha",
+						diff: "the-diff",
+						commitSubjects: ["replayed commit"],
+					});
 				},
 				changedPathsBetween: (targetDir) => {
 					stageDirs.push(targetDir);
