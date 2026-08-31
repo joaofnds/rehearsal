@@ -44,13 +44,15 @@ import type {
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
-import type { JudgeAttempt, JudgeInvoker } from "./judge-attempt";
+import type { JudgeInvoker } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
+import type { PendingStage } from "./run-abort";
+import { writeRunArtifact, writeStageJudgeFailure } from "./run-abort";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
@@ -94,13 +96,6 @@ async function createRunFiles(timestamp: string): Promise<{
 		checkpoint: (stage: string) =>
 			join(directory, `${name}.checkpoints`, stage),
 	};
-}
-
-async function writeArtifact(
-	path: string,
-	artifact: RunArtifact,
-): Promise<void> {
-	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
 function signalExitCode(signal: NodeJS.Signals): number {
@@ -246,7 +241,7 @@ export async function runFinalJudge(
 		);
 	} catch (error) {
 		if (error instanceof JudgeOutputValidationError) {
-			await writeArtifact(
+			await writeRunArtifact(
 				request.artifactFile,
 				buildFailedJudgeRunArtifact(inputs, error),
 			);
@@ -289,39 +284,6 @@ export interface StageDependencies extends StageSessionDependencies {
 	readonly runStageJudge: typeof runStageJudge;
 	readonly resolveSkillDirectory: typeof resolveSkillDirectory;
 	readonly recordCheckpoint: typeof recordCheckpoint;
-}
-
-export interface PendingStage {
-	readonly file: string;
-	readonly stage: WorkflowStage;
-	readonly input: StageJudgeInput;
-	readonly failure?:
-		| {
-				readonly prompt: string;
-				readonly attempts: readonly JudgeAttempt[];
-				readonly costUsd: number;
-		  }
-		| undefined;
-}
-
-export async function writeStageJudgeFailure(
-	pending: PendingStage,
-	reason: string,
-): Promise<void> {
-	await Bun.write(
-		pending.file,
-		`${JSON.stringify(
-			{
-				status: "STAGE_JUDGE_FAILED",
-				stage: pending.stage,
-				error: reason,
-				input: pending.input,
-				...pending.failure,
-			},
-			null,
-			2,
-		)}\n`,
-	);
 }
 
 export interface StageContext {
@@ -657,7 +619,7 @@ export async function runBenchmark(
 					await writeStageJudgeFailure(pendingStage, reason);
 				}
 				if (pendingArtifact) {
-					await writeArtifact(runFiles.artifact, {
+					await writeRunArtifact(runFiles.artifact, {
 						...pendingArtifact,
 						status: "FAILED",
 					});
@@ -882,7 +844,7 @@ export async function runBenchmark(
 			judge,
 			reviewFile: runFiles.review,
 		});
-		await writeArtifact(runFiles.artifact, artifact);
+		await writeRunArtifact(runFiles.artifact, artifact);
 		pendingArtifact = artifact;
 		console.log(`Run artifact: ${runFiles.artifact}`);
 		console.log(`Human review: ${runFiles.review}`);
@@ -906,7 +868,7 @@ export async function runBenchmark(
 			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		});
-		await writeArtifact(runFiles.artifact, {
+		await writeRunArtifact(runFiles.artifact, {
 			...artifact,
 			status: "COMPLETE",
 			calibration,

@@ -96,7 +96,6 @@ import {
 	runReplay,
 } from "./src/benchmark/replay";
 import type {
-	PendingStage,
 	RunArtifactBaseInputs,
 	RunArtifactInputs,
 	StageContext,
@@ -109,8 +108,12 @@ import {
 	runBenchmark,
 	runFinalJudge,
 	runGradedStages,
-	writeStageJudgeFailure,
 } from "./src/benchmark/run";
+import type { PendingStage } from "./src/benchmark/run-abort";
+import {
+	createRunAbort,
+	writeStageJudgeFailure,
+} from "./src/benchmark/run-abort";
 import {
 	applyAuthoritativeStageResults,
 	assertStageGradePassed,
@@ -2134,6 +2137,51 @@ describe(writeStageJudgeFailure.name, () => {
 			prompt: "original prompt",
 			attempts,
 			costUsd: 0.3,
+		});
+	});
+});
+
+describe(createRunAbort.name, () => {
+	it("writes the pending stage and failed run artifact without a Claude session", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		temporaryDirectories.push(directory);
+		const artifactFile = join(directory, "run.json");
+		const stageFile = join(directory, "shape.json");
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const pendingStage: PendingStage = {
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		};
+
+		abort.trackPendingStage(pendingStage);
+		abort.trackPendingArtifact(artifact);
+		await abort.markAborted("stage Judge failed");
+
+		expect(JSON.parse(await Bun.file(stageFile).text())).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			stage: "shape",
+			error: "stage Judge failed",
+		});
+		expect(JSON.parse(await Bun.file(artifactFile).text())).toEqual({
+			...artifact,
+			status: "FAILED",
 		});
 	});
 });
