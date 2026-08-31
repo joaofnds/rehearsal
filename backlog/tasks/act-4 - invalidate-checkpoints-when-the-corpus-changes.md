@@ -1,11 +1,11 @@
 ---
 id: ACT-4
 title: invalidate checkpoints when the corpus changes
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-31 03:50'
+updated_date: '2026-08-31 04:12'
 labels: []
 dependencies:
   - ACT-2
@@ -81,3 +81,90 @@ Refactoring pass: staleness and the comparison guard had each grown their own wa
 
 Filed ACT-18: the original run's attempt carries no lineage inputs, because the per-stage scorecard file never records the corpus, model, and effort the session ran with. So the most common comparison, original versus its own replay, is the one the guard cannot check. ACT-13 (split the test file) and ACT-14 (share the run-directory layout) already cover the other structural items this task touched.
 <!-- SECTION:NOTES:END -->
+
+## Review (2026-08-31)
+
+Independent review dispatched: the change is outward-facing and touches the
+comparison contract other stages will build on. Suite before review: 217 pass,
+0 fail (`bun test`); typecheck, lint, and format check clean. Note: the repo's
+CLAUDE.md names Biome, MikroORM, NestJS and a `test:unit` script, none of which
+exist in package.json; the real commands are `bun test`, `bun run lint`,
+`bun run typecheck`, `bun run fmt:check`.
+
+Twelve findings. One blocking, six should-fix, five notes. All disposed.
+
+### Blocking, fixed (commit e9b549e)
+
+1. **A lineage mismatch ended the replay CLI with an unhandled rejection.**
+   `presentAttempts` asserts comparable lineages first, and `replay-stage.ts`
+   had no catch for `LineageMismatchError`. Reproduced: two replays of one
+   stage across a corpus edit refuse with "Cannot compare replay 1 with replay
+   2: they consumed different inputs (CLAUDE.md differs)". That is the primary
+   tuning loop, and the refusal landed after the stage, product-owner, and
+   judge sessions were paid for. The record and its path were already written,
+   so nothing was lost on disk, but the command's deliverable was.
+   Fix: the CLI catches the mismatch, prints it, and exits normally. Verified
+   by driving the same handling over a mismatched pair: message printed,
+   exit 0.
+
+### Should-fix, fixed
+
+2. **The guard only ever compared the second attempt** (commit e524e6e).
+   Limiting `labelled.slice(1)` to `slice(1, 2)` left 213 pass, 0 fail. A
+   mismatch introduced by a third replay would have been presented, which is
+   AC #4's behavior. Pinned with a three-attempt case; the mutation now fails.
+
+3. **Which upstream stage is blamed was unpinned** (commit e524e6e). Changing
+   the latch from first-stale to nearest-stale left 213 pass, 0 fail. The
+   three-stage fixture cannot tell the policies apart. Pinned with a
+   four-stage chain and one corpus edit, where the two policies name different
+   stages; the mutation now fails. (My first attempt at this test was also too
+   weak and did not catch it; the four-stage chain does.)
+
+4. **Staleness input wiring was unpinned** (commit e524e6e). Passing
+   `"MUTATED"` and `["/nonexistent"]` into `currentChainCorpus` left 213 pass,
+   0 fail, though that wiring decides whether every checkpoint reads stale.
+   Every `runReplay` test stubbed `captureStageCorpus` ignoring arguments 2
+   and 3. The harness now records the capture arguments and one test asserts
+   the request's instructions and the worktree's skill roots reach it; the
+   mutation now fails.
+
+5. **`AttemptLineageInputs.effort` was `string`** (commit e9b549e), where
+   `ReplayRecord`, `CheckpointInputs`, and `StalenessRequest` all use the
+   `Effort` union. The type admitted a non-effort that would then be reported
+   as a legitimate mismatch. Now `Effort`.
+
+6. **Global skills were missing from pre-flight resolution** (commit e9b549e).
+   `run.ts` resolved each stage's own skill before any stage ran, with a
+   comment stating that invariant, but `captureStageCorpus` now also requires
+   every `GLOBAL_SKILLS` entry. Only accidentally safe while doctrine exists.
+   The loop resolves the global skills too, and a test covers a missing one.
+
+7. **`AttemptLineageInputs`'s docstring described the consumed checkpoint's
+   inputs** (commit e9b549e), but the field is populated from the replayed
+   stage's own corpus, model, and effort. Reworded to what the field holds.
+
+### Notes, no action here
+
+- `corpusDifferences` reports a spurious removal when a path appears twice in
+  its left argument. Verified. Unreachable today because captureStageCorpus
+  builds unique paths. Tracked as ACT-19.
+- A fresh chain prints nothing about staleness, so the user cannot distinguish
+  fresh from a pre-feature build. Tracked as ACT-20.
+- `hashedFileSchema` accepts control characters in `path`, which now flow into
+  log lines and the mismatch message. Reaching it requires write access to the
+  harness's own state directory, which is a full local compromise. Pre-existing
+  schema behavior; recorded so it is not rediscovered.
+- Test fixtures in the `deriveStaleness` block use four-character hashes where
+  `hashedFileSchema` wants 64. `deriveStaleness` never parses, so these are
+  valid unit inputs. No action.
+- Duplicated `{stage, causes}` shape across `CheckpointStaleness`,
+  `ReplayRecord.staleness`, and its zod object. Advisory refactoring finding;
+  ACT-13 and ACT-14 already track the structural items this task touched.
+
+The reviewer also flagged the test file's size as Divergent Change risk; ACT-13
+already tracks splitting it.
+
+Suite after all fixes: 217 pass, 0 fail. Typecheck, lint, and format check
+clean. Each of the three mutations above was re-run against the fixed suite and
+now fails.
