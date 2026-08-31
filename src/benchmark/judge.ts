@@ -115,9 +115,9 @@ export function validateJudgeEvidence(
 
 		for (const evidence of requirement.evidence) {
 			// A claim that spans a whole source has no single file to cite; the
-			// source's own name is its citation.
+			// source's own name, with or without a #fragment, is its citation.
 			const valid =
-				evidence.path === evidence.source ||
+				evidence.path.split("#", 1)[0] === evidence.source ||
 				(evidence.source === "diff" &&
 					citationMatchesPath(evidence.path, changedPaths)) ||
 				(evidence.source === "baseline-context" &&

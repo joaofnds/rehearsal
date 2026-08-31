@@ -196,9 +196,9 @@ export function validateStageJudgeEvidence(
 		for (const evidence of item.evidence) {
 			// A claim that spans a whole source (for example "nothing prohibited
 			// appears in the diff") has no single file to cite; the source's own
-			// name is its citation.
+			// name, with or without a #fragment, is its citation.
 			if (
-				evidence.path !== evidence.source &&
+				evidence.path.split("#", 1)[0] !== evidence.source &&
 				!citationMatchesPath(evidence.path, availablePaths[evidence.source])
 			) {
 				throw new Error(

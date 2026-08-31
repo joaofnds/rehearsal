@@ -1400,6 +1400,41 @@ describe(validateStageJudgeEvidence.name, () => {
 		}).not.toThrow();
 	});
 
+	it("accepts a whole-source citation carrying a fragment", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("product-brief", "product-brief#details")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("build"));
+		}).not.toThrow();
+	});
+
 	it("rejects citations outside the frozen stage input", () => {
 		const rubric = parseStageRubric(
 			JSON.stringify({
