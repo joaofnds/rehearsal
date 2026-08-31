@@ -2353,6 +2353,115 @@ describe(createRunAbort.name, () => {
 			status: "FAILED",
 		});
 	});
+
+	it("records only the first abort reason", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		temporaryDirectories.push(directory);
+		const stageFile = join(directory, "shape.json");
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: join(directory, "run.json"),
+				teardown: () => Promise.resolve(),
+			},
+		);
+		abort.trackPendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		await Promise.all([
+			abort.markAborted("first reason"),
+			abort.markAborted("second reason"),
+		]);
+
+		expect(JSON.parse(await Bun.file(stageFile).text())).toMatchObject({
+			error: "first reason",
+		});
+	});
+
+	it("restores once when cleanup callers overlap", async () => {
+		const restored = Promise.withResolvers<undefined>();
+		let teardownCalls = 0;
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: "/tmp/run.json",
+				teardown: () => {
+					teardownCalls += 1;
+
+					return restored.promise;
+				},
+			},
+		);
+
+		const first = abort.teardown();
+		const second = abort.teardown();
+
+		expect(teardownCalls).toBe(1);
+		restored.resolve(undefined);
+		await Promise.all([first, second]);
+	});
+
+	it("latches repeated signals while recovery is running", async () => {
+		const cancellation = Promise.withResolvers<undefined>();
+		const exited = Promise.withResolvers<undefined>();
+		const handlers = new Map<
+			NodeJS.Signals,
+			(signal: NodeJS.Signals) => void
+		>();
+		let cancellationCalls = 0;
+		let teardownCalls = 0;
+		const exitCodes: number[] = [];
+		createRunAbort(
+			{
+				killActiveCommands: () => {
+					cancellationCalls += 1;
+
+					return cancellation.promise;
+				},
+				registerSignal: (signal, handler) => {
+					handlers.set(signal, handler);
+				},
+				releaseSignal: () => undefined,
+				exit: (code) => {
+					exitCodes.push(code);
+					exited.resolve(undefined);
+				},
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: "/tmp/run.json",
+				teardown: () => {
+					teardownCalls += 1;
+
+					return Promise.resolve();
+				},
+			},
+		);
+
+		handlers.get("SIGINT")?.("SIGINT");
+		handlers.get("SIGTERM")?.("SIGTERM");
+		cancellation.resolve(undefined);
+		await exited.promise;
+
+		expect(cancellationCalls).toBe(1);
+		expect(teardownCalls).toBe(1);
+		expect(exitCodes).toEqual([130]);
+	});
 });
 
 describe(assertStageGradePassed.name, () => {
