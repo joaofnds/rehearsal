@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { CommandError, runCommand } from "./command";
-import type { HashedFile } from "./checkpoint";
+import type { CorpusDifferenceWording, HashedFile } from "./checkpoint";
+import { corpusDifferences } from "./checkpoint";
 import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
@@ -210,6 +211,17 @@ function attemptContent(attempt: Attempt): string | undefined {
 	return attempt.artifact?.content ?? attempt.diff;
 }
 
+/**
+ * Neither attempt is the authority here, unlike staleness where the record
+ * is compared against the present, so a file only one of them read is named
+ * without saying which side lacked it.
+ */
+const COMPARISON_WORDING: CorpusDifferenceWording = {
+	modified: (path) => `${path} differs`,
+	missingFromRight: (path) => `${path} present in one attempt only`,
+	missingFromLeft: (path) => `${path} present in one attempt only`,
+};
+
 function lineageDifferences(
 	reference: AttemptLineageInputs,
 	other: AttemptLineageInputs,
@@ -224,24 +236,13 @@ function lineageDifferences(
 		);
 	}
 
-	const otherByPath = new Map(
-		other.corpusFiles.map((file) => [file.path, file.sha256]),
+	differences.push(
+		...corpusDifferences(
+			reference.corpusFiles,
+			other.corpusFiles,
+			COMPARISON_WORDING,
+		),
 	);
-	for (const file of reference.corpusFiles) {
-		const counterpart = otherByPath.get(file.path);
-		if (counterpart === undefined) {
-			differences.push(`${file.path} present in one attempt only`);
-			continue;
-		}
-		if (counterpart !== file.sha256) {
-			differences.push(`${file.path} differs`);
-		}
-
-		otherByPath.delete(file.path);
-	}
-	for (const path of otherByPath.keys()) {
-		differences.push(`${path} present in one attempt only`);
-	}
 
 	return differences.toSorted();
 }

@@ -231,39 +231,62 @@ export interface CheckpointStaleness {
 }
 
 /**
- * A corpus file differs when its hash changed, when the record has it and
- * the corpus no longer does, or the reverse. Each is named by its path so a
- * reader learns which edit invalidated the checkpoint, not merely that one
- * did.
+ * How a reader is told about each way two corpora can differ. Staleness and
+ * the comparison guard ask the same question of the same data and differ only
+ * in what the answer means to their reader, so the traversal is shared and
+ * the wording is theirs.
  */
-function corpusChanges(
-	recorded: readonly HashedFile[],
-	current: readonly HashedFile[],
-): string[] {
-	const currentByPath = new Map(
-		current.map((file) => [file.path, file.sha256]),
-	);
-	const causes: string[] = [];
+export interface CorpusDifferenceWording {
+	/** Present in both, hashing differently. */
+	readonly modified: (path: string) => string;
+	/** Present in the left side only. */
+	readonly missingFromRight: (path: string) => string;
+	/** Present in the right side only. */
+	readonly missingFromLeft: (path: string) => string;
+}
 
-	for (const file of recorded) {
-		const now = currentByPath.get(file.path);
-		if (now === undefined) {
-			causes.push(`${file.path} removed`);
+/**
+ * Every way two sets of hashed files disagree, each named by its path so a
+ * reader learns which file it was, not merely that one differed. Sorted, so
+ * the same disagreement reads the same way twice.
+ */
+export function corpusDifferences(
+	left: readonly HashedFile[],
+	right: readonly HashedFile[],
+	wording: CorpusDifferenceWording,
+): string[] {
+	const rightByPath = new Map(right.map((file) => [file.path, file.sha256]));
+	const differences: string[] = [];
+
+	for (const file of left) {
+		const counterpart = rightByPath.get(file.path);
+		if (counterpart === undefined) {
+			differences.push(wording.missingFromRight(file.path));
 			continue;
 		}
-		if (now !== file.sha256) {
-			causes.push(`${file.path} changed`);
+		if (counterpart !== file.sha256) {
+			differences.push(wording.modified(file.path));
 		}
 
-		currentByPath.delete(file.path);
+		rightByPath.delete(file.path);
 	}
 
-	for (const path of currentByPath.keys()) {
-		causes.push(`${path} added`);
+	for (const path of rightByPath.keys()) {
+		differences.push(wording.missingFromLeft(path));
 	}
 
-	return causes.toSorted();
+	return differences.toSorted();
 }
+
+/**
+ * A corpus file the record has and the corpus no longer does was removed;
+ * the reverse was added. Both invalidate the checkpoint as surely as an edit.
+ */
+const STALENESS_WORDING: CorpusDifferenceWording = {
+	modified: (path) => `${path} changed`,
+	missingFromRight: (path) => `${path} removed`,
+	missingFromLeft: (path) => `${path} added`,
+};
 
 /**
  * Walks the chain in order, so an upstream stale checkpoint carries forward:
@@ -298,7 +321,13 @@ export function deriveStaleness(
 
 		const currentCorpus = current.get(record.stage);
 		if (currentCorpus !== undefined) {
-			causes.push(...corpusChanges(record.corpusFiles, currentCorpus));
+			causes.push(
+				...corpusDifferences(
+					record.corpusFiles,
+					currentCorpus,
+					STALENESS_WORDING,
+				),
+			);
 		}
 
 		const stale = causes.length > 0;
