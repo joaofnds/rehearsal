@@ -3235,67 +3235,67 @@ describe(runBenchmark.name, () => {
 	});
 });
 
+function artifactBaseInputs(
+	pipeline: PipelineDefinition,
+	pipelinePath: string,
+): RunArtifactBaseInputs {
+	return {
+		timestamp: "2026-08-30T00:00:00.000Z",
+		controlSha: "control-sha",
+		source: { root: "/tmp/target", origin: undefined, sha: "source-sha" },
+		taskSha: "task-sha",
+		config: {
+			sourceDir: "/tmp/target",
+			model: "sonnet",
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			pipelinePath,
+		},
+		pipeline,
+		claudeVersion: "claude 1.0.0",
+		task: "Task",
+		productBrief: "Brief",
+		instructions: "Instructions",
+		rubric: "Rubric",
+		rubricIds: ["scope"],
+		baselineContext: [],
+		taskId: "TASK-1",
+		productOwner: { sessionId: "po", spentUsd: 0 },
+		workflow: [],
+		stageScorecards: [],
+		checkpoints: [],
+		evidence: {
+			resultSha: "result-sha",
+			diff: "the-diff",
+			changedPaths: ["src/example.ts"],
+			taskState: "state",
+			checkIntegrity: harnessResult("PASS", "checks match"),
+			localChecks: harnessResult("PASS", "all green"),
+		},
+	};
+}
+
+function artifactInputs(
+	pipeline: PipelineDefinition,
+	pipelinePath: string,
+): RunArtifactInputs {
+	return {
+		...artifactBaseInputs(pipeline, pipelinePath),
+		judge: {
+			prompt: "judge prompt",
+			attempts: [],
+			costUsd: 0,
+			grade: {
+				requirements: [],
+				verdict: "PASS" as const,
+				summary: "ok",
+			},
+		},
+		reviewFile: "/tmp/review.json",
+	};
+}
+
 describe(buildRunArtifact.name, () => {
-	function artifactBaseInputs(
-		pipeline: PipelineDefinition,
-		pipelinePath: string,
-	): RunArtifactBaseInputs {
-		return {
-			timestamp: "2026-08-30T00:00:00.000Z",
-			controlSha: "control-sha",
-			source: { root: "/tmp/target", origin: undefined, sha: "source-sha" },
-			taskSha: "task-sha",
-			config: {
-				sourceDir: "/tmp/target",
-				model: "sonnet",
-				judgeModel: "sonnet",
-				sessionBudgetUsd: 5,
-				pipelinePath,
-			},
-			pipeline,
-			claudeVersion: "claude 1.0.0",
-			task: "Task",
-			productBrief: "Brief",
-			instructions: "Instructions",
-			rubric: "Rubric",
-			rubricIds: ["scope"],
-			baselineContext: [],
-			taskId: "TASK-1",
-			productOwner: { sessionId: "po", spentUsd: 0 },
-			workflow: [],
-			stageScorecards: [],
-			checkpoints: [],
-			evidence: {
-				resultSha: "result-sha",
-				diff: "the-diff",
-				changedPaths: ["src/example.ts"],
-				taskState: "state",
-				checkIntegrity: harnessResult("PASS", "checks match"),
-				localChecks: harnessResult("PASS", "all green"),
-			},
-		};
-	}
-
-	function artifactInputs(
-		pipeline: PipelineDefinition,
-		pipelinePath: string,
-	): RunArtifactInputs {
-		return {
-			...artifactBaseInputs(pipeline, pipelinePath),
-			judge: {
-				prompt: "judge prompt",
-				attempts: [],
-				costUsd: 0,
-				grade: {
-					requirements: [],
-					verdict: "PASS" as const,
-					summary: "ok",
-				},
-			},
-			reviewFile: "/tmp/review.json",
-		};
-	}
-
 	describe(runFinalJudge.name, () => {
 		it("writes the failed main artifact after two rejected payloads", async () => {
 			const directory = await mkdtemp(join(tmpdir(), "rehearsal-final-judge-"));
