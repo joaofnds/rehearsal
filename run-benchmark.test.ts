@@ -4198,6 +4198,22 @@ describe(resolveReplay.name, () => {
 			/chain is broken at the plan stage/u,
 		);
 	});
+
+	it("carries the whole consumed chain, in order, for staleness", () => {
+		const plan = resolveReplay(manifest(), checkpoints(), "build");
+
+		expect(plan.chain.map(({ stage }) => stage)).toEqual([
+			"initial",
+			"discuss",
+			"plan",
+		]);
+	});
+
+	it("carries only the initial checkpoint when replaying the first stage", () => {
+		const plan = resolveReplay(manifest(), checkpoints(), "discuss");
+
+		expect(plan.chain.map(({ stage }) => stage)).toEqual(["initial"]);
+	});
 });
 
 describe(runReplay.name, () => {
@@ -4212,7 +4228,9 @@ describe(runReplay.name, () => {
 		readonly replaysRoot: string;
 	}
 
-	async function recordedRun(): Promise<RecordedRun> {
+	async function recordedRun(
+		discussCorpus: readonly HashedFile[] = [],
+	): Promise<RecordedRun> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replayrun-"));
 		temporaryDirectories.push(directory);
 		const stateDir = join(directory, "state");
@@ -4240,7 +4258,7 @@ describe(runReplay.name, () => {
 				targetSha: "task-sha",
 				upstream: initial.lineage,
 				model: "sonnet",
-				corpusFiles: [],
+				corpusFiles: discussCorpus,
 				artifacts: [
 					{
 						path: SPEC_PATH,
@@ -4636,6 +4654,79 @@ describe(runReplay.name, () => {
 			runReplay(fake.dependencies, request(run, "discuss")),
 		).rejects.toThrow(/no initial checkpoint/u);
 		expect(fake.worktrees).toEqual([]);
+	});
+
+	it("labels the replay fresh when the corpus still matches the chain", async () => {
+		const run = await recordedRun([
+			{
+				path: "skills/discuss/SKILL.md",
+				sha256: createHash("sha256").update("discuss").digest("hex"),
+			},
+		]);
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(outcome.record.stale).toBe(false);
+		expect(outcome.record.staleness).toEqual([]);
+	});
+
+	it("labels the replay stale and names the changed upstream file", async () => {
+		const run = await recordedRun([
+			{ path: "skills/discuss/SKILL.md", sha256: "aa".repeat(32) },
+		]);
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(outcome.record.stale).toBe(true);
+		expect(outcome.record.staleness).toEqual([
+			{ stage: "discuss", causes: ["skills/discuss/SKILL.md changed"] },
+		]);
+		const printed = fake.log.join("\n");
+		expect(printed).toContain("skills/discuss/SKILL.md changed");
+	});
+
+	it("labels the replay stale when the model differs from the recorded run", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, {
+			...request(run, "build"),
+			model: "opus",
+		});
+
+		expect(outcome.record.stale).toBe(true);
+		expect(outcome.record.staleness?.[0]?.causes).toContain(
+			"model sonnet is now opus",
+		);
+	});
+
+	it("leaves the replay fresh when only the replayed stage's own skill changed", async () => {
+		const run = await recordedRun([
+			{
+				path: "skills/discuss/SKILL.md",
+				sha256: createHash("sha256").update("discuss").digest("hex"),
+			},
+		]);
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "discuss"));
+
+		expect(outcome.record.stale).toBe(false);
+	});
+
+	it("writes a stale record that still validates against the replay schema", async () => {
+		const run = await recordedRun([
+			{ path: "skills/discuss/SKILL.md", sha256: "aa".repeat(32) },
+		]);
+		const fake = fakeReplayDependencies();
+
+		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+
+		const record = await readReplayRecord(outcome.recordPath);
+		expect(record.stale).toBe(true);
+		expect(record.staleness?.[0]?.stage).toBe("discuss");
 	});
 
 	it("replays end to end against a real repository, leaving the primary untouched", async () => {

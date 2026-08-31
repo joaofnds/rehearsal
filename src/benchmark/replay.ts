@@ -9,6 +9,7 @@ import type {
 	materializeCheckpoint,
 } from "./checkpoint";
 import {
+	deriveStaleness,
 	hashArtifacts,
 	hashedFileSchema,
 	INITIAL_CHECKPOINT_STAGE,
@@ -59,6 +60,8 @@ export interface ReplayPlan {
 	readonly definition: StageDefinition;
 	readonly consumed: CheckpointRecord;
 	readonly priorArtifacts: readonly HashedFile[];
+	/** The verified chain from the initial checkpoint to the consumed one. */
+	readonly chain: readonly CheckpointRecord[];
 }
 
 /**
@@ -93,6 +96,7 @@ export function resolveReplay(
 
 	let consumed = initial;
 	const priorArtifacts: HashedFile[] = [];
+	const chain: CheckpointRecord[] = [initial];
 	for (const earlier of stages.slice(0, index)) {
 		const checkpoint = checkpoints.get(earlier.name);
 		if (!checkpoint) {
@@ -108,9 +112,10 @@ export function resolveReplay(
 
 		priorArtifacts.push(...checkpoint.artifacts);
 		consumed = checkpoint;
+		chain.push(checkpoint);
 	}
 
-	return { definition, consumed, priorArtifacts };
+	return { definition, consumed, priorArtifacts, chain };
 }
 
 export interface ReplayDependencies {
@@ -164,6 +169,13 @@ export interface ReplayRecord {
 	readonly productOwnerCostUsd: number;
 	readonly judgeCostUsd: number;
 	readonly resultSha?: string | undefined;
+	/** Whether the consumed chain still reflects the current corpus. */
+	readonly stale: boolean;
+	/** Per stale checkpoint, why: named corpus files, model, or effort. */
+	readonly staleness: readonly {
+		readonly stage: string;
+		readonly causes: readonly string[];
+	}[];
 	readonly scorecard: StageScorecard;
 }
 
@@ -197,6 +209,17 @@ export const replayRecordSchema = z
 		productOwnerCostUsd: z.number().nonnegative(),
 		judgeCostUsd: z.number().nonnegative(),
 		resultSha: z.string().min(1).optional(),
+		stale: z.boolean().optional(),
+		staleness: z
+			.array(
+				z
+					.object({
+						stage: z.string().min(1),
+						causes: z.array(z.string().min(1)),
+					})
+					.strict(),
+			)
+			.optional(),
 		scorecard: z
 			.object({
 				stage: z.string().min(1),
@@ -276,6 +299,45 @@ async function readPriorArtifacts(
 	return artifacts;
 }
 
+/**
+ * The current corpus for each stage in the consumed chain, so staleness
+ * compares each checkpoint against the corpus that would feed its stage
+ * today. The initial checkpoint consumes no corpus, so it has none to
+ * capture. A stage whose skill no longer resolves fails the replay rather
+ * than reading as fresh: an uncapturable corpus is not an unchanged one.
+ */
+async function currentChainCorpus(
+	plan: ReplayPlan,
+	manifest: RunManifest,
+	instructions: string,
+	roots: readonly string[],
+	captureStageCorpus: StageSessionDependencies["captureStageCorpus"],
+): Promise<Map<string, readonly HashedFile[]>> {
+	const corpus = new Map<string, readonly HashedFile[]>();
+
+	for (const record of plan.chain) {
+		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
+			continue;
+		}
+
+		const definition = manifest.pipeline.stages.find(
+			({ name }) => name === record.stage,
+		);
+		if (!definition) {
+			throw new ReplayError(
+				`The run's pipeline no longer declares the ${record.stage} stage its checkpoint records`,
+			);
+		}
+
+		corpus.set(
+			record.stage,
+			await captureStageCorpus(definition.skill, instructions, roots),
+		);
+	}
+
+	return corpus;
+}
+
 export async function runReplay(
 	dependencies: ReplayDependencies,
 	request: ReplayRequest,
@@ -311,6 +373,20 @@ export async function runReplay(
 			worktreeDir,
 			plan.priorArtifacts,
 		);
+		const staleness = deriveStaleness(
+			plan.chain,
+			await currentChainCorpus(
+				plan,
+				manifest,
+				request.instructions,
+				skillSearchRoots(worktreeDir),
+				dependencies.stageSession.captureStageCorpus,
+			),
+			{ model: request.model, effort: request.effort },
+		).filter(({ stale }) => stale);
+		for (const { stage, causes } of staleness) {
+			dependencies.log(`Stale checkpoint ${stage}: ${causes.join("; ")}`);
+		}
 		const baselineHashes = await dependencies.captureFileHashes(worktreeDir);
 		const baselineContext =
 			await dependencies.captureBaselineContext(worktreeDir);
@@ -385,6 +461,8 @@ export async function runReplay(
 			productOwnerCostUsd: productOwner.snapshot().spentUsd,
 			judgeCostUsd: scorecard.costUsd,
 			resultSha: session.buildEvidence?.resultSha,
+			stale: staleness.length > 0,
+			staleness: staleness.map(({ stage, causes }) => ({ stage, causes })),
 			scorecard,
 		};
 		const recordPath = join(
