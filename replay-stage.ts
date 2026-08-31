@@ -1,6 +1,10 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadAttempts, presentAttempts } from "./src/benchmark/attempts";
+import {
+	loadAttempts,
+	LineageMismatchError,
+	presentAttempts,
+} from "./src/benchmark/attempts";
 import {
 	assertPlanningStageCompleted,
 	installInstructions,
@@ -130,17 +134,27 @@ async function main(): Promise<void> {
 	);
 
 	console.log(`\nReplay record: ${outcome.recordPath}`);
-	console.log(
-		await presentAttempts(
-			outcome.record.consumed.lineage,
-			await loadAttempts(
-				RUNS_DIRECTORY,
-				config.runName,
-				config.stage,
+	// The replay itself is already recorded and paid for, so a refusal to
+	// compare is reported rather than thrown away with the command.
+	try {
+		console.log(
+			await presentAttempts(
 				outcome.record.consumed.lineage,
+				await loadAttempts(
+					RUNS_DIRECTORY,
+					config.runName,
+					config.stage,
+					outcome.record.consumed.lineage,
+				),
 			),
-		),
-	);
+		);
+	} catch (error) {
+		if (!(error instanceof LineageMismatchError)) {
+			throw error;
+		}
+
+		console.log(`\n${error.message}`);
+	}
 }
 
 if (import.meta.main) {

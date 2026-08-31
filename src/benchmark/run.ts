@@ -13,6 +13,7 @@ import { collectCalibration } from "./calibration";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	captureStageCorpus,
+	GLOBAL_SKILLS,
 	hashArtifacts,
 	hashWorkflowState,
 	INITIAL_CHECKPOINT_STAGE,
@@ -418,12 +419,16 @@ export async function runGradedStages(
 	let buildEvidence: BuildEvidence | undefined;
 
 	// Every skill is resolved before any stage runs, so a missing one fails
-	// the run before the first session is paid for. Hashing waits for each
-	// stage's start: the lineage must record the corpus that fed the stage,
-	// and a skill can change while earlier stages run.
+	// the run before the first session is paid for. The global skills are
+	// resolved too, because every stage's corpus hashes them. Hashing waits
+	// for each stage's start: the lineage must record the corpus that fed the
+	// stage, and a skill can change while earlier stages run.
 	const skillRoots = skillSearchRoots(context.targetDir);
-	for (const definition of context.pipeline.stages) {
-		await dependencies.resolveSkillDirectory(definition.skill, skillRoots);
+	for (const skill of [
+		...GLOBAL_SKILLS,
+		...context.pipeline.stages.map(({ skill: name }) => name),
+	]) {
+		await dependencies.resolveSkillDirectory(skill, skillRoots);
 	}
 	let upstream = context.initialLineage;
 	let baselineSha = context.taskSha;

@@ -2,22 +2,23 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { CommandError, runCommand } from "./command";
 import type { CorpusDifferenceWording, HashedFile } from "./checkpoint";
 import { corpusDifferences } from "./checkpoint";
+import { CommandError, runCommand } from "./command";
+import type { Effort } from "./config";
 import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
 
 /**
- * The inputs that produced the checkpoint an attempt consumed. Two attempts
- * are comparable only when these agree; a difference means the two ran
- * against different corpora and their grades measure different things.
+ * The inputs an attempt itself ran with. Two attempts are comparable only
+ * when these agree; a difference means the two ran against different corpora
+ * and their grades measure different things.
  */
 export interface AttemptLineageInputs {
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
-	readonly effort?: string | undefined;
+	readonly effort?: Effort | undefined;
 }
 
 export class LineageMismatchError extends Error {
