@@ -245,6 +245,30 @@ describe(parseArgs.name, () => {
 		expect(config.confirmation).toEqual({ reps: 5, approved: false });
 	});
 
+	it.each([
+		{ flags: ["--reps", "3"], error: "only with --confirm" },
+		{ flags: ["--yes"], error: "only with --confirm" },
+		{
+			flags: ["--confirm", "--reps", "1"],
+			error: "integer of at least 2",
+		},
+	])("rejects invalid confirmation flags: $flags", ({ flags, error }) => {
+		expect(() =>
+			parseArgs(
+				[
+					"--target",
+					"./target",
+					"--model",
+					"sonnet",
+					"--session-budget-usd",
+					"5",
+					...flags,
+				],
+				{},
+			),
+		).toThrow(error);
+	});
+
 	it("defaults Judge effort to workflow effort", () => {
 		const config = parseArgs(
 			[
@@ -328,6 +352,28 @@ describe(parseReplayArgs.name, () => {
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
 		});
+	});
+
+	it("overrides confirmation reps and accepts noninteractive approval", () => {
+		const config = parseReplayArgs(
+			[
+				"--run",
+				"run-1",
+				"--stage",
+				"build",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+				"--confirm",
+				"--reps",
+				"7",
+				"--yes",
+			],
+			{},
+		);
+
+		expect(config.confirmation).toEqual({ reps: 7, approved: true });
 	});
 
 	it("falls back to the benchmark environment variables", () => {
