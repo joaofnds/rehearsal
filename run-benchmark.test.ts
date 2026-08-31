@@ -2292,6 +2292,59 @@ describe(runGradedStages.name, () => {
 			.parse(JSON.parse(await Bun.file(calibrating.stageFile("shape")).text()));
 		expect(stageRecord.calibration.humanReview.verdict).toBe("REJECT");
 	});
+
+	it("preserves the stage session inputs when adding a stopped scorecard's calibration", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const context = {
+			...(await stageContext()),
+			model: "opus",
+			effort: "high" as const,
+			calibrateStageFailure: (): Promise<CalibrationResult> =>
+				Promise.resolve({
+					humanReview: { verdict: "REJECT", summary: "failed", findings: [] },
+					instructionsChanged: false,
+					rubricChanged: false,
+					stageRubricsChanged: [],
+				}),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		await expect(runGradedStages(failing, context)).rejects.toThrow(
+			"minimum grade is B",
+		);
+
+		const stageRecord = z
+			.object({
+				calibration: z.object({
+					humanReview: z.object({ verdict: z.literal("REJECT") }),
+				}),
+				corpusFiles: z.array(
+					z.object({ path: z.string(), sha256: z.string() }),
+				),
+				model: z.string(),
+				effort: z.string(),
+			})
+			.parse(JSON.parse(await Bun.file(context.stageFile("shape")).text()));
+		expect(stageRecord).toEqual({
+			calibration: { humanReview: { verdict: "REJECT" } },
+			corpusFiles: [
+				{
+					path: "skills/shape/SKILL.md",
+					sha256: createHash("sha256").update("shape").digest("hex"),
+				},
+			],
+			model: "opus",
+			effort: "high",
+		});
+	});
 });
 
 describe(assertCommitSubjects.name, () => {

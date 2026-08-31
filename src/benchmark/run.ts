@@ -475,25 +475,19 @@ export async function runGradedStages(
 		);
 		context.trackPendingStage(undefined);
 		stageScorecards.push(scorecard);
-		await Bun.write(
-			stageFile,
-			`${JSON.stringify(
-				{
-					...scorecard,
-					corpusFiles,
-					model: context.model,
-					effort: context.effort,
-				},
-				null,
-				2,
-			)}\n`,
-		);
+		const stageRecord = {
+			...scorecard,
+			corpusFiles,
+			model: context.model,
+			effort: context.effort,
+		};
+		await Bun.write(stageFile, `${JSON.stringify(stageRecord, null, 2)}\n`);
 		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			const calibration = await context.calibrateStageFailure(stageScorecards);
 			await Bun.write(
 				stageFile,
-				`${JSON.stringify({ ...scorecard, calibration }, null, 2)}\n`,
+				`${JSON.stringify({ ...stageRecord, calibration }, null, 2)}\n`,
 			);
 		}
 		assertStageGradePassed(scorecard);
