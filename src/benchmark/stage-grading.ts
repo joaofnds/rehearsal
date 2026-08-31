@@ -163,6 +163,20 @@ export function applyAuthoritativeStageResults(
 	};
 }
 
+/**
+ * Judges spell a whole-source citation many ways: the source name, the
+ * camelCase field key from the input JSON, either with a #fragment. All of
+ * them name the source; the comparison ignores case and separators.
+ */
+function citesWholeSource(path: string, source: string): boolean {
+	const normalize = (value: string): string =>
+		value
+			.split("#", 1)[0]
+			?.toLowerCase()
+			.replaceAll(/[^a-z0-9]/gu, "") ?? "";
+	return normalize(path) === normalize(source);
+}
+
 export function validateStageJudgeEvidence(
 	output: StageJudgeOutput,
 	input: StageJudgeInput,
@@ -196,9 +210,9 @@ export function validateStageJudgeEvidence(
 		for (const evidence of item.evidence) {
 			// A claim that spans a whole source (for example "nothing prohibited
 			// appears in the diff") has no single file to cite; the source's own
-			// name, with or without a #fragment, is its citation.
+			// name is its citation.
 			if (
-				evidence.path.split("#", 1)[0] !== evidence.source &&
+				!citesWholeSource(evidence.path, evidence.source) &&
 				!citationMatchesPath(evidence.path, availablePaths[evidence.source])
 			) {
 				throw new Error(

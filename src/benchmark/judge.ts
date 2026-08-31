@@ -103,6 +103,20 @@ export function applyHarnessResults(
 	};
 }
 
+/**
+ * Judges spell a whole-source citation many ways: the source name, the
+ * camelCase field key from the input JSON, either with a #fragment. All of
+ * them name the source; the comparison ignores case and separators.
+ */
+function citesWholeSource(path: string, source: string): boolean {
+	const normalize = (value: string): string =>
+		value
+			.split("#", 1)[0]
+			?.toLowerCase()
+			.replaceAll(/[^a-z0-9]/gu, "") ?? "";
+	return normalize(path) === normalize(source);
+}
+
 export function validateJudgeEvidence(
 	grade: JudgeGrade,
 	changedPaths: readonly string[],
@@ -115,9 +129,9 @@ export function validateJudgeEvidence(
 
 		for (const evidence of requirement.evidence) {
 			// A claim that spans a whole source has no single file to cite; the
-			// source's own name, with or without a #fragment, is its citation.
+			// source's own name, in any spelling, is its citation.
 			const valid =
-				evidence.path.split("#", 1)[0] === evidence.source ||
+				citesWholeSource(evidence.path, evidence.source) ||
 				(evidence.source === "diff" &&
 					citationMatchesPath(evidence.path, changedPaths)) ||
 				(evidence.source === "baseline-context" &&
