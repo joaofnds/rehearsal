@@ -155,6 +155,28 @@ export interface TaskState {
 	readonly view: TaskView;
 }
 
+/**
+ * The card file is the task's full record: goal, decisions, glossary, and
+ * prose sections that backlog's JSON projection omits. Judges read the card;
+ * the JSON stays for structural validation.
+ */
+export async function readTaskCard(
+	targetDir: string,
+	taskId: string,
+): Promise<string> {
+	const tasksDirectory = join(targetDir, "backlog", "tasks");
+	const entries = await readdir(tasksDirectory);
+	const prefix = `${taskId.toLowerCase()} -`;
+	const cardFile = entries.find((entry) =>
+		entry.toLowerCase().startsWith(prefix),
+	);
+	if (cardFile === undefined) {
+		throw new StageValidationError(`No task card found for ${taskId}`);
+	}
+
+	return Bun.file(join(tasksDirectory, cardFile)).text();
+}
+
 export function parseTaskState(output: string): TaskState {
 	try {
 		return { output, view: taskViewSchema.parse(JSON.parse(output)) };

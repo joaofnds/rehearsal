@@ -14,6 +14,7 @@ import {
 	assertStageArtifactState,
 	installInstructions,
 	parseTaskState,
+	readTaskCard,
 } from "./src/benchmark/backlog";
 import {
 	CalibrationIncompleteError,
@@ -1040,6 +1041,30 @@ describe(assertStageArtifactState.name, () => {
 	});
 });
 
+describe(readTaskCard.name, () => {
+	it("returns the card file matching the task id", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-card-"));
+		temporaryDirectories.push(directory);
+		await mkdir(join(directory, "backlog", "tasks"), { recursive: true });
+		await Bun.write(
+			join(directory, "backlog", "tasks", "task-1 - Audit-log.md"),
+			"## Goal\nthe card\n",
+		);
+
+		expect(await readTaskCard(directory, "TASK-1")).toContain("the card");
+	});
+
+	it("rejects a task without a card file", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-card-"));
+		temporaryDirectories.push(directory);
+		await mkdir(join(directory, "backlog", "tasks"), { recursive: true });
+
+		expect(readTaskCard(directory, "TASK-9")).rejects.toThrow(
+			"No task card found",
+		);
+	});
+});
+
 describe(parseTaskState.name, () => {
 	it("classifies malformed Backlog output as candidate validation failure", () => {
 		expect(() => parseTaskState("not json")).toThrow(StageValidationError);
@@ -1659,6 +1684,7 @@ describe(runGradedStages.name, () => {
 							task: { acceptanceCriteria: ["done"], documentation: [] },
 						}),
 					),
+				readTaskCard: () => Promise.resolve("the task card"),
 				captureBuildCandidate: () =>
 					Promise.resolve({
 						resultSha: "candidate-sha",
@@ -1898,6 +1924,7 @@ describe(runGradedStages.name, () => {
 
 		const outcome = await runGradedStages(committing, await stageContext());
 
+		expect(judged[0]?.taskState).toBe("the task card");
 		expect(judged[0]?.diff).toBe("glossary-diff");
 		expect(judged[0]?.changedPaths).toEqual(["GLOSSARY.md"]);
 		expect(buildBaselines).toEqual(["shape-sha"]);
@@ -3990,6 +4017,7 @@ describe(runReplay.name, () => {
 						}),
 					);
 				},
+				readTaskCard: () => Promise.resolve("the task card"),
 				captureBuildCandidate: (targetDir) => {
 					stageDirs.push(targetDir);
 
@@ -4358,6 +4386,7 @@ describe(runReplay.name, () => {
 								},
 							}),
 						),
+					readTaskCard: () => Promise.resolve("the replayed task card"),
 					captureBuildCandidate: () =>
 						Promise.reject(new Error("not a delivery stage")),
 					assertPlanningStageCompleted,

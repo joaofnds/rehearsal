@@ -4,6 +4,7 @@ import { loadAttempts, presentAttempts } from "./src/benchmark/attempts";
 import {
 	assertPlanningStageCompleted,
 	installInstructions,
+	readTaskCard,
 	readTaskOutput,
 } from "./src/benchmark/backlog";
 import {
@@ -91,6 +92,7 @@ async function main(): Promise<void> {
 			stageSession: {
 				runWorkflowStage,
 				readTaskOutput,
+				readTaskCard,
 				captureBuildCandidate,
 				assertPlanningStageCompleted,
 				assertBuildCommitted,

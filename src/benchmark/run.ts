@@ -5,6 +5,7 @@ import {
 	assertPlanningStageCompleted,
 	createTaskCommit,
 	parseTaskState,
+	readTaskCard,
 	readTaskOutput,
 } from "./backlog";
 import type { Questioner } from "./calibration";
@@ -205,6 +206,7 @@ export function retainedCheckpointRecorder(
 export interface StageSessionDependencies {
 	readonly runWorkflowStage: typeof runWorkflowStage;
 	readonly readTaskOutput: typeof readTaskOutput;
+	readonly readTaskCard: typeof readTaskCard;
 	readonly captureBuildCandidate: typeof captureBuildCandidate;
 	readonly assertPlanningStageCompleted: typeof assertPlanningStageCompleted;
 	readonly assertBuildCommitted: typeof assertBuildCommitted;
@@ -321,6 +323,10 @@ export async function executeStageSession(
 		environment.targetDir,
 		environment.taskId,
 	);
+	const taskCard = await dependencies.readTaskCard(
+		environment.targetDir,
+		environment.taskId,
+	);
 	const buildCandidate =
 		definition.kind === "delivery"
 			? await dependencies.captureBuildCandidate(
@@ -335,7 +341,7 @@ export async function executeStageSession(
 		productBrief: environment.productBrief,
 		instructions: environment.instructions,
 		baselineContext: environment.baselineContext,
-		taskState: currentTaskOutput,
+		taskState: taskCard,
 		transcript,
 		priorArtifacts: [...priorArtifacts],
 		diff: buildCandidate?.diff,
@@ -357,7 +363,6 @@ export async function executeStageSession(
 
 			return {
 				...baseInput,
-				taskState: planning.taskState,
 				artifact: planning.artifact,
 				diff: planning.changedPaths.length > 0 ? planning.diff : undefined,
 				changedPaths:
@@ -387,12 +392,11 @@ export async function executeStageSession(
 			localChecks: await dependencies.captureTreatmentChecks(
 				environment.targetDir,
 			),
-			taskState: currentTaskOutput,
+			taskState: taskCard,
 		};
 
 		return {
 			...baseInput,
-			taskState: buildEvidence.taskState,
 			diff: buildEvidence.diff,
 			changedPaths: buildEvidence.changedPaths,
 			checkIntegrity: buildEvidence.checkIntegrity,
@@ -659,6 +663,7 @@ export async function runBenchmark(
 					runWorkflowStage,
 					runStageJudge,
 					readTaskOutput,
+					readTaskCard,
 					captureBuildCandidate,
 					assertPlanningStageCompleted,
 					assertBuildCommitted,
