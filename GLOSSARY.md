@@ -19,6 +19,8 @@
   Today, `build`.
 - **End-to-end mode** — running the whole pipeline and judging only the final
   code; the integration test.
+- **Fresh checkpoint chain** — a replay's consumed checkpoint chain when none
+  of its checkpoints is stale.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
   rubric-scored LLM with rationale.
 - **Judge attempt** — one Judge call against frozen evidence and a rubric,
