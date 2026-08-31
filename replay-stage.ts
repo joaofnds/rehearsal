@@ -29,6 +29,10 @@ import {
 	REQUIRED_BUN_VERSION,
 } from "./src/benchmark/config";
 import { runReplay } from "./src/benchmark/replay";
+import {
+	benchmarkRunPaths,
+	benchmarkRunsDirectory,
+} from "./src/benchmark/run-layout";
 import { loadStageRubric, runStageJudge } from "./src/benchmark/stage-grading";
 import {
 	addWorktree,
@@ -40,7 +44,7 @@ import {
 } from "./src/benchmark/target";
 import { runWorkflowStage } from "./src/benchmark/workflow";
 
-const RUNS_DIRECTORY = join(CONTROL_DIR, ".benchmark-runs");
+const RUNS_DIRECTORY = benchmarkRunsDirectory(CONTROL_DIR);
 
 async function resolveRunDirectory(runName: string): Promise<string> {
 	const runDirectory = join(RUNS_DIRECTORY, `${runName}.checkpoints`);
@@ -89,6 +93,7 @@ async function main(): Promise<void> {
 	}
 
 	const config: ReplayCliConfig = parseReplayArgs(Bun.argv.slice(2));
+	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
 	const runDirectory = await resolveRunDirectory(config.runName);
 
 	const outcome = await runReplay(
@@ -141,8 +146,7 @@ async function main(): Promise<void> {
 			await presentAttempts(
 				outcome.record.consumed.lineage,
 				await loadAttempts(
-					RUNS_DIRECTORY,
-					config.runName,
+					paths,
 					config.stage,
 					outcome.record.consumed.lineage,
 				),

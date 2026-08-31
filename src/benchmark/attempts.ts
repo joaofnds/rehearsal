@@ -10,6 +10,7 @@ import { effortSchema } from "./config";
 import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
+import type { BenchmarkRunPaths } from "./run-layout";
 
 /**
  * The inputs an attempt itself ran with. Two attempts are comparable only
@@ -108,11 +109,10 @@ function attemptFromScorecard(
  * so the comparison guard skips those attempts rather than assuming inputs.
  */
 async function loadOriginalAttempt(
-	runsDirectory: string,
-	runName: string,
+	paths: BenchmarkRunPaths,
 	stage: string,
 ): Promise<Attempt | undefined> {
-	const file = Bun.file(join(runsDirectory, `${runName}.${stage}.json`));
+	const file = Bun.file(paths.stageFile(stage));
 	if (!(await file.exists())) {
 		return undefined;
 	}
@@ -131,7 +131,7 @@ async function loadOriginalAttempt(
 			: undefined;
 
 	return attemptFromScorecard(
-		`original run ${runName}`,
+		`original run ${paths.name}`,
 		parsed.data,
 		undefined,
 		lineageInputs,
@@ -144,18 +144,17 @@ async function loadOriginalAttempt(
  * replay records live under the consumed checkpoint's lineage.
  */
 export async function loadAttempts(
-	runsDirectory: string,
-	runName: string,
+	paths: BenchmarkRunPaths,
 	stage: string,
 	lineage: string,
 ): Promise<Attempt[]> {
 	const attempts: Attempt[] = [];
-	const original = await loadOriginalAttempt(runsDirectory, runName, stage);
+	const original = await loadOriginalAttempt(paths, stage);
 	if (original) {
 		attempts.push(original);
 	}
 
-	const replaysDirectory = join(runsDirectory, "replays", lineage);
+	const replaysDirectory = paths.replayDirectory(lineage);
 	let entries: string[] = [];
 	try {
 		const replayEntries = await readdir(replaysDirectory);

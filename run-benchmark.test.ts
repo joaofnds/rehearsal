@@ -6403,7 +6403,11 @@ describe(runReplay.name, () => {
 		expect(
 			await presentAttempts(
 				record.consumed.lineage,
-				await loadAttempts(parent, "run", "discuss", record.consumed.lineage),
+				await loadAttempts(
+					benchmarkRunPaths(parent, "run"),
+					"discuss",
+					record.consumed.lineage,
+				),
 			),
 		).toContain("replay ");
 	});
@@ -6511,25 +6515,28 @@ describe(loadAttempts.name, () => {
 		};
 	}
 
-	async function attemptFixture(): Promise<string> {
+	async function attemptFixture(): Promise<
+		ReturnType<typeof benchmarkRunPaths>
+	> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-attempts-"));
 		temporaryDirectories.push(directory);
+		const paths = benchmarkRunPaths(directory, "run1");
 		await Bun.write(
-			join(directory, "run1.discuss.json"),
+			paths.stageFile("discuss"),
 			`${JSON.stringify(originalScorecard(), null, 2)}\n`,
 		);
 		await Bun.write(
-			join(directory, "replays", LINEAGE, "2026-08-30T10-00-00.000Z.json"),
+			paths.replayRecordFile(LINEAGE, "2026-08-30T10:00:00.000Z"),
 			`${JSON.stringify(replayRecord("2026-08-30T10:00:00.000Z", "new spec\n"), null, 2)}\n`,
 		);
 
-		return directory;
+		return paths;
 	}
 
 	it("presents the original result and each replay as one attempt list", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 
 		expect(attempts.map(({ label }) => label)).toEqual([
 			"original run run1",
@@ -6544,13 +6551,13 @@ describe(loadAttempts.name, () => {
 	});
 
 	it("skips an original stage file that never reached a grade", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 		await Bun.write(
-			join(directory, "run1.discuss.json"),
+			paths.stageFile("discuss"),
 			`${JSON.stringify({ status: "AWAITING_STAGE_JUDGE", stage: "discuss" })}\n`,
 		);
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 
 		expect(attempts.map(({ label }) => label)).toEqual([
 			"replay 2026-08-30T10:00:00.000Z",
@@ -6558,17 +6565,17 @@ describe(loadAttempts.name, () => {
 	});
 
 	it("returns only the original when the checkpoint has no replays yet", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", "other");
+		const attempts = await loadAttempts(paths, "discuss", "other");
 
 		expect(attempts).toHaveLength(1);
 	});
 
 	it("carries each replay's own corpus, model, and effort for the comparison guard", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 
 		expect(attempts[1]?.lineageInputs).toEqual({
 			corpusFiles: [{ path: "CLAUDE.md", sha256: "aa".repeat(32) }],
@@ -6578,9 +6585,9 @@ describe(loadAttempts.name, () => {
 	});
 
 	it("carries a current original stage file's corpus, model, and effort for the comparison guard", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 		await Bun.write(
-			join(directory, "run1.discuss.json"),
+			paths.stageFile("discuss"),
 			`${JSON.stringify({
 				...originalScorecard(),
 				corpusFiles: [{ path: "CLAUDE.md", sha256: "bb".repeat(32) }],
@@ -6589,7 +6596,7 @@ describe(loadAttempts.name, () => {
 			})}\n`,
 		);
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 
 		expect(attempts[0]?.lineageInputs).toEqual({
 			corpusFiles: [{ path: "CLAUDE.md", sha256: "bb".repeat(32) }],
@@ -6599,9 +6606,9 @@ describe(loadAttempts.name, () => {
 	});
 
 	it("loads and presents a legacy original stage file beside a replay without guarding it", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 		const output = await presentAttempts(LINEAGE, attempts, () =>
 			Promise.resolve("diff"),
 		);
@@ -6612,13 +6619,13 @@ describe(loadAttempts.name, () => {
 	});
 
 	it("refuses a loaded original and replay whose corpora differ, naming the changed file", async () => {
-		const directory = await attemptFixture();
+		const paths = await attemptFixture();
 		const originalCorpus = [
 			{ path: "CLAUDE.md", sha256: "aa".repeat(32) },
 			{ path: "skills/discuss/SKILL.md", sha256: "bb".repeat(32) },
 		];
 		await Bun.write(
-			join(directory, "run1.discuss.json"),
+			paths.stageFile("discuss"),
 			`${JSON.stringify({
 				...originalScorecard(),
 				corpusFiles: originalCorpus,
@@ -6626,7 +6633,7 @@ describe(loadAttempts.name, () => {
 			})}\n`,
 		);
 		await Bun.write(
-			join(directory, "replays", LINEAGE, "2026-08-30T10-00-00.000Z.json"),
+			paths.replayRecordFile(LINEAGE, "2026-08-30T10:00:00.000Z"),
 			`${JSON.stringify({
 				...replayRecord("2026-08-30T10:00:00.000Z", "new spec\n"),
 				corpusFiles: [
@@ -6636,7 +6643,7 @@ describe(loadAttempts.name, () => {
 			})}\n`,
 		);
 
-		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
 
 		expect(presentAttempts(LINEAGE, attempts)).rejects.toThrow(
 			/skills\/discuss\/SKILL\.md/u,
