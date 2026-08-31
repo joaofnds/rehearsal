@@ -1,16 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
+import { claudeArgs, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
 import type { Effort } from "./config";
 import { CLAUDE_TIMEOUT_MS, HARNESS_RUBRIC_IDS } from "./config";
 import type { ContextFile, JudgeGrade, LocalCheckResult } from "./contracts";
 import { citationMatchesPath, judgeGradeSchema } from "./contracts";
 import type { JudgeAttempt, JudgeInvoker } from "./judge-attempt";
-import { JudgeOutputValidationError } from "./judge-attempt";
-
-const JUDGE_ATTEMPTS = 2;
+import { runJudgeAttempts } from "./judge-attempt";
 
 export interface JudgeResult {
 	readonly grade: JudgeGrade;
@@ -194,57 +192,26 @@ export async function runJudge(
 			));
 
 	try {
-		let costUsd = 0;
-		const attempts: JudgeAttempt[] = [];
-		let attemptPrompt = prompt;
-		for (let attempt = 1; ; attempt += 1) {
-			const output = await invokeJudge(attemptPrompt);
-			const envelope = readClaudeEnvelope(output);
-			const attemptCostUsd = envelope.total_cost_usd ?? 0;
-			const payload = envelope.structured_output ?? envelope.result ?? null;
-			costUsd += attemptCostUsd;
-			try {
-				const parsedGrade = validateJudgeGrade(
-					readStructuredOutput(envelope, judgeGradeSchema),
-					rubricIds,
-				);
-				validateJudgeEvidence(
-					parsedGrade,
-					changedPaths,
-					baselineContext.map(({ path }) => path),
-				);
-				attempts.push({
-					payload,
-					costUsd: attemptCostUsd,
-					outcome: "ACCEPTED",
-				});
+		const result = await runJudgeAttempts(prompt, invokeJudge, (envelope) => {
+			const parsedGrade = validateJudgeGrade(
+				readStructuredOutput(envelope, judgeGradeSchema),
+				rubricIds,
+			);
+			validateJudgeEvidence(
+				parsedGrade,
+				changedPaths,
+				baselineContext.map(({ path }) => path),
+			);
 
-				return {
-					grade: applyHarnessResults(parsedGrade, checkIntegrity, localChecks),
-					prompt,
-					attempts,
-					costUsd,
-				};
-			} catch (error) {
-				const reason = error instanceof Error ? error.message : String(error);
-				attempts.push({
-					payload,
-					costUsd: attemptCostUsd,
-					outcome: "REJECTED",
-					error: reason,
-				});
-				if (attempt >= JUDGE_ATTEMPTS) {
-					throw new JudgeOutputValidationError(
-						reason,
-						prompt,
-						attempts,
-						costUsd,
-					);
-				}
+			return applyHarnessResults(parsedGrade, checkIntegrity, localChecks);
+		});
 
-				attemptPrompt = `${prompt}\n\nYour previous response was rejected: ${reason}. Correct it and return the full schema again.`;
-			}
-		}
+		return {
+			grade: result.value,
+			prompt,
+			attempts: result.attempts,
+			costUsd: result.costUsd,
+		};
 	} finally {
 		await rm(judgeDirectory, { force: true, recursive: true });
 	}

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
+import { claudeArgs, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
 import type { Effort } from "./config";
 import { CLAUDE_TIMEOUT_MS, CONTROL_DIR } from "./config";
@@ -19,8 +19,8 @@ import {
 	stageJudgeOutputSchema,
 	stageRubricSchema,
 } from "./contracts";
-import type { JudgeAttempt, JudgeInvoker } from "./judge-attempt";
-import { JudgeOutputValidationError } from "./judge-attempt";
+import type { JudgeInvoker } from "./judge-attempt";
+import { runJudgeAttempts } from "./judge-attempt";
 import type { StageDefinition, StageKind } from "./pipeline";
 
 const GRADE_ORDER: readonly StageLetterGrade[] = ["A", "B", "C", "D", "F"];
@@ -264,13 +264,6 @@ export async function loadStageRubric(stage: StageDefinition): Promise<{
 	};
 }
 
-/**
- * One retry, with the rejection quoted back: a Judge that misformats a
- * citation gets to correct itself for the price of a judge call instead of
- * discarding the paid engineering session it was grading.
- */
-const JUDGE_ATTEMPTS = 2;
-
 export async function runStageJudge(
 	model: string,
 	effort: Effort | undefined,
@@ -304,58 +297,26 @@ export async function runStageJudge(
 			));
 
 	try {
-		let costUsd = 0;
-		const attempts: JudgeAttempt[] = [];
-		let attemptPrompt = prompt;
-		for (let attempt = 1; ; attempt += 1) {
-			const output = await invokeJudge(attemptPrompt);
-			const envelope = readClaudeEnvelope(output);
-			const attemptCostUsd = envelope.total_cost_usd ?? 0;
-			const payload = envelope.structured_output ?? envelope.result ?? null;
-			costUsd += attemptCostUsd;
-			try {
-				const stageOutput = applyAuthoritativeStageResults(
-					readStructuredOutput(envelope, stageJudgeOutputSchema),
-					input,
-				);
-				validateStageJudgeEvidence(stageOutput, input);
-				const grade = deriveStageGrade(stageOutput, source.rubric);
-				attempts.push({
-					payload,
-					costUsd: attemptCostUsd,
-					outcome: "ACCEPTED",
-				});
+		const result = await runJudgeAttempts(prompt, invokeJudge, (envelope) => {
+			const stageOutput = applyAuthoritativeStageResults(
+				readStructuredOutput(envelope, stageJudgeOutputSchema),
+				input,
+			);
+			validateStageJudgeEvidence(stageOutput, input);
 
-				return {
-					stage: input.stage,
-					rubricPath: source.rubricPath,
-					rubric: source.rubric,
-					input,
-					prompt,
-					attempts,
-					costUsd,
-					grade,
-				};
-			} catch (error) {
-				const reason = error instanceof Error ? error.message : String(error);
-				attempts.push({
-					payload,
-					costUsd: attemptCostUsd,
-					outcome: "REJECTED",
-					error: reason,
-				});
-				if (attempt >= JUDGE_ATTEMPTS) {
-					throw new JudgeOutputValidationError(
-						reason,
-						prompt,
-						attempts,
-						costUsd,
-					);
-				}
+			return deriveStageGrade(stageOutput, source.rubric);
+		});
 
-				attemptPrompt = `${prompt}\n\nYour previous response was rejected: ${reason}. Correct it and return the full schema again.`;
-			}
-		}
+		return {
+			stage: input.stage,
+			rubricPath: source.rubricPath,
+			rubric: source.rubric,
+			input,
+			prompt,
+			attempts: result.attempts,
+			costUsd: result.costUsd,
+			grade: result.value,
+		};
 	} finally {
 		await rm(judgeDirectory, { force: true, recursive: true });
 	}
