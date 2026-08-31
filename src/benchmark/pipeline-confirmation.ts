@@ -644,13 +644,64 @@ export async function runPipelineConfirmation(
 		},
 	);
 	const makespanMs = now() - makespanStart;
-	const repRecordFiles = results.map(({ outcome }) => {
-		if (outcome.status === "rejected") {
-			throw outcome.reason;
-		}
+	const repRecordFiles = await Promise.all(
+		results.map(async ({ plan, outcome }) => {
+			if (outcome.status === "fulfilled") {
+				return outcome.value;
+			}
 
-		return outcome.value;
-	});
+			const reason =
+				outcome.reason instanceof Error
+					? outcome.reason.message
+					: String(outcome.reason);
+			dependencies.log(
+				`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+			);
+			const [failedStage, ...laterStages] = request.pipeline.stages;
+			if (failedStage === undefined) {
+				throw new Error("Pipeline must declare at least one stage");
+			}
+			const record = confirmationRepRecordSchema.parse({
+				schemaVersion: 1,
+				groupId: request.groupId,
+				repId: plan.repId,
+				ordinal: plan.ordinal,
+				mode: "pipeline",
+				worktreePath: plan.worktreePath,
+				lineage: { kind: "SOURCE", sha: request.source.sha },
+				outcome: "UNSUCCESSFUL",
+				stages: [
+					{
+						stage: failedStage.name,
+						status: "EXECUTION_FAILED",
+						error: reason,
+						worktreePath: plan.worktreePath,
+						elapsedMs: makespanMs,
+					},
+					...laterStages.map((stage) => ({
+						stage: stage.name,
+						status: "NOT_REACHED" as const,
+						reason: `${failedStage.name} execution failed`,
+					})),
+				],
+				finalOutcome: {
+					status: "NOT_REACHED",
+					reason: `${failedStage.name} execution failed`,
+				},
+				metrics: {
+					status: "MISSING",
+					calls: [],
+					missing: ["stage evidence"],
+				},
+				workerTrajectorySteps: 0,
+				elapsedMs: makespanMs,
+			});
+			const { recordFile } = paths.rep(plan.repId);
+			await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
+
+			return recordFile;
+		}),
+	);
 	const records = await Promise.all(
 		repRecordFiles.map(async (path) =>
 			confirmationRepRecordSchema.parse(
@@ -706,7 +757,9 @@ export async function runPipelineConfirmation(
 		makespanMs,
 	});
 	await Bun.write(paths.groupFile, `${JSON.stringify(group, null, 2)}\n`);
-	await rm(worktreesDirectory, { force: true, recursive: true });
+	if (results.every(({ outcome }) => outcome.status === "fulfilled")) {
+		await rm(worktreesDirectory, { force: true, recursive: true });
+	}
 
 	return {
 		groupRecordFile: paths.groupFile,
