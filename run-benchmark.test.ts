@@ -3936,16 +3936,19 @@ describe(deriveStaleness.name, () => {
 			{ path: "skills/review/SKILL.md", sha256: "ee55" },
 		]);
 		const longer = [initial, planning, build, review] as const;
-		const corpus = new Map<string, readonly HashedFile[]>(
-			longer
-				.filter(({ stage }) => stage !== "initial")
-				.map((record) => [record.stage, record.corpusFiles]),
-		);
-		corpus.set("shape", [
+		const edited: readonly HashedFile[] = [
 			claudeMd,
 			doctrine,
 			{ path: "skills/shape/SKILL.md", sha256: "changed" },
-		]);
+		];
+		const corpus = new Map<string, readonly HashedFile[]>(
+			longer
+				.filter(({ stage }) => stage !== "initial")
+				.map((record) => [
+					record.stage,
+					record.stage === "shape" ? edited : record.corpusFiles,
+				]),
+		);
 
 		const staleness = deriveStaleness(longer, corpus, request);
 
