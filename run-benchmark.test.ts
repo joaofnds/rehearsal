@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { executeReplayStage } from "./replay-stage";
 import type { ConfirmationRepPlan } from "./src/benchmark/confirmation";
 import {
 	formatProjectedCost,
@@ -589,6 +590,49 @@ describe(runRequestedExecution.name, () => {
 			"prompt",
 			"start",
 		]);
+	});
+});
+
+describe(executeReplayStage.name, () => {
+	it('runs one debug replay with the exact "single-rep evidence, not a score" label', async () => {
+		const output: string[] = [];
+		const requests: ReplayRequest[] = [];
+		const replayRequest: ReplayRequest = {
+			paths: benchmarkRunPaths("/runs", "run"),
+			stage: "build",
+			instructions: "instructions",
+			controlSha: "control-sha",
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+		};
+
+		const outcome = await executeReplayStage(
+			{ confirmation: undefined },
+			replayRequest,
+			{
+				approval: {
+					output: (message) => {
+						output.push(message);
+					},
+					prompt: () => Promise.resolve("no"),
+				},
+				runDebug: (request) => {
+					requests.push(request);
+
+					return Promise.resolve({ judge: "B" });
+				},
+				runConfirmed: () => {
+					throw new Error("confirmation must not run");
+				},
+				groupId: () => "confirmation-1",
+				corpusRoots: ["/corpus"],
+			},
+		);
+
+		expect(output).toEqual(["single-rep evidence, not a score"]);
+		expect(requests).toEqual([replayRequest]);
+		expect(outcome).toEqual({ kind: "debug", evidence: { judge: "B" } });
 	});
 });
 

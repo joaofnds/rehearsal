@@ -22,13 +22,18 @@ import {
 	captureTreatmentChecks,
 } from "./src/benchmark/checks";
 import { runCommand } from "./src/benchmark/command";
-import type { ReplayCliConfig } from "./src/benchmark/config";
+import type {
+	ConfirmationConfig,
+	ReplayCliConfig,
+} from "./src/benchmark/config";
 import {
 	CONTROL_DIR,
 	parseReplayArgs,
 	REQUIRED_BUN_VERSION,
 } from "./src/benchmark/config";
 import { runReplay } from "./src/benchmark/replay";
+import type { ReplayRequest } from "./src/benchmark/replay";
+import type { ReplayConfirmationRequest } from "./src/benchmark/replay-confirmation";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
@@ -47,6 +52,43 @@ import {
 import { runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUNS_DIRECTORY = benchmarkRunsDirectory(CONTROL_DIR);
+
+export type ReplayStageOutcome<DebugEvidence, ConfirmationEvidence> =
+	| { readonly kind: "debug"; readonly evidence: DebugEvidence }
+	| { readonly kind: "confirmation"; readonly evidence: ConfirmationEvidence };
+
+export interface ReplayStageExecutionDependencies<
+	DebugEvidence,
+	ConfirmationEvidence,
+> {
+	readonly approval: {
+		readonly output: (message: string) => void;
+		readonly prompt: (message: string) => Promise<string>;
+	};
+	readonly runDebug: (request: ReplayRequest) => Promise<DebugEvidence>;
+	readonly runConfirmed: (
+		request: ReplayConfirmationRequest,
+	) => Promise<ConfirmationEvidence>;
+	readonly groupId: () => string;
+	readonly corpusRoots: readonly string[];
+}
+
+export async function executeReplayStage<DebugEvidence, ConfirmationEvidence>(
+	config: { readonly confirmation: ConfirmationConfig | undefined },
+	request: ReplayRequest,
+	dependencies: ReplayStageExecutionDependencies<
+		DebugEvidence,
+		ConfirmationEvidence
+	>,
+): Promise<ReplayStageOutcome<DebugEvidence, ConfirmationEvidence>> {
+	if (config.confirmation !== undefined) {
+		throw new Error("Stage confirmation is not wired");
+	}
+
+	dependencies.approval.output("single-rep evidence, not a score");
+
+	return { kind: "debug", evidence: await dependencies.runDebug(request) };
+}
 
 async function resolveRunDirectory(paths: BenchmarkRunPaths): Promise<string> {
 	if (await Bun.file(paths.manifestFile).exists()) {
