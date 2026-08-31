@@ -38,7 +38,10 @@ export interface RunAbort {
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
+	readonly release: () => void;
 }
+
+const RUN_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
 export async function writeRunArtifact(
 	path: string,
@@ -74,6 +77,11 @@ export function createRunAbort(
 	let pendingArtifact: RunArtifact | undefined;
 	let pendingStage: PendingStage | undefined;
 	let abortRecorded: Promise<void> | undefined;
+	const restoreOnSignal = (_signal: NodeJS.Signals): void => undefined;
+
+	for (const signal of RUN_SIGNALS) {
+		dependencies.registerSignal(signal, restoreOnSignal);
+	}
 
 	return {
 		trackPendingStage: (pending) => {
@@ -102,6 +110,11 @@ export function createRunAbort(
 			})();
 
 			return abortRecorded;
+		},
+		release: () => {
+			for (const signal of RUN_SIGNALS) {
+				dependencies.releaseSignal(signal, restoreOnSignal);
+			}
 		},
 	};
 }

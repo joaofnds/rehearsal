@@ -2184,6 +2184,40 @@ describe(createRunAbort.name, () => {
 			status: "FAILED",
 		});
 	});
+
+	it("registers and releases the supported signal handlers", () => {
+		const registered: {
+			signal: NodeJS.Signals;
+			handler: (signal: NodeJS.Signals) => void;
+		}[] = [];
+		const released: typeof registered = [];
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: (signal, handler) => {
+					registered.push({ signal, handler });
+				},
+				releaseSignal: (signal, handler) => {
+					released.push({ signal, handler });
+				},
+				exit: () => undefined,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: "/tmp/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		abort.release();
+
+		expect(registered.map(({ signal }) => signal)).toEqual([
+			"SIGINT",
+			"SIGTERM",
+			"SIGHUP",
+		]);
+		expect(released).toEqual(registered);
+	});
 });
 
 describe(assertStageGradePassed.name, () => {
