@@ -1,0 +1,597 @@
+import { createHash } from "node:crypto";
+import { cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import {
+	deriveStaleness,
+	snapshotStageCorpus,
+	installStageCorpusSnapshot,
+	INITIAL_CHECKPOINT_STAGE,
+} from "./checkpoint";
+import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import type { ClaudeCallMetrics, StageScorecard } from "./contracts";
+import type { ConfirmationCostProjection } from "./confirmation";
+import { runConfirmation } from "./confirmation";
+import {
+	buildReliabilityReport,
+	buildResourceReport,
+} from "./confirmation-report";
+import type {
+	ConfirmationGroupRecord,
+	ConfirmationRepRecord,
+} from "./confirmation-record";
+import {
+	confirmationGroupRecordSchema,
+	confirmationRepRecordSchema,
+} from "./confirmation-record";
+import { loadRunManifest } from "./manifest";
+import {
+	detachedStageDependencies,
+	loadRunCheckpoints,
+	readPriorArtifacts,
+	resolveReplay,
+} from "./replay";
+import type { ReplayDependencies, ReplayRequest } from "./replay";
+import { executeStageSession } from "./run";
+import { confirmationGroupPaths } from "./run-layout";
+import { recordRetentionRef } from "./target";
+import { createProductOwner } from "./workflow";
+
+interface FrozenFile {
+	readonly kind:
+		| "checkpoint"
+		| "corpus"
+		| "rubric"
+		| "pipeline"
+		| "instructions"
+		| "task"
+		| "product-brief";
+	readonly path: string;
+	readonly sha256: string;
+}
+
+interface FrozenReplayInputs {
+	readonly manifest: Awaited<ReturnType<typeof loadRunManifest>>;
+	readonly plan: ReturnType<typeof resolveReplay>;
+	readonly checkpointDirectory: string;
+	readonly corpusDirectory: string;
+	readonly rubric: Awaited<ReturnType<ReplayDependencies["loadStageRubric"]>>;
+	readonly instructions: string;
+	readonly staleness: readonly {
+		readonly stage: string;
+		readonly causes: readonly string[];
+	}[];
+	readonly files: readonly FrozenFile[];
+}
+
+export interface ReplayConfirmationRequest extends ReplayRequest {
+	readonly groupId: string;
+	readonly reps: number;
+	readonly corpusRoots: readonly string[];
+	readonly projectedCost: ConfirmationCostProjection;
+	readonly approvalMethod: "interactive" | "yes";
+	readonly now?: (() => number) | undefined;
+}
+
+export interface ReplayConfirmationOutcome {
+	readonly groupRecordFile: string;
+	readonly reportFile: string;
+	readonly repRecordFiles: readonly string[];
+}
+
+function sha256(content: string): string {
+	return createHash("sha256").update(content).digest("hex");
+}
+
+async function writeFrozenFile(
+	groupDirectory: string,
+	path: string,
+	content: string,
+	kind: FrozenFile["kind"],
+): Promise<FrozenFile> {
+	await Bun.write(path, content);
+
+	return {
+		kind,
+		path: relative(groupDirectory, path),
+		sha256: sha256(content),
+	};
+}
+
+async function frozenDirectoryFiles(
+	groupDirectory: string,
+	directory: string,
+	kind: FrozenFile["kind"],
+): Promise<readonly FrozenFile[]> {
+	const files: FrozenFile[] = [];
+	const entries = await readdir(directory, { recursive: true });
+	for (const entry of entries.toSorted()) {
+		const path = join(directory, entry);
+		const file = Bun.file(path);
+		if (!(await file.exists()) || file.type === "directory") {
+			continue;
+		}
+
+		const bytes = await file.bytes();
+		files.push({
+			kind,
+			path: relative(groupDirectory, path),
+			sha256: createHash("sha256").update(bytes).digest("hex"),
+		});
+	}
+
+	return files;
+}
+
+async function freezeReplayInputs(
+	dependencies: ReplayDependencies,
+	request: ReplayConfirmationRequest,
+	groupDirectory: string,
+	inputsDirectory: string,
+): Promise<FrozenReplayInputs> {
+	const manifest = await loadRunManifest(request.paths.manifestFile);
+	const checkpoints = await loadRunCheckpoints(
+		request.paths.checkpointsDirectory,
+	);
+	const plan = resolveReplay(manifest, checkpoints, request.stage);
+	const checkpointDirectory = join(inputsDirectory, "checkpoint");
+	await cp(
+		request.paths.checkpointDirectory(plan.consumed.stage),
+		checkpointDirectory,
+		{ recursive: true },
+	);
+
+	const definitions = [
+		...plan.chain.flatMap((record) => {
+			if (record.stage === INITIAL_CHECKPOINT_STAGE) {
+				return [];
+			}
+
+			const definition = manifest.pipeline.stages.find(
+				({ name }) => name === record.stage,
+			);
+			if (definition === undefined) {
+				throw new Error(
+					`The run's pipeline no longer declares the ${record.stage} stage its checkpoint records`,
+				);
+			}
+
+			return [definition];
+		}),
+		plan.definition,
+	];
+	const corpusRoot = join(inputsDirectory, "corpus");
+	const corpusByStage = new Map<string, readonly HashedFile[]>();
+	for (const definition of definitions) {
+		if (corpusByStage.has(definition.name)) {
+			continue;
+		}
+
+		corpusByStage.set(
+			definition.name,
+			await snapshotStageCorpus(
+				definition.skill,
+				request.instructions,
+				request.corpusRoots,
+				join(corpusRoot, definition.name),
+			),
+		);
+	}
+	const staleness = deriveStaleness(plan.chain, corpusByStage, {
+		model: request.model,
+		effort: request.effort,
+	}).filter(({ stale }) => stale);
+	const rubric = await dependencies.loadStageRubric(plan.definition);
+	const files: FrozenFile[] = [
+		...(await frozenDirectoryFiles(
+			groupDirectory,
+			checkpointDirectory,
+			"checkpoint",
+		)),
+		...(await frozenDirectoryFiles(groupDirectory, corpusRoot, "corpus")),
+		await writeFrozenFile(
+			groupDirectory,
+			join(inputsDirectory, "rubric.json"),
+			rubric.content,
+			"rubric",
+		),
+		await writeFrozenFile(
+			groupDirectory,
+			join(inputsDirectory, "instructions.md"),
+			request.instructions,
+			"instructions",
+		),
+		await writeFrozenFile(
+			groupDirectory,
+			join(inputsDirectory, "pipeline.json"),
+			`${JSON.stringify(manifest.pipeline, null, 2)}\n`,
+			"pipeline",
+		),
+		await writeFrozenFile(
+			groupDirectory,
+			join(inputsDirectory, "task.md"),
+			manifest.task,
+			"task",
+		),
+		await writeFrozenFile(
+			groupDirectory,
+			join(inputsDirectory, "product-brief.md"),
+			manifest.productBrief,
+			"product-brief",
+		),
+	];
+
+	return {
+		manifest,
+		plan,
+		checkpointDirectory,
+		corpusDirectory: join(corpusRoot, plan.definition.name),
+		rubric,
+		instructions: request.instructions,
+		staleness: staleness.map(({ stage, causes }) => ({ stage, causes })),
+		files,
+	};
+}
+
+function completeRepRecord(
+	request: ReplayConfirmationRequest,
+	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
+	repId: string,
+	ordinal: number,
+	worktreePath: string,
+	resultSha: string,
+	scorecardFile: string,
+	scorecard: StageScorecard,
+	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	stageElapsedMs: number,
+	repElapsedMs: number,
+): ConfirmationRepRecord {
+	const calls: {
+		role: "worker" | "product-owner" | "stage-judge";
+		metrics: ClaudeCallMetrics;
+	}[] = [];
+	const missing: string[] = [];
+	if (workerMetrics === undefined || workerMetrics.length === 0) {
+		missing.push("worker call metrics");
+	} else {
+		for (const metrics of workerMetrics) {
+			calls.push({ role: "worker", metrics });
+		}
+	}
+	if (productOwnerMetrics === undefined) {
+		missing.push("product-owner call metrics");
+	} else {
+		for (const metrics of productOwnerMetrics) {
+			calls.push({ role: "product-owner", metrics });
+		}
+	}
+	if (scorecard.attempts.length === 0) {
+		missing.push("stage-judge call metrics");
+	}
+	for (const attempt of scorecard.attempts) {
+		const { metrics } = attempt;
+		if (metrics === undefined) {
+			missing.push("stage-judge call metrics");
+
+			continue;
+		}
+
+		calls.push({ role: "stage-judge", metrics });
+	}
+	const workerTrajectorySteps = calls
+		.filter(({ role }) => role === "worker")
+		.reduce((total, call) => total + call.metrics.turns, 0);
+	const successful =
+		missing.length === 0 &&
+		scorecard.grade.verdict === "CONTINUE" &&
+		(scorecard.grade.grade === "A" || scorecard.grade.grade === "B");
+
+	return confirmationRepRecordSchema.parse({
+		schemaVersion: 1,
+		groupId: request.groupId,
+		repId,
+		ordinal,
+		mode: "stage",
+		worktreePath,
+		lineage: {
+			kind: "CHECKPOINT",
+			lineage: consumed.lineage,
+			targetSha: consumed.targetSha,
+		},
+		outcome: successful ? "SUCCESSFUL" : "UNSUCCESSFUL",
+		stages: [
+			{
+				stage: request.stage,
+				status: "JUDGED",
+				grade: scorecard.grade.grade,
+				verdict: scorecard.grade.verdict,
+				elapsedMs: stageElapsedMs,
+				evidence: { resultSha, recordFile: scorecardFile },
+			},
+		],
+		finalOutcome: { status: "NOT_APPLICABLE" },
+		metrics:
+			missing.length === 0
+				? { status: "COMPLETE", calls }
+				: { status: "MISSING", calls, missing },
+		workerTrajectorySteps,
+		elapsedMs: repElapsedMs,
+	});
+}
+
+function failedRepRecord(
+	request: ReplayConfirmationRequest,
+	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
+	repId: string,
+	ordinal: number,
+	worktreePath: string,
+	error: string,
+	elapsedMs: number,
+): ConfirmationRepRecord {
+	return confirmationRepRecordSchema.parse({
+		schemaVersion: 1,
+		groupId: request.groupId,
+		repId,
+		ordinal,
+		mode: "stage",
+		worktreePath,
+		lineage: {
+			kind: "CHECKPOINT",
+			lineage: consumed.lineage,
+			targetSha: consumed.targetSha,
+		},
+		outcome: "UNSUCCESSFUL",
+		stages: [
+			{
+				stage: request.stage,
+				status: "EXECUTION_FAILED",
+				elapsedMs,
+				error,
+				worktreePath,
+			},
+		],
+		finalOutcome: { status: "NOT_APPLICABLE" },
+		metrics: {
+			status: "MISSING",
+			calls: [],
+			missing: ["stage evidence"],
+		},
+		workerTrajectorySteps: 0,
+		elapsedMs,
+	});
+}
+
+export async function runReplayConfirmation(
+	dependencies: ReplayDependencies,
+	request: ReplayConfirmationRequest,
+): Promise<ReplayConfirmationOutcome> {
+	const now = request.now ?? (() => performance.now());
+	const paths = confirmationGroupPaths(
+		request.paths.runsDirectory,
+		request.groupId,
+	);
+	await mkdir(paths.inputsDirectory, { recursive: true });
+	const frozen = await freezeReplayInputs(
+		dependencies,
+		request,
+		paths.directory,
+		paths.inputsDirectory,
+	);
+	const worktreesDirectory = await mkdtemp(
+		join(tmpdir(), `rehearsal-${request.groupId}-`),
+	);
+	const makespanStart = now();
+	const results = await runConfirmation(
+		{
+			groupId: request.groupId,
+			reps: request.reps,
+			frozenInputs: frozen,
+			worktreePath: (repId) => join(worktreesDirectory, repId),
+		},
+		async (plan) => {
+			const repPaths = paths.rep(plan.repId);
+			await mkdir(repPaths.stagesDirectory, { recursive: true });
+			const repStart = now();
+			let worktreeCreated = false;
+			try {
+				await dependencies.addWorktree(
+					frozen.manifest.sourceRoot,
+					frozen.plan.consumed.targetSha,
+					plan.worktreePath,
+				);
+				worktreeCreated = true;
+				await dependencies.materializeCheckpoint(
+					frozen.checkpointDirectory,
+					plan.worktreePath,
+				);
+				const baseSha = await dependencies.installInstructions(
+					plan.worktreePath,
+					frozen.instructions,
+				);
+				await installStageCorpusSnapshot(
+					frozen.corpusDirectory,
+					plan.worktreePath,
+				);
+				if (frozen.plan.definition.kind === "delivery") {
+					await dependencies.installDependencies(plan.worktreePath);
+				}
+				const priorArtifacts = await readPriorArtifacts(
+					plan.worktreePath,
+					frozen.plan.priorArtifacts,
+				);
+				const baselineHashes = await dependencies.captureFileHashes(
+					plan.worktreePath,
+				);
+				const baselineContext = await dependencies.captureBaselineContext(
+					plan.worktreePath,
+				);
+				const productOwner = createProductOwner({
+					directory: join(repPaths.directory, "product-owner"),
+					model: request.model,
+					effort: request.effort,
+					sessionBudgetUsd: request.sessionBudgetUsd,
+					task: frozen.manifest.task,
+					productBrief: frozen.manifest.productBrief,
+				});
+				const stageStart = now();
+				const session = await executeStageSession(
+					detachedStageDependencies(dependencies.stageSession),
+					{
+						targetDir: plan.worktreePath,
+						model: request.model,
+						effort: request.effort,
+						sessionBudgetUsd: request.sessionBudgetUsd,
+						productOwner,
+						task: frozen.manifest.task,
+						productBrief: frozen.manifest.productBrief,
+						instructions: frozen.instructions,
+						baselineContext,
+						baselineHashes,
+						taskId: frozen.manifest.taskId,
+						taskSha: baseSha,
+						baselineSha: baseSha,
+						commitSubjectPattern: frozen.manifest.pipeline.commitSubjectPattern,
+						skillRoots: [join(plan.worktreePath, ".claude", "skills")],
+						log: dependencies.log,
+					},
+					frozen.plan.definition,
+					priorArtifacts,
+				);
+				const scorecard = await dependencies.runStageJudge(
+					request.judgeModel,
+					request.judgeEffort,
+					request.sessionBudgetUsd,
+					session.input,
+					frozen.rubric,
+				);
+				const stageElapsedMs = now() - stageStart;
+				const scorecardFile = repPaths.stageFile(request.stage);
+				await Bun.write(
+					scorecardFile,
+					`${JSON.stringify(scorecard, null, 2)}\n`,
+				);
+				await recordRetentionRef(
+					frozen.manifest.sourceRoot,
+					`${request.groupId}/${plan.repId}`,
+					session.resultSha,
+				);
+				const record = completeRepRecord(
+					request,
+					frozen.plan.consumed,
+					plan.repId,
+					plan.ordinal,
+					plan.worktreePath,
+					session.resultSha,
+					relative(repPaths.directory, scorecardFile),
+					scorecard,
+					session.transcript.callMetrics,
+					productOwner.snapshot().callMetrics,
+					stageElapsedMs,
+					now() - repStart,
+				);
+				await Bun.write(
+					repPaths.recordFile,
+					`${JSON.stringify(record, null, 2)}\n`,
+				);
+				await dependencies.removeWorktree(
+					frozen.manifest.sourceRoot,
+					plan.worktreePath,
+				);
+
+				return repPaths.recordFile;
+			} catch (error) {
+				const failure =
+					error instanceof Error ? error : new Error(String(error));
+				if (worktreeCreated) {
+					dependencies.log(
+						`Replay rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+					);
+				}
+				const record = failedRepRecord(
+					request,
+					frozen.plan.consumed,
+					plan.repId,
+					plan.ordinal,
+					plan.worktreePath,
+					failure.message,
+					now() - repStart,
+				);
+				await Bun.write(
+					repPaths.recordFile,
+					`${JSON.stringify(record, null, 2)}\n`,
+				);
+
+				return repPaths.recordFile;
+			}
+		},
+	);
+	const makespanMs = now() - makespanStart;
+	const repRecordFiles = results.map(({ outcome }) => {
+		if (outcome.status === "rejected") {
+			throw outcome.reason;
+		}
+
+		return outcome.value;
+	});
+	const records = await Promise.all(
+		repRecordFiles.map(async (path) =>
+			confirmationRepRecordSchema.parse(
+				JSON.parse(await Bun.file(path).text()),
+			),
+		),
+	);
+	const reliability = buildReliabilityReport(
+		[request.stage],
+		records.map((record) => ({
+			stages: record.stages,
+			finalOutcome: { status: "NOT_REACHED" },
+		})),
+	).slice(0, 1);
+	const resources = buildResourceReport([request.stage], records, makespanMs);
+	await Bun.write(
+		paths.reportFile,
+		`${JSON.stringify({ reliability, resources }, null, 2)}\n`,
+	);
+	const groupRecord: ConfirmationGroupRecord =
+		confirmationGroupRecordSchema.parse({
+			schemaVersion: 1,
+			groupId: request.groupId,
+			mode: "stage",
+			reps: request.reps,
+			declaredStages: [request.stage],
+			inputs: {
+				lineage: {
+					kind: "CHECKPOINT",
+					lineage: frozen.plan.consumed.lineage,
+					targetSha: frozen.plan.consumed.targetSha,
+				},
+				files: frozen.files,
+				model: request.model,
+				effort: request.effort,
+				judgeModel: request.judgeModel,
+				judgeEffort: request.judgeEffort,
+				sessionBudgetUsd: request.sessionBudgetUsd,
+				pipelinePath: frozen.manifest.pipelinePath,
+			},
+			projectedCost: request.projectedCost,
+			approval: { method: request.approvalMethod, approved: true },
+			repRecords: repRecordFiles.map((path, index) => ({
+				repId: `${request.groupId}-rep-${index + 1}`,
+				ordinal: index + 1,
+				path: relative(paths.directory, path),
+			})),
+			reportFile: relative(paths.directory, paths.reportFile),
+			makespanMs,
+		});
+	await Bun.write(paths.groupFile, `${JSON.stringify(groupRecord, null, 2)}\n`);
+	if (records.every(({ stages }) => stages[0]?.status === "JUDGED")) {
+		await rm(worktreesDirectory, { force: true, recursive: true });
+	}
+
+	return {
+		groupRecordFile: paths.groupFile,
+		reportFile: paths.reportFile,
+		repRecordFiles,
+	};
+}

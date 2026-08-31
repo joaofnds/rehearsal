@@ -191,6 +191,7 @@ export function parseConfirmationRepRecord(
 const frozenFileSchema = z
 	.object({
 		kind: z.enum([
+			"checkpoint",
 			"corpus",
 			"rubric",
 			"pipeline",

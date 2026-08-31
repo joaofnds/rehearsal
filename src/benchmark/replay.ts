@@ -249,7 +249,7 @@ export interface ReplayOutcome {
  * A replayed stage validates against the worktree's detached HEAD: main
  * cannot be checked out twice, and the primary checkout must stay untouched.
  */
-function detachedStageDependencies(
+export function detachedStageDependencies(
 	base: StageSessionDependencies,
 ): StageSessionDependencies {
 	return {
@@ -271,7 +271,7 @@ function detachedStageDependencies(
  * Prior artifacts reach the judge from the materialized snapshot, verified
  * against the hashes their own checkpoints recorded when they were accepted.
  */
-async function readPriorArtifacts(
+export async function readPriorArtifacts(
 	worktreeDir: string,
 	recorded: readonly HashedFile[],
 ): Promise<ContextFile[]> {

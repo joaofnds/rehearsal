@@ -119,6 +119,7 @@ import {
 	resolveReplay,
 	runReplay,
 } from "./src/benchmark/replay";
+import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
 import type {
 	RunArtifactBaseInputs,
 	RunArtifactInputs,
@@ -7375,6 +7376,349 @@ describe(runReplay.name, () => {
 				),
 			),
 		).toContain("replay ");
+	});
+
+	it("runs three frozen stage replay reps concurrently without changing the primary checkout", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-confirmed-replay-"));
+		temporaryDirectories.push(parent);
+		const primary = join(parent, "primary");
+		await mkdir(primary);
+		await runCommand(["git", "init", "-b", "main"], primary);
+		await runCommand(["git", "config", "user.name", "Benchmark Test"], primary);
+		await runCommand(
+			["git", "config", "user.email", "benchmark@example.com"],
+			primary,
+		);
+		await Bun.write(
+			join(primary, ".gitignore"),
+			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
+		);
+		await Bun.write(join(primary, "base.txt"), "base\n");
+		await commitAll(primary, "chore: base");
+		const taskSha = await installInstructions(
+			primary,
+			"Original instructions\n",
+		);
+		await mkdir(join(primary, "backlog"), { recursive: true });
+		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
+		const paths = benchmarkRunPaths(parent, "run");
+		const initial = await recordCheckpoint(
+			primary,
+			paths.checkpointDirectory("initial"),
+			initialCheckpointInputs(
+				{
+					taskSha,
+					task: "Task text",
+					productBrief: "Brief text",
+					workflowFiles: await hashWorkflowState(primary),
+				},
+				"sonnet",
+				"high",
+			),
+		);
+		const manifest: RunManifest = {
+			timestamp: "2026-08-31T00:00:00.000Z",
+			controlSha: "run-control-sha",
+			sourceRoot: primary,
+			sourceSha: taskSha,
+			taskId: "TASK-1",
+			taskSha,
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			effort: "high",
+			judgeModel: "opus",
+			judgeEffort: "high",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+			pipeline: {
+				statuses: ["To Do", "Done"],
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+				],
+			},
+		};
+		await writeRunManifest(paths.manifestFile, manifest);
+		const corpusRoot = join(parent, "corpus");
+		await mkdir(join(corpusRoot, "discuss"), { recursive: true });
+		await mkdir(join(corpusRoot, "doctrine"), { recursive: true });
+		await Bun.write(
+			join(corpusRoot, "discuss", "SKILL.md"),
+			"frozen discuss\n",
+		);
+		await Bun.write(
+			join(corpusRoot, "doctrine", "SKILL.md"),
+			"frozen doctrine\n",
+		);
+		const instructions = "Frozen instructions\n";
+		const rubric = {
+			rubricPath: "rubrics/discuss.json",
+			content: '{"frozen":true}\n',
+			rubric: {
+				hardBlockers: [],
+				requirements: [{ id: "scope", description: "Scope is explicit" }],
+				dimensions: [
+					{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
+				],
+			},
+		} satisfies Awaited<ReturnType<typeof loadStageRubric>>;
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const allStarted = Promise.withResolvers<boolean>();
+		const release = Promise.withResolvers<boolean>();
+		const consumedInputs: {
+			readonly targetDir: string;
+			readonly branch: string;
+			readonly instructions: string;
+			readonly skill: string;
+			readonly checkpoint: string;
+			rubric: string;
+			readonly model: string;
+			readonly effort: string | undefined;
+			readonly budget: number;
+		}[] = [];
+		const primaryBefore = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], primary),
+			branch: await runCommand(["git", "branch", "--show-current"], primary),
+			status: await runCommand(["git", "status", "--porcelain"], primary),
+			base: await Bun.file(join(primary, "base.txt")).bytes(),
+			instructions: await Bun.file(join(primary, "CLAUDE.md")).bytes(),
+		};
+
+		const execution = runReplayConfirmation(
+			{
+				stageSession: {
+					runWorkflowStage: async (workflowRequest) => {
+						const ordinal = consumedInputs.push({
+							targetDir: workflowRequest.targetDir,
+							branch: await runCommand(
+								["git", "branch", "--show-current"],
+								workflowRequest.targetDir,
+							),
+							instructions: await Bun.file(
+								join(workflowRequest.targetDir, "CLAUDE.md"),
+							).text(),
+							skill: await Bun.file(
+								join(
+									workflowRequest.targetDir,
+									".claude",
+									"skills",
+									"discuss",
+									"SKILL.md",
+								),
+							).text(),
+							checkpoint: await Bun.file(
+								join(workflowRequest.targetDir, "backlog", "config.yml"),
+							).text(),
+							rubric: "",
+							model: workflowRequest.model,
+							effort: workflowRequest.effort,
+							budget: workflowRequest.sessionBudgetUsd,
+						});
+						if (consumedInputs.length === 3) {
+							allStarted.resolve(true);
+						}
+						await release.promise;
+						await mkdir(join(workflowRequest.targetDir, "backlog", "docs"), {
+							recursive: true,
+						});
+						await Bun.write(
+							join(
+								workflowRequest.targetDir,
+								"backlog",
+								"docs",
+								"DOC-1 - spec.md",
+							),
+							"confirmed spec\n",
+						);
+
+						return {
+							stage: workflowRequest.stage,
+							sessionId: `session-${ordinal}`,
+							costUsd: metric.costUsd,
+							callMetrics: [metric],
+							exchanges: [],
+						};
+					},
+					readTaskOutput: () =>
+						Promise.resolve(
+							JSON.stringify({
+								task: {
+									acceptanceCriteria: ["done"],
+									documentation: ["DOC-1 - spec.md"],
+								},
+							}),
+						),
+					readTaskCard: () => Promise.resolve("confirmed task card"),
+					captureBuildCandidate: () =>
+						Promise.reject(new Error("not a delivery stage")),
+					assertPlanningStageCompleted: async (
+						targetDir,
+						baselineSha,
+						stage,
+					) => ({
+						taskState: `${stage.name}-state`,
+						artifact: {
+							path: "backlog/docs/DOC-1 - spec.md",
+							content: await Bun.file(
+								join(targetDir, "backlog", "docs", "DOC-1 - spec.md"),
+							).text(),
+						},
+						resultSha: baselineSha,
+						diff: "",
+						changedPaths: [],
+					}),
+					assertBuildCommitted: () =>
+						Promise.reject(new Error("not a delivery stage")),
+					changedPathsBetween: () => Promise.resolve([]),
+					captureCheckIntegrity: () =>
+						Promise.resolve(harnessResult("PASS", "checks match")),
+					captureTreatmentChecks: () =>
+						Promise.resolve(harnessResult("PASS", "all green")),
+					captureStageCorpus,
+				},
+				runStageJudge: (_model, _effort, _budget, input, source) => {
+					const target =
+						consumedInputs[
+							Number(input.transcript.sessionId.replace("session-", "")) - 1
+						];
+					if (target !== undefined) {
+						target.rubric = source.content;
+					}
+
+					return Promise.resolve({
+						...scorecardFor(input),
+						rubricPath: source.rubricPath,
+						rubric: source.rubric,
+						attempts: [
+							{
+								payload: { summary: "accepted" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+					});
+				},
+				loadStageRubric: () => Promise.resolve(rubric),
+				addWorktree,
+				removeWorktree,
+				materializeCheckpoint,
+				captureBaselineContext,
+				captureFileHashes,
+				installInstructions,
+				installDependencies: () =>
+					Promise.reject(new Error("not a delivery stage")),
+				log: () => undefined,
+			},
+			{
+				paths,
+				stage: "discuss",
+				instructions,
+				controlSha: "control-sha",
+				model: "sonnet",
+				effort: "high",
+				judgeModel: "opus",
+				judgeEffort: "high",
+				sessionBudgetUsd: 5,
+				groupId: "confirmation-stage-1",
+				reps: 3,
+				corpusRoots: [corpusRoot],
+				projectedCost: {
+					reps: 3,
+					perRepMaximumUsd: 20,
+					totalMaximumUsd: 60,
+				},
+				approvalMethod: "yes",
+			},
+		);
+
+		await allStarted.promise;
+		expect(consumedInputs).toHaveLength(3);
+		expect(new Set(consumedInputs.map(({ targetDir }) => targetDir)).size).toBe(
+			3,
+		);
+		expect(consumedInputs.every(({ branch }) => branch === "")).toBe(true);
+		release.resolve(true);
+		const outcome = await execution;
+
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (recordFile) =>
+				parseConfirmationRepRecord(await Bun.file(recordFile).text()),
+			),
+		);
+		expect(records.map(({ repId }) => repId)).toEqual([
+			"confirmation-stage-1-rep-1",
+			"confirmation-stage-1-rep-2",
+			"confirmation-stage-1-rep-3",
+		]);
+		expect(new Set(outcome.repRecordFiles).size).toBe(3);
+		expect(
+			records.every(({ outcome: result }) => result === "SUCCESSFUL"),
+		).toBe(true);
+		expect(
+			consumedInputs.map(({ targetDir: _targetDir, ...input }) => input),
+		).toEqual(
+			Array.from({ length: 3 }, () => ({
+				branch: "",
+				instructions,
+				skill: "frozen discuss\n",
+				checkpoint: "statuses: []\n",
+				rubric: rubric.content,
+				model: "sonnet",
+				effort: "high",
+				budget: 5,
+			})),
+		);
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+		expect(group.inputs.lineage).toEqual({
+			kind: "CHECKPOINT",
+			lineage: initial.lineage,
+			targetSha: taskSha,
+		});
+		expect(group.inputs.pipelinePath).toBe("pipelines/default.json");
+		expect(group.inputs.sessionBudgetUsd).toBe(5);
+		expect(new Set(group.inputs.files.map(({ kind }) => kind))).toEqual(
+			new Set([
+				"checkpoint",
+				"corpus",
+				"rubric",
+				"pipeline",
+				"instructions",
+				"task",
+				"product-brief",
+			]),
+		);
+		const primaryAfter = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], primary),
+			branch: await runCommand(["git", "branch", "--show-current"], primary),
+			status: await runCommand(["git", "status", "--porcelain"], primary),
+			base: await Bun.file(join(primary, "base.txt")).bytes(),
+			instructions: await Bun.file(join(primary, "CLAUDE.md")).bytes(),
+		};
+		expect(primaryAfter).toEqual(primaryBefore);
+		const worktrees = await runCommand(
+			["git", "worktree", "list", "--porcelain"],
+			primary,
+		);
+		expect(
+			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
+		).toHaveLength(1);
 	});
 });
 
