@@ -150,10 +150,36 @@ export const humanReviewSchema = z.object({
 	findings: z.array(humanFindingSchema),
 });
 
+const claudeUsageSchema = z
+	.object({
+		input_tokens: z.number().int().nonnegative(),
+		output_tokens: z.number().int().nonnegative(),
+		cache_read_input_tokens: z.number().int().nonnegative(),
+		cache_creation_input_tokens: z.number().int().nonnegative(),
+	})
+	.strict();
+
+export const claudeCallMetricsSchema = z
+	.object({
+		costUsd: z.number().nonnegative(),
+		inputTokens: z.number().int().nonnegative(),
+		outputTokens: z.number().int().nonnegative(),
+		cacheReadTokens: z.number().int().nonnegative(),
+		cacheWriteTokens: z.number().int().nonnegative(),
+		turns: z.number().int().nonnegative(),
+		durationMs: z.number().int().nonnegative().optional(),
+		apiDurationMs: z.number().int().nonnegative().optional(),
+	})
+	.strict();
+
 export const claudeEnvelopeSchema = z
 	.object({
 		session_id: z.string().min(1),
 		total_cost_usd: z.number().nonnegative().optional(),
+		num_turns: z.number().int().nonnegative().optional(),
+		duration_ms: z.number().int().nonnegative().optional(),
+		duration_api_ms: z.number().int().nonnegative().optional(),
+		usage: claudeUsageSchema.optional(),
 		is_error: z.boolean().optional(),
 		result: z.string().optional(),
 		structured_output: z.unknown().optional(),
@@ -164,6 +190,9 @@ export type JudgeGrade = Immutable<z.infer<typeof judgeGradeSchema>>;
 export type HumanReview = Immutable<z.infer<typeof humanReviewSchema>>;
 export type StageTurn = Immutable<z.infer<typeof stageTurnSchema>>;
 export type ClaudeEnvelope = Immutable<z.infer<typeof claudeEnvelopeSchema>>;
+export type ClaudeCallMetrics = Immutable<
+	z.infer<typeof claudeCallMetricsSchema>
+>;
 export type StageLetterGrade = z.infer<typeof stageLetterGradeSchema>;
 export type StageRubric = Immutable<z.infer<typeof stageRubricSchema>>;
 export type StageJudgeOutput = Immutable<

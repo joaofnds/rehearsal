@@ -1,7 +1,11 @@
 import type { z } from "zod";
 import type { Effort } from "./config";
-import type { ClaudeEnvelope } from "./contracts";
-import { claudeEnvelopeSchema, claudeJsonSchema } from "./contracts";
+import type { ClaudeCallMetrics, ClaudeEnvelope } from "./contracts";
+import {
+	claudeCallMetricsSchema,
+	claudeEnvelopeSchema,
+	claudeJsonSchema,
+} from "./contracts";
 
 export interface SessionSettings {
 	readonly model: string;
@@ -54,6 +58,23 @@ export function readClaudeEnvelope(output: string): ClaudeEnvelope {
 	}
 
 	return envelope;
+}
+
+export function readClaudeCallMetrics(
+	envelope: ClaudeEnvelope,
+): ClaudeCallMetrics | undefined {
+	const metrics = claudeCallMetricsSchema.safeParse({
+		costUsd: envelope.total_cost_usd,
+		inputTokens: envelope.usage?.input_tokens,
+		outputTokens: envelope.usage?.output_tokens,
+		cacheReadTokens: envelope.usage?.cache_read_input_tokens,
+		cacheWriteTokens: envelope.usage?.cache_creation_input_tokens,
+		turns: envelope.num_turns,
+		durationMs: envelope.duration_ms,
+		apiDurationMs: envelope.duration_api_ms,
+	});
+
+	return metrics.success ? metrics.data : undefined;
 }
 
 export function readStructuredOutput<T>(

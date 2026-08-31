@@ -1,20 +1,33 @@
-import { readClaudeEnvelope } from "./claude";
-import type { ClaudeEnvelope } from "./contracts";
+import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
+import type { ClaudeCallMetrics, ClaudeEnvelope } from "./contracts";
 
 export type JudgeInvoker = (prompt: string) => Promise<string>;
 
-export type JudgeAttempt =
-	| {
-			readonly payload: unknown;
-			readonly costUsd: number;
-			readonly outcome: "ACCEPTED";
-	  }
-	| {
-			readonly payload: unknown;
-			readonly costUsd: number;
-			readonly outcome: "REJECTED";
-			readonly error: string;
-	  };
+interface JudgeAttemptEvidence {
+	readonly payload: unknown;
+	readonly costUsd: number;
+	readonly metrics?: ClaudeCallMetrics | undefined;
+}
+
+type JudgeAttemptOutcome =
+	| { readonly outcome: "ACCEPTED" }
+	| { readonly outcome: "REJECTED"; readonly error: string };
+
+export type JudgeAttempt = JudgeAttemptEvidence & JudgeAttemptOutcome;
+
+type JudgeAttemptWithoutMetrics = Omit<JudgeAttemptEvidence, "metrics"> &
+	JudgeAttemptOutcome;
+
+function withMetrics(
+	attempt: JudgeAttemptWithoutMetrics,
+	metrics: ClaudeCallMetrics | undefined,
+): JudgeAttempt {
+	if (metrics === undefined) {
+		return attempt;
+	}
+
+	return { ...attempt, metrics };
+}
 
 export class JudgeOutputValidationError extends Error {
 	public override name = "JudgeOutputValidationError";
@@ -55,25 +68,36 @@ export async function runJudgeAttempts<Value>(
 		const output = await invoke(attemptPrompt);
 		const envelope = readClaudeEnvelope(output);
 		const attemptCostUsd = envelope.total_cost_usd ?? 0;
+		const metrics = readClaudeCallMetrics(envelope);
 		const payload = envelope.structured_output ?? envelope.result ?? null;
 		costUsd += attemptCostUsd;
 		try {
 			const value = validate(envelope);
-			attempts.push({
-				payload,
-				costUsd: attemptCostUsd,
-				outcome: "ACCEPTED",
-			});
+			attempts.push(
+				withMetrics(
+					{
+						payload,
+						costUsd: attemptCostUsd,
+						outcome: "ACCEPTED",
+					},
+					metrics,
+				),
+			);
 
 			return { value, attempts, costUsd };
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
-			attempts.push({
-				payload,
-				costUsd: attemptCostUsd,
-				outcome: "REJECTED",
-				error: reason,
-			});
+			attempts.push(
+				withMetrics(
+					{
+						payload,
+						costUsd: attemptCostUsd,
+						outcome: "REJECTED",
+						error: reason,
+					},
+					metrics,
+				),
+			);
 			if (attempt >= JUDGE_ATTEMPTS) {
 				throw new JudgeOutputValidationError({
 					message: reason,

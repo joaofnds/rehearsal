@@ -48,6 +48,7 @@ import {
 } from "./src/benchmark/checks";
 import {
 	claudeArgs,
+	readClaudeCallMetrics,
 	readClaudeEnvelope,
 	readStructuredOutput,
 } from "./src/benchmark/claude";
@@ -653,6 +654,45 @@ describe(readClaudeEnvelope.name, () => {
 	});
 });
 
+describe(readClaudeCallMetrics.name, () => {
+	it("maps complete provider usage without converting fields", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.5,
+				num_turns: 7,
+				duration_ms: 1200,
+				duration_api_ms: 900,
+				usage: {
+					input_tokens: 100,
+					output_tokens: 20,
+					cache_read_input_tokens: 30,
+					cache_creation_input_tokens: 40,
+				},
+			}),
+		);
+
+		expect(readClaudeCallMetrics(envelope)).toEqual({
+			costUsd: 0.5,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 7,
+			durationMs: 1200,
+			apiDurationMs: 900,
+		});
+	});
+
+	it("preserves missing required metrics as absence", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({ session_id: "session-1", total_cost_usd: 0.5 }),
+		);
+
+		expect(readClaudeCallMetrics(envelope)).toBeUndefined();
+	});
+});
+
 describe(readStructuredOutput.name, () => {
 	it("reads the structured output field", () => {
 		const envelope = readClaudeEnvelope(
@@ -764,6 +804,34 @@ describe(runJudge.name, () => {
 		]);
 		expect(result.costUsd).toBeCloseTo(0.2);
 		expect(result.grade.verdict).toBe("PASS");
+	});
+
+	it("retains complete provider metrics on an attempt", async () => {
+		const result = await gradeWith(() =>
+			Promise.resolve(
+				JSON.stringify({
+					session_id: "judge-session",
+					total_cost_usd: 0.1,
+					num_turns: 3,
+					usage: {
+						input_tokens: 100,
+						output_tokens: 20,
+						cache_read_input_tokens: 30,
+						cache_creation_input_tokens: 40,
+					},
+					structured_output: completeGrade("PASS"),
+				}),
+			),
+		);
+
+		expect(result.attempts[0]?.metrics).toEqual({
+			costUsd: 0.1,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 3,
+		});
 	});
 
 	it("quotes rejection feedback as untrusted data", async () => {
