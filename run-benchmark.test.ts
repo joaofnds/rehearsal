@@ -11,7 +11,10 @@ import {
 	requireConfirmationApproval,
 	runConfirmation,
 } from "./src/benchmark/confirmation";
-import { buildReliabilityReport } from "./src/benchmark/confirmation-report";
+import {
+	buildReliabilityReport,
+	buildResourceReport,
+} from "./src/benchmark/confirmation-report";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
@@ -73,6 +76,7 @@ import {
 } from "./src/benchmark/config";
 import type {
 	CalibrationResult,
+	ClaudeCallMetrics,
 	HumanReview,
 	JudgeGrade,
 	LocalCheckResult,
@@ -755,6 +759,86 @@ describe(buildReliabilityReport.name, () => {
 				passK: 0.2 ** 5,
 			},
 		]);
+	});
+});
+
+describe(buildResourceReport.name, () => {
+	it("distributes complete role evidence without zero-filling missing reps", () => {
+		const metric = (
+			costUsd: number,
+			tokens: number,
+			turns: number,
+		): ClaudeCallMetrics => ({
+			costUsd,
+			inputTokens: tokens,
+			outputTokens: tokens + 1,
+			cacheReadTokens: tokens + 2,
+			cacheWriteTokens: tokens + 3,
+			turns,
+		});
+		const report = buildResourceReport(
+			["shape", "build"],
+			[
+				{
+					metrics: {
+						status: "COMPLETE",
+						calls: [
+							{ role: "worker", metrics: metric(1, 10, 2) },
+							{ role: "stage-judge", metrics: metric(0.5, 5, 1) },
+						],
+					},
+					workerTrajectorySteps: 2,
+					elapsedMs: 40,
+					stages: [
+						{ stage: "shape", elapsedMs: 10 },
+						{ stage: "build", elapsedMs: 20 },
+					],
+				},
+				{
+					metrics: {
+						status: "COMPLETE",
+						calls: [
+							{ role: "worker", metrics: metric(2, 20, 4) },
+							{ role: "stage-judge", metrics: metric(1, 10, 1) },
+						],
+					},
+					workerTrajectorySteps: 4,
+					elapsedMs: 50,
+					stages: [{ stage: "shape", elapsedMs: 12 }],
+				},
+				{
+					metrics: {
+						status: "MISSING",
+						calls: [],
+						missing: ["worker.inputTokens"],
+					},
+					workerTrajectorySteps: 0,
+					elapsedMs: 5,
+					stages: [],
+				},
+			],
+			75,
+		);
+
+		expect(report.completeReps).toBe(2);
+		expect(report.missingMetricReps).toBe(1);
+		expect(report.perRole.worker).toEqual({
+			costUsd: [1, 2],
+			inputTokens: [10, 20],
+			outputTokens: [11, 21],
+			cacheReadTokens: [12, 22],
+			cacheWriteTokens: [13, 23],
+		});
+		expect(report.total.costUsd).toEqual([1.5, 3]);
+		expect(report.workerTurns).toEqual([2, 4]);
+		expect(report.stageElapsedMs).toEqual(
+			Object.fromEntries([
+				["shape", [10, 12]],
+				["build", [20]],
+			]),
+		);
+		expect(report.repElapsedMs).toEqual([40, 50]);
+		expect(report.makespanMs).toBe(75);
 	});
 });
 
