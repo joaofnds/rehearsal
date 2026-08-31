@@ -22,9 +22,10 @@ import {
 	parseHumanReview,
 	validateCalibration,
 } from "./src/benchmark/calibration";
-import type { CheckpointRecord } from "./src/benchmark/checkpoint";
+import type { CheckpointRecord, HashedFile } from "./src/benchmark/checkpoint";
 import {
 	captureStageCorpus,
+	deriveStaleness,
 	hashWorkflowState,
 	initialCheckpointInputs,
 	lineageKey,
@@ -3753,6 +3754,196 @@ describe(initialCheckpointInputs.name, () => {
 
 		expect(inputs.effort).toBeUndefined();
 		expect(JSON.stringify(inputs)).not.toContain('"effort"');
+	});
+});
+
+describe(deriveStaleness.name, () => {
+	const claudeMd = { path: "CLAUDE.md", sha256: "aa11" } as const;
+	const doctrine = {
+		path: "skills/doctrine/SKILL.md",
+		sha256: "dd44",
+	} as const;
+
+	function checkpoint(
+		stage: string,
+		upstream: string,
+		corpusFiles: readonly { readonly path: string; readonly sha256: string }[],
+	): CheckpointRecord {
+		const inputs = {
+			stage,
+			targetSha: `${stage}-sha`,
+			upstream,
+			model: "sonnet",
+			effort: "high",
+			corpusFiles,
+			artifacts: [],
+		} as const;
+
+		return {
+			...inputs,
+			lineage: lineageKey(inputs),
+			workflowState: [],
+		};
+	}
+
+	const initial = checkpoint("initial", "root-key", []);
+	const planning = checkpoint("shape", initial.lineage, [
+		claudeMd,
+		doctrine,
+		{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+	]);
+	const build = checkpoint("build", planning.lineage, [
+		claudeMd,
+		doctrine,
+		{ path: "skills/build/SKILL.md", sha256: "cc33" },
+	]);
+	const chain = [initial, planning, build] as const;
+
+	function currentCorpus(
+		...edits: readonly (readonly [string, readonly HashedFile[]])[]
+	): Map<string, readonly HashedFile[]> {
+		const corpus = new Map<string, readonly HashedFile[]>(
+			chain
+				.filter(({ stage }) => stage !== "initial")
+				.map((record) => [record.stage, record.corpusFiles]),
+		);
+		for (const [stage, files] of edits) {
+			corpus.set(stage, files);
+		}
+
+		return corpus;
+	}
+
+	const request = { model: "sonnet", effort: "high" } as const;
+
+	it("reports every checkpoint fresh when nothing changed", () => {
+		const staleness = deriveStaleness(chain, currentCorpus(), request);
+
+		expect(staleness.map(({ stage, stale }) => [stage, stale])).toEqual([
+			["initial", false],
+			["shape", false],
+			["build", false],
+		]);
+	});
+
+	it("marks the edited stage and everything downstream stale, naming the file", () => {
+		const staleness = deriveStaleness(
+			chain,
+			currentCorpus([
+				"shape",
+				[
+					claudeMd,
+					doctrine,
+					{ path: "skills/shape/SKILL.md", sha256: "changed" },
+				],
+			]),
+			request,
+		);
+
+		expect(staleness.map(({ stage, stale }) => [stage, stale])).toEqual([
+			["initial", false],
+			["shape", true],
+			["build", true],
+		]);
+		expect(staleness[1]?.causes).toEqual(["skills/shape/SKILL.md changed"]);
+		expect(staleness[2]?.causes).toEqual(["upstream stage shape is stale"]);
+	});
+
+	it("marks every stage checkpoint stale when a global instruction file changes", () => {
+		const edited = { path: "CLAUDE.md", sha256: "edited" } as const;
+		const staleness = deriveStaleness(
+			chain,
+			currentCorpus(
+				[
+					"shape",
+					[edited, doctrine, { path: "skills/shape/SKILL.md", sha256: "bb22" }],
+				],
+				[
+					"build",
+					[edited, doctrine, { path: "skills/build/SKILL.md", sha256: "cc33" }],
+				],
+			),
+			request,
+		);
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([false, true, true]);
+		expect(staleness[1]?.causes).toEqual(["CLAUDE.md changed"]);
+	});
+
+	it("marks every stage checkpoint stale when a global skill file changes", () => {
+		const edited = {
+			path: "skills/doctrine/SKILL.md",
+			sha256: "edited",
+		} as const;
+		const staleness = deriveStaleness(
+			chain,
+			currentCorpus(
+				[
+					"shape",
+					[claudeMd, edited, { path: "skills/shape/SKILL.md", sha256: "bb22" }],
+				],
+				[
+					"build",
+					[claudeMd, edited, { path: "skills/build/SKILL.md", sha256: "cc33" }],
+				],
+			),
+			request,
+		);
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([false, true, true]);
+		expect(staleness[1]?.causes).toEqual(["skills/doctrine/SKILL.md changed"]);
+	});
+
+	it("marks every checkpoint including the initial one stale on a model change", () => {
+		const staleness = deriveStaleness(chain, currentCorpus(), {
+			model: "opus",
+			effort: "high",
+		});
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([true, true, true]);
+		expect(staleness[0]?.causes).toEqual(["model sonnet is now opus"]);
+	});
+
+	it("marks every checkpoint including the initial one stale on an effort change", () => {
+		const staleness = deriveStaleness(chain, currentCorpus(), {
+			model: "sonnet",
+			effort: "low",
+		});
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([true, true, true]);
+		expect(staleness[0]?.causes).toEqual(["effort high is now low"]);
+	});
+
+	it("names a corpus file the record has and the corpus no longer does", () => {
+		const staleness = deriveStaleness(
+			chain,
+			currentCorpus(["shape", [claudeMd, doctrine]]),
+			request,
+		);
+
+		expect(staleness[1]?.stale).toBe(true);
+		expect(staleness[1]?.causes).toEqual(["skills/shape/SKILL.md removed"]);
+	});
+
+	it("names a corpus file the corpus has and the record does not", () => {
+		const staleness = deriveStaleness(
+			chain,
+			currentCorpus([
+				"shape",
+				[
+					claudeMd,
+					doctrine,
+					{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+					{ path: "skills/shape/references/new.md", sha256: "ee55" },
+				],
+			]),
+			request,
+		);
+
+		expect(staleness[1]?.stale).toBe(true);
+		expect(staleness[1]?.causes).toEqual([
+			"skills/shape/references/new.md added",
+		]);
 	});
 });
 

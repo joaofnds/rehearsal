@@ -191,6 +191,98 @@ export function rootLineage(inputs: RootLineageInputs): string {
 	);
 }
 
+export interface StalenessRequest {
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+}
+
+export interface CheckpointStaleness {
+	readonly stage: string;
+	readonly stale: boolean;
+	readonly causes: readonly string[];
+}
+
+/**
+ * A corpus file differs when its hash changed, when the record has it and
+ * the corpus no longer does, or the reverse. Each is named by its path so a
+ * reader learns which edit invalidated the checkpoint, not merely that one
+ * did.
+ */
+function corpusChanges(
+	recorded: readonly HashedFile[],
+	current: readonly HashedFile[],
+): string[] {
+	const currentByPath = new Map(
+		current.map((file) => [file.path, file.sha256]),
+	);
+	const causes: string[] = [];
+
+	for (const file of recorded) {
+		const now = currentByPath.get(file.path);
+		if (now === undefined) {
+			causes.push(`${file.path} removed`);
+			continue;
+		}
+		if (now !== file.sha256) {
+			causes.push(`${file.path} changed`);
+		}
+
+		currentByPath.delete(file.path);
+	}
+
+	for (const path of currentByPath.keys()) {
+		causes.push(`${path} added`);
+	}
+
+	return causes.toSorted();
+}
+
+/**
+ * Walks the chain in order, so an upstream stale checkpoint carries forward:
+ * a checkpoint produced from state that can no longer be reproduced is stale
+ * whatever its own corpus says. The initial checkpoint consumes no corpus, so
+ * only a model or effort change can make it stale.
+ *
+ * A stage absent from `current` is one the corpus no longer feeds; its own
+ * corpus is left unjudged and only its upstream can make it stale.
+ */
+export function deriveStaleness(
+	chain: readonly CheckpointRecord[],
+	current: ReadonlyMap<string, readonly HashedFile[]>,
+	request: StalenessRequest,
+): CheckpointStaleness[] {
+	const staleness: CheckpointStaleness[] = [];
+	let staleUpstream: string | undefined;
+
+	for (const record of chain) {
+		const causes: string[] = [];
+		if (staleUpstream !== undefined) {
+			causes.push(`upstream stage ${staleUpstream} is stale`);
+		}
+		if (record.model !== request.model) {
+			causes.push(`model ${record.model} is now ${request.model}`);
+		}
+		if (record.effort !== request.effort) {
+			causes.push(
+				`effort ${record.effort ?? "none"} is now ${request.effort ?? "none"}`,
+			);
+		}
+
+		const currentCorpus = current.get(record.stage);
+		if (currentCorpus !== undefined) {
+			causes.push(...corpusChanges(record.corpusFiles, currentCorpus));
+		}
+
+		const stale = causes.length > 0;
+		staleness.push({ stage: record.stage, stale, causes });
+		if (stale && staleUpstream === undefined) {
+			staleUpstream = record.stage;
+		}
+	}
+
+	return staleness;
+}
+
 export function hashArtifacts(
 	artifacts: readonly { readonly path: string; readonly content: string }[],
 ): readonly HashedFile[] {
