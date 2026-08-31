@@ -126,6 +126,7 @@ import {
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
+	confirmationGroupPaths,
 	runNameFromCheckpointsEntry,
 	runNameFromTimestamp,
 } from "./src/benchmark/run-layout";
@@ -3074,6 +3075,69 @@ describe(benchmarkRunPaths.name, () => {
 		);
 		expect(runNameFromCheckpointsEntry("run-1.checkpoints")).toBe("run-1");
 		expect(runNameFromCheckpointsEntry("run-1.json")).toBeUndefined();
+	});
+});
+
+describe(confirmationGroupPaths.name, () => {
+	it("assigns one durable path to every group and rep artifact", () => {
+		const paths = confirmationGroupPaths(
+			benchmarkRunsDirectory("/control"),
+			"group-1",
+		);
+		const rep = paths.rep("group-1-rep-2");
+
+		expect(paths).toMatchObject({
+			directory: join(
+				"/control",
+				".benchmark-runs",
+				"confirmations",
+				"group-1",
+			),
+			groupFile: join(
+				"/control",
+				".benchmark-runs",
+				"confirmations",
+				"group-1",
+				"group.json",
+			),
+			inputsDirectory: join(
+				"/control",
+				".benchmark-runs",
+				"confirmations",
+				"group-1",
+				"inputs",
+			),
+			reportFile: join(
+				"/control",
+				".benchmark-runs",
+				"confirmations",
+				"group-1",
+				"report.json",
+			),
+			repsDirectory: join(
+				"/control",
+				".benchmark-runs",
+				"confirmations",
+				"group-1",
+				"reps",
+			),
+		});
+		expect(rep).toMatchObject({
+			directory: join(paths.repsDirectory, "group-1-rep-2"),
+			recordFile: join(paths.repsDirectory, "group-1-rep-2", "rep.json"),
+			stagesDirectory: join(paths.repsDirectory, "group-1-rep-2", "stages"),
+			checkpointsDirectory: join(
+				paths.repsDirectory,
+				"group-1-rep-2",
+				"checkpoints",
+			),
+		});
+		expect(rep.stageFile("build")).toBe(
+			join(paths.repsDirectory, "group-1-rep-2", "stages", "build.json"),
+		);
+		expect(rep.checkpointDirectory("build")).toBe(
+			join(paths.repsDirectory, "group-1-rep-2", "checkpoints", "build"),
+		);
 	});
 });
 

@@ -17,6 +17,24 @@ export interface BenchmarkRunPaths {
 	readonly replayRecordFile: (lineage: string, timestamp: string) => string;
 }
 
+export interface ConfirmationRepPaths {
+	readonly directory: string;
+	readonly recordFile: string;
+	readonly stagesDirectory: string;
+	readonly checkpointsDirectory: string;
+	readonly stageFile: (stage: string) => string;
+	readonly checkpointDirectory: (stage: string) => string;
+}
+
+export interface ConfirmationGroupPaths {
+	readonly directory: string;
+	readonly groupFile: string;
+	readonly inputsDirectory: string;
+	readonly reportFile: string;
+	readonly repsDirectory: string;
+	readonly rep: (repId: string) => ConfirmationRepPaths;
+}
+
 export function benchmarkRunsDirectory(controlDirectory: string): string {
 	return join(controlDirectory, ".benchmark-runs");
 }
@@ -60,5 +78,35 @@ export function benchmarkRunPaths(
 				lineage,
 				`${runNameFromTimestamp(timestamp)}.json`,
 			),
+	};
+}
+
+export function confirmationGroupPaths(
+	runsDirectory: string,
+	groupId: string,
+): ConfirmationGroupPaths {
+	const directory = join(runsDirectory, "confirmations", groupId);
+	const repsDirectory = join(directory, "reps");
+
+	return {
+		directory,
+		groupFile: join(directory, "group.json"),
+		inputsDirectory: join(directory, "inputs"),
+		reportFile: join(directory, "report.json"),
+		repsDirectory,
+		rep: (repId) => {
+			const repDirectory = join(repsDirectory, repId);
+			const stagesDirectory = join(repDirectory, "stages");
+			const checkpointsDirectory = join(repDirectory, "checkpoints");
+
+			return {
+				directory: repDirectory,
+				recordFile: join(repDirectory, "rep.json"),
+				stagesDirectory,
+				checkpointsDirectory,
+				stageFile: (stage) => join(stagesDirectory, `${stage}.json`),
+				checkpointDirectory: (stage) => join(checkpointsDirectory, stage),
+			};
+		},
 	};
 }
