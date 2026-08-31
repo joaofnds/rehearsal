@@ -54,7 +54,7 @@ export interface JudgeAttemptResult<Value> {
 	readonly costUsd: number;
 }
 
-const JUDGE_ATTEMPTS = 2;
+export const MAX_JUDGE_ATTEMPTS = 2;
 
 export async function runJudgeAttempts<Value>(
 	prompt: string,
@@ -98,7 +98,7 @@ export async function runJudgeAttempts<Value>(
 					metrics,
 				),
 			);
-			if (attempt >= JUDGE_ATTEMPTS) {
+			if (attempt >= MAX_JUDGE_ATTEMPTS) {
 				throw new JudgeOutputValidationError({
 					message: reason,
 					prompt,

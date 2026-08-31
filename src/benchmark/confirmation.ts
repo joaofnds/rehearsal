@@ -1,4 +1,5 @@
 import type { ConfirmationConfig } from "./config";
+import { MAX_JUDGE_ATTEMPTS } from "./judge-attempt";
 
 export type ConfirmationCostRequest =
 	| {
@@ -22,7 +23,10 @@ export interface ConfirmationCostProjection {
 export function projectConfirmationCost(
 	request: ConfirmationCostRequest,
 ): ConfirmationCostProjection {
-	const sessionsPerRep = request.mode === "stage" ? 4 : 3 * request.stages + 3;
+	const sessionsPerRep =
+		request.mode === "stage"
+			? 2 + MAX_JUDGE_ATTEMPTS
+			: (1 + MAX_JUDGE_ATTEMPTS) * request.stages + 1 + MAX_JUDGE_ATTEMPTS;
 	const perRepMaximumUsd = sessionsPerRep * request.sessionBudgetUsd;
 
 	return {
