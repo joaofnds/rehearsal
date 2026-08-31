@@ -38,7 +38,6 @@ import type {
 	FailedJudgeRunArtifact,
 	GradedRunArtifact,
 	LocalCheckResult,
-	RunArtifact,
 	RunArtifactEvidence,
 	StageJudgeInput,
 	StageScorecard,
@@ -52,7 +51,7 @@ import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
-import { writeRunArtifact, writeStageJudgeFailure } from "./run-abort";
+import { createRunAbort, writeRunArtifact } from "./run-abort";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
@@ -96,16 +95,6 @@ async function createRunFiles(timestamp: string): Promise<{
 		checkpoint: (stage: string) =>
 			join(directory, `${name}.checkpoints`, stage),
 	};
-}
-
-function signalExitCode(signal: NodeJS.Signals): number {
-	if (signal === "SIGTERM") {
-		return 143;
-	}
-	if (signal === "SIGHUP") {
-		return 129;
-	}
-	return 130;
 }
 
 export interface BuildEvidence {
@@ -608,71 +597,28 @@ export async function runBenchmark(
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
-	let pendingArtifact: RunArtifact | undefined;
-	let pendingStage: PendingStage | undefined;
-
-	let abortRecorded: Promise<void> | undefined;
-	const markAborted = (reason: string): Promise<void> => {
-		abortRecorded ??= (async () => {
-			try {
-				if (pendingStage) {
-					await writeStageJudgeFailure(pendingStage, reason);
-				}
-				if (pendingArtifact) {
-					await writeRunArtifact(runFiles.artifact, {
-						...pendingArtifact,
-						status: "FAILED",
-					});
-				}
-			} catch (writeError) {
-				console.error(
-					`Failed to update run artifacts: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
-				);
-			}
-		})();
-
-		return abortRecorded;
-	};
-	let teardownStarted: Promise<void> | undefined;
-	const teardown = (): Promise<void> => {
-		teardownStarted ??= teardownTarget(source, workflowBackup);
-		return teardownStarted;
-	};
-	let abortStarted = false;
-	const abortAndExit = async (signal: NodeJS.Signals): Promise<void> => {
-		try {
-			if (!teardownStarted) {
-				await killActiveCommands();
-			}
-			await markAborted(`run interrupted by ${signal}`);
-			await teardown();
-		} catch (error) {
-			console.error(error instanceof Error ? error.message : String(error));
-		} finally {
-			process.exit(signalExitCode(signal));
-		}
-	};
-	const restoreOnSignal = (signal: NodeJS.Signals): void => {
-		console.error(`\nReceived ${signal}; restoring the target before exit.`);
-		if (abortStarted) {
-			return;
-		}
-		abortStarted = true;
-		void abortAndExit(signal);
-	};
-	const releaseSignalHandlers = (): void => {
-		process.off("SIGINT", restoreOnSignal);
-		process.off("SIGTERM", restoreOnSignal);
-		process.off("SIGHUP", restoreOnSignal);
-	};
-	process.on("SIGINT", restoreOnSignal);
-	process.on("SIGTERM", restoreOnSignal);
-	process.on("SIGHUP", restoreOnSignal);
+	const abort = createRunAbort(
+		{
+			killActiveCommands,
+			registerSignal: (signal, handler) => {
+				process.on(signal, handler);
+			},
+			releaseSignal: (signal, handler) => {
+				process.off(signal, handler);
+			},
+			exit: (code) => process.exit(code),
+			reportError: console.error,
+		},
+		{
+			artifactFile: runFiles.artifact,
+			teardown: () => teardownTarget(source, workflowBackup),
+		},
+	);
 
 	try {
 		await claimTarget(source);
 	} catch (error) {
-		releaseSignalHandlers();
+		abort.release();
 		throw error;
 	}
 
@@ -776,9 +722,7 @@ export async function runBenchmark(
 					stageFile: runFiles.stage,
 					checkpointDirectory: runFiles.checkpoint,
 					log: console.log,
-					trackPendingStage: (pending) => {
-						pendingStage = pending;
-					},
+					trackPendingStage: abort.trackPendingStage,
 					calibrateStageFailure: async (scorecards) => {
 						const calibration = await collectCalibration({
 							rl,
@@ -845,7 +789,7 @@ export async function runBenchmark(
 			reviewFile: runFiles.review,
 		});
 		await writeRunArtifact(runFiles.artifact, artifact);
-		pendingArtifact = artifact;
+		abort.trackPendingArtifact(artifact);
 		console.log(`Run artifact: ${runFiles.artifact}`);
 		console.log(`Human review: ${runFiles.review}`);
 
@@ -873,12 +817,12 @@ export async function runBenchmark(
 			status: "COMPLETE",
 			calibration,
 		});
-		pendingArtifact = undefined;
+		abort.trackPendingArtifact(undefined);
 		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		console.error(message);
-		await markAborted(message);
+		await abort.markAborted(message);
 		if (!stageFailureCalibrated) {
 			try {
 				await rl.question(
@@ -891,9 +835,9 @@ export async function runBenchmark(
 		throw error;
 	} finally {
 		try {
-			await teardown();
+			await abort.teardown();
 		} finally {
-			releaseSignalHandlers();
+			abort.release();
 			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}
