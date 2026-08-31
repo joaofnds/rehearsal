@@ -777,6 +777,71 @@ describe(collectCalibration.name, () => {
 		expect(result.updatedRubric).toBeDefined();
 		expect(result.revisedGrade).toBeUndefined();
 	});
+
+	it("retains Judge attempts from a stage rubric rejudge", async () => {
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		temporaryDirectories.push(reviewDirectory);
+		const reviewFile = join(reviewDirectory, "review.json");
+		const rubricPath = join(reviewDirectory, "discuss.json");
+		const original = stageScorecard("FAIL");
+		const updatedRubric = {
+			...original.rubric,
+			requirements: [
+				{ id: "scope", description: "Scope is explicit and observable" },
+			],
+		};
+		await Bun.write(rubricPath, JSON.stringify(updatedRubric));
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "rejudged" },
+				costUsd: 0.4,
+				outcome: "ACCEPTED",
+			},
+		];
+		const revised = {
+			...original,
+			rubricPath,
+			rubric: parseStageRubric(JSON.stringify(updatedRubric)),
+			attempts,
+			costUsd: 0.4,
+		};
+		let questions = 0;
+		const rl = {
+			async question() {
+				questions += 1;
+				if (questions === 1) {
+					await Bun.write(
+						reviewFile,
+						`${JSON.stringify({
+							verdict: "REJECT",
+							summary: "The stage failed.",
+							findings: [],
+						})}\n`,
+					);
+
+					return "";
+				}
+
+				return "yes";
+			},
+		};
+
+		const result = await collectCalibration({
+			rl,
+			reviewFile,
+			targetDir: reviewDirectory,
+			originalInstructions: await Bun.file(
+				join(import.meta.dir, "CLAUDE.md"),
+			).text(),
+			originalRubric: await Bun.file(join(import.meta.dir, "rubric.md")).text(),
+			stageScorecards: [{ ...original, rubricPath }],
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			stageJudge: () => Promise.resolve(revised),
+		});
+
+		expect(result.revisedStageScorecards?.[0]?.attempts).toBe(attempts);
+	});
 });
 
 describe(validateCalibration.name, () => {
@@ -2207,6 +2272,39 @@ describe(runGradedStages.name, () => {
 		});
 	});
 
+	it("records Judge attempts beside a continued scorecard", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "accepted" },
+				costUsd: 0.4,
+				outcome: "ACCEPTED",
+			},
+		];
+		const context = await stageContext();
+		const recording = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) =>
+				Promise.resolve({
+					...scorecardFor(input, "CONTINUE"),
+					attempts,
+					costUsd: 0.4,
+				}),
+		};
+
+		await runGradedStages(recording, context);
+
+		const record: unknown = JSON.parse(
+			await Bun.file(context.stageFile("shape")).text(),
+		);
+		expect(record).toMatchObject({ attempts, costUsd: 0.4 });
+	});
+
 	it("retains exhausted validation evidence on the pending stage", async () => {
 		const { dependencies } = fakeStageDependencies();
 		const attempts: readonly JudgeAttempt[] = [
@@ -3001,6 +3099,32 @@ describe(buildRunArtifact.name, () => {
 			failure: "second validation error",
 		});
 		expect("grade" in artifact).toBe(false);
+	});
+
+	it("records successful final Judge attempts and aggregate cost", async () => {
+		const pipeline = await loadDefaultPipeline();
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "invalid" },
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error: "invalid evidence",
+			},
+			{
+				payload: { summary: "accepted" },
+				costUsd: 0.2,
+				outcome: "ACCEPTED",
+			},
+		];
+		const inputs = artifactInputs(pipeline, "pipelines/default.json");
+
+		const artifact = buildRunArtifact({
+			...inputs,
+			judge: { ...inputs.judge, attempts, costUsd: 0.3 },
+		});
+
+		expect(artifact.judgeAttempts).toBe(attempts);
+		expect(artifact.judgeCostUsd).toBeCloseTo(0.3);
 	});
 
 	it("records the pipeline it ran and the path it came from", async () => {
@@ -5132,6 +5256,32 @@ describe(runReplay.name, () => {
 		expect(record.consumed.lineage).toBe(run.discuss.lineage);
 		expect(record.corpusFiles.length).toBeGreaterThan(0);
 		expect(record.scorecard.grade.verdict).toBe("CONTINUE");
+	});
+
+	it("retains the stage scorecard's Judge attempts", async () => {
+		const run = await recordedRun();
+		const fake = fakeReplayDependencies();
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "accepted replay" },
+				costUsd: 0.5,
+				outcome: "ACCEPTED",
+			},
+		];
+		const recording = {
+			...fake.dependencies,
+			runStageJudge: (
+				_model: string | undefined,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve({ ...scorecardFor(input), attempts }),
+		};
+
+		const outcome = await runReplay(recording, request(run, "build"));
+		const record = await readReplayRecord(outcome.recordPath);
+
+		expect(record.scorecard["attempts"]).toEqual(attempts);
 	});
 
 	it("replays the first stage from the initial checkpoint without installing dependencies", async () => {

@@ -126,7 +126,7 @@ When no blocker or requirement fails, the worst quality-dimension grade becomes 
 
 Planning-stage Judges receive the task, product brief, project instructions, frozen tracked repository files except `bun.lock` (binary files and files beyond the capture limits in `src/benchmark/config.ts` are skipped so judge prompts stay bounded), the stage's structured questions, decisions, and completion summary, Backlog task state, current stage artifact, and all previously accepted artifacts. The Build Judge receives those inputs plus the implementation diff and authoritative local checks. Harness-detected delivery and Build-check failures force a hard blocker regardless of the model's assessment. This records where quality first degraded instead of discovering only that the final implementation failed.
 
-Every stage scorecard stores the frozen input, full rubric, structured source citations, derived grade, Judge prompt, and Judge cost. Citations must resolve to the frozen input. A failed grade stops subsequent workflow stages and enters human calibration against that exact stage input. A malformed stage delivery follows the same scorecard and calibration path instead of bypassing grading.
+Every stage scorecard stores the frozen input, full rubric, structured source citations, derived grade, original Judge prompt, each returned payload with its per-call cost and validation outcome, and aggregate Judge cost. Citations must resolve to the frozen input. When returned output fails schema, evidence, or grade validation, the Judge receives the rejection and one correction attempt against the same frozen input and rubric. Invocation and Claude-envelope failures are not retried. A failed grade stops subsequent workflow stages and enters human calibration against that exact stage input. A malformed stage delivery follows the same scorecard and calibration path instead of bypassing grading.
 
 ## Final Grading
 
@@ -148,7 +148,7 @@ After every stage has passed, the final Judge runs separately in safe mode with 
 - measured check results
 - measured check-integrity results
 
-Judge output is schema-validated. Every rubric ID must appear exactly once, evidence must cite supplied material, and PASS requires every requirement to pass. The harness replaces the Judge's `check-integrity` and `local-checks` conclusions with authoritative local results.
+Judge output is schema-validated. Every rubric ID must appear exactly once, evidence must cite supplied material, and PASS requires every requirement to pass. Output rejected by those validations receives one correction attempt against the same frozen candidate evidence and rubric; invocation and Claude-envelope failures are not retried. The harness replaces the Judge's `check-integrity` and `local-checks` conclusions with authoritative local results.
 
 Human acceptance remains the final calibration standard. Passing stage grades and a final Judge PASS do not overrule a problem found during review.
 
@@ -261,7 +261,7 @@ Unit and filesystem integration tests for configuration parsing, stage and final
 - target dependencies already installed
 - clean, committed control repository
 - clean target repository on `main`
-- enough budget for one engineering session and one stage Judge per pipeline stage, the shared PO, the final Judge, and any calibration rejudges
+- enough budget for one engineering session per pipeline stage, the shared PO, up to two calls for each stage or final Judge when output validation requires correction, and any calibration rejudges
 
 Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
 
@@ -314,7 +314,7 @@ Completed runs are written to:
 .benchmark-runs/<ISO timestamp>.checkpoints/<stage>/
 ```
 
-Each stage file first records the frozen Judge input, so a Judge timeout or invalid response does not erase the stage evidence. A successful Judge replaces that preliminary record with the scorecard, including when the grade stops the workflow. Successful end-to-end runs also include all stage scorecards in the main artifact.
+Each stage file first records the frozen Judge input, so a Judge timeout or invalid response does not erase the stage evidence. A successful Judge replaces that preliminary record with the scorecard, including every Judge attempt and including when the grade stops the workflow. Successful end-to-end runs also include all stage scorecards in the main artifact.
 
 Each checkpoint directory freezes the state the next stage consumed, written the moment the stage's Judge accepts, so a run that fails at a later stage keeps every accepted checkpoint for replay. It holds a `checkpoint.json` record — target SHA, per-file hashes, the corpus files that fed the stage, and the lineage key chaining back to the run's initial state — beside a byte-faithful copy of the workflow state (`backlog/`, `.boris/`).
 
@@ -326,19 +326,19 @@ The directory is ignored by Git. Each artifact records:
 - task, product brief, instructions, rubric, and parsed rubric IDs
 - the pipeline definition the run executed and the path it was loaded from
 - each workflow session ID, the PO session ID, costs, questions, answers, and completion summaries
-- each stage rubric, frozen Judge input, prompt, evidence, grade, and stop decision
+- each stage rubric, frozen Judge input, prompt, returned Judge attempts, aggregate cost, evidence, grade, and stop decision
 - each accepted stage's checkpoint record with its lineage key
 - final Backlog.md task state
 - baseline context supplied to Judge
 - complete implementation diff
 - measured checks and check integrity
-- original Judge prompt and structured grade
+- original final Judge prompt, returned attempts, aggregate cost, and structured grade
 - human verdict and classified findings
 - changed instruction and rubric contents
 - revised Judge prompt and grade when the rubric changed
 - human confirmation of the revised Judge reasoning
 
-The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. A run that aborts after the preliminary artifact rewrites it with status `FAILED`, and a stage Judge failure rewrites its stage file as `STAGE_JUDGE_FAILED` with the error and the frozen input. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
+The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. If both returned final Judge payloads fail harness validation, the harness instead writes a `FAILED` main artifact without a grade; it retains the completed workflow, stage scorecards, frozen candidate evidence, original prompt, both payloads, both validation errors, per-call costs, and aggregate cost. A run that aborts after the preliminary artifact rewrites it with status `FAILED`. A stage Judge failure rewrites its stage file as `STAGE_JUDGE_FAILED`; an exhausted output-validation retry retains the original prompt and both attempts in addition to the error and frozen input. Invocation and Claude-envelope failures retain the earlier one-call failure records. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
 
 ## Tuning Loop
 

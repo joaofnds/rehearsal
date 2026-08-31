@@ -38,6 +38,7 @@ interface CalibrationContext {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly stageJudge?: typeof runStageJudge | undefined;
 }
 
 export class CalibrationIncompleteError extends Error {
@@ -304,7 +305,7 @@ export async function collectCalibration(
 				stageRubricsChanged.push(scorecard.stage);
 				console.log(`\nRejudging the same ${scorecard.stage} stage`);
 				const revisedScorecard = await asCalibrationInput(() =>
-					runStageJudge(
+					(context.stageJudge ?? runStageJudge)(
 						context.judgeModel,
 						context.judgeEffort,
 						context.sessionBudgetUsd,
