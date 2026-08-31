@@ -2272,6 +2272,87 @@ describe(createRunAbort.name, () => {
 			error: "run interrupted by SIGTERM",
 		});
 	});
+
+	it("records evidence and restores when command cancellation fails", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-signal-"));
+		temporaryDirectories.push(directory);
+		const stageFile = join(directory, "shape.json");
+		const handlers = new Map<
+			NodeJS.Signals,
+			(signal: NodeJS.Signals) => void
+		>();
+		const exited = Promise.withResolvers<number>();
+		let teardownCalls = 0;
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.reject(new Error("kill failed")),
+				registerSignal: (signal, handler) => {
+					handlers.set(signal, handler);
+				},
+				releaseSignal: () => undefined,
+				exit: exited.resolve,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: join(directory, "run.json"),
+				teardown: () => {
+					teardownCalls += 1;
+
+					return Promise.resolve();
+				},
+			},
+		);
+		abort.trackPendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		handlers.get("SIGTERM")?.("SIGTERM");
+		await exited.promise;
+
+		expect(teardownCalls).toBe(1);
+		expect(JSON.parse(await Bun.file(stageFile).text())).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			error: "run interrupted by SIGTERM",
+		});
+	});
+
+	it("records the failed run artifact when stage evidence cannot be written", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		temporaryDirectories.push(directory);
+		const artifactFile = join(directory, "run.json");
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+		abort.trackPendingStage({
+			file: directory,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+		abort.trackPendingArtifact(artifact);
+
+		await abort.markAborted("stage Judge failed");
+
+		expect(JSON.parse(await Bun.file(artifactFile).text())).toEqual({
+			...artifact,
+			status: "FAILED",
+		});
+	});
 });
 
 describe(assertStageGradePassed.name, () => {

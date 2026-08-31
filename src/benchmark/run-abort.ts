@@ -94,20 +94,26 @@ export function createRunAbort(
 
 	const markAborted = (reason: string): Promise<void> => {
 		abortRecorded ??= (async () => {
-			try {
-				if (pendingStage !== undefined) {
+			if (pendingStage !== undefined) {
+				try {
 					await writeStageJudgeFailure(pendingStage, reason);
+				} catch (error) {
+					dependencies.reportError(
+						`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
+					);
 				}
-				if (pendingArtifact !== undefined) {
+			}
+			if (pendingArtifact !== undefined) {
+				try {
 					await writeRunArtifact(request.artifactFile, {
 						...pendingArtifact,
 						status: "FAILED",
 					});
+				} catch (error) {
+					dependencies.reportError(
+						`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
+					);
 				}
-			} catch (error) {
-				dependencies.reportError(
-					`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
-				);
 			}
 		})();
 
@@ -118,20 +124,24 @@ export function createRunAbort(
 
 		return teardownStarted;
 	};
-	const abortAndExit = async (signal: NodeJS.Signals): Promise<void> => {
+	const attemptRecovery = async (
+		recover: () => Promise<void>,
+	): Promise<void> => {
 		try {
-			if (teardownStarted === undefined) {
-				await dependencies.killActiveCommands();
-			}
-			await markAborted(`run interrupted by ${signal}`);
-			await teardown();
+			await recover();
 		} catch (error) {
 			dependencies.reportError(
 				error instanceof Error ? error.message : String(error),
 			);
-		} finally {
-			dependencies.exit(signalExitCode(signal));
 		}
+	};
+	const abortAndExit = async (signal: NodeJS.Signals): Promise<void> => {
+		if (teardownStarted === undefined) {
+			await attemptRecovery(dependencies.killActiveCommands);
+		}
+		await markAborted(`run interrupted by ${signal}`);
+		await attemptRecovery(teardown);
+		dependencies.exit(signalExitCode(signal));
 	};
 	const restoreOnSignal = (signal: NodeJS.Signals): void => {
 		dependencies.reportError(
