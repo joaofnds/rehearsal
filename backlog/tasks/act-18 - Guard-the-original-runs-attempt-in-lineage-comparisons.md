@@ -2,9 +2,10 @@
 id: ACT-18
 title: Guard the original run's attempt in lineage comparisons
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-31 03:50'
-updated_date: '2026-08-31 04:53'
+updated_date: '2026-08-31 04:59'
 labels: []
 dependencies: []
 ordinal: 10008

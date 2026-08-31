@@ -1883,6 +1883,37 @@ describe(runGradedStages.name, () => {
 		expect(outcome.workflow).toHaveLength(2);
 	});
 
+	it("records the stage session inputs beside a continued scorecard", async () => {
+		const { dependencies } = fakeStageDependencies();
+		const context = {
+			...(await stageContext()),
+			model: "opus",
+			effort: "high" as const,
+		};
+
+		await runGradedStages(dependencies, context);
+
+		const stageRecord = z
+			.object({
+				corpusFiles: z.array(
+					z.object({ path: z.string(), sha256: z.string() }),
+				),
+				model: z.string(),
+				effort: z.string(),
+			})
+			.parse(JSON.parse(await Bun.file(context.stageFile("shape")).text()));
+		expect(stageRecord).toEqual({
+			corpusFiles: [
+				{
+					path: "skills/shape/SKILL.md",
+					sha256: createHash("sha256").update("shape").digest("hex"),
+				},
+			],
+			model: "opus",
+			effort: "high",
+		});
+	});
+
 	function planningStage(
 		name: string,
 		artifact: string,
