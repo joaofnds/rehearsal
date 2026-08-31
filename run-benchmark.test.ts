@@ -2036,7 +2036,7 @@ describe(runGradedStages.name, () => {
 });
 
 describe(assertCommitSubjects.name, () => {
-	const conventional = "^[a-z]+(?:\\([^)]+\\))?!?: .+";
+	const conventional = String.raw`^[a-z]+(?:\([^)]+\))?!?: .+`;
 
 	it("accepts subjects matching the pipeline's convention", () => {
 		expect(() => {

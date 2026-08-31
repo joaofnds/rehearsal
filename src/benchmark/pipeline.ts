@@ -47,8 +47,7 @@ export const pipelineDefinitionSchema = z.object({
 		.min(1)
 		.refine((pattern) => {
 			try {
-				new RegExp(pattern, "u");
-				return true;
+				return new RegExp(pattern, "u") instanceof RegExp;
 			} catch {
 				return false;
 			}
