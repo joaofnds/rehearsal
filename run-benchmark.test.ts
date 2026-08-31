@@ -4,7 +4,6 @@ import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { executeReplayStage } from "./replay-stage";
 import type { ConfirmationRepPlan } from "./src/benchmark/confirmation";
 import {
 	formatProjectedCost,
@@ -120,6 +119,7 @@ import {
 	resolveReplay,
 	runReplay,
 } from "./src/benchmark/replay";
+import { executeReplayStage } from "./src/benchmark/replay-command";
 import type { ReplayConfirmationRequest } from "./src/benchmark/replay-confirmation";
 import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
 import type {

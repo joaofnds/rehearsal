@@ -26,14 +26,7 @@ import {
 	captureTreatmentChecks,
 } from "./src/benchmark/checks";
 import { runCommand } from "./src/benchmark/command";
-import {
-	projectConfirmationCost,
-	runRequestedExecution,
-} from "./src/benchmark/confirmation";
-import type {
-	ConfirmationConfig,
-	ReplayCliConfig,
-} from "./src/benchmark/config";
+import type { ReplayCliConfig } from "./src/benchmark/config";
 import {
 	CONTROL_DIR,
 	parseReplayArgs,
@@ -41,10 +34,9 @@ import {
 } from "./src/benchmark/config";
 import { runReplay } from "./src/benchmark/replay";
 import type { ReplayDependencies, ReplayRequest } from "./src/benchmark/replay";
-import type {
-	ReplayConfirmationOutcome,
-	ReplayConfirmationRequest,
-} from "./src/benchmark/replay-confirmation";
+import type { ReplayStageOutcome } from "./src/benchmark/replay-command";
+import { executeReplayStage } from "./src/benchmark/replay-command";
+import type { ReplayConfirmationOutcome } from "./src/benchmark/replay-confirmation";
 import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
 import {
 	benchmarkRunPaths,
@@ -64,71 +56,6 @@ import {
 import { runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUNS_DIRECTORY = benchmarkRunsDirectory(CONTROL_DIR);
-
-export type ReplayStageOutcome<DebugEvidence, ConfirmationEvidence> =
-	| { readonly kind: "debug"; readonly evidence: DebugEvidence }
-	| { readonly kind: "confirmation"; readonly evidence: ConfirmationEvidence };
-
-export interface ReplayStageExecutionDependencies<
-	DebugEvidence,
-	ConfirmationEvidence,
-> {
-	readonly approval: {
-		readonly output: (message: string) => void;
-		readonly prompt: (message: string) => Promise<string>;
-	};
-	readonly runDebug: (request: ReplayRequest) => Promise<DebugEvidence>;
-	readonly runConfirmed: (
-		request: ReplayConfirmationRequest,
-	) => Promise<ConfirmationEvidence>;
-	readonly groupId: () => string;
-	readonly corpusRoots: readonly string[];
-}
-
-export function executeReplayStage<DebugEvidence, ConfirmationEvidence>(
-	config: { readonly confirmation?: ConfirmationConfig | undefined },
-	request: ReplayRequest,
-	dependencies: ReplayStageExecutionDependencies<
-		DebugEvidence,
-		ConfirmationEvidence
-	>,
-): Promise<ReplayStageOutcome<DebugEvidence, ConfirmationEvidence>> {
-	const { confirmation } = config;
-
-	return runRequestedExecution<
-		ReplayStageOutcome<DebugEvidence, ConfirmationEvidence>
-	>({
-		confirmation,
-		projectCost: () =>
-			projectConfirmationCost({
-				mode: "stage",
-				reps: confirmation?.reps ?? 1,
-				sessionBudgetUsd: request.sessionBudgetUsd,
-			}),
-		approval: dependencies.approval,
-		runDebug: async () => ({
-			kind: "debug" as const,
-			evidence: await dependencies.runDebug(request),
-		}),
-		runConfirmed: async (projectedCost) => {
-			if (confirmation === undefined) {
-				throw new Error("Confirmation configuration is required");
-			}
-
-			return {
-				kind: "confirmation" as const,
-				evidence: await dependencies.runConfirmed({
-					...request,
-					groupId: dependencies.groupId(),
-					reps: confirmation.reps,
-					corpusRoots: dependencies.corpusRoots,
-					projectedCost,
-					approvalMethod: confirmation.approved ? "yes" : "interactive",
-				}),
-			};
-		},
-	});
-}
 
 async function resolveRunDirectory(paths: BenchmarkRunPaths): Promise<string> {
 	if (await Bun.file(paths.manifestFile).exists()) {
