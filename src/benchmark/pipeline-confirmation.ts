@@ -46,7 +46,11 @@ import {
 	confirmationRepRecordSchema,
 } from "./confirmation-record";
 import { detachedStageDependencies } from "./replay";
-import type { BuildEvidence, StageSessionDependencies } from "./run";
+import type {
+	BuildEvidence,
+	StageSessionDependencies,
+	StageSessionResult,
+} from "./run";
 import { executeStageSession } from "./run";
 import { confirmationGroupPaths } from "./run-layout";
 import type {
@@ -56,6 +60,7 @@ import type {
 	removeWorktree,
 	SourceBaseline,
 } from "./target";
+import type { ProductOwner } from "./workflow";
 import { createProductOwner } from "./workflow";
 
 interface LoadedStageRubric {
@@ -92,11 +97,7 @@ export interface PipelineConfirmationDependencies {
 		model: string,
 		effort: Effort | undefined,
 		budget: number,
-		input: Parameters<
-			StageSessionDependencies["runWorkflowStage"]
-		>[0] extends never
-			? never
-			: StageScorecard["input"],
+		input: StageScorecard["input"],
 		source: LoadedStageRubric,
 	) => Promise<StageScorecard>;
 	readonly runFinalJudge: (
@@ -338,37 +339,71 @@ interface MetricCall {
 	readonly metrics: ClaudeCallMetrics;
 }
 
+interface CallWithOptionalMetrics {
+	readonly metrics?: ClaudeCallMetrics | undefined;
+}
+
+interface AttemptMetricCollection {
+	readonly calls: readonly MetricCall[];
+	readonly missing: readonly string[];
+}
+
+function appendMetrics(
+	current: readonly ClaudeCallMetrics[] | undefined,
+	next: readonly ClaudeCallMetrics[] | undefined,
+): ClaudeCallMetrics[] | undefined {
+	return current === undefined || next === undefined || next.length === 0
+		? undefined
+		: [...current, ...next];
+}
+
+function collectAttemptMetrics(
+	role: "stage-judge" | "final-judge",
+	attempts: readonly CallWithOptionalMetrics[],
+): AttemptMetricCollection {
+	const calls: MetricCall[] = [];
+	const missing: string[] = [];
+	if (attempts.length === 0) {
+		missing.push(`${role} call metrics`);
+	}
+	for (const { metrics } of attempts) {
+		if (metrics === undefined) {
+			missing.push(`${role} call metrics`);
+		} else {
+			calls.push({ role, metrics });
+		}
+	}
+
+	return { calls, missing };
+}
+
 function repMetrics(
-	worker: readonly ClaudeCallMetrics[],
+	worker: readonly ClaudeCallMetrics[] | undefined,
 	productOwner: readonly ClaudeCallMetrics[] | undefined,
-	stageJudge: readonly ClaudeCallMetrics[],
-	finalJudge: readonly ClaudeCallMetrics[],
+	stageJudge: readonly CallWithOptionalMetrics[],
+	finalJudge: readonly CallWithOptionalMetrics[] | undefined,
 ): Pick<ConfirmationRepRecord, "metrics" | "workerTrajectorySteps"> {
 	const calls: MetricCall[] = [];
 	const missing: string[] = [];
-	if (worker.length === 0) {
+	if (worker === undefined || worker.length === 0) {
 		missing.push("worker call metrics");
 	}
 	if (productOwner === undefined) {
 		missing.push("product-owner call metrics");
 	}
-	if (stageJudge.length === 0) {
-		missing.push("stage-judge call metrics");
-	}
-	if (finalJudge.length === 0) {
-		missing.push("final-judge call metrics");
-	}
-	for (const metrics of worker) {
+	for (const metrics of worker ?? []) {
 		calls.push({ role: "worker", metrics });
 	}
 	for (const metrics of productOwner ?? []) {
 		calls.push({ role: "product-owner", metrics });
 	}
-	for (const metrics of stageJudge) {
-		calls.push({ role: "stage-judge", metrics });
-	}
-	for (const metrics of finalJudge) {
-		calls.push({ role: "final-judge", metrics });
+	const stageJudgeEvidence = collectAttemptMetrics("stage-judge", stageJudge);
+	calls.push(...stageJudgeEvidence.calls);
+	missing.push(...stageJudgeEvidence.missing);
+	if (finalJudge !== undefined) {
+		const finalJudgeEvidence = collectAttemptMetrics("final-judge", finalJudge);
+		calls.push(...finalJudgeEvidence.calls);
+		missing.push(...finalJudgeEvidence.missing);
 	}
 
 	return {
@@ -376,19 +411,458 @@ function repMetrics(
 			missing.length === 0
 				? { status: "COMPLETE", calls }
 				: { status: "MISSING", calls, missing },
-		workerTrajectorySteps: worker.reduce(
+		workerTrajectorySteps: (worker ?? []).reduce(
 			(total, metrics) => total + metrics.turns,
 			0,
 		),
 	};
 }
 
-function attemptMetrics(
-	attempts: readonly { readonly metrics?: ClaudeCallMetrics | undefined }[],
-): ClaudeCallMetrics[] {
-	return attempts.flatMap(({ metrics }) =>
-		metrics === undefined ? [] : [metrics],
-	);
+interface PipelineRepPlan {
+	readonly repId: string;
+	readonly ordinal: number;
+	readonly worktreePath: string;
+}
+
+interface PipelineRepResult {
+	readonly recordFile: string;
+	readonly preservedWorktree: boolean;
+}
+
+interface StageClock {
+	readonly read: () => number | undefined;
+	readonly start: () => void;
+}
+
+function createStageClock(now: () => number): StageClock {
+	let startedAt: number | undefined;
+
+	return {
+		read: () => startedAt,
+		start: () => {
+			startedAt = now();
+		},
+	};
+}
+
+function measuredStageDependencies(
+	dependencies: StageSessionDependencies,
+	clock: StageClock,
+): StageSessionDependencies {
+	const detached = detachedStageDependencies(dependencies);
+
+	return {
+		...detached,
+		runWorkflowStage: (request) => {
+			clock.start();
+
+			return detached.runWorkflowStage(request);
+		},
+	};
+}
+
+// The branches mirror the durable rep outcomes and retain their in-flight evidence.
+// oxlint-disable-next-line eslint/complexity
+async function runPipelineRep(
+	dependencies: PipelineConfirmationDependencies,
+	request: PipelineConfirmationRequest,
+	frozen: FrozenPipelineInputs,
+	paths: ReturnType<typeof confirmationGroupPaths>,
+	plan: PipelineRepPlan,
+	now: () => number,
+): Promise<PipelineRepResult> {
+	const repPaths = paths.rep(plan.repId);
+	await mkdir(repPaths.stagesDirectory, { recursive: true });
+	const repStart = now();
+	const stageOutcomes: ConfirmationRepRecord["stages"] = [];
+	let workerMetrics: ClaudeCallMetrics[] | undefined = [];
+	const stageJudgeAttempts: CallWithOptionalMetrics[] = [];
+	const priorArtifacts: ContextFile[] = [];
+	let upstream = frozen.initialCheckpoint.lineage;
+	let baselineSha = frozen.taskSha;
+	let buildEvidence: BuildEvidence | undefined;
+	let resultSha = frozen.taskSha;
+	let worktreeCreated = false;
+	let productOwner: ProductOwner | undefined;
+	let currentStageIndex = 0;
+	let currentSession: StageSessionResult | undefined;
+	let stageClock = createStageClock(now);
+	let judgingFinal = false;
+
+	try {
+		await dependencies.addWorktree(
+			request.source.root,
+			frozen.taskSha,
+			plan.worktreePath,
+		);
+		worktreeCreated = true;
+		await dependencies.materializeCheckpoint(
+			frozen.checkpointDirectory,
+			plan.worktreePath,
+		);
+		productOwner = createProductOwner({
+			directory: join(repPaths.directory, "product-owner"),
+			model: request.model,
+			effort: request.effort,
+			sessionBudgetUsd: request.sessionBudgetUsd,
+			task: request.task,
+			productBrief: request.productBrief,
+		});
+
+		for (const [index, definition] of request.pipeline.stages.entries()) {
+			currentStageIndex = index;
+			currentSession = undefined;
+			stageClock = createStageClock(now);
+			await installStageCorpusSnapshot(
+				frozen.corpusDirectories[definition.name] ?? "",
+				plan.worktreePath,
+			);
+			currentSession = await executeStageSession(
+				measuredStageDependencies(dependencies.stageSession, stageClock),
+				{
+					targetDir: plan.worktreePath,
+					model: request.model,
+					effort: request.effort,
+					sessionBudgetUsd: request.sessionBudgetUsd,
+					productOwner,
+					task: request.task,
+					productBrief: request.productBrief,
+					instructions: request.instructions,
+					baselineContext: frozen.baselineContext,
+					baselineHashes: frozen.baselineHashes,
+					taskId: frozen.taskId,
+					taskSha: frozen.taskSha,
+					baselineSha,
+					commitSubjectPattern: request.pipeline.commitSubjectPattern,
+					skillRoots: [join(plan.worktreePath, ".claude", "skills")],
+					log: dependencies.log,
+				},
+				definition,
+				priorArtifacts,
+			);
+			workerMetrics = appendMetrics(
+				workerMetrics,
+				currentSession.transcript.callMetrics,
+			);
+			const rubric = request.stageRubrics[definition.name];
+			if (rubric === undefined) {
+				throw new Error(`No frozen rubric for ${definition.name}`);
+			}
+			const scorecard = await dependencies.runStageJudge(
+				request.judgeModel,
+				request.judgeEffort,
+				request.sessionBudgetUsd,
+				currentSession.input,
+				rubric,
+			);
+			stageJudgeAttempts.push(...scorecard.attempts);
+			const stageFile = repPaths.stageFile(definition.name);
+			await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
+			stageOutcomes.push({
+				stage: definition.name,
+				status: "JUDGED",
+				grade: scorecard.grade.grade,
+				verdict: scorecard.grade.verdict,
+				elapsedMs: now() - (stageClock.read() ?? repStart),
+				evidence: {
+					resultSha: currentSession.resultSha,
+					recordFile: relative(repPaths.directory, stageFile),
+				},
+			});
+			({ resultSha } = currentSession);
+			if (scorecard.grade.verdict === "STOP") {
+				for (const later of request.pipeline.stages.slice(index + 1)) {
+					stageOutcomes.push({
+						stage: later.name,
+						status: "NOT_REACHED",
+						reason: `${definition.name} Judge stopped the rep`,
+					});
+				}
+				const evidence = repMetrics(
+					workerMetrics,
+					productOwner.snapshot().callMetrics,
+					stageJudgeAttempts,
+					undefined,
+				);
+				const record = confirmationRepRecordSchema.parse({
+					schemaVersion: 1,
+					groupId: request.groupId,
+					repId: plan.repId,
+					ordinal: plan.ordinal,
+					mode: "pipeline",
+					worktreePath: plan.worktreePath,
+					lineage: { kind: "SOURCE", sha: request.source.sha },
+					outcome: "UNSUCCESSFUL",
+					stages: stageOutcomes,
+					finalOutcome: {
+						status: "NOT_REACHED",
+						reason: `${definition.name} Judge stopped the rep`,
+					},
+					metrics: evidence.metrics,
+					workerTrajectorySteps: evidence.workerTrajectorySteps,
+					elapsedMs: now() - repStart,
+				});
+				await Bun.write(
+					repPaths.recordFile,
+					`${JSON.stringify(record, null, 2)}\n`,
+				);
+				await dependencies.recordRetentionRef(
+					request.source.root,
+					`${request.groupId}/${plan.repId}`,
+					currentSession.resultSha,
+				);
+				await dependencies.removeWorktree(
+					request.source.root,
+					plan.worktreePath,
+				);
+
+				return { recordFile: repPaths.recordFile, preservedWorktree: false };
+			}
+			({ resultSha: baselineSha } = currentSession);
+			if (currentSession.artifact !== undefined) {
+				priorArtifacts.push(currentSession.artifact);
+			}
+			if (currentSession.buildEvidence !== undefined) {
+				({ buildEvidence } = currentSession);
+			}
+			const checkpoint = await dependencies.recordCheckpoint(
+				plan.worktreePath,
+				repPaths.checkpointDirectory(definition.name),
+				{
+					stage: definition.name,
+					targetSha: currentSession.resultSha,
+					upstream,
+					model: request.model,
+					effort: request.effort,
+					corpusFiles: frozen.corpusFiles[definition.name] ?? [],
+					artifacts: hashArtifacts(
+						currentSession.artifact ? [currentSession.artifact] : [],
+					),
+				},
+			);
+			upstream = checkpoint.lineage;
+		}
+
+		if (buildEvidence === undefined) {
+			throw new Error("Build stage did not run");
+		}
+		const fullCandidate = await dependencies.captureBuildCandidate(
+			plan.worktreePath,
+			frozen.taskSha,
+		);
+		judgingFinal = true;
+		const finalJudge = await dependencies.runFinalJudge({
+			repId: plan.repId,
+			ordinal: plan.ordinal,
+			resultSha,
+			rubric: request.finalRubric,
+			baselineContext: frozen.baselineContext,
+			evidence: {
+				...buildEvidence,
+				diff: fullCandidate.diff,
+				changedPaths: fullCandidate.changedPaths,
+			},
+		});
+		await Bun.write(
+			repPaths.finalFile,
+			`${JSON.stringify(finalJudge, null, 2)}\n`,
+		);
+		const evidence = repMetrics(
+			workerMetrics,
+			productOwner.snapshot().callMetrics,
+			stageJudgeAttempts,
+			finalJudge.attempts,
+		);
+		const successful =
+			evidence.metrics.status === "COMPLETE" &&
+			stageOutcomes.every(
+				(stage) =>
+					stage.status === "JUDGED" &&
+					stage.verdict === "CONTINUE" &&
+					(stage.grade === "A" || stage.grade === "B"),
+			) &&
+			finalJudge.grade.verdict === "PASS";
+		const record = confirmationRepRecordSchema.parse({
+			schemaVersion: 1,
+			groupId: request.groupId,
+			repId: plan.repId,
+			ordinal: plan.ordinal,
+			mode: "pipeline",
+			worktreePath: plan.worktreePath,
+			lineage: { kind: "SOURCE", sha: request.source.sha },
+			outcome: successful ? "SUCCESSFUL" : "UNSUCCESSFUL",
+			stages: stageOutcomes,
+			finalOutcome: {
+				status: "JUDGED",
+				verdict: finalJudge.grade.verdict,
+				evidence: {
+					resultSha,
+					recordFile: relative(repPaths.directory, repPaths.finalFile),
+				},
+			},
+			metrics: evidence.metrics,
+			workerTrajectorySteps: evidence.workerTrajectorySteps,
+			elapsedMs: now() - repStart,
+		});
+		await dependencies.recordRetentionRef(
+			request.source.root,
+			`${request.groupId}/${plan.repId}`,
+			resultSha,
+		);
+		await Bun.write(
+			repPaths.recordFile,
+			`${JSON.stringify(record, null, 2)}\n`,
+		);
+		await dependencies.removeWorktree(request.source.root, plan.worktreePath);
+
+		return { recordFile: repPaths.recordFile, preservedWorktree: false };
+	} catch (error) {
+		const failure = error instanceof Error ? error : new Error(String(error));
+		const judgeFailure =
+			failure instanceof JudgeOutputValidationError ? failure : undefined;
+		const completedJudgeRejection =
+			judgeFailure !== undefined &&
+			worktreeCreated &&
+			productOwner !== undefined &&
+			(judgingFinal || currentSession !== undefined);
+		if (!completedJudgeRejection && worktreeCreated) {
+			dependencies.log(
+				`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+			);
+		}
+
+		if (stageClock.read() !== undefined && currentSession === undefined) {
+			workerMetrics = undefined;
+		}
+		let stages = [...stageOutcomes];
+		let finalOutcome: ConfirmationRepRecord["finalOutcome"];
+		if (judgingFinal) {
+			if (judgeFailure !== undefined) {
+				await Bun.write(
+					repPaths.finalFile,
+					`${JSON.stringify(
+						{
+							status: "REJECTED",
+							prompt: judgeFailure.prompt,
+							attempts: judgeFailure.attempts,
+							costUsd: judgeFailure.costUsd,
+							error: failure.message,
+						},
+						null,
+						2,
+					)}\n`,
+				);
+			}
+			finalOutcome = {
+				status: "EXECUTION_FAILED",
+				error: failure.message,
+				...(completedJudgeRejection
+					? {
+							evidence: {
+								resultSha,
+								recordFile: relative(repPaths.directory, repPaths.finalFile),
+							},
+						}
+					: { worktreePath: plan.worktreePath }),
+			};
+		} else {
+			const failedStage = request.pipeline.stages[currentStageIndex];
+			if (failedStage === undefined) {
+				throw new Error("Pipeline must declare at least one stage", {
+					cause: error,
+				});
+			}
+			let evidence:
+				| { readonly resultSha: string; readonly recordFile: string }
+				| undefined;
+			if (completedJudgeRejection && judgeFailure !== undefined) {
+				stageJudgeAttempts.push(...judgeFailure.attempts);
+				const stageFile = repPaths.stageFile(failedStage.name);
+				await Bun.write(
+					stageFile,
+					`${JSON.stringify(
+						{
+							stage: failedStage.name,
+							status: "REJECTED",
+							prompt: judgeFailure.prompt,
+							attempts: judgeFailure.attempts,
+							costUsd: judgeFailure.costUsd,
+							error: failure.message,
+						},
+						null,
+						2,
+					)}\n`,
+				);
+				evidence = {
+					resultSha: currentSession?.resultSha ?? resultSha,
+					recordFile: relative(repPaths.directory, stageFile),
+				};
+			}
+			stages = [
+				...stageOutcomes,
+				{
+					stage: failedStage.name,
+					status: "EXECUTION_FAILED",
+					error: failure.message,
+					elapsedMs: now() - (stageClock.read() ?? repStart),
+					...(evidence === undefined
+						? { worktreePath: plan.worktreePath }
+						: { evidence }),
+				},
+				...request.pipeline.stages
+					.slice(currentStageIndex + 1)
+					.map((stage) => ({
+						stage: stage.name,
+						status: "NOT_REACHED" as const,
+						reason: `${failedStage.name} execution failed`,
+					})),
+			];
+			finalOutcome = {
+				status: "NOT_REACHED",
+				reason: `${failedStage.name} execution failed`,
+			};
+		}
+
+		const evidence = repMetrics(
+			workerMetrics,
+			productOwner?.snapshot().callMetrics,
+			stageJudgeAttempts,
+			judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
+		);
+		const record = confirmationRepRecordSchema.parse({
+			schemaVersion: 1,
+			groupId: request.groupId,
+			repId: plan.repId,
+			ordinal: plan.ordinal,
+			mode: "pipeline",
+			worktreePath: plan.worktreePath,
+			lineage: { kind: "SOURCE", sha: request.source.sha },
+			outcome: "UNSUCCESSFUL",
+			stages,
+			finalOutcome,
+			metrics: evidence.metrics,
+			workerTrajectorySteps: evidence.workerTrajectorySteps,
+			elapsedMs: now() - repStart,
+		});
+		await Bun.write(
+			repPaths.recordFile,
+			`${JSON.stringify(record, null, 2)}\n`,
+		);
+		if (completedJudgeRejection) {
+			const retainedSha = currentSession?.resultSha ?? resultSha;
+			await dependencies.recordRetentionRef(
+				request.source.root,
+				`${request.groupId}/${plan.repId}`,
+				retainedSha,
+			);
+			await dependencies.removeWorktree(request.source.root, plan.worktreePath);
+		}
+
+		return {
+			recordFile: repPaths.recordFile,
+			preservedWorktree: worktreeCreated && !completedJudgeRejection,
+		};
+	}
 }
 
 export async function runPipelineConfirmation(
@@ -416,357 +890,17 @@ export async function runPipelineConfirmation(
 			frozenInputs: frozen,
 			worktreePath: (repId) => join(worktreesDirectory, repId),
 		},
-		async (plan) => {
-			const repPaths = paths.rep(plan.repId);
-			await mkdir(repPaths.stagesDirectory, { recursive: true });
-			const repStart = now();
-			await dependencies.addWorktree(
-				request.source.root,
-				frozen.taskSha,
-				plan.worktreePath,
-			);
-			await dependencies.materializeCheckpoint(
-				frozen.checkpointDirectory,
-				plan.worktreePath,
-			);
-			const productOwner = createProductOwner({
-				directory: join(repPaths.directory, "product-owner"),
-				model: request.model,
-				effort: request.effort,
-				sessionBudgetUsd: request.sessionBudgetUsd,
-				task: request.task,
-				productBrief: request.productBrief,
-			});
-			const stageOutcomes: ConfirmationRepRecord["stages"] = [];
-			const workerMetrics: ClaudeCallMetrics[] = [];
-			const stageJudgeMetrics: ClaudeCallMetrics[] = [];
-			const priorArtifacts: ContextFile[] = [];
-			let upstream = frozen.initialCheckpoint.lineage;
-			let baselineSha = frozen.taskSha;
-			let buildEvidence: BuildEvidence | undefined;
-			let resultSha = frozen.taskSha;
-			for (const [index, definition] of request.pipeline.stages.entries()) {
-				await installStageCorpusSnapshot(
-					frozen.corpusDirectories[definition.name] ?? "",
-					plan.worktreePath,
-				);
-				const stageStart = now();
-				const session = await executeStageSession(
-					detachedStageDependencies(dependencies.stageSession),
-					{
-						targetDir: plan.worktreePath,
-						model: request.model,
-						effort: request.effort,
-						sessionBudgetUsd: request.sessionBudgetUsd,
-						productOwner,
-						task: request.task,
-						productBrief: request.productBrief,
-						instructions: request.instructions,
-						baselineContext: frozen.baselineContext,
-						baselineHashes: frozen.baselineHashes,
-						taskId: frozen.taskId,
-						taskSha: frozen.taskSha,
-						baselineSha,
-						commitSubjectPattern: request.pipeline.commitSubjectPattern,
-						skillRoots: [join(plan.worktreePath, ".claude", "skills")],
-						log: dependencies.log,
-					},
-					definition,
-					priorArtifacts,
-				);
-				workerMetrics.push(...(session.transcript.callMetrics ?? []));
-				const rubric = request.stageRubrics[definition.name];
-				if (rubric === undefined) {
-					throw new Error(`No frozen rubric for ${definition.name}`);
-				}
-				const scorecard = await dependencies.runStageJudge(
-					request.judgeModel,
-					request.judgeEffort,
-					request.sessionBudgetUsd,
-					session.input,
-					rubric,
-				);
-				stageJudgeMetrics.push(...attemptMetrics(scorecard.attempts));
-				const stageFile = repPaths.stageFile(definition.name);
-				await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
-				stageOutcomes.push({
-					stage: definition.name,
-					status: "JUDGED",
-					grade: scorecard.grade.grade,
-					verdict: scorecard.grade.verdict,
-					elapsedMs: now() - stageStart,
-					evidence: {
-						resultSha: session.resultSha,
-						recordFile: relative(repPaths.directory, stageFile),
-					},
-				});
-				({ resultSha } = session);
-				if (scorecard.grade.verdict === "STOP") {
-					for (const later of request.pipeline.stages.slice(index + 1)) {
-						stageOutcomes.push({
-							stage: later.name,
-							status: "NOT_REACHED",
-							reason: `${definition.name} Judge stopped the rep`,
-						});
-					}
-					const evidence = repMetrics(
-						workerMetrics,
-						productOwner.snapshot().callMetrics,
-						stageJudgeMetrics,
-						[],
-					);
-					const record = confirmationRepRecordSchema.parse({
-						schemaVersion: 1,
-						groupId: request.groupId,
-						repId: plan.repId,
-						ordinal: plan.ordinal,
-						mode: "pipeline",
-						worktreePath: plan.worktreePath,
-						lineage: { kind: "SOURCE", sha: request.source.sha },
-						outcome: "UNSUCCESSFUL",
-						stages: stageOutcomes,
-						finalOutcome: {
-							status: "NOT_REACHED",
-							reason: `${definition.name} Judge stopped the rep`,
-						},
-						metrics: evidence.metrics,
-						workerTrajectorySteps: evidence.workerTrajectorySteps,
-						elapsedMs: now() - repStart,
-					});
-					await Bun.write(
-						repPaths.recordFile,
-						`${JSON.stringify(record, null, 2)}\n`,
-					);
-					await dependencies.removeWorktree(
-						request.source.root,
-						plan.worktreePath,
-					);
-
-					return repPaths.recordFile;
-				}
-				({ resultSha: baselineSha } = session);
-				if (session.artifact !== undefined) {
-					priorArtifacts.push(session.artifact);
-				}
-				if (session.buildEvidence !== undefined) {
-					({ buildEvidence } = session);
-				}
-				const checkpoint = await dependencies.recordCheckpoint(
-					plan.worktreePath,
-					repPaths.checkpointDirectory(definition.name),
-					{
-						stage: definition.name,
-						targetSha: session.resultSha,
-						upstream,
-						model: request.model,
-						effort: request.effort,
-						corpusFiles: frozen.corpusFiles[definition.name] ?? [],
-						artifacts: hashArtifacts(
-							session.artifact ? [session.artifact] : [],
-						),
-					},
-				);
-				upstream = checkpoint.lineage;
-			}
-			if (buildEvidence === undefined) {
-				throw new Error("Build stage did not run");
-			}
-			const fullCandidate = await dependencies.captureBuildCandidate(
-				plan.worktreePath,
-				frozen.taskSha,
-			);
-			const finalEvidence = {
-				...buildEvidence,
-				diff: fullCandidate.diff,
-				changedPaths: fullCandidate.changedPaths,
-			};
-			const finalJudge = await dependencies.runFinalJudge({
-				repId: plan.repId,
-				ordinal: plan.ordinal,
-				resultSha,
-				rubric: request.finalRubric,
-				baselineContext: frozen.baselineContext,
-				evidence: finalEvidence,
-			});
-			const finalJudgeMetrics = attemptMetrics(finalJudge.attempts);
-			await Bun.write(
-				paths.rep(plan.repId).finalFile,
-				`${JSON.stringify(finalJudge, null, 2)}\n`,
-			);
-			const evidence = repMetrics(
-				workerMetrics,
-				productOwner.snapshot().callMetrics,
-				stageJudgeMetrics,
-				finalJudgeMetrics,
-			);
-			const successful =
-				evidence.metrics.status === "COMPLETE" &&
-				stageOutcomes.every(
-					(stage) =>
-						stage.status === "JUDGED" &&
-						stage.verdict === "CONTINUE" &&
-						(stage.grade === "A" || stage.grade === "B"),
-				) &&
-				finalJudge.grade.verdict === "PASS";
-			const record = confirmationRepRecordSchema.parse({
-				schemaVersion: 1,
-				groupId: request.groupId,
-				repId: plan.repId,
-				ordinal: plan.ordinal,
-				mode: "pipeline",
-				worktreePath: plan.worktreePath,
-				lineage: { kind: "SOURCE", sha: request.source.sha },
-				outcome: successful ? "SUCCESSFUL" : "UNSUCCESSFUL",
-				stages: stageOutcomes,
-				finalOutcome: {
-					status: "JUDGED",
-					verdict: finalJudge.grade.verdict,
-					evidence: {
-						resultSha,
-						recordFile: relative(repPaths.directory, repPaths.finalFile),
-					},
-				},
-				metrics: evidence.metrics,
-				workerTrajectorySteps: evidence.workerTrajectorySteps,
-				elapsedMs: now() - repStart,
-			});
-			await dependencies.recordRetentionRef(
-				request.source.root,
-				`${request.groupId}/${plan.repId}`,
-				resultSha,
-			);
-			await Bun.write(
-				repPaths.recordFile,
-				`${JSON.stringify(record, null, 2)}\n`,
-			);
-			await dependencies.removeWorktree(request.source.root, plan.worktreePath);
-
-			return repPaths.recordFile;
-		},
+		(plan) => runPipelineRep(dependencies, request, frozen, paths, plan, now),
 	);
 	const makespanMs = now() - makespanStart;
-	const repRecordFiles = await Promise.all(
-		results.map(async ({ plan, outcome }) => {
-			if (outcome.status === "fulfilled") {
-				return outcome.value;
-			}
+	const repResults = results.map(({ outcome }) => {
+		if (outcome.status === "rejected") {
+			throw outcome.reason;
+		}
 
-			const reason =
-				outcome.reason instanceof Error
-					? outcome.reason.message
-					: String(outcome.reason);
-			const judgeFailure =
-				outcome.reason instanceof JudgeOutputValidationError
-					? outcome.reason
-					: undefined;
-			const judgeRejected = judgeFailure !== undefined;
-			if (!judgeRejected) {
-				dependencies.log(
-					`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
-				);
-			}
-			const [failedStage, ...laterStages] = request.pipeline.stages;
-			if (failedStage === undefined) {
-				throw new Error("Pipeline must declare at least one stage");
-			}
-			const repPaths = paths.rep(plan.repId);
-			let failureEvidence:
-				| { readonly resultSha: string; readonly recordFile: string }
-				| undefined;
-			if (judgeRejected) {
-				const stageFile = repPaths.stageFile(failedStage.name);
-				await Bun.write(
-					stageFile,
-					`${JSON.stringify(
-						{
-							stage: failedStage.name,
-							status: "REJECTED",
-							prompt: judgeFailure.prompt,
-							attempts: judgeFailure.attempts,
-							costUsd: judgeFailure.costUsd,
-							error: reason,
-						},
-						null,
-						2,
-					)}\n`,
-				);
-				failureEvidence = {
-					resultSha: frozen.taskSha,
-					recordFile: relative(repPaths.directory, stageFile),
-				};
-			}
-			const failedStageOutcome =
-				failureEvidence === undefined
-					? {
-							stage: failedStage.name,
-							status: "EXECUTION_FAILED" as const,
-							error: reason,
-							worktreePath: plan.worktreePath,
-							elapsedMs: makespanMs,
-						}
-					: {
-							stage: failedStage.name,
-							status: "EXECUTION_FAILED" as const,
-							error: reason,
-							worktreePath: plan.worktreePath,
-							elapsedMs: makespanMs,
-							evidence: failureEvidence,
-						};
-			const record = confirmationRepRecordSchema.parse({
-				schemaVersion: 1,
-				groupId: request.groupId,
-				repId: plan.repId,
-				ordinal: plan.ordinal,
-				mode: "pipeline",
-				worktreePath: plan.worktreePath,
-				lineage: { kind: "SOURCE", sha: request.source.sha },
-				outcome: "UNSUCCESSFUL",
-				stages: [
-					failedStageOutcome,
-					...laterStages.map((stage) => ({
-						stage: stage.name,
-						status: "NOT_REACHED" as const,
-						reason: `${failedStage.name} execution failed`,
-					})),
-				],
-				finalOutcome: {
-					status: "NOT_REACHED",
-					reason: `${failedStage.name} execution failed`,
-				},
-				metrics: judgeRejected
-					? {
-							status: "MISSING",
-							calls: attemptMetrics(judgeFailure.attempts).map((metrics) => ({
-								role: "stage-judge",
-								metrics,
-							})),
-							missing: ["worker call metrics"],
-						}
-					: {
-							status: "MISSING",
-							calls: [],
-							missing: ["stage evidence"],
-						},
-				workerTrajectorySteps: 0,
-				elapsedMs: makespanMs,
-			});
-			const { recordFile } = repPaths;
-			await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
-			if (judgeRejected) {
-				await dependencies.recordRetentionRef(
-					request.source.root,
-					`${request.groupId}/${plan.repId}`,
-					frozen.taskSha,
-				);
-				await dependencies.removeWorktree(
-					request.source.root,
-					plan.worktreePath,
-				);
-			}
-
-			return recordFile;
-		}),
-	);
+		return outcome.value;
+	});
+	const repRecordFiles = repResults.map(({ recordFile }) => recordFile);
 	const records = await Promise.all(
 		repRecordFiles.map(async (path) =>
 			confirmationRepRecordSchema.parse(
@@ -783,7 +917,11 @@ export async function runPipelineConfirmation(
 				);
 			}
 
-			return { stages: record.stages, finalOutcome: record.finalOutcome };
+			return {
+				metricsComplete: record.metrics.status === "COMPLETE",
+				stages: record.stages,
+				finalOutcome: record.finalOutcome,
+			};
 		}),
 	);
 	const resources = buildResourceReport(
@@ -822,7 +960,7 @@ export async function runPipelineConfirmation(
 		makespanMs,
 	});
 	await Bun.write(paths.groupFile, `${JSON.stringify(group, null, 2)}\n`);
-	if (results.every(({ outcome }) => outcome.status === "fulfilled")) {
+	if (repResults.every(({ preservedWorktree }) => !preservedWorktree)) {
 		await rm(worktreesDirectory, { force: true, recursive: true });
 	}
 

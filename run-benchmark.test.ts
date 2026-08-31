@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { ConfirmationRepPlan } from "./src/benchmark/confirmation";
 import {
@@ -789,6 +789,39 @@ describe(executeBenchmark.name, () => {
 			},
 		]);
 	});
+
+	it("routes the production CLI through approval before target access", async () => {
+		const missingTarget = join(tmpdir(), `missing-target-${randomUUID()}`);
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				"run-benchmark.ts",
+				"--target",
+				missingTarget,
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"1",
+				"--confirm",
+			],
+			{
+				cwd: import.meta.dir,
+				stdin: new Blob(["no\n"]),
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		const [exitCode, stdout, stderr] = await Promise.all([
+			child.exited,
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+		]);
+
+		expect(exitCode).not.toBe(0);
+		expect(stdout).toContain("Projected maximum cost: $45.00");
+		expect(stderr).toContain("Confirmation declined");
+		expect(stderr).not.toContain(missingTarget);
+	});
 });
 
 describe(runConfirmation.name, () => {
@@ -918,6 +951,7 @@ describe(buildReliabilityReport.name, () => {
 			["shape", "build"],
 			[
 				{
+					metricsComplete: true,
 					stages: [
 						{
 							stage: "shape",
@@ -935,6 +969,7 @@ describe(buildReliabilityReport.name, () => {
 					finalOutcome: { status: "JUDGED", verdict: "PASS" },
 				},
 				{
+					metricsComplete: true,
 					stages: [
 						{
 							stage: "shape",
@@ -952,6 +987,7 @@ describe(buildReliabilityReport.name, () => {
 					finalOutcome: { status: "JUDGED", verdict: "FAIL" },
 				},
 				{
+					metricsComplete: true,
 					stages: [
 						{
 							stage: "shape",
@@ -964,6 +1000,7 @@ describe(buildReliabilityReport.name, () => {
 					finalOutcome: { status: "NOT_REACHED" },
 				},
 				{
+					metricsComplete: true,
 					stages: [
 						{ stage: "shape", status: "EXECUTION_FAILED" },
 						{ stage: "build", status: "NOT_REACHED" },
@@ -971,6 +1008,7 @@ describe(buildReliabilityReport.name, () => {
 					finalOutcome: { status: "NOT_REACHED" },
 				},
 				{
+					metricsComplete: true,
 					stages: [
 						{ stage: "shape", status: "METRICS_MISSING" },
 						{ stage: "build", status: "NOT_REACHED" },
@@ -1024,6 +1062,32 @@ describe(buildReliabilityReport.name, () => {
 				standardError: Math.sqrt((0.2 * 0.8) / 5),
 				passK: 0.2 ** 5,
 			},
+		]);
+	});
+
+	it("retains grades without counting passing outcomes with missing metrics", () => {
+		const report = buildReliabilityReport(
+			["build"],
+			[
+				{
+					metricsComplete: false,
+					stages: [
+						{
+							stage: "build",
+							status: "JUDGED",
+							grade: "A",
+							verdict: "CONTINUE",
+						},
+					],
+					finalOutcome: { status: "JUDGED", verdict: "PASS" },
+				},
+			],
+		);
+
+		expect(report.map(({ successful }) => successful)).toEqual([0, 0]);
+		expect(report.map(({ gradeDistribution }) => gradeDistribution)).toEqual([
+			Object.fromEntries([["A", 1]]),
+			{ PASS: 1 },
 		]);
 	});
 });
@@ -1174,6 +1238,23 @@ describe(parseConfirmationRepRecord.name, () => {
 		const record = { ...completeRepRecord(), extra: true };
 
 		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow();
+	});
+
+	it("accepts retained evidence for a failed final Judge", () => {
+		const record = {
+			...completeRepRecord(),
+			outcome: "UNSUCCESSFUL" as const,
+			finalOutcome: {
+				status: "EXECUTION_FAILED" as const,
+				error: "Judge rejected both attempts",
+				evidence: {
+					resultSha: "a".repeat(40),
+					recordFile: "final.json",
+				},
+			},
+		};
+
+		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
 	});
 
 	it("rejects success when required provider metrics are missing", () => {
@@ -8232,6 +8313,7 @@ describe(runPipelineConfirmation.name, () => {
 		const allStarted = Promise.withResolvers<boolean>();
 		const release = Promise.withResolvers<boolean>();
 		const events = new Map<number, string[]>();
+		const retained = new Map<string, string>();
 		const primaryBefore = {
 			head: await runCommand(["git", "rev-parse", "HEAD"], source.directory),
 			branch: await runCommand(
@@ -8329,7 +8411,11 @@ describe(runPipelineConfirmation.name, () => {
 						Promise.resolve(harnessResult("PASS", "checks match")),
 					captureTreatmentChecks: () =>
 						Promise.resolve(harnessResult("PASS", "all green")),
-					captureStageCorpus,
+					captureStageCorpus: async (skill, instructions, roots) => {
+						await Bun.sleep(500);
+
+						return captureStageCorpus(skill, instructions, roots);
+					},
 				},
 				runStageJudge: (_model, _effort, _budget, input, rubricSource) =>
 					Promise.resolve({
@@ -8351,17 +8437,47 @@ describe(runPipelineConfirmation.name, () => {
 					repEvents.push("final");
 					events.set(ordinal, repEvents);
 
+					if (ordinal === 3) {
+						return Promise.reject(
+							new JudgeOutputValidationError({
+								message: "Final Judge rejected both attempts",
+								prompt: "final prompt",
+								attempts: [
+									{
+										payload: { invalid: true },
+										costUsd: metric.costUsd,
+										metrics: metric,
+										outcome: "REJECTED",
+										error: "invalid output",
+									},
+								],
+								costUsd: metric.costUsd,
+							}),
+						);
+					}
+
+					const acceptedAttempt = {
+						payload: { summary: "pass" },
+						costUsd: metric.costUsd,
+						metrics: metric,
+						outcome: "ACCEPTED" as const,
+					};
+
 					return Promise.resolve({
 						grade: completeGrade("PASS"),
 						prompt: "final prompt",
-						attempts: [
-							{
-								payload: { summary: "pass" },
-								costUsd: metric.costUsd,
-								metrics: metric,
-								outcome: "ACCEPTED",
-							},
-						],
+						attempts:
+							ordinal === 2
+								? [
+										{
+											payload: { invalid: true },
+											costUsd: 0,
+											outcome: "REJECTED" as const,
+											error: "metrics unavailable",
+										},
+										acceptedAttempt,
+									]
+								: [acceptedAttempt],
 						costUsd: metric.costUsd,
 					});
 				},
@@ -8376,7 +8492,11 @@ describe(runPipelineConfirmation.name, () => {
 				removeWorktree,
 				materializeCheckpoint,
 				recordCheckpoint,
-				recordRetentionRef: () => Promise.resolve(),
+				recordRetentionRef: (_targetDir, runName, targetSha) => {
+					retained.set(runName, targetSha);
+
+					return Promise.resolve();
+				},
 				captureBuildCandidate,
 				log: () => undefined,
 			},
@@ -8428,13 +8548,54 @@ describe(runPipelineConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
-		expect(
-			records.every(({ outcome: result }) => result === "SUCCESSFUL"),
-		).toBe(true);
+		expect(records.map(({ outcome: result }) => result)).toEqual([
+			"SUCCESSFUL",
+			"UNSUCCESSFUL",
+			"UNSUCCESSFUL",
+		]);
+		expect(records[1]?.metrics.status).toBe("MISSING");
 		expect(records.every(({ stages }) => stages.length === 2)).toBe(true);
 		expect(
-			records.every(({ finalOutcome }) => finalOutcome.status === "JUDGED"),
+			records.every(({ stages }) => {
+				const [discuss] = stages;
+
+				return discuss?.status === "JUDGED" && discuss.elapsedMs < 400;
+			}),
 		).toBe(true);
+		expect(records.map(({ finalOutcome }) => finalOutcome.status)).toEqual([
+			"JUDGED",
+			"JUDGED",
+			"EXECUTION_FAILED",
+		]);
+		expect(records[2]?.finalOutcome).toMatchObject({
+			status: "EXECUTION_FAILED",
+			evidence: { recordFile: "final.json" },
+		});
+		expect(
+			retained.get("pipeline-confirmation-1/pipeline-confirmation-1-rep-3"),
+		).toBe(
+			records[2]?.finalOutcome.status === "EXECUTION_FAILED"
+				? records[2].finalOutcome.evidence?.resultSha
+				: undefined,
+		);
+		const successfulFinal = records[0]?.finalOutcome;
+		if (successfulFinal?.status !== "JUDGED") {
+			throw new Error("Expected a judged final outcome");
+		}
+		const [firstRecordFile] = outcome.repRecordFiles;
+		if (firstRecordFile === undefined) {
+			throw new Error("Expected the first rep record");
+		}
+		const finalEvidence = z
+			.object({ grade: z.object({ verdict: z.literal("PASS") }) })
+			.parse(
+				JSON.parse(
+					await Bun.file(
+						join(dirname(firstRecordFile), successfulFinal.evidence.recordFile),
+					).text(),
+				),
+			);
+		expect(finalEvidence.grade.verdict).toBe("PASS");
 		expect([...events.values()]).toEqual([
 			["discuss", "build", "final"],
 			["discuss", "build", "final"],
@@ -8465,6 +8626,17 @@ describe(runPipelineConfirmation.name, () => {
 		expect(
 			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
 		).toHaveLength(1);
+		const [firstRecord] = records;
+		if (firstRecord === undefined) {
+			throw new Error("Expected the first confirmation record");
+		}
+		const temporaryRootExists = await stat(
+			dirname(firstRecord.worktreePath),
+		).then(
+			() => true,
+			() => false,
+		);
+		expect(temporaryRootExists).toBe(false);
 	});
 
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
@@ -8524,6 +8696,7 @@ describe(runPipelineConfirmation.name, () => {
 		const finished: number[] = [];
 		const removed: string[] = [];
 		const logs: string[] = [];
+		const retained: string[] = [];
 		const outcome = await runPipelineConfirmation(
 			{
 				stageSession: {
@@ -8539,11 +8712,26 @@ describe(runPipelineConfirmation.name, () => {
 						}
 
 						await failed.promise;
-						finished.push(ordinal);
+						if (workflowRequest.stage === "discuss") {
+							finished.push(ordinal);
+						} else {
+							await Bun.write(
+								join(workflowRequest.targetDir, "change.txt"),
+								`rep ${ordinal}\n`,
+							);
+							await runCommand(
+								["git", "add", "change.txt"],
+								workflowRequest.targetDir,
+							);
+							await runCommand(
+								["git", "commit", "-m", "feat: implement change"],
+								workflowRequest.targetDir,
+							);
+						}
 
 						return {
 							stage: workflowRequest.stage,
-							sessionId: `${ordinal}-discuss`,
+							sessionId: `${ordinal}-${workflowRequest.stage}`,
 							costUsd: metric.costUsd,
 							callMetrics: [metric],
 							exchanges: [],
@@ -8556,8 +8744,7 @@ describe(runPipelineConfirmation.name, () => {
 							}),
 						),
 					readTaskCard: () => Promise.resolve("task card"),
-					captureBuildCandidate: () =>
-						Promise.reject(new Error("build is not reached")),
+					captureBuildCandidate,
 					assertPlanningStageCompleted: (_target, baselineSha, stage) =>
 						Promise.resolve({
 							taskState: `${stage.name}-state`,
@@ -8569,9 +8756,8 @@ describe(runPipelineConfirmation.name, () => {
 							diff: "",
 							changedPaths: [],
 						}),
-					assertBuildCommitted: () =>
-						Promise.reject(new Error("build is not reached")),
-					changedPathsBetween: () => Promise.resolve([]),
+					assertBuildCommitted,
+					changedPathsBetween,
 					captureCheckIntegrity: () =>
 						Promise.resolve(harnessResult("PASS", "checks match")),
 					captureTreatmentChecks: () =>
@@ -8579,7 +8765,10 @@ describe(runPipelineConfirmation.name, () => {
 					captureStageCorpus,
 				},
 				runStageJudge: (_model, _effort, _budget, input, rubricSource) => {
-					if (input.transcript.sessionId.startsWith("3-")) {
+					if (
+						input.stage === "build" &&
+						input.transcript.sessionId.startsWith("3-")
+					) {
 						return Promise.reject(
 							new JudgeOutputValidationError({
 								message: "Judge rejected both attempts",
@@ -8617,9 +8806,13 @@ describe(runPipelineConfirmation.name, () => {
 							hardBlockers: [],
 							requirements: [],
 							dimensions: [],
-							summary: "stop",
-							grade: "F",
-							verdict: "STOP",
+							summary: input.transcript.sessionId.startsWith("3-")
+								? "continue"
+								: "stop",
+							grade: input.transcript.sessionId.startsWith("3-") ? "A" : "F",
+							verdict: input.transcript.sessionId.startsWith("3-")
+								? "CONTINUE"
+								: "STOP",
 						},
 					});
 				},
@@ -8639,7 +8832,11 @@ describe(runPipelineConfirmation.name, () => {
 				},
 				materializeCheckpoint,
 				recordCheckpoint,
-				recordRetentionRef: () => Promise.resolve(),
+				recordRetentionRef: (_targetDir, runName) => {
+					retained.push(runName);
+
+					return Promise.resolve();
+				},
 				captureBuildCandidate,
 				log: (message) => {
 					logs.push(message);
@@ -8692,7 +8889,7 @@ describe(runPipelineConfirmation.name, () => {
 		).toEqual([
 			["JUDGED", "NOT_REACHED"],
 			["EXECUTION_FAILED", "NOT_REACHED"],
-			["EXECUTION_FAILED", "NOT_REACHED"],
+			["JUDGED", "EXECUTION_FAILED"],
 		]);
 		expect(
 			records.every(({ outcome: result }) => result === "UNSUCCESSFUL"),
@@ -8705,6 +8902,20 @@ describe(runPipelineConfirmation.name, () => {
 		expect(preserved.isDirectory()).toBe(true);
 		expect(removed).not.toContain(preservedPath);
 		expect(removed).toContain(records[2]?.worktreePath ?? "missing");
+		expect(records[0]?.metrics.status).toBe("COMPLETE");
+		expect(retained).toContain("pipeline-failures/pipeline-failures-rep-1");
+		expect(retained).toContain("pipeline-failures/pipeline-failures-rep-3");
+		const report = z
+			.object({
+				reliability: z.array(
+					z.object({ name: z.string(), successful: z.number() }),
+				),
+			})
+			.parse(JSON.parse(await Bun.file(outcome.reportFile).text()));
+		expect(report.reliability[0]).toMatchObject({
+			name: "discuss",
+			successful: 1,
+		});
 		await removeWorktree(source.directory, preservedPath);
 	});
 });

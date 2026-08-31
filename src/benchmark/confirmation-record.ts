@@ -64,6 +64,7 @@ const finalOutcomeSchema = z.union([
 			status: z.enum(["EXECUTION_FAILED", "METRICS_MISSING"]),
 			error: z.string().min(1),
 			worktreePath: z.string().min(1).optional(),
+			evidence: resultEvidenceSchema.optional(),
 		})
 		.strict(),
 	z

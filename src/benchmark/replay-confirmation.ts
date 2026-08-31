@@ -679,6 +679,7 @@ export async function runReplayConfirmation(
 	const reliability = buildReliabilityReport(
 		[request.stage],
 		records.map((record) => ({
+			metricsComplete: record.metrics.status === "COMPLETE",
 			stages: record.stages,
 			finalOutcome: { status: "NOT_REACHED" },
 		})),

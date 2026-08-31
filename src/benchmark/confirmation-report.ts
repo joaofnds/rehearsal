@@ -19,6 +19,7 @@ export type ConfirmationFinalOutcome =
 	  };
 
 export interface ConfirmationReliabilityRep {
+	readonly metricsComplete: boolean;
 	readonly stages: readonly ConfirmationStageOutcome[];
 	readonly finalOutcome: ConfirmationFinalOutcome;
 }
@@ -86,6 +87,7 @@ function summarize(
 
 function stageObservation(
 	outcome: ConfirmationStageOutcome,
+	metricsComplete: boolean,
 ): ReliabilityObservation {
 	if (outcome.status === "NOT_REACHED") {
 		return { attempted: false, successful: false };
@@ -97,6 +99,7 @@ function stageObservation(
 	return {
 		attempted: true,
 		successful:
+			metricsComplete &&
 			outcome.verdict === "CONTINUE" &&
 			(outcome.grade === "A" || outcome.grade === "B"),
 		grade: outcome.grade,
@@ -105,6 +108,7 @@ function stageObservation(
 
 function finalObservation(
 	outcome: ConfirmationFinalOutcome,
+	metricsComplete: boolean,
 ): ReliabilityObservation {
 	if (outcome.status === "NOT_REACHED") {
 		return { attempted: false, successful: false };
@@ -115,7 +119,7 @@ function finalObservation(
 
 	return {
 		attempted: true,
-		successful: outcome.verdict === "PASS",
+		successful: metricsComplete && outcome.verdict === "PASS",
 		grade: outcome.verdict,
 	};
 }
@@ -135,7 +139,7 @@ export function buildReliabilityReport(
 					throw new Error(`Rep is missing the declared ${stage} stage`);
 				}
 
-				return stageObservation(outcome);
+				return stageObservation(outcome, rep.metricsComplete);
 			}),
 		),
 	);
@@ -144,7 +148,9 @@ export function buildReliabilityReport(
 		...stages,
 		summarize(
 			"final",
-			reps.map((rep) => finalObservation(rep.finalOutcome)),
+			reps.map((rep) =>
+				finalObservation(rep.finalOutcome, rep.metricsComplete),
+			),
 		),
 	];
 }
