@@ -457,16 +457,21 @@ export async function executeStageSession(
 			);
 			({ artifact, resultSha } = planning);
 
-			return {
+			const planningInput: StageJudgeInput = {
 				...baseInput,
 				artifact: planning.artifact,
 				diff: planning.changedPaths.length > 0 ? planning.diff : undefined,
 				changedPaths:
 					planning.changedPaths.length > 0 ? planning.changedPaths : undefined,
-				...(planning.commitSubjects === undefined
-					? {}
-					: { commitSubjects: planning.commitSubjects }),
 			};
+			if (planning.commitSubjects !== undefined) {
+				return {
+					...planningInput,
+					commitSubjects: planning.commitSubjects,
+				};
+			}
+
+			return planningInput;
 		}
 
 		const build = await dependencies.assertBuildCommitted(

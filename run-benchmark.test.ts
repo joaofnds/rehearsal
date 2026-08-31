@@ -1933,10 +1933,13 @@ describe(runStageJudge.name, () => {
 			validateStageJudgeEvidence(
 				{
 					...scorecard.grade,
-					requirements: scorecard.grade.requirements.map((requirement) => ({
-						...requirement,
-						evidence: [stageEvidence("commit-subjects", "commit-subjects")],
-					})),
+					requirements: [
+						{
+							id: "scope",
+							status: "PASS",
+							evidence: [stageEvidence("commit-subjects", "commit-subjects")],
+						},
+					],
 				},
 				input,
 			);
@@ -2369,9 +2372,14 @@ describe(runGradedStages.name, () => {
 				input: StageJudgeInput,
 			) => {
 				if (input.stage === "build") {
-					const pending: { input: StageJudgeInput } = JSON.parse(
+					const pendingRecord: unknown = JSON.parse(
 						await Bun.file(context.stageFile(input.stage)).text(),
 					);
+					const pending = z
+						.object({
+							input: z.object({ commitSubjects: z.array(z.string()) }),
+						})
+						.parse(pendingRecord);
 					awaitingSubjects = pending.input.commitSubjects;
 				}
 
@@ -2381,9 +2389,12 @@ describe(runGradedStages.name, () => {
 
 		await runGradedStages(recording, context);
 
-		const completed: StageScorecard = JSON.parse(
+		const completedRecord: unknown = JSON.parse(
 			await Bun.file(context.stageFile("build")).text(),
 		);
+		const completed = z
+			.object({ input: z.object({ commitSubjects: z.array(z.string()) }) })
+			.parse(completedRecord);
 		expect(awaitingSubjects).toEqual(["build commit"]);
 		expect(completed.input.commitSubjects).toEqual(["build commit"]);
 	});
@@ -2641,7 +2652,7 @@ describe(runGradedStages.name, () => {
 
 		await runGradedStages(invalid, await stageContext());
 
-		const buildInput = judged[1];
+		const [, buildInput] = judged;
 		expect(buildInput?.harnessFailure).toBe(
 			"Build phase rewrote or discarded task history",
 		);
@@ -2951,8 +2962,17 @@ describe(runGradedStages.name, () => {
 		expect(outcome).rejects.toThrow("minimum grade is B");
 		await outcome.catch(() => undefined);
 
-		const calibrated: StageScorecard & { calibration: CalibrationResult } =
-			JSON.parse(await Bun.file(context.stageFile("build")).text());
+		const calibratedRecord: unknown = JSON.parse(
+			await Bun.file(context.stageFile("build")).text(),
+		);
+		const calibrated = z
+			.object({
+				input: z.object({ commitSubjects: z.array(z.string()) }),
+				calibration: z.object({
+					humanReview: z.object({ verdict: z.literal("REJECT") }),
+				}),
+			})
+			.parse(calibratedRecord);
 		expect(calibrated.input.commitSubjects).toEqual(["build commit"]);
 		expect(calibrated.calibration.humanReview.verdict).toBe("REJECT");
 	});
