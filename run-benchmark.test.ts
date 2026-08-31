@@ -5293,12 +5293,49 @@ describe(loadAttempts.name, () => {
 		});
 	});
 
-	it("leaves the original run's attempt without lineage inputs the stage file never held", async () => {
+	it("loads and presents a legacy original stage file beside a replay without guarding it", async () => {
 		const directory = await attemptFixture();
 
 		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+		const output = await presentAttempts(LINEAGE, attempts, () =>
+			Promise.resolve("diff"),
+		);
 
 		expect(attempts[0]?.lineageInputs).toBeUndefined();
+		expect(output).toContain("original run run1");
+		expect(output).toContain("replay 2026-08-30T10:00:00.000Z");
+	});
+
+	it("refuses a loaded original and replay whose corpora differ, naming the changed file", async () => {
+		const directory = await attemptFixture();
+		const originalCorpus = [
+			{ path: "CLAUDE.md", sha256: "aa".repeat(32) },
+			{ path: "skills/discuss/SKILL.md", sha256: "bb".repeat(32) },
+		];
+		await Bun.write(
+			join(directory, "run1.discuss.json"),
+			`${JSON.stringify({
+				...originalScorecard(),
+				corpusFiles: originalCorpus,
+				model: "sonnet",
+			})}\n`,
+		);
+		await Bun.write(
+			join(directory, "replays", LINEAGE, "2026-08-30T10-00-00.000Z.json"),
+			`${JSON.stringify({
+				...replayRecord("2026-08-30T10:00:00.000Z", "new spec\n"),
+				corpusFiles: [
+					originalCorpus[0],
+					{ path: "skills/discuss/SKILL.md", sha256: "cc".repeat(32) },
+				],
+			})}\n`,
+		);
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(presentAttempts(LINEAGE, attempts)).rejects.toThrow(
+			/skills\/discuss\/SKILL\.md/u,
+		);
 	});
 });
 
