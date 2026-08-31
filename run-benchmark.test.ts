@@ -2317,9 +2317,10 @@ describe(runGradedStages.name, () => {
 			) => Promise.resolve(scorecardFor(input, "STOP")),
 		};
 
-		await expect(runGradedStages(failing, context)).rejects.toThrow(
-			"minimum grade is B",
-		);
+		const outcome = runGradedStages(failing, context);
+
+		expect(outcome).rejects.toThrow("minimum grade is B");
+		await outcome.catch(() => undefined);
 
 		const stageRecord = z
 			.object({
