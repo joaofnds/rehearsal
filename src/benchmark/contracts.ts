@@ -243,8 +243,7 @@ export interface CalibrationResult {
 	readonly revisedStageScorecards?: readonly StageScorecard[] | undefined;
 }
 
-export interface RunArtifact {
-	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | "FAILED";
+export interface RunArtifactEvidence {
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly sourceRoot: string;
@@ -275,13 +274,27 @@ export interface RunArtifact {
 	readonly checkpoints: readonly CheckpointRecord[];
 	readonly taskState: string;
 	readonly judgePrompt: string;
+	readonly judgeAttempts: readonly JudgeAttempt[];
+	readonly judgeCostUsd: number;
 	readonly diff: string;
+	readonly changedPaths: readonly string[];
 	readonly checkIntegrity: LocalCheckResult;
 	readonly localChecks: LocalCheckResult;
+}
+
+export interface GradedRunArtifact extends RunArtifactEvidence {
+	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | "FAILED";
 	readonly grade: JudgeGrade;
 	readonly reviewFile: string;
 	readonly calibration?: CalibrationResult | undefined;
 }
+
+export interface FailedJudgeRunArtifact extends RunArtifactEvidence {
+	readonly status: "FAILED";
+	readonly failure: string;
+}
+
+export type RunArtifact = GradedRunArtifact | FailedJudgeRunArtifact;
 
 export function citationMatchesPath(
 	citation: string,

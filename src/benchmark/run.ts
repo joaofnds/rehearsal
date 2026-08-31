@@ -35,15 +35,18 @@ import { CONTROL_DIR } from "./config";
 import type {
 	CalibrationResult,
 	ContextFile,
-	JudgeGrade,
+	FailedJudgeRunArtifact,
+	GradedRunArtifact,
 	LocalCheckResult,
 	RunArtifact,
+	RunArtifactEvidence,
 	StageJudgeInput,
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
+import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
@@ -119,7 +122,7 @@ export interface BuildEvidence {
 	readonly taskState: string;
 }
 
-export interface RunArtifactInputs {
+export interface RunArtifactBaseInputs {
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly source: {
@@ -143,15 +146,20 @@ export interface RunArtifactInputs {
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly checkpoints: readonly CheckpointRecord[];
 	readonly evidence: BuildEvidence;
-	readonly judge: { readonly prompt: string; readonly grade: JudgeGrade };
+}
+
+export interface RunArtifactInputs extends RunArtifactBaseInputs {
+	readonly judge: JudgeResult;
 	readonly reviewFile: string;
 }
 
-export function buildRunArtifact(inputs: RunArtifactInputs): RunArtifact {
-	const { source, config, evidence, judge, productOwner } = inputs;
+function runArtifactEvidence(
+	inputs: RunArtifactBaseInputs,
+	judge: Pick<JudgeResult, "prompt" | "attempts" | "costUsd">,
+): RunArtifactEvidence {
+	const { source, config, evidence, productOwner } = inputs;
 
 	return {
-		status: "AWAITING_HUMAN_REVIEW",
 		timestamp: inputs.timestamp,
 		controlSha: inputs.controlSha,
 		sourceRoot: source.root,
@@ -182,11 +190,32 @@ export function buildRunArtifact(inputs: RunArtifactInputs): RunArtifact {
 		checkpoints: inputs.checkpoints,
 		taskState: evidence.taskState,
 		judgePrompt: judge.prompt,
+		judgeAttempts: judge.attempts,
+		judgeCostUsd: judge.costUsd,
 		diff: evidence.diff,
+		changedPaths: evidence.changedPaths,
 		checkIntegrity: evidence.checkIntegrity,
 		localChecks: evidence.localChecks,
-		grade: judge.grade,
+	};
+}
+
+export function buildRunArtifact(inputs: RunArtifactInputs): GradedRunArtifact {
+	return {
+		...runArtifactEvidence(inputs, inputs.judge),
+		status: "AWAITING_HUMAN_REVIEW",
+		grade: inputs.judge.grade,
 		reviewFile: inputs.reviewFile,
+	};
+}
+
+export function buildFailedJudgeRunArtifact(
+	inputs: RunArtifactBaseInputs,
+	failure: Readonly<JudgeOutputValidationError>,
+): FailedJudgeRunArtifact {
+	return {
+		...runArtifactEvidence(inputs, failure),
+		status: "FAILED",
+		failure: failure.message,
 	};
 }
 
@@ -773,21 +802,7 @@ export async function runBenchmark(
 			changedPaths: fullCandidate.changedPaths,
 		};
 
-		console.log("\nJudge session");
-		const judge = await runJudge(
-			config.judgeModel,
-			config.judgeEffort,
-			config.sessionBudgetUsd,
-			rubric,
-			baselineContext,
-			evidence.diff,
-			evidence.changedPaths,
-			evidence.checkIntegrity,
-			evidence.localChecks,
-		);
-		const { grade } = judge;
-		console.log(JSON.stringify(grade, null, 2));
-		const artifact = buildRunArtifact({
+		const artifactInputs: RunArtifactBaseInputs = {
 			timestamp,
 			controlSha,
 			source,
@@ -807,6 +822,36 @@ export async function runBenchmark(
 			stageScorecards,
 			checkpoints: [initialCheckpoint, ...checkpoints],
 			evidence,
+		};
+
+		console.log("\nJudge session");
+		let judge: JudgeResult;
+		try {
+			judge = await runJudge(
+				config.judgeModel,
+				config.judgeEffort,
+				config.sessionBudgetUsd,
+				rubric,
+				baselineContext,
+				evidence.diff,
+				evidence.changedPaths,
+				evidence.checkIntegrity,
+				evidence.localChecks,
+			);
+		} catch (error) {
+			if (error instanceof JudgeOutputValidationError) {
+				await writeArtifact(
+					runFiles.artifact,
+					buildFailedJudgeRunArtifact(artifactInputs, error),
+				);
+			}
+
+			throw error;
+		}
+		const { grade } = judge;
+		console.log(JSON.stringify(grade, null, 2));
+		const artifact = buildRunArtifact({
+			...artifactInputs,
 			judge,
 			reviewFile: runFiles.review,
 		});

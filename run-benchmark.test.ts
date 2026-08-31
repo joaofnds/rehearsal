@@ -78,7 +78,7 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
-import type { JudgeAttempt } from "./src/benchmark/judge-attempt";
+import type { JudgeAttempt, JudgeInvoker } from "./src/benchmark/judge-attempt";
 import { JudgeOutputValidationError } from "./src/benchmark/judge-attempt";
 import type { RunManifest } from "./src/benchmark/manifest";
 import { loadRunManifest, writeRunManifest } from "./src/benchmark/manifest";
@@ -96,11 +96,13 @@ import {
 } from "./src/benchmark/replay";
 import type {
 	PendingStage,
+	RunArtifactBaseInputs,
 	RunArtifactInputs,
 	StageContext,
 	StageDependencies,
 } from "./src/benchmark/run";
 import {
+	buildFailedJudgeRunArtifact,
 	buildRunArtifact,
 	retainedCheckpointRecorder,
 	runBenchmark,
@@ -446,6 +448,21 @@ describe(runJudge.name, () => {
 		});
 	}
 
+	function gradeWith(invoke: JudgeInvoker): ReturnType<typeof runJudge> {
+		return runJudge(
+			"sonnet",
+			undefined,
+			5,
+			rubric,
+			[],
+			"candidate diff",
+			["src/audit/example.ts"],
+			passingChecks,
+			passingChecks,
+			invoke,
+		);
+	}
+
 	it("retries rejected output against the same evidence and records both attempts", async () => {
 		const validGrade = completeGrade("PASS");
 		const invalidGrade = withFirstRequirement(validGrade, {
@@ -461,26 +478,15 @@ describe(runJudge.name, () => {
 		const responses = [response(invalidGrade), response(validGrade)];
 		const prompts: string[] = [];
 
-		const result = await runJudge(
-			"sonnet",
-			undefined,
-			5,
-			rubric,
-			[],
-			"candidate diff",
-			["src/audit/example.ts"],
-			passingChecks,
-			passingChecks,
-			(prompt) => {
-				prompts.push(prompt);
-				const next = responses.shift();
-				if (next === undefined) {
-					throw new Error("no scripted response left");
-				}
+		const result = await gradeWith((prompt) => {
+			prompts.push(prompt);
+			const next = responses.shift();
+			if (next === undefined) {
+				throw new Error("no scripted response left");
+			}
 
-				return Promise.resolve(next);
-			},
-		);
+			return Promise.resolve(next);
+		});
 
 		expect(prompts).toHaveLength(2);
 		expect(prompts[1]?.startsWith(prompts[0] ?? "")).toBe(true);
@@ -501,6 +507,81 @@ describe(runJudge.name, () => {
 		]);
 		expect(result.costUsd).toBeCloseTo(0.2);
 		expect(result.grade.verdict).toBe("PASS");
+	});
+
+	it("stops after the second rejected output and retains both attempts", () => {
+		let calls = 0;
+		const invalidGrade = withFirstRequirement(completeGrade("PASS"), {
+			...requirement(RUBRIC_IDS[0], "PASS"),
+			evidence: [
+				{
+					source: "diff",
+					path: "src/missing.ts",
+					claim: "unavailable evidence",
+				},
+			],
+		});
+
+		expect(
+			gradeWith(() => {
+				calls += 1;
+
+				return Promise.resolve(response(invalidGrade));
+			}),
+		).rejects.toMatchObject({
+			name: "JudgeOutputValidationError",
+			costUsd: 0.2,
+			attempts: [
+				{
+					payload: invalidGrade,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Judge cited unavailable evidence for tests: diff:src/missing.ts",
+				},
+				{
+					payload: invalidGrade,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Judge cited unavailable evidence for tests: diff:src/missing.ts",
+				},
+			],
+		});
+		expect(calls).toBe(2);
+	});
+
+	it("does not retry an invocation failure", () => {
+		let calls = 0;
+		const failure = new Error("Judge command timed out");
+
+		expect(
+			gradeWith(() => {
+				calls += 1;
+
+				return Promise.reject(failure);
+			}),
+		).rejects.toBe(failure);
+		expect(calls).toBe(1);
+	});
+
+	it("does not retry a Claude error envelope", () => {
+		let calls = 0;
+
+		expect(
+			gradeWith(() => {
+				calls += 1;
+
+				return Promise.resolve(
+					JSON.stringify({
+						session_id: "judge-session",
+						is_error: true,
+						result: "Claude session failed",
+					}),
+				);
+			}),
+		).rejects.toThrow("Claude session failed");
+		expect(calls).toBe(1);
 	});
 });
 
@@ -1805,6 +1886,53 @@ describe(runStageJudge.name, () => {
 		});
 		expect(calls).toBe(2);
 	});
+
+	it("does not retry an invocation failure", () => {
+		let calls = 0;
+		const failure = new Error("Stage Judge command timed out");
+
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => {
+					calls += 1;
+
+					return Promise.reject(failure);
+				},
+			),
+		).rejects.toBe(failure);
+		expect(calls).toBe(1);
+	});
+
+	it("does not retry a Claude error envelope", () => {
+		let calls = 0;
+
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => {
+					calls += 1;
+
+					return Promise.resolve(
+						JSON.stringify({
+							session_id: "judge-session",
+							is_error: true,
+							result: "Claude session failed",
+						}),
+					);
+				},
+			),
+		).rejects.toThrow("Claude session failed");
+		expect(calls).toBe(1);
+	});
 });
 
 describe(writeStageJudgeFailure.name, () => {
@@ -2770,10 +2898,10 @@ describe(runBenchmark.name, () => {
 });
 
 describe(buildRunArtifact.name, () => {
-	function artifactInputs(
+	function artifactBaseInputs(
 		pipeline: PipelineDefinition,
 		pipelinePath: string,
-	): RunArtifactInputs {
+	): RunArtifactBaseInputs {
 		return {
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "control-sha",
@@ -2807,8 +2935,19 @@ describe(buildRunArtifact.name, () => {
 				checkIntegrity: harnessResult("PASS", "checks match"),
 				localChecks: harnessResult("PASS", "all green"),
 			},
+		};
+	}
+
+	function artifactInputs(
+		pipeline: PipelineDefinition,
+		pipelinePath: string,
+	): RunArtifactInputs {
+		return {
+			...artifactBaseInputs(pipeline, pipelinePath),
 			judge: {
 				prompt: "judge prompt",
+				attempts: [],
+				costUsd: 0,
 				grade: {
 					requirements: [],
 					verdict: "PASS" as const,
@@ -2818,6 +2957,51 @@ describe(buildRunArtifact.name, () => {
 			reviewFile: "/tmp/review.json",
 		};
 	}
+
+	it("builds a failed artifact from rejected final Judge attempts", async () => {
+		const pipeline = await loadDefaultPipeline();
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "first invalid payload" },
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error: "first validation error",
+			},
+			{
+				payload: { summary: "second invalid payload" },
+				costUsd: 0.2,
+				outcome: "REJECTED",
+				error: "second validation error",
+			},
+		];
+		const failure = new JudgeOutputValidationError(
+			"second validation error",
+			"original prompt",
+			attempts,
+			0.3,
+		);
+
+		const artifact = buildFailedJudgeRunArtifact(
+			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			failure,
+		);
+
+		expect(artifact).toMatchObject({
+			status: "FAILED",
+			workflow: [],
+			stageScorecards: [],
+			baselineContext: [],
+			diff: "the-diff",
+			changedPaths: ["src/example.ts"],
+			checkIntegrity: harnessResult("PASS", "checks match"),
+			localChecks: harnessResult("PASS", "all green"),
+			judgePrompt: "original prompt",
+			judgeAttempts: attempts,
+			judgeCostUsd: 0.3,
+			failure: "second validation error",
+		});
+		expect("grade" in artifact).toBe(false);
+	});
 
 	it("records the pipeline it ran and the path it came from", async () => {
 		const pipelinePath = join("pipelines", `custom-${randomUUID()}.json`);
