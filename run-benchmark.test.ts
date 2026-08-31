@@ -12,6 +12,8 @@ import {
 	runConfirmation,
 } from "./src/benchmark/confirmation";
 import { buildReliabilityReport } from "./src/benchmark/confirmation-report";
+import type { ConfirmationRepRecord } from "./src/benchmark/confirmation-record";
+import { parseConfirmationRepRecord } from "./src/benchmark/confirmation-record";
 import {
 	diffTexts,
 	loadAttempts,
@@ -747,6 +749,101 @@ describe(buildReliabilityReport.name, () => {
 				passK: 0.2 ** 5,
 			},
 		]);
+	});
+});
+
+describe(parseConfirmationRepRecord.name, () => {
+	function completeRepRecord(): ConfirmationRepRecord {
+		const resultSha = "a".repeat(40);
+		const metrics = {
+			costUsd: 0.5,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 3,
+		};
+
+		return {
+			schemaVersion: 1,
+			groupId: "group-1",
+			repId: "group-1-rep-1",
+			ordinal: 1,
+			mode: "pipeline",
+			worktreePath: "/worktrees/group-1-rep-1",
+			lineage: { kind: "SOURCE", sha: resultSha },
+			outcome: "SUCCESSFUL",
+			stages: [
+				{
+					stage: "shape",
+					status: "JUDGED",
+					grade: "A",
+					verdict: "CONTINUE",
+					elapsedMs: 120,
+					evidence: {
+						resultSha,
+						recordFile: "stages/shape.json",
+					},
+				},
+			],
+			finalOutcome: {
+				status: "JUDGED",
+				verdict: "PASS",
+				evidence: {
+					resultSha,
+					recordFile: "rep.json",
+				},
+			},
+			metrics: {
+				status: "COMPLETE",
+				calls: [
+					{ role: "worker", metrics },
+					{ role: "product-owner", metrics: { ...metrics, turns: 1 } },
+					{ role: "stage-judge", metrics: { ...metrics, turns: 2 } },
+					{ role: "final-judge", metrics: { ...metrics, turns: 2 } },
+				],
+			},
+			workerTrajectorySteps: 3,
+			elapsedMs: 500,
+		};
+	}
+
+	it("accepts complete role-attributed evidence", () => {
+		const record = completeRepRecord();
+
+		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
+	});
+
+	it("rejects unknown fields", () => {
+		const record = { ...completeRepRecord(), extra: true };
+
+		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow();
+	});
+
+	it("rejects success when required provider metrics are missing", () => {
+		const record = {
+			...completeRepRecord(),
+			metrics: {
+				status: "MISSING",
+				calls: [],
+				missing: ["worker.inputTokens"],
+			},
+		};
+
+		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow(
+			"Missing provider metrics cannot produce a successful rep",
+		);
+	});
+
+	it("rejects a trajectory count that differs from worker turns", () => {
+		const record = {
+			...completeRepRecord(),
+			workerTrajectorySteps: 4,
+		};
+
+		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow(
+			"Worker trajectory steps must equal provider-reported worker turns",
+		);
 	});
 });
 
