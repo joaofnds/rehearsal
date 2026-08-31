@@ -1,11 +1,11 @@
 ---
 id: ACT-20
 title: Say when a replayed chain is fresh
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-08-31 04:12'
-updated_date: '2026-08-31 12:28'
+updated_date: '2026-08-31 12:37'
 labels: []
 dependencies: []
 references:
@@ -26,8 +26,8 @@ Fix: log a single line naming the chain fresh when no checkpoint is stale.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Replaying a stage whose consumed checkpoint chain matches the current corpus, model, and effort prints `Checkpoint chain is fresh` exactly once.
-- [ ] #2 When an upstream corpus change makes checkpoints stale, replay prints one `Stale checkpoint <stage>: <causes>` line per stale checkpoint and does not print the fresh-chain line.
+- [x] #1 Replaying a stage whose consumed checkpoint chain matches the current corpus, model, and effort prints `Checkpoint chain is fresh` exactly once.
+- [x] #2 When an upstream corpus change makes checkpoints stale, replay prints one `Stale checkpoint <stage>: <causes>` line per stale checkpoint and does not print the fresh-chain line.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -54,3 +54,40 @@ First test to write: extend the existing “labels the replay fresh when the cor
 
 Glossary: added “Fresh checkpoint chain” as a replay's consumed chain containing no stale checkpoint.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Build handoff (2026-08-31)
+
+Changed:
+- Commit `113aca1` makes `runReplay` log `Checkpoint chain is fresh` exactly once when its consumed chain has no stale checkpoint. Existing per-stale-checkpoint lines and replay record fields are unchanged.
+- Focused tests separate persisted fresh/stale state from CLI output and pin both output branches.
+
+New capability and wiring:
+- Every existing `runReplay` caller receives the fresh status through the existing `ReplayDependencies.log` boundary. Nothing remains unwired, and no caller remains on an old path.
+
+Observed:
+- Red: `prints when the checkpoint chain is fresh` failed with received `[]` against expected `["Checkpoint chain is fresh"]`. After the branch was added, it passed.
+- Stale regression: the existing stale output first passed as characterization; making the fresh log unconditional caused the focused test to fail with both fresh and stale lines, proving it guards the branch. Restoring the condition made both checkpoint-chain tests pass.
+- Direct focused executions exposed the captured logs: fresh emitted `["Checkpoint chain is fresh", "\nBuild session", "\nbuild stage Judge"]`; stale emitted `["Stale checkpoint discuss: skills/discuss/SKILL.md changed", "\nBuild session", "\nbuild stage Judge"]`.
+- Final verification: `bun test` passed 244 tests with 0 failures; `bun run typecheck`, `bun run lint`, and `bun run fmt:check` passed.
+
+Not verified:
+- The real `replay-stage.ts` CLI was not run because this checkout has no recorded `.benchmark-runs` input; creating and replaying one would invoke paid model sessions outside this fix. `runReplay`, the behavior-owning boundary, was executed directly with deterministic dependencies.
+
+Stopped work:
+- The first format check found `run-benchmark.test.ts`; formatting the two task files resolved it. No product defect was found.
+
+Refactor pass:
+- Nothing to refactor. The branch belongs at the existing replay-output boundary; extraction would add indirection without removing duplicated policy.
+
+Review:
+- Independent review is due because the diff changes user-facing CLI output. Applicable axes: style, architecture, security, spec conformance, testing, and refactoring.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Built in `113aca1`: replay now prints `Checkpoint chain is fresh` for a fully fresh consumed chain and retains one cause-bearing line per stale checkpoint. Direct log capture observed both branches; 244 tests, typecheck, lint, and format check passed. Independent review remains due for the user-facing CLI change.
+<!-- SECTION:FINAL_SUMMARY:END -->
