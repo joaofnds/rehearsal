@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-31 16:02'
+updated_date: '2026-08-31 16:57'
 labels: []
 dependencies:
   - ACT-3
@@ -70,4 +70,6 @@ First test to write: drive a pure/injected confirmation coordinator with three f
 Shaped from docs/vision.md, docs/design.md, docs/research.md, the completed ACT-3 replay primitive, current CLI/artifact contracts, and ACT-3 review findings. ACT-10 is a prerequisite because runBenchmark currently owns process-wide signal state and mutates the primary checkout; ACT-14 is a prerequisite because adding group and rep paths to the existing three duplicated layout implementations would deepen a known silent data-coupling defect.
 
 Build checkpoint 2026-08-31: confirmation CLI parsing and invalid-state guards; deterministic cost projection and approval dispatch; concurrent all-settled coordinator with stable rep identities; optional provider cost/token/turn retention across worker, Product Owner, and Judge calls; strict group and rep schemas; reliability and resource distributions; collision-free group layout; and frozen skill-corpus snapshot/install are committed through 6199229. Full suite: 281 pass, 0 fail; typecheck, lint, and format check pass. Production entry points are not yet switched: --confirm still reaches the legacy single-run path and must not be used until stage and pipeline confirmation executors are wired. Next test: run three replay reps through the coordinator with frozen checkpoint, corpus, and rubric inputs, proving overlapping detached worktrees, strict records, primary-checkout invariants, and cleanup.
+
+Build checkpoint 2026-08-31, stage replay confirmation slice: replay-stage.ts now keeps debug replay at one rep with the exact "single-rep evidence, not a score" label and routes --confirm through deterministic projected-cost approval before the confirmation executor can snapshot inputs, create worktrees, or start sessions. The stage executor freezes the consumed checkpoint, all relevant stage corpus snapshots, rubric, instructions, task, product brief, pipeline, model/effort, Judge settings, checkpoint lineage, and session budget once; runs reps through the existing concurrent all-settled coordinator with stable IDs and collision-free artifact paths; writes strict group and rep records plus report evidence; retains result refs; removes completed and Judge STOP/validation-rejection worktrees; and preserves and prints the worktree for a pre-evidence worker failure while peers finish. Real-Git integration tests observed three detached worktrees overlap, consume byte-identical frozen inputs, emit distinct strict records, clean up, and leave primary HEAD, branch, status, and file bytes unchanged. A second integration test observed STOP and exhausted Judge-validation cleanup, one preserved worker-failure path, and both peers finishing. Full suite: 285 pass, 0 fail; typecheck, lint, and format check pass. No Claude or paid execution ran. Full-pipeline confirmation in run-benchmark.ts remains deliberately unwired, so the broader ACT-5 acceptance criteria remain unchecked.
 <!-- SECTION:NOTES:END -->
