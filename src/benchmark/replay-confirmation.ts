@@ -24,6 +24,7 @@ import {
 	confirmationGroupRecordSchema,
 	confirmationRepRecordSchema,
 } from "./confirmation-record";
+import { JudgeOutputValidationError } from "./judge-attempt";
 import { loadRunManifest } from "./manifest";
 import {
 	detachedStageDependencies,
@@ -32,9 +33,11 @@ import {
 	resolveReplay,
 } from "./replay";
 import type { ReplayDependencies, ReplayRequest } from "./replay";
+import type { StageSessionResult } from "./run";
 import { executeStageSession } from "./run";
 import { confirmationGroupPaths } from "./run-layout";
 import { recordRetentionRef } from "./target";
+import type { ProductOwner } from "./workflow";
 import { createProductOwner } from "./workflow";
 
 interface FrozenFile {
@@ -233,20 +236,22 @@ async function freezeReplayInputs(
 	};
 }
 
-function completeRepRecord(
-	request: ReplayConfirmationRequest,
-	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
-	repId: string,
-	ordinal: number,
-	worktreePath: string,
-	resultSha: string,
-	scorecardFile: string,
-	scorecard: StageScorecard,
+interface CallWithOptionalMetrics {
+	readonly metrics?: ClaudeCallMetrics | undefined;
+}
+
+interface JudgeRejection {
+	readonly message: string;
+	readonly prompt: string;
+	readonly attempts: readonly CallWithOptionalMetrics[];
+	readonly costUsd: number;
+}
+
+function collectMetrics(
 	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
 	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
-	stageElapsedMs: number,
-	repElapsedMs: number,
-): ConfirmationRepRecord {
+	judgeAttempts: readonly CallWithOptionalMetrics[],
+): Pick<ConfirmationRepRecord, "metrics" | "workerTrajectorySteps"> {
 	const calls: {
 		role: "worker" | "product-owner" | "stage-judge";
 		metrics: ClaudeCallMetrics;
@@ -266,10 +271,10 @@ function completeRepRecord(
 			calls.push({ role: "product-owner", metrics });
 		}
 	}
-	if (scorecard.attempts.length === 0) {
+	if (judgeAttempts.length === 0) {
 		missing.push("stage-judge call metrics");
 	}
-	for (const attempt of scorecard.attempts) {
+	for (const attempt of judgeAttempts) {
 		const { metrics } = attempt;
 		if (metrics === undefined) {
 			missing.push("stage-judge call metrics");
@@ -282,8 +287,37 @@ function completeRepRecord(
 	const workerTrajectorySteps = calls
 		.filter(({ role }) => role === "worker")
 		.reduce((total, call) => total + call.metrics.turns, 0);
+
+	return {
+		metrics:
+			missing.length === 0
+				? { status: "COMPLETE", calls }
+				: { status: "MISSING", calls, missing },
+		workerTrajectorySteps,
+	};
+}
+
+function completeRepRecord(
+	request: ReplayConfirmationRequest,
+	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
+	repId: string,
+	ordinal: number,
+	worktreePath: string,
+	resultSha: string,
+	scorecardFile: string,
+	scorecard: StageScorecard,
+	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	stageElapsedMs: number,
+	repElapsedMs: number,
+): ConfirmationRepRecord {
+	const evidence = collectMetrics(
+		workerMetrics,
+		productOwnerMetrics,
+		scorecard.attempts,
+	);
 	const successful =
-		missing.length === 0 &&
+		evidence.metrics.status === "COMPLETE" &&
 		scorecard.grade.verdict === "CONTINUE" &&
 		(scorecard.grade.grade === "A" || scorecard.grade.grade === "B");
 
@@ -311,11 +345,57 @@ function completeRepRecord(
 			},
 		],
 		finalOutcome: { status: "NOT_APPLICABLE" },
-		metrics:
-			missing.length === 0
-				? { status: "COMPLETE", calls }
-				: { status: "MISSING", calls, missing },
-		workerTrajectorySteps,
+		metrics: evidence.metrics,
+		workerTrajectorySteps: evidence.workerTrajectorySteps,
+		elapsedMs: repElapsedMs,
+	});
+}
+
+function rejectedJudgeRepRecord(
+	request: ReplayConfirmationRequest,
+	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
+	repId: string,
+	ordinal: number,
+	worktreePath: string,
+	resultSha: string,
+	recordFile: string,
+	error: JudgeRejection,
+	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	stageElapsedMs: number,
+	repElapsedMs: number,
+): ConfirmationRepRecord {
+	const evidence = collectMetrics(
+		workerMetrics,
+		productOwnerMetrics,
+		error.attempts,
+	);
+
+	return confirmationRepRecordSchema.parse({
+		schemaVersion: 1,
+		groupId: request.groupId,
+		repId,
+		ordinal,
+		mode: "stage",
+		worktreePath,
+		lineage: {
+			kind: "CHECKPOINT",
+			lineage: consumed.lineage,
+			targetSha: consumed.targetSha,
+		},
+		outcome: "UNSUCCESSFUL",
+		stages: [
+			{
+				stage: request.stage,
+				status: "EXECUTION_FAILED",
+				elapsedMs: stageElapsedMs,
+				error: error.message,
+				evidence: { resultSha, recordFile },
+			},
+		],
+		finalOutcome: { status: "NOT_APPLICABLE" },
+		metrics: evidence.metrics,
+		workerTrajectorySteps: evidence.workerTrajectorySteps,
 		elapsedMs: repElapsedMs,
 	});
 }
@@ -394,6 +474,9 @@ export async function runReplayConfirmation(
 			await mkdir(repPaths.stagesDirectory, { recursive: true });
 			const repStart = now();
 			let worktreeCreated = false;
+			let productOwner: ProductOwner | undefined;
+			let session: StageSessionResult | undefined;
+			let stageStart = repStart;
 			try {
 				await dependencies.addWorktree(
 					frozen.manifest.sourceRoot,
@@ -426,7 +509,7 @@ export async function runReplayConfirmation(
 				const baselineContext = await dependencies.captureBaselineContext(
 					plan.worktreePath,
 				);
-				const productOwner = createProductOwner({
+				productOwner = createProductOwner({
 					directory: join(repPaths.directory, "product-owner"),
 					model: request.model,
 					effort: request.effort,
@@ -434,8 +517,8 @@ export async function runReplayConfirmation(
 					task: frozen.manifest.task,
 					productBrief: frozen.manifest.productBrief,
 				});
-				const stageStart = now();
-				const session = await executeStageSession(
+				stageStart = now();
+				session = await executeStageSession(
 					detachedStageDependencies(dependencies.stageSession),
 					{
 						targetDir: plan.worktreePath,
@@ -503,6 +586,58 @@ export async function runReplayConfirmation(
 			} catch (error) {
 				const failure =
 					error instanceof Error ? error : new Error(String(error));
+				if (
+					failure instanceof JudgeOutputValidationError &&
+					worktreeCreated &&
+					session !== undefined &&
+					productOwner !== undefined
+				) {
+					const scorecardFile = repPaths.stageFile(request.stage);
+					await Bun.write(
+						scorecardFile,
+						`${JSON.stringify(
+							{
+								stage: request.stage,
+								status: "REJECTED",
+								prompt: failure.prompt,
+								attempts: failure.attempts,
+								costUsd: failure.costUsd,
+								error: failure.message,
+							},
+							null,
+							2,
+						)}\n`,
+					);
+					await recordRetentionRef(
+						frozen.manifest.sourceRoot,
+						`${request.groupId}/${plan.repId}`,
+						session.resultSha,
+					);
+					const record = rejectedJudgeRepRecord(
+						request,
+						frozen.plan.consumed,
+						plan.repId,
+						plan.ordinal,
+						plan.worktreePath,
+						session.resultSha,
+						relative(repPaths.directory, scorecardFile),
+						failure,
+						session.transcript.callMetrics,
+						productOwner.snapshot().callMetrics,
+						now() - stageStart,
+						now() - repStart,
+					);
+					await Bun.write(
+						repPaths.recordFile,
+						`${JSON.stringify(record, null, 2)}\n`,
+					);
+					await dependencies.removeWorktree(
+						frozen.manifest.sourceRoot,
+						plan.worktreePath,
+					);
+
+					return repPaths.recordFile;
+				}
 				if (worktreeCreated) {
 					dependencies.log(
 						`Replay rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,

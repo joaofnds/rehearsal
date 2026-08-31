@@ -7720,6 +7720,234 @@ describe(runReplay.name, () => {
 			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
 		).toHaveLength(1);
 	});
+
+	it("cleans completed Judge outcomes while preserving a pre-evidence failure", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, ".gitignore"),
+			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
+		);
+		await commitAll(source.directory, "chore: ignore workflow state");
+		const taskSha = await installInstructions(
+			source.directory,
+			"Original instructions\n",
+		);
+		await mkdir(join(source.directory, "backlog"), { recursive: true });
+		await Bun.write(
+			join(source.directory, "backlog", "config.yml"),
+			"statuses: []\n",
+		);
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-failures-"));
+		temporaryDirectories.push(parent);
+		const paths = benchmarkRunPaths(parent, "run");
+		await recordCheckpoint(
+			source.directory,
+			paths.checkpointDirectory("initial"),
+			initialCheckpointInputs(
+				{
+					taskSha,
+					task: "Task text",
+					productBrief: "Brief text",
+					workflowFiles: await hashWorkflowState(source.directory),
+				},
+				"sonnet",
+			),
+		);
+		await writeRunManifest(paths.manifestFile, {
+			timestamp: "2026-08-31T00:00:00.000Z",
+			controlSha: "run-control-sha",
+			sourceRoot: source.directory,
+			sourceSha: taskSha,
+			taskId: "TASK-1",
+			taskSha,
+			task: "Task text",
+			productBrief: "Brief text",
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+			pipeline: {
+				statuses: ["To Do", "Done"],
+				stages: [
+					{
+						name: "discuss",
+						kind: "planning",
+						skill: "discuss",
+						artifact: "spec",
+						rubric: "rubrics/discuss.json",
+						requiresAcceptanceCriteria: false,
+					},
+				],
+			},
+		});
+		const corpusRoot = join(parent, "corpus");
+		await mkdir(join(corpusRoot, "discuss"), { recursive: true });
+		await mkdir(join(corpusRoot, "doctrine"), { recursive: true });
+		await Bun.write(
+			join(corpusRoot, "discuss", "SKILL.md"),
+			"frozen discuss\n",
+		);
+		await Bun.write(
+			join(corpusRoot, "doctrine", "SKILL.md"),
+			"frozen doctrine\n",
+		);
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const failed = Promise.withResolvers<boolean>();
+		const finished: number[] = [];
+		const removed: string[] = [];
+		const fake = fakeReplayDependencies();
+		const execution = runReplayConfirmation(
+			{
+				...fake.dependencies,
+				stageSession: {
+					...fake.dependencies.stageSession,
+					runWorkflowStage: async (workflowRequest) => {
+						const match = /-rep-(?<ordinal>\d+)$/u.exec(
+							workflowRequest.targetDir,
+						);
+						const ordinal = Number(match?.groups?.["ordinal"]);
+						if (ordinal === 2) {
+							failed.resolve(true);
+
+							throw new Error("worker failed before evidence");
+						}
+
+						await failed.promise;
+						finished.push(ordinal);
+
+						return {
+							stage: workflowRequest.stage,
+							sessionId: workflowRequest.targetDir,
+							costUsd: metric.costUsd,
+							callMetrics: [metric],
+							exchanges: [],
+						};
+					},
+					assertPlanningStageCompleted: (_targetDir, baselineSha, stage) =>
+						Promise.resolve({
+							taskState: `${stage.name}-state`,
+							artifact: {
+								path: "backlog/docs/DOC-1 - spec.md",
+								content: "confirmed spec\n",
+							},
+							resultSha: baselineSha,
+							diff: "",
+							changedPaths: [],
+						}),
+					captureStageCorpus,
+				},
+				runStageJudge: (_model, _effort, _budget, input) => {
+					if (input.transcript.sessionId.endsWith("-rep-3")) {
+						throw new JudgeOutputValidationError({
+							message: "Judge rejected both attempts",
+							prompt: "prompt",
+							attempts: [
+								{
+									payload: { invalid: true },
+									costUsd: metric.costUsd,
+									metrics: metric,
+									outcome: "REJECTED",
+									error: "invalid output",
+								},
+							],
+							costUsd: metric.costUsd,
+						});
+					}
+
+					return Promise.resolve({
+						...scorecardFor(input, "STOP"),
+						attempts: [
+							{
+								payload: { summary: "stop" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+					});
+				},
+				loadStageRubric: () =>
+					Promise.resolve({
+						rubricPath: "rubrics/discuss.json",
+						content: "{}\n",
+						rubric: {
+							hardBlockers: [],
+							requirements: [],
+							dimensions: [],
+						},
+					}),
+				addWorktree,
+				removeWorktree: async (targetDir, worktreeDir) => {
+					removed.push(worktreeDir);
+					await removeWorktree(targetDir, worktreeDir);
+				},
+				materializeCheckpoint,
+				captureBaselineContext,
+				captureFileHashes,
+				installInstructions,
+			},
+			{
+				paths,
+				stage: "discuss",
+				instructions: "Frozen instructions\n",
+				controlSha: "control-sha",
+				model: "sonnet",
+				judgeModel: "opus",
+				sessionBudgetUsd: 5,
+				groupId: "confirmation-failures",
+				reps: 3,
+				corpusRoots: [corpusRoot],
+				projectedCost: {
+					reps: 3,
+					perRepMaximumUsd: 20,
+					totalMaximumUsd: 60,
+				},
+				approvalMethod: "yes",
+			},
+		);
+
+		const outcome = await execution;
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		expect(finished.toSorted((left, right) => left - right)).toEqual([1, 3]);
+		expect(records.map(({ stages }) => stages[0]?.status)).toEqual([
+			"JUDGED",
+			"EXECUTION_FAILED",
+			"EXECUTION_FAILED",
+		]);
+		expect(
+			removed.toSorted((left, right) => left.localeCompare(right)),
+		).toEqual(
+			records
+				.filter(({ ordinal }) => ordinal !== 2)
+				.map(({ worktreePath }) => worktreePath)
+				.toSorted((left, right) => left.localeCompare(right)),
+		);
+		const preservedPath = records[1]?.worktreePath ?? "missing";
+		expect(fake.log).toContain(
+			`Replay rep confirmation-failures-rep-2 failed; evidence preserved at ${preservedPath}`,
+		);
+		const preserved = await stat(preservedPath);
+		expect(preserved.isDirectory()).toBe(true);
+		const worktrees = await runCommand(
+			["git", "worktree", "list", "--porcelain"],
+			source.directory,
+		);
+		expect(
+			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
+		).toHaveLength(2);
+		await removeWorktree(source.directory, preservedPath);
+	});
 });
 
 describe(loadAttempts.name, () => {

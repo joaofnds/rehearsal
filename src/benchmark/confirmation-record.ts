@@ -33,6 +33,7 @@ const failedStageSchema = z
 		elapsedMs: elapsedSchema.optional(),
 		error: z.string().min(1),
 		worktreePath: z.string().min(1).optional(),
+		evidence: resultEvidenceSchema.optional(),
 	})
 	.strict();
 
