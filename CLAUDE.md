@@ -20,7 +20,7 @@
   with `bun test`.
 - **Commits**: Conventional Commits. A lowercase type, an optional scope, then a
   lowercase imperative subject: `fix: latch the signal path so it cannot kill its
-  own restore`. The body says why. Commits between 2026-08-30 and 2026-08-31 omit
+own restore`. The body says why. Commits between 2026-08-30 and 2026-08-31 omit
   the type prefix; that was a regression, not the convention, so do not read the
   recent log as evidence.
 - **Stage hygiene**: Commit every workflow artifact a stage creates (glossary,
