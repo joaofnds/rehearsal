@@ -1,3 +1,5 @@
+import type { ConfirmationConfig } from "./config";
+
 export type ConfirmationCostRequest =
 	| {
 			readonly mode: "stage";
@@ -56,6 +58,35 @@ export async function requireConfirmationApproval(
 	if (answer !== "y" && answer !== "yes") {
 		throw new Error("Confirmation declined");
 	}
+}
+
+export interface RequestedExecution<Result> {
+	readonly confirmation: ConfirmationConfig | undefined;
+	readonly projectCost: () => ConfirmationCostProjection;
+	readonly approval: ConfirmationApprovalIO;
+	readonly runDebug: () => Promise<Result>;
+	readonly runConfirmed: (
+		projection: ConfirmationCostProjection,
+	) => Promise<Result>;
+}
+
+export async function runRequestedExecution<Result>(
+	execution: RequestedExecution<Result>,
+): Promise<Result> {
+	if (execution.confirmation === undefined) {
+		execution.approval.output("single-rep evidence, not a score");
+
+		return execution.runDebug();
+	}
+
+	const projection = execution.projectCost();
+	await requireConfirmationApproval(
+		projection,
+		execution.confirmation.approved,
+		execution.approval,
+	);
+
+	return execution.runConfirmed(projection);
 }
 
 export interface ConfirmationPlan<Inputs> {

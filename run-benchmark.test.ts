@@ -10,6 +10,7 @@ import {
 	projectConfirmationCost,
 	requireConfirmationApproval,
 	runConfirmation,
+	runRequestedExecution,
 } from "./src/benchmark/confirmation";
 import {
 	buildReliabilityReport,
@@ -524,6 +525,69 @@ describe(requireConfirmationApproval.name, () => {
 		);
 
 		expect(prompts).toBe(0);
+	});
+});
+
+describe(runRequestedExecution.name, () => {
+	it("labels and runs one debug rep when confirmation is absent", async () => {
+		const output: string[] = [];
+		let confirmations = 0;
+
+		const result = await runRequestedExecution({
+			confirmation: undefined,
+			projectCost: () => {
+				throw new Error("debug runs have no confirmation projection");
+			},
+			approval: {
+				output: (message) => {
+					output.push(message);
+				},
+				prompt: () => Promise.resolve("no"),
+			},
+			runDebug: () => Promise.resolve("debug result"),
+			runConfirmed: () => {
+				confirmations += 1;
+				return Promise.resolve("confirmation result");
+			},
+		});
+
+		expect(result).toBe("debug result");
+		expect(output).toEqual(["single-rep evidence, not a score"]);
+		expect(confirmations).toBe(0);
+	});
+
+	it("starts confirmation only after projected cost approval", async () => {
+		const events: string[] = [];
+
+		const result = await runRequestedExecution({
+			confirmation: { reps: 3, approved: false },
+			projectCost: () => ({
+				reps: 3,
+				perRepMaximumUsd: 20,
+				totalMaximumUsd: 60,
+			}),
+			approval: {
+				output: (message) => {
+					events.push(`output:${message}`);
+				},
+				prompt: () => {
+					events.push("prompt");
+					return Promise.resolve("yes");
+				},
+			},
+			runDebug: () => Promise.resolve("debug result"),
+			runConfirmed: () => {
+				events.push("start");
+				return Promise.resolve("confirmation result");
+			},
+		});
+
+		expect(result).toBe("confirmation result");
+		expect(events).toEqual([
+			"output:Projected maximum cost: $60.00 (3 reps x $20.00)",
+			"prompt",
+			"start",
+		]);
 	});
 });
 
