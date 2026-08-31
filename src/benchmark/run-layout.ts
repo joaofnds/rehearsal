@@ -20,6 +20,7 @@ export interface BenchmarkRunPaths {
 export interface ConfirmationRepPaths {
 	readonly directory: string;
 	readonly recordFile: string;
+	readonly finalFile: string;
 	readonly stagesDirectory: string;
 	readonly checkpointsDirectory: string;
 	readonly stageFile: (stage: string) => string;
@@ -102,6 +103,7 @@ export function confirmationGroupPaths(
 			return {
 				directory: repDirectory,
 				recordFile: join(repDirectory, "rep.json"),
+				finalFile: join(repDirectory, "final.json"),
 				stagesDirectory,
 				checkpointsDirectory,
 				stageFile: (stage) => join(stagesDirectory, `${stage}.json`),

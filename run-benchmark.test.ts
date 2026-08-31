@@ -122,6 +122,7 @@ import {
 import { executeReplayStage } from "./src/benchmark/replay-command";
 import type { ReplayConfirmationRequest } from "./src/benchmark/replay-confirmation";
 import { runReplayConfirmation } from "./src/benchmark/replay-confirmation";
+import { runPipelineConfirmation } from "./src/benchmark/pipeline-confirmation";
 import type {
 	RunArtifactBaseInputs,
 	RunArtifactInputs,
@@ -167,6 +168,7 @@ import {
 	captureBuildCandidate,
 	capturePlanningAdvance,
 	captureWorkflowBackup,
+	changedPathsBetween,
 	claimTarget,
 	removeWorktree,
 	restoreTarget,
@@ -8068,6 +8070,325 @@ describe(runReplay.name, () => {
 			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
 		).toHaveLength(2);
 		await removeWorktree(source.directory, preservedPath);
+	});
+});
+
+describe(runPipelineConfirmation.name, () => {
+	it("runs three frozen full-pipeline reps concurrently without changing the primary checkout", async () => {
+		const source = await createRepository();
+		await Bun.write(
+			join(source.directory, ".gitignore"),
+			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
+		);
+		await commitAll(source.directory, "chore: ignore workflow state");
+		const sourceHead = await runCommand(
+			["git", "rev-parse", "HEAD"],
+			source.directory,
+		);
+		const sourceSha = sourceHead.trim();
+		const parent = await mkdtemp(
+			join(tmpdir(), "rehearsal-pipeline-confirmation-"),
+		);
+		temporaryDirectories.push(parent);
+		const corpusRoot = join(parent, "corpus");
+		for (const skill of ["discuss", "build", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill} corpus\n`);
+		}
+		const pipeline: PipelineDefinition = {
+			statuses: ["To Do", "Done"],
+			stages: [
+				{
+					name: "discuss",
+					kind: "planning",
+					skill: "discuss",
+					artifact: "spec",
+					rubric: "rubrics/discuss.json",
+					requiresAcceptanceCriteria: false,
+				},
+				{
+					name: "build",
+					kind: "delivery",
+					skill: "build",
+					rubric: "rubrics/build.json",
+				},
+			],
+		};
+		const stageRubric = {
+			hardBlockers: [],
+			requirements: [{ id: "scope", description: "Scope is explicit" }],
+			dimensions: [
+				{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
+			],
+		};
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const passingStageScorecard = (input: StageJudgeInput): StageScorecard => ({
+			stage: input.stage,
+			rubricPath: "rubrics/stage.json",
+			rubric: stageRubric,
+			input,
+			prompt: "prompt",
+			attempts: [
+				{
+					payload: { summary: "accepted" },
+					costUsd: metric.costUsd,
+					metrics: metric,
+					outcome: "ACCEPTED",
+				},
+			],
+			costUsd: metric.costUsd,
+			grade: {
+				hardBlockers: [],
+				requirements: [],
+				dimensions: [],
+				summary: "graded",
+				grade: "A",
+				verdict: "CONTINUE",
+			},
+		});
+		const allStarted = Promise.withResolvers<boolean>();
+		const release = Promise.withResolvers<boolean>();
+		const events = new Map<number, string[]>();
+		const primaryBefore = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], source.directory),
+			branch: await runCommand(
+				["git", "branch", "--show-current"],
+				source.directory,
+			),
+			status: await runCommand(
+				["git", "status", "--porcelain"],
+				source.directory,
+			),
+			base: await Bun.file(join(source.directory, "base.txt")).bytes(),
+		};
+
+		const execution = runPipelineConfirmation(
+			{
+				stageSession: {
+					runWorkflowStage: async (workflowRequest) => {
+						const match = /-rep-(?<ordinal>\d+)$/u.exec(
+							workflowRequest.targetDir,
+						);
+						const ordinal = Number(match?.groups?.["ordinal"]);
+						const repEvents = events.get(ordinal) ?? [];
+						repEvents.push(workflowRequest.stage);
+						events.set(ordinal, repEvents);
+						if (workflowRequest.stage === "discuss") {
+							if (events.size === 3) {
+								allStarted.resolve(true);
+							}
+							await release.promise;
+							await mkdir(join(workflowRequest.targetDir, "backlog", "docs"), {
+								recursive: true,
+							});
+							await Bun.write(
+								join(
+									workflowRequest.targetDir,
+									"backlog",
+									"docs",
+									"DOC-1 - spec.md",
+								),
+								"confirmed spec\n",
+							);
+						} else {
+							await Bun.write(
+								join(workflowRequest.targetDir, "change.txt"),
+								`rep ${ordinal}\n`,
+							);
+							await runCommand(
+								["git", "add", "change.txt"],
+								workflowRequest.targetDir,
+							);
+							await runCommand(
+								["git", "commit", "-m", "feat: implement change"],
+								workflowRequest.targetDir,
+							);
+						}
+
+						return {
+							stage: workflowRequest.stage,
+							sessionId: `${ordinal}-${workflowRequest.stage}`,
+							costUsd: metric.costUsd,
+							callMetrics: [metric],
+							exchanges: [],
+						};
+					},
+					readTaskOutput: () =>
+						Promise.resolve(
+							JSON.stringify({
+								task: {
+									acceptanceCriteria: ["done"],
+									documentation: ["DOC-1 - spec.md"],
+								},
+							}),
+						),
+					readTaskCard: () => Promise.resolve("confirmed task card"),
+					captureBuildCandidate,
+					assertPlanningStageCompleted: async (
+						targetDir,
+						baselineSha,
+						stage,
+					) => ({
+						taskState: `${stage.name}-state`,
+						artifact: {
+							path: "backlog/docs/DOC-1 - spec.md",
+							content: await Bun.file(
+								join(targetDir, "backlog", "docs", "DOC-1 - spec.md"),
+							).text(),
+						},
+						resultSha: baselineSha,
+						diff: "",
+						changedPaths: [],
+					}),
+					assertBuildCommitted,
+					changedPathsBetween,
+					captureCheckIntegrity: () =>
+						Promise.resolve(harnessResult("PASS", "checks match")),
+					captureTreatmentChecks: () =>
+						Promise.resolve(harnessResult("PASS", "all green")),
+					captureStageCorpus,
+				},
+				runStageJudge: (_model, _effort, _budget, input, rubricSource) =>
+					Promise.resolve({
+						...passingStageScorecard(input),
+						rubricPath: rubricSource.rubricPath,
+						rubric: rubricSource.rubric,
+						attempts: [
+							{
+								payload: { summary: "accepted" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+					}),
+				runFinalJudge: (request) => {
+					const { ordinal } = request;
+					const repEvents = events.get(ordinal) ?? [];
+					repEvents.push("final");
+					events.set(ordinal, repEvents);
+
+					return Promise.resolve({
+						grade: completeGrade("PASS"),
+						prompt: "final prompt",
+						attempts: [
+							{
+								payload: { summary: "pass" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+						costUsd: metric.costUsd,
+					});
+				},
+				createTaskCommit: async (targetDir, _task, instructions) => ({
+					taskId: "TASK-1",
+					taskSha: await installInstructions(targetDir, instructions),
+				}),
+				runChecks: () => Promise.resolve(),
+				captureBaselineContext,
+				captureFileHashes,
+				addWorktree,
+				removeWorktree,
+				materializeCheckpoint,
+				recordCheckpoint,
+				recordRetentionRef: () => Promise.resolve(),
+				captureBuildCandidate,
+				log: () => undefined,
+			},
+			{
+				runsDirectory: parent,
+				groupId: "pipeline-confirmation-1",
+				reps: 3,
+				projectedCost: {
+					reps: 3,
+					perRepMaximumUsd: 45,
+					totalMaximumUsd: 135,
+				},
+				approvalMethod: "yes",
+				source: { root: source.directory, sha: sourceSha },
+				controlSha: "a".repeat(40),
+				pipelinePath: "pipelines/test.json",
+				pipeline,
+				task: "# Task\n\nImplement it.",
+				productBrief: "Product brief",
+				instructions: "Frozen instructions\n",
+				finalRubric: "1. `final`: pass the candidate\n",
+				stageRubrics: {
+					discuss: {
+						rubricPath: "rubrics/discuss.json",
+						content: "{}\n",
+						rubric: stageRubric,
+					},
+					build: {
+						rubricPath: "rubrics/build.json",
+						content: "{}\n",
+						rubric: stageRubric,
+					},
+				},
+				corpusRoots: [corpusRoot],
+				model: "sonnet",
+				effort: "high",
+				judgeModel: "opus",
+				judgeEffort: "high",
+				sessionBudgetUsd: 5,
+			},
+		);
+
+		await allStarted.promise;
+		expect(events.size).toBe(3);
+		release.resolve(true);
+		const outcome = await execution;
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		expect(
+			records.every(({ outcome: result }) => result === "SUCCESSFUL"),
+		).toBe(true);
+		expect(records.every(({ stages }) => stages.length === 2)).toBe(true);
+		expect(
+			records.every(({ finalOutcome }) => finalOutcome.status === "JUDGED"),
+		).toBe(true);
+		expect([...events.values()]).toEqual([
+			["discuss", "build", "final"],
+			["discuss", "build", "final"],
+			["discuss", "build", "final"],
+		]);
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+		expect(group.mode).toBe("pipeline");
+		expect(group.declaredStages).toEqual(["discuss", "build"]);
+		const primaryAfter = {
+			head: await runCommand(["git", "rev-parse", "HEAD"], source.directory),
+			branch: await runCommand(
+				["git", "branch", "--show-current"],
+				source.directory,
+			),
+			status: await runCommand(
+				["git", "status", "--porcelain"],
+				source.directory,
+			),
+			base: await Bun.file(join(source.directory, "base.txt")).bytes(),
+		};
+		expect(primaryAfter).toEqual(primaryBefore);
+		const worktrees = await runCommand(
+			["git", "worktree", "list", "--porcelain"],
+			source.directory,
+		);
+		expect(
+			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
+		).toHaveLength(1);
 	});
 });
 
