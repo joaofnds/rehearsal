@@ -1,11 +1,11 @@
 ---
 id: ACT-4
 title: invalidate checkpoints when the corpus changes
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-30 22:20'
+updated_date: '2026-08-31 03:50'
 labels: []
 dependencies:
   - ACT-2
@@ -22,10 +22,10 @@ Map corpus files to the stages they feed: each stage skill to its stage, global 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The harness derives, from the set of changed corpus files, exactly which stages and checkpoints are stale.
-- [ ] #2 Editing a stage skill marks that stage's and all downstream checkpoints stale; editing a global instruction file marks all stale; a model or effort change marks all stale.
-- [ ] #3 Replaying from a stale checkpoint works and is labeled stale in the record.
-- [ ] #4 Comparing attempts whose lineages differ is refused with an error naming the mismatched inputs.
+- [x] #1 The harness derives, from the set of changed corpus files, exactly which stages and checkpoints are stale.
+- [x] #2 Editing a stage skill marks that stage's and all downstream checkpoints stale; editing a global instruction file marks all stale; a model or effort change marks all stale.
+- [x] #3 Replaying from a stale checkpoint works and is labeled stale in the record.
+- [x] #4 Comparing attempts whose lineages differ is refused with an error naming the mismatched inputs.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -58,3 +58,26 @@ First test to write: the staleness derivation function, cases above.
 
 Glossary: added "Stale checkpoint" (2026-08-31).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Built 2026-08-31. Four commits, plus one refactoring commit.
+
+What shipped:
+- deriveStaleness (src/benchmark/checkpoint.ts): pure function from a checkpoint chain, the current per-stage corpus, and the requested model/effort to per-checkpoint fresh-or-stale with named causes. Staleness carries downstream. The initial checkpoint consumes no corpus, so only a model or effort change makes it stale.
+- GLOBAL_SKILLS (decision 2): captureStageCorpus now hashes the doctrine skill into every stage's corpus beside the installed CLAUDE.md. A global skill that is also the stage's own is hashed once. Lineage keys changed as predicted, so pre-existing checkpoints read as stale.
+- resolveReplay returns the verified chain; runReplay derives staleness over it, logs each cause, and records stale/staleness in the replay record. Both fields optional in the schema so older records still parse.
+- presentAttempts refuses attempts whose corpus, model, or effort differ, naming what differed and the two attempts. Attempts without recorded inputs are presented as before.
+
+Direct observations (real files, real git repository, not only unit tests):
+1. Recorded a two-stage chain with the real captureStageCorpus: unchanged corpus read fresh; editing the stage skill marked it stale naming skills/shape/SKILL.md; editing the doctrine skill marked it stale naming skills/doctrine/SKILL.md; a model change marked every checkpoint including the initial one stale.
+2. Replay end to end against a real git repository with real skill files: unchanged corpus wrote stale=false; editing the upstream discuss skill wrote stale=true with the cause naming skills/discuss/SKILL.md, verified by re-reading the record from disk; replaying the edited discuss stage itself stayed fresh, which is the tuning loop the design intends.
+3. Comparison guard: matching lineages present with the diff; corpus, model, and effort mismatches each refuse with the differing input and both attempt labels named.
+
+Suite: 213 pass, 0 fail. Lint and typecheck clean.
+
+Refactoring pass: staleness and the comparison guard had each grown their own walk over two sets of hashed files with the same three cases. Extracted corpusDifferences into checkpoint.ts with caller-supplied wording, since the two mean different things by a difference (record-versus-present has removed/added; attempt-versus-attempt has neither side as authority). Behavior preserved, 213 pass before and after, separate commit.
+
+Filed ACT-18: the original run's attempt carries no lineage inputs, because the per-stage scorecard file never records the corpus, model, and effort the session ran with. So the most common comparison, original versus its own replay, is the one the guard cannot check. ACT-13 (split the test file) and ACT-14 (share the run-directory layout) already cover the other structural items this task touched.
+<!-- SECTION:NOTES:END -->
