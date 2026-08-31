@@ -1,10 +1,7 @@
-import { join } from "node:path";
 import { z } from "zod";
 import { effortSchema } from "./config";
 import { pipelineDefinitionSchema } from "./pipeline";
 import type { Immutable } from "./contracts";
-
-export const RUN_MANIFEST_FILE = "manifest.json";
 
 /**
  * Written when the run starts, not when it ends: a run that dies mid-pipeline
@@ -34,19 +31,13 @@ const runManifestSchema = z
 export type RunManifest = Immutable<z.infer<typeof runManifestSchema>>;
 
 export async function writeRunManifest(
-	runDirectory: string,
+	path: string,
 	manifest: RunManifest,
 ): Promise<void> {
-	await Bun.write(
-		join(runDirectory, RUN_MANIFEST_FILE),
-		`${JSON.stringify(manifest, null, 2)}\n`,
-	);
+	await Bun.write(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-export async function loadRunManifest(
-	runDirectory: string,
-): Promise<RunManifest> {
-	const path = join(runDirectory, RUN_MANIFEST_FILE);
+export async function loadRunManifest(path: string): Promise<RunManifest> {
 	const file = Bun.file(path);
 
 	if (!(await file.exists())) {

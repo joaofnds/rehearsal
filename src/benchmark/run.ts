@@ -52,6 +52,12 @@ import type { PipelineDefinition, StageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
 import { createRunAbort, writeRunArtifact } from "./run-abort";
+import type { BenchmarkRunPaths } from "./run-layout";
+import {
+	benchmarkRunPaths,
+	benchmarkRunsDirectory,
+	runNameFromTimestamp,
+} from "./run-layout";
 import {
 	assertStageGradePassed,
 	captureStageJudgeInput,
@@ -73,28 +79,12 @@ import {
 import type { ProductOwner, ProductOwnerSnapshot } from "./workflow";
 import { createProductOwner, runWorkflowStage } from "./workflow";
 
-async function createRunFiles(timestamp: string): Promise<{
-	name: string;
-	artifact: string;
-	review: string;
-	stage: (stage: string) => string;
-	checkpointsRoot: string;
-	checkpoint: (stage: string) => string;
-}> {
-	const directory = join(CONTROL_DIR, ".benchmark-runs");
-	const name = timestamp.replaceAll(":", "-");
+async function createRunFiles(timestamp: string): Promise<BenchmarkRunPaths> {
+	const directory = benchmarkRunsDirectory(CONTROL_DIR);
 
 	await mkdir(directory, { recursive: true });
 
-	return {
-		name,
-		artifact: join(directory, `${name}.json`),
-		review: join(directory, `${name}.review.json`),
-		stage: (stage: string) => join(directory, `${name}.${stage}.json`),
-		checkpointsRoot: join(directory, `${name}.checkpoints`),
-		checkpoint: (stage: string) =>
-			join(directory, `${name}.checkpoints`, stage),
-	};
+	return benchmarkRunPaths(directory, runNameFromTimestamp(timestamp));
 }
 
 export interface BuildEvidence {
@@ -610,7 +600,7 @@ export async function runBenchmark(
 			reportError: console.error,
 		},
 		{
-			artifactFile: runFiles.artifact,
+			artifactFile: runFiles.artifactFile,
 			teardown: () => teardownTarget(source, workflowBackup),
 		},
 	);
@@ -646,7 +636,7 @@ export async function runBenchmark(
 			pipeline.statuses,
 		);
 		const recordRetainedCheckpoint = retainedCheckpointRecorder(runFiles.name);
-		await writeRunManifest(runFiles.checkpointsRoot, {
+		await writeRunManifest(runFiles.manifestFile, {
 			timestamp,
 			controlSha,
 			sourceRoot: source.root,
@@ -665,7 +655,7 @@ export async function runBenchmark(
 		});
 		const initialCheckpoint = await recordRetainedCheckpoint(
 			source.root,
-			runFiles.checkpoint(INITIAL_CHECKPOINT_STAGE),
+			runFiles.checkpointDirectory(INITIAL_CHECKPOINT_STAGE),
 			initialCheckpointInputs(
 				{
 					taskSha,
@@ -719,14 +709,14 @@ export async function runBenchmark(
 					taskId,
 					taskSha,
 					pipeline,
-					stageFile: runFiles.stage,
-					checkpointDirectory: runFiles.checkpoint,
+					stageFile: runFiles.stageFile,
+					checkpointDirectory: runFiles.checkpointDirectory,
 					log: console.log,
 					trackPendingStage: abort.trackPendingStage,
 					calibrateStageFailure: async (scorecards) => {
 						const calibration = await collectCalibration({
 							rl,
-							reviewFile: runFiles.review,
+							reviewFile: runFiles.reviewFile,
 							targetDir: source.root,
 							originalInstructions: instructions,
 							originalRubric: rubric,
@@ -778,7 +768,7 @@ export async function runBenchmark(
 
 		console.log("\nJudge session");
 		const judge = await runFinalJudge({
-			artifactFile: runFiles.artifact,
+			artifactFile: runFiles.artifactFile,
 			artifactInputs,
 		});
 		const { grade } = judge;
@@ -786,16 +776,16 @@ export async function runBenchmark(
 		const artifact = buildRunArtifact({
 			...artifactInputs,
 			judge,
-			reviewFile: runFiles.review,
+			reviewFile: runFiles.reviewFile,
 		});
-		await writeRunArtifact(runFiles.artifact, artifact);
+		await writeRunArtifact(runFiles.artifactFile, artifact);
 		abort.trackPendingArtifact(artifact);
-		console.log(`Run artifact: ${runFiles.artifact}`);
-		console.log(`Human review: ${runFiles.review}`);
+		console.log(`Run artifact: ${runFiles.artifactFile}`);
+		console.log(`Human review: ${runFiles.reviewFile}`);
 
 		const calibration = await collectCalibration({
 			rl,
-			reviewFile: runFiles.review,
+			reviewFile: runFiles.reviewFile,
 			targetDir: source.root,
 			originalInstructions: instructions,
 			originalRubric: rubric,
@@ -812,7 +802,7 @@ export async function runBenchmark(
 			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		});
-		await writeRunArtifact(runFiles.artifact, {
+		await writeRunArtifact(runFiles.artifactFile, {
 			...artifact,
 			status: "COMPLETE",
 			calibration,

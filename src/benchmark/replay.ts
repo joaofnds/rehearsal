@@ -341,7 +341,7 @@ export async function runReplay(
 	dependencies: ReplayDependencies,
 	request: ReplayRequest,
 ): Promise<ReplayOutcome> {
-	const manifest = await loadRunManifest(request.paths.checkpointsDirectory);
+	const manifest = await loadRunManifest(request.paths.manifestFile);
 	const checkpoints = await loadRunCheckpoints(
 		request.paths.checkpointsDirectory,
 	);

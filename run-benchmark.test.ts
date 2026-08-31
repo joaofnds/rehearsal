@@ -5075,18 +5075,22 @@ describe(loadRunManifest.name, () => {
 	it("round-trips the manifest a run wrote", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
 		temporaryDirectories.push(directory);
+		const paths = benchmarkRunPaths(directory, "run");
 		const manifest = manifestFixture();
 
-		await writeRunManifest(directory, manifest);
+		await writeRunManifest(paths.manifestFile, manifest);
+		const manifestStats = await stat(paths.manifestFile);
 
-		expect(await loadRunManifest(directory)).toEqual(manifest);
+		expect(await loadRunManifest(paths.manifestFile)).toEqual(manifest);
+		expect(manifestStats.isFile()).toBe(true);
 	});
 
 	it("names the missing manifest when the run predates manifests", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
 		temporaryDirectories.push(directory);
+		const paths = benchmarkRunPaths(directory, "run");
 
-		expect(loadRunManifest(directory)).rejects.toThrow(
+		expect(loadRunManifest(paths.manifestFile)).rejects.toThrow(
 			"runs recorded before manifests cannot be replayed",
 		);
 	});
@@ -5094,13 +5098,14 @@ describe(loadRunManifest.name, () => {
 	it("rejects a manifest that lost a field it later needs", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
 		temporaryDirectories.push(directory);
+		const paths = benchmarkRunPaths(directory, "run");
 		const { taskSha: _taskSha, ...truncated } = manifestFixture();
 		await Bun.write(
-			join(directory, "manifest.json"),
+			paths.manifestFile,
 			`${JSON.stringify(truncated, null, 2)}\n`,
 		);
 
-		expect(loadRunManifest(directory)).rejects.toThrow();
+		expect(loadRunManifest(paths.manifestFile)).rejects.toThrow();
 	});
 });
 
@@ -5586,7 +5591,6 @@ describe(runReplay.name, () => {
 		const stateDir = join(directory, "state");
 		await mkdir(join(stateDir, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(stateDir, "backlog", "config.yml"), "statuses: []\n");
-		const runDirectory = paths.checkpointsDirectory;
 		const initial = await recordCheckpoint(
 			stateDir,
 			paths.checkpointDirectory("initial"),
@@ -5673,7 +5677,7 @@ describe(runReplay.name, () => {
 				],
 			},
 		};
-		await writeRunManifest(runDirectory, manifest);
+		await writeRunManifest(paths.manifestFile, manifest);
 
 		return {
 			paths,
@@ -6228,7 +6232,6 @@ describe(runReplay.name, () => {
 		await mkdir(join(primary, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
 		const paths = benchmarkRunPaths(parent, "run");
-		const runDirectory = paths.checkpointsDirectory;
 		await recordCheckpoint(
 			primary,
 			paths.checkpointDirectory("initial"),
@@ -6275,7 +6278,7 @@ describe(runReplay.name, () => {
 				],
 			},
 		};
-		await writeRunManifest(runDirectory, manifest);
+		await writeRunManifest(paths.manifestFile, manifest);
 		const before = {
 			head: await runCommand(["git", "rev-parse", "HEAD"], primary),
 			branch: await runCommand(["git", "branch", "--show-current"], primary),
