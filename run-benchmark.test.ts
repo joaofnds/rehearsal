@@ -32,6 +32,7 @@ import {
 	materializeCheckpoint,
 	recordCheckpoint,
 	rootLineage,
+	skillSearchRoots,
 } from "./src/benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -2143,6 +2144,27 @@ describe(runGradedStages.name, () => {
 		expect(executed).toEqual([]);
 	});
 
+	it("fails before any stage runs when a global skill is missing", async () => {
+		const { dependencies, executed } = fakeStageDependencies();
+		const missing = {
+			...dependencies,
+			resolveSkillDirectory: (skill: string) => {
+				if (skill === "doctrine") {
+					return Promise.reject(
+						new Error(`The ${skill} skill is not installed`),
+					);
+				}
+
+				return Promise.resolve(`/skills/${skill}`);
+			},
+		};
+
+		expect(runGradedStages(missing, await stageContext())).rejects.toThrow(
+			"doctrine skill is not installed",
+		);
+		expect(executed).toEqual([]);
+	});
+
 	it("hashes a stage's corpus when the stage starts, not at run start", async () => {
 		const { dependencies } = fakeStageDependencies();
 		const log: string[] = [];
@@ -2172,6 +2194,7 @@ describe(runGradedStages.name, () => {
 		await runGradedStages(timed, await stageContext());
 
 		expect(log).toEqual([
+			"resolve:doctrine",
 			"resolve:shape",
 			"resolve:build",
 			"corpus:shape",
@@ -3906,6 +3929,35 @@ describe(deriveStaleness.name, () => {
 		expect(staleness[2]?.causes).toEqual(["upstream stage shape is stale"]);
 	});
 
+	it("blames the first stale stage, not the nearest, further down the chain", () => {
+		const review = checkpoint("review", build.lineage, [
+			claudeMd,
+			doctrine,
+			{ path: "skills/review/SKILL.md", sha256: "ee55" },
+		]);
+		const longer = [initial, planning, build, review] as const;
+		const corpus = new Map<string, readonly HashedFile[]>(
+			longer
+				.filter(({ stage }) => stage !== "initial")
+				.map((record) => [record.stage, record.corpusFiles]),
+		);
+		corpus.set("shape", [
+			claudeMd,
+			doctrine,
+			{ path: "skills/shape/SKILL.md", sha256: "changed" },
+		]);
+
+		const staleness = deriveStaleness(longer, corpus, request);
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([
+			false,
+			true,
+			true,
+			true,
+		]);
+		expect(staleness[3]?.causes).toEqual(["upstream stage shape is stale"]);
+	});
+
 	it("marks every stage checkpoint stale when a global instruction file changes", () => {
 		const edited = { path: "CLAUDE.md", sha256: "edited" } as const;
 		const staleness = deriveStaleness(
@@ -4348,6 +4400,11 @@ describe(runReplay.name, () => {
 		readonly installed: string[];
 		readonly judged: StageJudgeInput[];
 		readonly log: string[];
+		readonly corpusCaptures: {
+			skill: string;
+			instructions: string;
+			roots: readonly string[];
+		}[];
 	}
 
 	function fakeReplayDependencies(
@@ -4360,6 +4417,11 @@ describe(runReplay.name, () => {
 		const installed: string[] = [];
 		const judged: StageJudgeInput[] = [];
 		const log: string[] = [];
+		const corpusCaptures: {
+			skill: string;
+			instructions: string;
+			roots: readonly string[];
+		}[] = [];
 
 		const dependencies: ReplayDependencies = {
 			stageSession: {
@@ -4442,13 +4504,16 @@ describe(runReplay.name, () => {
 
 					return Promise.resolve(harnessResult("PASS", "all green"));
 				},
-				captureStageCorpus: (skill) =>
-					Promise.resolve([
+				captureStageCorpus: (skill, instructions, roots) => {
+					corpusCaptures.push({ skill, instructions, roots });
+
+					return Promise.resolve([
 						{
 							path: `skills/${skill}/SKILL.md`,
 							sha256: createHash("sha256").update(skill).digest("hex"),
 						},
-					]),
+					]);
+				},
 			},
 			runStageJudge: (_model, _effort, _budget, input) => {
 				judged.push(input);
@@ -4518,6 +4583,7 @@ describe(runReplay.name, () => {
 			installed,
 			judged,
 			log,
+			corpusCaptures,
 		};
 	}
 
@@ -4669,6 +4735,25 @@ describe(runReplay.name, () => {
 
 		expect(outcome.record.stale).toBe(false);
 		expect(outcome.record.staleness).toEqual([]);
+	});
+
+	it("derives staleness from the request's instructions and the worktree's skills", async () => {
+		const run = await recordedRun([
+			{
+				path: "skills/discuss/SKILL.md",
+				sha256: createHash("sha256").update("discuss").digest("hex"),
+			},
+		]);
+		const fake = fakeReplayDependencies();
+
+		await runReplay(fake.dependencies, request(run, "build"));
+
+		const worktree = fake.worktrees[0]?.path ?? "missing";
+		const upstream = fake.corpusCaptures.find(
+			({ skill }) => skill === "discuss",
+		);
+		expect(upstream?.instructions).toBe("Current instructions");
+		expect(upstream?.roots).toEqual(skillSearchRoots(worktree));
 	});
 
 	it("labels the replay stale and names the changed upstream file", async () => {
@@ -5248,6 +5333,23 @@ describe(presentAttempts.name, () => {
 				diffTexts,
 			),
 		).rejects.toThrow(/original run run1.*replay r2/u);
+	});
+
+	it("refuses a later attempt that disagrees with ones before it", () => {
+		expect(
+			presentAttempts(
+				"lineage-1",
+				[
+					{ ...attempt("replay r1", "B", "one\n"), lineageInputs },
+					{ ...attempt("replay r2", "B", "two\n"), lineageInputs },
+					{
+						...attempt("replay r3", "A", "three\n"),
+						lineageInputs: { ...lineageInputs, model: "opus" },
+					},
+				],
+				diffTexts,
+			),
+		).rejects.toThrow(/replay r3/u);
 	});
 
 	it("presents attempts that record no lineage inputs, as records before this did", async () => {
