@@ -463,6 +463,9 @@ export async function executeStageSession(
 				diff: planning.changedPaths.length > 0 ? planning.diff : undefined,
 				changedPaths:
 					planning.changedPaths.length > 0 ? planning.changedPaths : undefined,
+				...(planning.commitSubjects === undefined
+					? {}
+					: { commitSubjects: planning.commitSubjects }),
 			};
 		}
 
@@ -495,6 +498,7 @@ export async function executeStageSession(
 			...baseInput,
 			diff: buildEvidence.diff,
 			changedPaths: buildEvidence.changedPaths,
+			commitSubjects: build.commitSubjects,
 			checkIntegrity: buildEvidence.checkIntegrity,
 			localChecks: buildEvidence.localChecks,
 		};

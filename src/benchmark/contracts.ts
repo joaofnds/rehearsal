@@ -208,6 +208,7 @@ export interface StageJudgeInput {
 	readonly priorArtifacts: readonly ContextFile[];
 	readonly diff?: string | undefined;
 	readonly changedPaths?: readonly string[] | undefined;
+	readonly commitSubjects?: readonly string[] | undefined;
 	readonly checkIntegrity?: LocalCheckResult | undefined;
 	readonly localChecks?: LocalCheckResult | undefined;
 	readonly harnessFailure?: string | undefined;

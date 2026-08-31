@@ -2273,6 +2273,8 @@ describe(runGradedStages.name, () => {
 			"backlog/docs/shape.md",
 		]);
 		expect(judged[1]?.diff).toBe("the-diff");
+		expect(judged[0]).not.toHaveProperty("commitSubjects");
+		expect(judged[1]?.commitSubjects).toEqual(["build commit"]);
 		expect(outcome.buildEvidence?.resultSha).toBe("result-sha");
 		expect(outcome.workflow).toHaveLength(2);
 	});
@@ -2306,6 +2308,38 @@ describe(runGradedStages.name, () => {
 			model: "opus",
 			effort: "high",
 		});
+	});
+
+	it("retains commit subjects in awaiting and completed stage records", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const context = await stageContext();
+		let awaitingSubjects: readonly string[] | undefined;
+		const recording = {
+			...dependencies,
+			runStageJudge: async (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => {
+				if (input.stage === "build") {
+					const pending: { input: StageJudgeInput } = JSON.parse(
+						await Bun.file(context.stageFile(input.stage)).text(),
+					);
+					awaitingSubjects = pending.input.commitSubjects;
+				}
+
+				return scorecardFor(input, "CONTINUE");
+			},
+		};
+
+		await runGradedStages(recording, context);
+
+		const completed: StageScorecard = JSON.parse(
+			await Bun.file(context.stageFile("build")).text(),
+		);
+		expect(awaitingSubjects).toEqual(["build commit"]);
+		expect(completed.input.commitSubjects).toEqual(["build commit"]);
 	});
 
 	it("records Judge attempts beside a continued scorecard", async () => {
@@ -2518,6 +2552,7 @@ describe(runGradedStages.name, () => {
 					resultSha: `${stage.name}-sha`,
 					diff: "glossary-diff",
 					changedPaths: ["GLOSSARY.md"],
+					commitSubjects: [`${stage.name} commit`],
 				}),
 			assertBuildCommitted: (_targetDir: string, baselineSha: string) => {
 				buildBaselines.push(baselineSha);
@@ -2535,11 +2570,36 @@ describe(runGradedStages.name, () => {
 		expect(judged[0]?.taskState).toBe("the task card");
 		expect(judged[0]?.diff).toBe("glossary-diff");
 		expect(judged[0]?.changedPaths).toEqual(["GLOSSARY.md"]);
+		expect(judged.map(({ commitSubjects }) => commitSubjects)).toEqual([
+			["shape commit"],
+			["build commit"],
+		]);
 		expect(buildBaselines).toEqual(["shape-sha"]);
 		expect(outcome.checkpoints.map(({ targetSha }) => targetSha)).toEqual([
 			"shape-sha",
 			"result-sha",
 		]);
+	});
+
+	it("withholds commit subjects when delivery validation fails", async () => {
+		const { dependencies, judged } = fakeStageDependencies();
+		const invalid = {
+			...dependencies,
+			assertBuildCommitted: () =>
+				Promise.reject(
+					new StageValidationError(
+						"Build phase rewrote or discarded task history",
+					),
+				),
+		};
+
+		await runGradedStages(invalid, await stageContext());
+
+		const buildInput = judged[1];
+		expect(buildInput?.harnessFailure).toBe(
+			"Build phase rewrote or discarded task history",
+		);
+		expect(buildInput).not.toHaveProperty("commitSubjects");
 	});
 
 	it("writes a checkpoint for every accepted stage and chains lineage", async () => {
@@ -2813,6 +2873,42 @@ describe(runGradedStages.name, () => {
 			model: "opus",
 			effort: "high",
 		});
+	});
+
+	it("retains commit subjects when calibrating a stopped delivery", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				statuses: ["To Do", "Done"],
+				stages: [deliveryStage],
+			},
+			calibrateStageFailure: (): Promise<CalibrationResult> =>
+				Promise.resolve({
+					humanReview: { verdict: "REJECT", summary: "failed", findings: [] },
+					instructionsChanged: false,
+					rubricChanged: false,
+					stageRubricsChanged: [],
+				}),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		const outcome = runGradedStages(failing, context);
+		expect(outcome).rejects.toThrow("minimum grade is B");
+		await outcome.catch(() => undefined);
+
+		const calibrated: StageScorecard & { calibration: CalibrationResult } =
+			JSON.parse(await Bun.file(context.stageFile("build")).text());
+		expect(calibrated.input.commitSubjects).toEqual(["build commit"]);
+		expect(calibrated.calibration.humanReview.verdict).toBe("REJECT");
 	});
 });
 
@@ -5353,6 +5449,7 @@ describe(runReplay.name, () => {
 		expect(fake.judged[0]?.priorArtifacts).toEqual([
 			{ path: SPEC_PATH, content: SPEC_CONTENT },
 		]);
+		expect(fake.judged[0]?.commitSubjects).toEqual(["replayed commit"]);
 		expect(outcome.record.consumed).toEqual({
 			stage: "discuss",
 			lineage: run.discuss.lineage,
@@ -5373,6 +5470,9 @@ describe(runReplay.name, () => {
 		expect(outcome.record.stageCostUsd).toBe(1.25);
 		expect(outcome.record.judgeCostUsd).toBe(0.5);
 		expect(outcome.record.resultSha).toBe("result-sha");
+		expect(outcome.record.scorecard.input.commitSubjects).toEqual([
+			"replayed commit",
+		]);
 		expect(outcome.recordPath.startsWith(run.replaysRoot)).toBe(true);
 		expect(outcome.recordPath).toContain(run.discuss.lineage);
 	});
