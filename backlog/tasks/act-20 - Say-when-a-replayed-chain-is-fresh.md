@@ -1,11 +1,11 @@
 ---
 id: ACT-20
 title: Say when a replayed chain is fresh
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-31 04:12'
-updated_date: '2026-08-31 12:37'
+updated_date: '2026-08-31 12:53'
 labels: []
 dependencies: []
 references:
@@ -84,10 +84,34 @@ Refactor pass:
 
 Review:
 - Independent review is due because the diff changes user-facing CLI output. Applicable axes: style, architecture, security, spec conformance, testing, and refactoring.
+
+Independent review (2026-08-31)
+
+Review input correction:
+- The first user-invoked reviewer received `it`, which was not a ref, and reviewed only the unrelated uncommitted ACT-5 card change. Its clean result did not apply to ACT-20.
+- The ACT-20 review used a materialized patch of commit `113aca1`, the task acceptance observations, and all applicable axis briefs. Both changed files, the replay CLI caller, staleness derivation, test harness, repository instructions, glossary, and style/testing references were examined.
+
+Suite before review: `bun test` passed 244 tests with 0 failures.
+
+Findings: one should-fix; no blocking findings or notes.
+
+1. Testing, should-fix, fixed in `1f05dcd`: the stale-output fixture contained only one stale checkpoint, so an implementation that logged only the first staleness result would still pass while violating acceptance criterion 2. The fixture now records a second stage checkpoint; one upstream corpus change makes both discuss and build stale, and the test requires both output lines with no fresh line. Verification: changing the production loop to `staleness.slice(0, 1)` made the focused test fail because the build line disappeared; restoring the loop passed.
+
+Axis disposition:
+- Style: no findings.
+- Architecture: no findings.
+- Spec conformance: no findings.
+- Security: no findings.
+- Testing: one finding, fixed above.
+- Refactoring: no findings.
+
+Final verification after the review fix: `bun test` passed 244 tests with 0 failures; `bun run typecheck`, `bun run lint`, and `bun run fmt:check` passed.
+
+Verdict: proceed.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Built in `113aca1`: replay now prints `Checkpoint chain is fresh` for a fully fresh consumed chain and retains one cause-bearing line per stale checkpoint. Direct log capture observed both branches; 244 tests, typecheck, lint, and format check passed. Independent review remains due for the user-facing CLI change.
+Built in `113aca1`: replay prints `Checkpoint chain is fresh` for a fully fresh consumed chain and retains one cause-bearing line per stale checkpoint. Independent review found one should-fix testing gap, fixed in `1f05dcd` and mutation-verified. Direct log capture observed both output branches; 244 tests, typecheck, lint, and format check passed. No blocking findings remain.
 <!-- SECTION:FINAL_SUMMARY:END -->
