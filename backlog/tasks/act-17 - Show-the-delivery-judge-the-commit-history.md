@@ -1,12 +1,20 @@
 ---
 id: ACT-17
 title: Show the delivery judge the commit history
-status: Build
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-08-31 02:05'
-updated_date: '2026-08-31 05:25'
+updated_date: '2026-08-31 11:52'
 labels: []
 dependencies: []
+modified_files:
+  - src/benchmark/target.ts
+  - src/benchmark/backlog.ts
+  - src/benchmark/contracts.ts
+  - src/benchmark/run.ts
+  - src/benchmark/stage-grading.ts
+  - run-benchmark.test.ts
 ordinal: 9008
 ---
 
@@ -49,13 +57,13 @@ In the real-git `assertBuildCommitted` test group, create two commits after the 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stage that adds two descendant commits gives its Judge exactly those two subjects oldest first; commits at or before the stage baseline are absent, even when no commit-subject convention is configured
-- [ ] #2 A committing planning stage gives its Judge its own stage commit history, and the following stage receives only commits made after the planning stage advanced the baseline
-- [ ] #3 A planning stage that creates no commit omits commitSubjects from its Judge input
-- [ ] #4 A replayed stage records the same stage-local commit subjects from its detached baseline as a forward run
-- [ ] #5 A stage result that fails ancestry or delivery validation gives the Judge harnessFailure and no unvalidated commitSubjects
-- [ ] #6 The stage Judge prompt identifies commitSubjects as the citable commit-subjects source, and evidence validation accepts commit-subjects or commitSubjects as a whole-source citation
-- [ ] #7 Awaiting, completed, replayed, and recalibrated stage records retain the captured commitSubjects in the embedded StageJudgeInput
+- [x] #1 A stage that adds two descendant commits gives its Judge exactly those two subjects oldest first; commits at or before the stage baseline are absent, even when no commit-subject convention is configured
+- [x] #2 A committing planning stage gives its Judge its own stage commit history, and the following stage receives only commits made after the planning stage advanced the baseline
+- [x] #3 A planning stage that creates no commit omits commitSubjects from its Judge input
+- [x] #4 A replayed stage records the same stage-local commit subjects from its detached baseline as a forward run
+- [x] #5 A stage result that fails ancestry or delivery validation gives the Judge harnessFailure and no unvalidated commitSubjects
+- [x] #6 The stage Judge prompt identifies commitSubjects as the citable commit-subjects source, and evidence validation accepts commit-subjects or commitSubjects as a whole-source citation
+- [x] #7 Awaiting, completed, replayed, and recalibrated stage records retain the captured commitSubjects in the embedded StageJudgeInput
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -66,3 +74,29 @@ In the real-git `assertBuildCommitted` test group, create two commits after the 
 3. Add `commit-subjects` to the evidence schema, whole-source path map, and Judge prompt.
 4. Drive the change through real-git capture tests first, then stage-loop/replay, citation/prompt, and persisted-record tests.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Handoff
+
+Changed: planning and delivery validation capture oldest-first subjects for the validated baseline..result range; StageJudgeInput carries them only after validated advancement; stage evidence accepts commit-subjects citations and the prompt names commitSubjects/commit-subjects; forward, replay, awaiting, completed, and calibrated records preserve the embedded input.
+
+Available but not wired: none. All forward and replay callers use executeStageSession; no caller remains on an old path.
+
+Observed: a fresh temporary repository produced planning history ["record planning artifact"] and following delivery history ["add failing delivery test", "make delivery pass"], excluding earlier commits. Fresh verification passed bun test (242 tests), bun run typecheck, bun run lint, and bun run fmt:check.
+
+Not verified: no paid Claude Judge invocation was run; prompt and citation behavior were observed through the injected Judge boundary.
+
+Stopped work: lint initially found seven defects in the new code; fixed in fdeded0 before continuing.
+
+Refactor pass: shared commitSubjectsBetween removed duplicate git-log knowledge; no further structural opportunity warranted code or a board task.
+
+Independent review: completed because the Judge evidence contract is outward-facing and security-surfaced. One blocking finding (absent history remained citable) and one should-fix finding (prompt contradicted its field-path exception) were verified and fixed in ab900a9; no findings remained.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Stage Judges now receive each validated stage's own oldest-first commit subjects, including planning and replay paths, while no-commit or invalid stages expose no history. The history is a frozen commit-subjects source retained in every stage record. Observed isolated planning and delivery ranges directly; all 242 tests and all static guards pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
