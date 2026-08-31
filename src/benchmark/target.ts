@@ -334,6 +334,7 @@ export async function assertBuildCommitted(
 	targetDir: string,
 	taskSha: string,
 	expectedBranch: ExpectedBranch = "main",
+	commitSubjectPattern?: string,
 ): Promise<{ resultSha: string; diff: string }> {
 	const branch = await git(targetDir, "branch", "--show-current");
 	if (branch !== (expectedBranch ?? "")) {
@@ -378,27 +379,31 @@ export async function assertBuildCommitted(
 		throw new StageValidationError("Build commit contains no changes");
 	}
 
-	const subjects = await git(
-		targetDir,
-		"log",
-		"--format=%s",
-		`${taskSha}..${resultSha}`,
-	);
-	assertConventionalCommitSubjects(subjects.split("\n"));
+	if (commitSubjectPattern !== undefined) {
+		const subjects = await git(
+			targetDir,
+			"log",
+			"--format=%s",
+			`${taskSha}..${resultSha}`,
+		);
+		assertCommitSubjects(subjects.split("\n"), commitSubjectPattern);
+	}
 
 	return { resultSha, diff };
 }
 
-export function assertConventionalCommitSubjects(
+export function assertCommitSubjects(
 	subjects: readonly string[],
+	pattern: string,
 ): void {
+	const subjectPattern = new RegExp(pattern, "u");
 	const invalidSubjects = subjects.filter(
-		(subject) => !/^[a-z]+(?:\([^)]+\))?!?: .+/u.test(subject),
+		(subject) => !subjectPattern.test(subject),
 	);
 
 	if (invalidSubjects.length > 0) {
 		throw new StageValidationError(
-			`Build used non-conventional commit subjects: ${invalidSubjects.join(", ")}`,
+			`Build commit subjects do not match the pipeline's convention: ${invalidSubjects.join(", ")}`,
 		);
 	}
 }

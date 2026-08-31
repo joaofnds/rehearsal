@@ -1,5 +1,6 @@
 {
 	"statuses": ["To Do", "Shape", "Build", "Review", "Ship", "Done"],
+	"commitSubjectPattern": "^[a-z]+(?:\\([^)]+\\))?!?: .+",
 	"stages": [
 		{
 			"name": "shape",

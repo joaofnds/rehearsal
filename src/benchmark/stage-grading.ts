@@ -177,12 +177,12 @@ export function validateStageJudgeEvidence(
 		"prior-artifact": input.priorArtifacts.map(({ path }) => path),
 		"baseline-context": input.baselineContext.map(({ path }) => path),
 		diff: input.changedPaths ?? [],
-		"check-integrity": input.checkIntegrity ? ["harness"] : [],
-		"local-checks": input.localChecks ? ["harness"] : [],
-		"harness-failure":
-			input.harnessFailure === undefined || input.harnessFailure === ""
-				? []
-				: ["harness"],
+		// Harness-owned sources stay citable even when the input carries no
+		// result for them: a Judge failing a delivery because check results are
+		// absent is citing exactly that absence.
+		"check-integrity": ["harness"],
+		"local-checks": ["harness"],
+		"harness-failure": ["harness"],
 	} satisfies Record<
 		StageJudgeOutput["requirements"][number]["evidence"][number]["source"],
 		readonly string[]

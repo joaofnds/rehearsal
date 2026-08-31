@@ -42,6 +42,18 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const pipelineDefinitionSchema = z.object({
 	statuses: z.array(z.string().min(1)).min(1),
+	commitSubjectPattern: z
+		.string()
+		.min(1)
+		.refine((pattern) => {
+			try {
+				new RegExp(pattern, "u");
+				return true;
+			} catch {
+				return false;
+			}
+		}, "must be a valid regular expression")
+		.optional(),
 	stages: z.array(stageDefinitionSchema).min(1),
 });
 

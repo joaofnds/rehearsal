@@ -273,6 +273,7 @@ export interface StageSessionEnvironment {
 	readonly taskId: string;
 	readonly taskSha: string;
 	readonly baselineSha: string;
+	readonly commitSubjectPattern?: string | undefined;
 	readonly skillRoots: readonly string[];
 	readonly log: (message: string) => void;
 }
@@ -367,6 +368,8 @@ export async function executeStageSession(
 		const build = await dependencies.assertBuildCommitted(
 			environment.targetDir,
 			environment.baselineSha,
+			"main",
+			environment.commitSubjectPattern,
 		);
 		({ resultSha } = build);
 		buildEvidence = {
@@ -425,7 +428,12 @@ export async function runGradedStages(
 		const stage = definition.name;
 		const session = await executeStageSession(
 			dependencies,
-			{ ...context, skillRoots, baselineSha },
+			{
+				...context,
+				skillRoots,
+				baselineSha,
+				commitSubjectPattern: context.pipeline.commitSubjectPattern,
+			},
 			definition,
 			stageArtifacts,
 		);

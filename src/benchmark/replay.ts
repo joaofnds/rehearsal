@@ -240,8 +240,8 @@ function detachedStageDependencies(
 				taskState,
 				null,
 			),
-		assertBuildCommitted: (targetDir, taskSha) =>
-			base.assertBuildCommitted(targetDir, taskSha, null),
+		assertBuildCommitted: (targetDir, taskSha, _branch, commitSubjectPattern) =>
+			base.assertBuildCommitted(targetDir, taskSha, null, commitSubjectPattern),
 	};
 }
 
@@ -339,6 +339,7 @@ export async function runReplay(
 				taskId: manifest.taskId,
 				taskSha: baseSha,
 				baselineSha: baseSha,
+				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
 				skillRoots: skillSearchRoots(worktreeDir),
 				log: dependencies.log,
 			},

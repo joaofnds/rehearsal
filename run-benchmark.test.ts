@@ -111,7 +111,7 @@ import {
 import {
 	addWorktree,
 	assertBuildCommitted,
-	assertConventionalCommitSubjects,
+	assertCommitSubjects,
 	assertSourceReady,
 	assertWorkspaceCleanAt,
 	captureBuildCandidate,
@@ -2035,20 +2035,28 @@ describe(runGradedStages.name, () => {
 	});
 });
 
-describe(assertConventionalCommitSubjects.name, () => {
-	it("accepts conventional commit subjects", () => {
+describe(assertCommitSubjects.name, () => {
+	const conventional = "^[a-z]+(?:\\([^)]+\\))?!?: .+";
+
+	it("accepts subjects matching the pipeline's convention", () => {
 		expect(() => {
-			assertConventionalCommitSubjects([
-				"feat(audit): add worker",
-				"fix: wire persistence",
-			]);
+			assertCommitSubjects(
+				["feat(audit): add worker", "fix: wire persistence"],
+				conventional,
+			);
 		}).not.toThrow();
 	});
 
-	it("rejects free-form commit subjects", () => {
+	it("rejects subjects outside the pipeline's convention", () => {
 		expect(() => {
-			assertConventionalCommitSubjects(["Implement audit"]);
-		}).toThrow("non-conventional commit subjects");
+			assertCommitSubjects(["Implement audit"], conventional);
+		}).toThrow("do not match the pipeline's convention");
+	});
+
+	it("holds subjects to whatever convention the pipeline declares", () => {
+		expect(() => {
+			assertCommitSubjects(["add audit worker"], "^[a-z]");
+		}).not.toThrow();
 	});
 });
 
