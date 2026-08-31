@@ -57,3 +57,57 @@ export async function requireConfirmationApproval(
 		throw new Error("Confirmation declined");
 	}
 }
+
+export interface ConfirmationPlan<Inputs> {
+	readonly groupId: string;
+	readonly reps: number;
+	readonly frozenInputs: Inputs;
+	readonly worktreePath: (repId: string) => string;
+}
+
+export interface ConfirmationRepPlan<Inputs> {
+	readonly groupId: string;
+	readonly ordinal: number;
+	readonly repId: string;
+	readonly worktreePath: string;
+	readonly inputs: Inputs;
+}
+
+export interface ConfirmationRepResult<Inputs, Result> {
+	readonly plan: ConfirmationRepPlan<Inputs>;
+	readonly outcome: PromiseSettledResult<Result>;
+}
+
+async function executeRep<Inputs, Result>(
+	plan: ConfirmationRepPlan<Inputs>,
+	execute: (plan: ConfirmationRepPlan<Inputs>) => Promise<Result>,
+): Promise<ConfirmationRepResult<Inputs, Result>> {
+	try {
+		return {
+			plan,
+			outcome: { status: "fulfilled", value: await execute(plan) },
+		};
+	} catch (error) {
+		return { plan, outcome: { status: "rejected", reason: error } };
+	}
+}
+
+export function runConfirmation<Inputs, Result>(
+	confirmation: ConfirmationPlan<Inputs>,
+	execute: (plan: ConfirmationRepPlan<Inputs>) => Promise<Result>,
+): Promise<readonly ConfirmationRepResult<Inputs, Result>[]> {
+	const plans = Array.from({ length: confirmation.reps }, (_value, index) => {
+		const ordinal = index + 1;
+		const repId = `${confirmation.groupId}-rep-${ordinal}`;
+
+		return {
+			groupId: confirmation.groupId,
+			ordinal,
+			repId,
+			worktreePath: confirmation.worktreePath(repId),
+			inputs: confirmation.frozenInputs,
+		};
+	});
+
+	return Promise.all(plans.map((plan) => executeRep(plan, execute)));
+}

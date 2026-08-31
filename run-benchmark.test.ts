@@ -4,10 +4,12 @@ import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import type { ConfirmationRepPlan } from "./src/benchmark/confirmation";
 import {
 	formatProjectedCost,
 	projectConfirmationCost,
 	requireConfirmationApproval,
+	runConfirmation,
 } from "./src/benchmark/confirmation";
 import {
 	diffTexts,
@@ -504,6 +506,84 @@ describe(requireConfirmationApproval.name, () => {
 		);
 
 		expect(prompts).toBe(0);
+	});
+});
+
+describe(runConfirmation.name, () => {
+	it("starts isolated reps together from one frozen input", async () => {
+		const frozenInputs = Object.freeze({
+			corpus: "frozen corpus",
+			rubric: "frozen rubric",
+			model: "sonnet",
+			effort: "high",
+			lineage: "checkpoint-1",
+		});
+		const started: ConfirmationRepPlan<typeof frozenInputs>[] = [];
+		const releases: PromiseWithResolvers<string>[] = [];
+		const execution = runConfirmation(
+			{
+				groupId: "confirmation-1",
+				reps: 3,
+				frozenInputs,
+				worktreePath: (repId) => `/worktrees/${repId}`,
+			},
+			(plan) => {
+				const release = Promise.withResolvers<string>();
+				started.push(plan);
+				releases.push(release);
+				return release.promise;
+			},
+		);
+
+		expect(started).toHaveLength(3);
+		expect(started.map(({ repId }) => repId)).toEqual([
+			"confirmation-1-rep-1",
+			"confirmation-1-rep-2",
+			"confirmation-1-rep-3",
+		]);
+		expect(new Set(started.map(({ worktreePath }) => worktreePath)).size).toBe(
+			3,
+		);
+		expect(started.every(({ inputs }) => inputs === frozenInputs)).toBe(true);
+
+		for (const [index, release] of releases.entries()) {
+			release.resolve(`confirmation-1-rep-${index + 1}`);
+		}
+
+		expect(await execution).toEqual(
+			started.map((plan) => ({
+				plan,
+				outcome: { status: "fulfilled", value: plan.repId },
+			})),
+		);
+	});
+
+	it("lets peer reps finish when one rejects", async () => {
+		const completed: number[] = [];
+		const results = await runConfirmation(
+			{
+				groupId: "confirmation-2",
+				reps: 3,
+				frozenInputs: "checkpoint-1",
+				worktreePath: (repId) => `/worktrees/${repId}`,
+			},
+			async (plan) => {
+				if (plan.ordinal === 2) {
+					throw new Error("rep failed");
+				}
+
+				await Promise.resolve();
+				completed.push(plan.ordinal);
+				return plan.ordinal;
+			},
+		);
+
+		expect(results.map(({ outcome }) => outcome.status)).toEqual([
+			"fulfilled",
+			"rejected",
+			"fulfilled",
+		]);
+		expect(completed).toEqual([1, 3]);
 	});
 });
 
