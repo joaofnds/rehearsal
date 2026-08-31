@@ -18,9 +18,11 @@
   `class-validator/class-transformer`.
 - **Testing**: The native `bun:test` runner. Do not install Jest. Run the suite
   with `bun test`.
-- **Commits**: Lowercase imperative subjects with no type prefix, matching the
-  repository history (`derive which checkpoints a corpus change makes stale`).
-  The body says why.
+- **Commits**: Conventional Commits. A lowercase type, an optional scope, then a
+  lowercase imperative subject: `fix: latch the signal path so it cannot kill its
+  own restore`. The body says why. Commits between 2026-08-30 and 2026-08-31 omit
+  the type prefix; that was a regression, not the convention, so do not read the
+  recent log as evidence.
 - **Stage hygiene**: Commit every workflow artifact a stage creates (glossary,
   documents, instruction references) before declaring the stage complete; never
   claim completion with uncommitted changes or an open question in the
