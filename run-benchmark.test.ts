@@ -5,6 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+	formatProjectedCost,
+	projectConfirmationCost,
+} from "./src/benchmark/confirmation";
+import {
 	diffTexts,
 	loadAttempts,
 	presentAttempts,
@@ -401,6 +405,36 @@ describe(parseReplayArgs.name, () => {
 				{},
 			),
 		).toThrow("Provide --stage");
+	});
+});
+
+describe(projectConfirmationCost.name, () => {
+	it("projects the bounded maximum before a confirmation", () => {
+		const replay = projectConfirmationCost({
+			mode: "stage",
+			reps: 5,
+			sessionBudgetUsd: 5,
+		});
+		const pipeline = projectConfirmationCost({
+			mode: "pipeline",
+			reps: 5,
+			stages: 4,
+			sessionBudgetUsd: 5,
+		});
+
+		expect(replay).toEqual({
+			reps: 5,
+			perRepMaximumUsd: 20,
+			totalMaximumUsd: 100,
+		});
+		expect(pipeline).toEqual({
+			reps: 5,
+			perRepMaximumUsd: 75,
+			totalMaximumUsd: 375,
+		});
+		expect(formatProjectedCost(replay)).toBe(
+			"Projected maximum cost: $100.00 (5 reps x $20.00)",
+		);
 	});
 });
 
