@@ -338,6 +338,7 @@ export async function runReplay(
 				baselineHashes,
 				taskId: manifest.taskId,
 				taskSha: baseSha,
+				baselineSha: baseSha,
 				skillRoots: skillSearchRoots(worktreeDir),
 				log: dependencies.log,
 			},

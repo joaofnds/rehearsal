@@ -110,9 +110,9 @@ To Do, Shape, Build, Review, Ship, Done
 
 It writes the control repository's `CLAUDE.md` into the target and commits that tracked instruction change before the workflow starts. Backlog.md and Boris artifacts remain personal workflow state and are carried between fresh sessions.
 
-After every planning stage, the harness verifies that application Git history and tracked files are still unchanged. It also verifies that the stage wrote acceptance criteria when its definition requires them, and attached its durable document when its definition declares an artifact.
+After every planning stage, the harness verifies that the target is still on its branch with a clean worktree and that history only advanced, never rewrote, what the stage started from. A planning stage may commit workflow artifacts, a glossary or a document; those commits become part of the stage's judged evidence and advance the baseline the next stage starts from. The harness also verifies that the stage wrote acceptance criteria when its definition requires them, and attached its durable document when its definition declares an artifact.
 
-Build must create at least one conventional commit directly on `main`, leave a clean worktree, and preserve descendant history from the task setup commit.
+Build must create at least one conventional commit directly on `main`, leave a clean worktree, and preserve descendant history from the baseline the last accepted stage left. The build Judge sees the delivery stage's own commits; the final Judge sees the whole candidate since task setup.
 
 ## Stage Grading
 

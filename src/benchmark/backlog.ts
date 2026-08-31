@@ -5,7 +5,7 @@ import { runCommand } from "./command";
 import { StageValidationError } from "./contracts";
 import type { PlanningStageDefinition } from "./pipeline";
 import type { ExpectedBranch } from "./target";
-import { assertWorkspaceCleanAt, git } from "./target";
+import { capturePlanningAdvance, git } from "./target";
 import type { Immutable } from "./contracts";
 
 const taskViewSchema = z
@@ -208,20 +208,27 @@ export function assertStageArtifactState(
 
 export async function assertPlanningStageCompleted(
 	targetDir: string,
-	taskSha: string,
+	baselineSha: string,
 	stage: PlanningStageDefinition,
 	taskState: { readonly output: string; readonly view: TaskView },
 	expectedBranch: ExpectedBranch = "main",
 ): Promise<{
 	taskState: string;
 	artifact: { path: string; content: string } | undefined;
+	resultSha: string;
+	diff: string;
+	changedPaths: string[];
 }> {
-	await assertWorkspaceCleanAt(targetDir, taskSha, expectedBranch);
+	const advance = await capturePlanningAdvance(
+		targetDir,
+		baselineSha,
+		expectedBranch,
+	);
 	const { output, view } = taskState;
 	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
 	if (artifactFile === undefined) {
-		return { taskState: output, artifact: undefined };
+		return { taskState: output, artifact: undefined, ...advance };
 	}
 	const artifactPath = join("backlog", "docs", artifactFile);
 
@@ -231,5 +238,6 @@ export async function assertPlanningStageCompleted(
 			path: artifactPath,
 			content: await Bun.file(join(targetDir, artifactPath)).text(),
 		},
+		...advance,
 	};
 }

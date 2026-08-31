@@ -249,6 +249,55 @@ export interface BuildCandidate {
 	readonly changedPaths: readonly string[];
 }
 
+/**
+ * A planning stage may commit workflow artifacts (a glossary, a document),
+ * so an advanced HEAD is evidence, not a broken baseline. What it may not
+ * do is leave the branch, leave the worktree dirty, or rewrite the history
+ * it started from.
+ */
+export async function capturePlanningAdvance(
+	targetDir: string,
+	baselineSha: string,
+	expectedBranch: ExpectedBranch = "main",
+): Promise<{ resultSha: string; diff: string; changedPaths: string[] }> {
+	const branch = await git(targetDir, "branch", "--show-current");
+	const status = await git(
+		targetDir,
+		"status",
+		"--porcelain=v1",
+		"--untracked-files=all",
+	);
+	if (branch !== (expectedBranch ?? "") || status !== "") {
+		throw new StageValidationError("Target baseline changed unexpectedly");
+	}
+
+	const resultSha = await git(targetDir, "rev-parse", "HEAD");
+	if (resultSha === baselineSha) {
+		return { resultSha, diff: "", changedPaths: [] };
+	}
+
+	try {
+		await git(targetDir, "merge-base", "--is-ancestor", baselineSha, resultSha);
+	} catch (error) {
+		if (error instanceof CommandError && error.exitCode === 1) {
+			throw new StageValidationError(
+				"Planning stage rewrote or discarded task history",
+			);
+		}
+
+		throw error;
+	}
+
+	return {
+		resultSha,
+		diff: await runCommand(
+			["git", "diff", "--no-ext-diff", `${baselineSha}..${resultSha}`],
+			targetDir,
+		),
+		changedPaths: await changedPathsBetween(targetDir, baselineSha, resultSha),
+	};
+}
+
 export async function captureBuildCandidate(
 	targetDir: string,
 	taskSha: string,

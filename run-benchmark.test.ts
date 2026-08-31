@@ -115,6 +115,7 @@ import {
 	assertSourceReady,
 	assertWorkspaceCleanAt,
 	captureBuildCandidate,
+	capturePlanningAdvance,
 	captureWorkflowBackup,
 	claimTarget,
 	removeWorktree,
@@ -1596,7 +1597,7 @@ describe(runGradedStages.name, () => {
 					}),
 				assertPlanningStageCompleted: (
 					_targetDir: string,
-					_taskSha: string,
+					baselineSha: string,
 					stage: { readonly name: string },
 				) =>
 					Promise.resolve({
@@ -1605,6 +1606,9 @@ describe(runGradedStages.name, () => {
 							path: `backlog/docs/${stage.name}.md`,
 							content: `${stage.name} artifact`,
 						},
+						resultSha: baselineSha,
+						diff: "",
+						changedPaths: [],
 					}),
 				assertBuildCommitted: () =>
 					Promise.resolve({ resultSha: "result-sha", diff: "the-diff" }),
@@ -1793,6 +1797,44 @@ describe(runGradedStages.name, () => {
 		expect(executed).toEqual(["discuss", "research", "plan", "build"]);
 		expect(judged[1]?.stage).toBe("research");
 		expect(rubricsUsed[1]?.endsWith("rubrics/shape.json")).toBe(true);
+	});
+
+	it("carries a planning stage's commits into evidence and the baseline", async () => {
+		const { dependencies, judged } = fakeStageDependencies();
+		const buildBaselines: string[] = [];
+		const committing = {
+			...dependencies,
+			assertPlanningStageCompleted: (
+				_targetDir: string,
+				_baselineSha: string,
+				stage: { readonly name: string },
+			) =>
+				Promise.resolve({
+					taskState: `${stage.name}-state`,
+					artifact: {
+						path: `backlog/docs/${stage.name}.md`,
+						content: `${stage.name} artifact`,
+					},
+					resultSha: `${stage.name}-sha`,
+					diff: "glossary-diff",
+					changedPaths: ["GLOSSARY.md"],
+				}),
+			assertBuildCommitted: (_targetDir: string, baselineSha: string) => {
+				buildBaselines.push(baselineSha);
+
+				return Promise.resolve({ resultSha: "result-sha", diff: "the-diff" });
+			},
+		};
+
+		const outcome = await runGradedStages(committing, await stageContext());
+
+		expect(judged[0]?.diff).toBe("glossary-diff");
+		expect(judged[0]?.changedPaths).toEqual(["GLOSSARY.md"]);
+		expect(buildBaselines).toEqual(["shape-sha"]);
+		expect(outcome.checkpoints.map(({ targetSha }) => targetSha)).toEqual([
+			"shape-sha",
+			"result-sha",
+		]);
 	});
 
 	it("writes a checkpoint for every accepted stage and chains lineage", async () => {
@@ -2082,6 +2124,57 @@ describe(addWorktree.name, () => {
 		await removeWorktree(source.directory, worktree);
 
 		expect(await Bun.file(join(worktree, "base.txt")).exists()).toBe(false);
+	});
+});
+
+describe(capturePlanningAdvance.name, () => {
+	it("captures commits a planning stage added on the baseline", async () => {
+		const source = await createRepository();
+		await Bun.write(join(source.directory, "GLOSSARY.md"), "audit log\n");
+		await commitAll(source.directory, "add project glossary");
+		const head = await runCommand(
+			["git", "rev-parse", "HEAD"],
+			source.directory,
+		);
+
+		const advance = await capturePlanningAdvance(source.directory, source.sha);
+
+		expect(advance.resultSha).toBe(head.trim());
+		expect(advance.changedPaths).toEqual(["GLOSSARY.md"]);
+		expect(advance.diff).toContain("audit log");
+	});
+
+	it("captures an empty advance when the stage committed nothing", async () => {
+		const source = await createRepository();
+
+		const advance = await capturePlanningAdvance(source.directory, source.sha);
+
+		expect(advance).toEqual({
+			resultSha: source.sha,
+			diff: "",
+			changedPaths: [],
+		});
+	});
+
+	it("rejects a stage that rewrote the baseline history", async () => {
+		const source = await createRepository();
+		await runCommand(
+			["git", "commit", "--amend", "--no-edit", "-m", "chore: rewritten"],
+			source.directory,
+		);
+
+		expect(
+			capturePlanningAdvance(source.directory, source.sha),
+		).rejects.toThrow("rewrote or discarded task history");
+	});
+
+	it("rejects a stage that left the worktree dirty", async () => {
+		const source = await createRepository();
+		await Bun.write(join(source.directory, "stray.md"), "uncommitted\n");
+
+		expect(
+			capturePlanningAdvance(source.directory, source.sha),
+		).rejects.toThrow("Target baseline changed unexpectedly");
 	});
 });
 
@@ -3830,7 +3923,7 @@ describe(runReplay.name, () => {
 				},
 				assertPlanningStageCompleted: (
 					targetDir,
-					_taskSha,
+					baselineSha,
 					stage,
 					_taskState,
 					expectedBranch,
@@ -3844,6 +3937,9 @@ describe(runReplay.name, () => {
 							path: `backlog/docs/${stage.name}.md`,
 							content: `${stage.name} artifact`,
 						},
+						resultSha: baselineSha,
+						diff: "",
+						changedPaths: [],
 					});
 				},
 				assertBuildCommitted: (targetDir, _taskSha, expectedBranch) => {

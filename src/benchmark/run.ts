@@ -272,11 +272,13 @@ export interface StageSessionEnvironment {
 	readonly baselineHashes: ReadonlyMap<string, string>;
 	readonly taskId: string;
 	readonly taskSha: string;
+	readonly baselineSha: string;
 	readonly skillRoots: readonly string[];
 	readonly log: (message: string) => void;
 }
 
 export interface StageSessionResult {
+	readonly resultSha: string;
 	readonly corpusFiles: readonly HashedFile[];
 	readonly transcript: StageTranscript;
 	readonly input: StageJudgeInput;
@@ -340,34 +342,39 @@ export async function executeStageSession(
 	};
 	let artifact: ContextFile | undefined;
 	let buildEvidence: BuildEvidence | undefined;
+	let resultSha = environment.baselineSha;
 	const input = await captureStageJudgeInput(baseInput, async () => {
 		if (definition.kind === "planning") {
 			const currentTask = parseTaskState(currentTaskOutput);
 			const planning = await dependencies.assertPlanningStageCompleted(
 				environment.targetDir,
-				environment.taskSha,
+				environment.baselineSha,
 				definition,
 				currentTask,
 			);
-			({ artifact } = planning);
+			({ artifact, resultSha } = planning);
 
 			return {
 				...baseInput,
 				taskState: planning.taskState,
 				artifact: planning.artifact,
+				diff: planning.changedPaths.length > 0 ? planning.diff : undefined,
+				changedPaths:
+					planning.changedPaths.length > 0 ? planning.changedPaths : undefined,
 			};
 		}
 
 		const build = await dependencies.assertBuildCommitted(
 			environment.targetDir,
-			environment.taskSha,
+			environment.baselineSha,
 		);
+		({ resultSha } = build);
 		buildEvidence = {
 			resultSha: build.resultSha,
 			diff: build.diff,
 			changedPaths: await dependencies.changedPathsBetween(
 				environment.targetDir,
-				environment.taskSha,
+				environment.baselineSha,
 				build.resultSha,
 			),
 			checkIntegrity: await dependencies.captureCheckIntegrity(
@@ -390,7 +397,7 @@ export async function executeStageSession(
 		};
 	});
 
-	return { corpusFiles, transcript, input, artifact, buildEvidence };
+	return { resultSha, corpusFiles, transcript, input, artifact, buildEvidence };
 }
 
 export async function runGradedStages(
@@ -412,12 +419,13 @@ export async function runGradedStages(
 		await dependencies.resolveSkillDirectory(definition.skill, skillRoots);
 	}
 	let upstream = context.initialLineage;
+	let baselineSha = context.taskSha;
 
 	for (const definition of context.pipeline.stages) {
 		const stage = definition.name;
 		const session = await executeStageSession(
 			dependencies,
-			{ ...context, skillRoots },
+			{ ...context, skillRoots, baselineSha },
 			definition,
 			stageArtifacts,
 		);
@@ -461,15 +469,13 @@ export async function runGradedStages(
 		}
 		assertStageGradePassed(scorecard);
 
+		baselineSha = session.resultSha;
 		const checkpoint = await dependencies.recordCheckpoint(
 			context.targetDir,
 			context.checkpointDirectory(stage),
 			{
 				stage,
-				targetSha:
-					definition.kind === "delivery" && buildEvidence
-						? buildEvidence.resultSha
-						: context.taskSha,
+				targetSha: session.resultSha,
 				upstream,
 				model: context.model,
 				effort: context.effort,
@@ -700,7 +706,14 @@ export async function runBenchmark(
 		if (!buildEvidence) {
 			throw new Error("Build stage did not run");
 		}
-		const evidence = buildEvidence;
+		// The build Judge saw only the delivery stage's own commits; the final
+		// Judge grades the whole candidate, planning commits included.
+		const fullCandidate = await captureBuildCandidate(source.root, taskSha);
+		const evidence = {
+			...buildEvidence,
+			diff: fullCandidate.diff,
+			changedPaths: fullCandidate.changedPaths,
+		};
 
 		console.log("\nJudge session");
 		const judge = await runJudge(
