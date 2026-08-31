@@ -49,6 +49,8 @@
   judges.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own.
+- **Stage commit history** — oldest-first subjects of the commits a stage added
+  after its baseline; absent when the stage did not advance the target history.
 - **Stage scorecard** — persisted Judge result for one stage: its frozen input
   and rubric, citations, grade, prompt, and Judge cost; a rejected scorecard
   also carries its calibration.
