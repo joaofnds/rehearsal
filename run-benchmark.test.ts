@@ -1599,7 +1599,7 @@ describe(killActiveCommands.name, () => {
 
 describe(runStageJudge.name, () => {
 	function judgeResponse(evidencePath: string): string {
-		const item = (id: string): unknown => ({
+		const item = (id: string): StageJudgeOutput["requirements"][number] => ({
 			id,
 			status: "PASS",
 			evidence: [{ source: "task", path: evidencePath, claim: "grounded" }],
