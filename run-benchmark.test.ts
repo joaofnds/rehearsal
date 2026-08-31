@@ -8578,8 +8578,27 @@ describe(runPipelineConfirmation.name, () => {
 						Promise.resolve(harnessResult("PASS", "checks pass")),
 					captureStageCorpus,
 				},
-				runStageJudge: (_model, _effort, _budget, input, rubricSource) =>
-					Promise.resolve({
+				runStageJudge: (_model, _effort, _budget, input, rubricSource) => {
+					if (input.transcript.sessionId.startsWith("3-")) {
+						return Promise.reject(
+							new JudgeOutputValidationError({
+								message: "Judge rejected both attempts",
+								prompt: "prompt",
+								attempts: [
+									{
+										payload: { invalid: true },
+										costUsd: metric.costUsd,
+										metrics: metric,
+										outcome: "REJECTED",
+										error: "invalid output",
+									},
+								],
+								costUsd: metric.costUsd,
+							}),
+						);
+					}
+
+					return Promise.resolve({
 						stage: input.stage,
 						rubricPath: rubricSource.rubricPath,
 						rubric: rubricSource.rubric,
@@ -8602,7 +8621,8 @@ describe(runPipelineConfirmation.name, () => {
 							grade: "F",
 							verdict: "STOP",
 						},
-					}),
+					});
+				},
 				runFinalJudge: () =>
 					Promise.reject(new Error("final Judge is not reached")),
 				createTaskCommit: async (targetDir, _task, instructions) => ({
@@ -8672,7 +8692,7 @@ describe(runPipelineConfirmation.name, () => {
 		).toEqual([
 			["JUDGED", "NOT_REACHED"],
 			["EXECUTION_FAILED", "NOT_REACHED"],
-			["JUDGED", "NOT_REACHED"],
+			["EXECUTION_FAILED", "NOT_REACHED"],
 		]);
 		expect(
 			records.every(({ outcome: result }) => result === "UNSUCCESSFUL"),
@@ -8684,6 +8704,7 @@ describe(runPipelineConfirmation.name, () => {
 		const preserved = await stat(preservedPath);
 		expect(preserved.isDirectory()).toBe(true);
 		expect(removed).not.toContain(preservedPath);
+		expect(removed).toContain(records[2]?.worktreePath ?? "missing");
 		await removeWorktree(source.directory, preservedPath);
 	});
 });

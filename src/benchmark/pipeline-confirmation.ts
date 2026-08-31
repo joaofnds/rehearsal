@@ -29,6 +29,7 @@ import type {
 	StageScorecard,
 } from "./contracts";
 import type { JudgeResult } from "./judge";
+import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition } from "./pipeline";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
@@ -654,13 +655,63 @@ export async function runPipelineConfirmation(
 				outcome.reason instanceof Error
 					? outcome.reason.message
 					: String(outcome.reason);
-			dependencies.log(
-				`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
-			);
+			const judgeFailure =
+				outcome.reason instanceof JudgeOutputValidationError
+					? outcome.reason
+					: undefined;
+			const judgeRejected = judgeFailure !== undefined;
+			if (!judgeRejected) {
+				dependencies.log(
+					`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+				);
+			}
 			const [failedStage, ...laterStages] = request.pipeline.stages;
 			if (failedStage === undefined) {
 				throw new Error("Pipeline must declare at least one stage");
 			}
+			const repPaths = paths.rep(plan.repId);
+			let failureEvidence:
+				| { readonly resultSha: string; readonly recordFile: string }
+				| undefined;
+			if (judgeRejected) {
+				const stageFile = repPaths.stageFile(failedStage.name);
+				await Bun.write(
+					stageFile,
+					`${JSON.stringify(
+						{
+							stage: failedStage.name,
+							status: "REJECTED",
+							prompt: judgeFailure.prompt,
+							attempts: judgeFailure.attempts,
+							costUsd: judgeFailure.costUsd,
+							error: reason,
+						},
+						null,
+						2,
+					)}\n`,
+				);
+				failureEvidence = {
+					resultSha: frozen.taskSha,
+					recordFile: relative(repPaths.directory, stageFile),
+				};
+			}
+			const failedStageOutcome =
+				failureEvidence === undefined
+					? {
+							stage: failedStage.name,
+							status: "EXECUTION_FAILED" as const,
+							error: reason,
+							worktreePath: plan.worktreePath,
+							elapsedMs: makespanMs,
+						}
+					: {
+							stage: failedStage.name,
+							status: "EXECUTION_FAILED" as const,
+							error: reason,
+							worktreePath: plan.worktreePath,
+							elapsedMs: makespanMs,
+							evidence: failureEvidence,
+						};
 			const record = confirmationRepRecordSchema.parse({
 				schemaVersion: 1,
 				groupId: request.groupId,
@@ -671,13 +722,7 @@ export async function runPipelineConfirmation(
 				lineage: { kind: "SOURCE", sha: request.source.sha },
 				outcome: "UNSUCCESSFUL",
 				stages: [
-					{
-						stage: failedStage.name,
-						status: "EXECUTION_FAILED",
-						error: reason,
-						worktreePath: plan.worktreePath,
-						elapsedMs: makespanMs,
-					},
+					failedStageOutcome,
 					...laterStages.map((stage) => ({
 						stage: stage.name,
 						status: "NOT_REACHED" as const,
@@ -688,16 +733,36 @@ export async function runPipelineConfirmation(
 					status: "NOT_REACHED",
 					reason: `${failedStage.name} execution failed`,
 				},
-				metrics: {
-					status: "MISSING",
-					calls: [],
-					missing: ["stage evidence"],
-				},
+				metrics: judgeRejected
+					? {
+							status: "MISSING",
+							calls: attemptMetrics(judgeFailure.attempts).map((metrics) => ({
+								role: "stage-judge",
+								metrics,
+							})),
+							missing: ["worker call metrics"],
+						}
+					: {
+							status: "MISSING",
+							calls: [],
+							missing: ["stage evidence"],
+						},
 				workerTrajectorySteps: 0,
 				elapsedMs: makespanMs,
 			});
-			const { recordFile } = paths.rep(plan.repId);
+			const { recordFile } = repPaths;
 			await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
+			if (judgeRejected) {
+				await dependencies.recordRetentionRef(
+					request.source.root,
+					`${request.groupId}/${plan.repId}`,
+					frozen.taskSha,
+				);
+				await dependencies.removeWorktree(
+					request.source.root,
+					plan.worktreePath,
+				);
+			}
 
 			return recordFile;
 		}),
