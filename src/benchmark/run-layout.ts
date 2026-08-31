@@ -25,6 +25,14 @@ export function runNameFromTimestamp(timestamp: string): string {
 	return timestamp.replaceAll(":", "-");
 }
 
+export function runNameFromCheckpointsEntry(entry: string): string | undefined {
+	if (!entry.endsWith(CHECKPOINTS_SUFFIX)) {
+		return undefined;
+	}
+
+	return entry.slice(0, -CHECKPOINTS_SUFFIX.length);
+}
+
 export function benchmarkRunPaths(
 	runsDirectory: string,
 	name: string,

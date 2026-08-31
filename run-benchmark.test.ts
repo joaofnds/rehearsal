@@ -117,6 +117,7 @@ import {
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
+	runNameFromCheckpointsEntry,
 	runNameFromTimestamp,
 } from "./src/benchmark/run-layout";
 import {
@@ -2527,6 +2528,8 @@ describe(benchmarkRunPaths.name, () => {
 				"2026-08-31T04-22-25.607Z.json",
 			),
 		);
+		expect(runNameFromCheckpointsEntry("run-1.checkpoints")).toBe("run-1");
+		expect(runNameFromCheckpointsEntry("run-1.json")).toBeUndefined();
 	});
 });
 

@@ -32,7 +32,9 @@ import { runReplay } from "./src/benchmark/replay";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
+	runNameFromCheckpointsEntry,
 } from "./src/benchmark/run-layout";
+import type { BenchmarkRunPaths } from "./src/benchmark/run-layout";
 import { loadStageRubric, runStageJudge } from "./src/benchmark/stage-grading";
 import {
 	addWorktree,
@@ -46,24 +48,23 @@ import { runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUNS_DIRECTORY = benchmarkRunsDirectory(CONTROL_DIR);
 
-async function resolveRunDirectory(runName: string): Promise<string> {
-	const runDirectory = join(RUNS_DIRECTORY, `${runName}.checkpoints`);
-	if (await Bun.file(join(runDirectory, "manifest.json")).exists()) {
-		return runDirectory;
+async function resolveRunDirectory(paths: BenchmarkRunPaths): Promise<string> {
+	if (await Bun.file(paths.manifestFile).exists()) {
+		return paths.checkpointsDirectory;
 	}
 
 	let runEntries: string[];
 	try {
-		runEntries = await readdir(RUNS_DIRECTORY);
+		runEntries = await readdir(paths.runsDirectory);
 	} catch {
 		runEntries = [];
 	}
 	const recorded = runEntries
-		.filter((entry) => entry.endsWith(".checkpoints"))
-		.map((entry) => entry.slice(0, -".checkpoints".length));
+		.map((entry) => runNameFromCheckpointsEntry(entry))
+		.filter((entry) => entry !== undefined);
 
 	throw new Error(
-		`No replayable run named ${runName}; recorded runs: ${
+		`No replayable run named ${paths.name}; recorded runs: ${
 			recorded.join(", ") || "none"
 		}`,
 	);
@@ -94,7 +95,7 @@ async function main(): Promise<void> {
 
 	const config: ReplayCliConfig = parseReplayArgs(Bun.argv.slice(2));
 	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
-	await resolveRunDirectory(config.runName);
+	await resolveRunDirectory(paths);
 
 	const outcome = await runReplay(
 		{
