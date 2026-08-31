@@ -27,6 +27,7 @@ import { loadRunManifest } from "./manifest";
 import type { StageDefinition } from "./pipeline";
 import type { StageSessionDependencies } from "./run";
 import { executeStageSession } from "./run";
+import type { BenchmarkRunPaths } from "./run-layout";
 import type { loadStageRubric, runStageJudge } from "./stage-grading";
 import type { addWorktree, removeWorktree } from "./target";
 import { createProductOwner } from "./workflow";
@@ -133,9 +134,7 @@ export interface ReplayDependencies {
 }
 
 export interface ReplayRequest {
-	readonly runName: string;
-	readonly runDirectory: string;
-	readonly replaysRoot: string;
+	readonly paths: BenchmarkRunPaths;
 	readonly stage: string;
 	readonly instructions: string;
 	readonly controlSha: string;
@@ -342,8 +341,10 @@ export async function runReplay(
 	dependencies: ReplayDependencies,
 	request: ReplayRequest,
 ): Promise<ReplayOutcome> {
-	const manifest = await loadRunManifest(request.runDirectory);
-	const checkpoints = await loadRunCheckpoints(request.runDirectory);
+	const manifest = await loadRunManifest(request.paths.checkpointsDirectory);
+	const checkpoints = await loadRunCheckpoints(
+		request.paths.checkpointsDirectory,
+	);
 	const plan = resolveReplay(manifest, checkpoints, request.stage);
 
 	const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-"));
@@ -359,7 +360,7 @@ export async function runReplay(
 	let outcome: ReplayOutcome;
 	try {
 		await dependencies.materializeCheckpoint(
-			join(request.runDirectory, plan.consumed.stage),
+			request.paths.checkpointDirectory(plan.consumed.stage),
 			worktreeDir,
 		);
 		const baseSha = await dependencies.installInstructions(
@@ -439,7 +440,7 @@ export async function runReplay(
 		const record: ReplayRecord = {
 			replay: true,
 			timestamp,
-			runName: request.runName,
+			runName: request.paths.name,
 			stage: request.stage,
 			consumed: {
 				stage: plan.consumed.stage,
@@ -468,10 +469,9 @@ export async function runReplay(
 			staleness: staleness.map(({ stage, causes }) => ({ stage, causes })),
 			scorecard,
 		};
-		const recordPath = join(
-			request.replaysRoot,
+		const recordPath = request.paths.replayRecordFile(
 			plan.consumed.lineage,
-			`${timestamp.replaceAll(":", "-")}.json`,
+			timestamp,
 		);
 		await Bun.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
 		outcome = { record, recordPath };

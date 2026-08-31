@@ -94,7 +94,7 @@ async function main(): Promise<void> {
 
 	const config: ReplayCliConfig = parseReplayArgs(Bun.argv.slice(2));
 	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
-	const runDirectory = await resolveRunDirectory(config.runName);
+	await resolveRunDirectory(config.runName);
 
 	const outcome = await runReplay(
 		{
@@ -124,9 +124,7 @@ async function main(): Promise<void> {
 			log: console.log,
 		},
 		{
-			runName: config.runName,
-			runDirectory,
-			replaysRoot: join(RUNS_DIRECTORY, "replays"),
+			paths,
 			stage: config.stage,
 			instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
 			controlSha: await currentControlSha(),

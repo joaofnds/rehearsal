@@ -5570,12 +5570,11 @@ describe(runReplay.name, () => {
 	const SPEC_PATH = "backlog/docs/DOC-1 - spec.md";
 
 	interface RecordedRun {
-		readonly runDirectory: string;
+		readonly paths: ReturnType<typeof benchmarkRunPaths>;
 		readonly manifest: RunManifest;
 		readonly initial: CheckpointRecord;
 		readonly discuss: CheckpointRecord;
 		readonly build: CheckpointRecord;
-		readonly replaysRoot: string;
 	}
 
 	async function recordedRun(
@@ -5583,13 +5582,14 @@ describe(runReplay.name, () => {
 	): Promise<RecordedRun> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replayrun-"));
 		temporaryDirectories.push(directory);
+		const paths = benchmarkRunPaths(directory, "run");
 		const stateDir = join(directory, "state");
 		await mkdir(join(stateDir, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(stateDir, "backlog", "config.yml"), "statuses: []\n");
-		const runDirectory = join(directory, "run.checkpoints");
+		const runDirectory = paths.checkpointsDirectory;
 		const initial = await recordCheckpoint(
 			stateDir,
-			join(runDirectory, "initial"),
+			paths.checkpointDirectory("initial"),
 			{
 				stage: "initial",
 				targetSha: "task-sha",
@@ -5602,7 +5602,7 @@ describe(runReplay.name, () => {
 		await Bun.write(join(stateDir, SPEC_PATH), SPEC_CONTENT);
 		const discuss = await recordCheckpoint(
 			stateDir,
-			join(runDirectory, "discuss"),
+			paths.checkpointDirectory("discuss"),
 			{
 				stage: "discuss",
 				targetSha: "task-sha",
@@ -5619,7 +5619,7 @@ describe(runReplay.name, () => {
 		);
 		const build = await recordCheckpoint(
 			stateDir,
-			join(runDirectory, "build"),
+			paths.checkpointDirectory("build"),
 			{
 				stage: "build",
 				targetSha: "candidate-sha",
@@ -5676,12 +5676,11 @@ describe(runReplay.name, () => {
 		await writeRunManifest(runDirectory, manifest);
 
 		return {
-			runDirectory,
+			paths,
 			manifest,
 			initial,
 			discuss,
 			build,
-			replaysRoot: join(directory, "replays"),
 		};
 	}
 
@@ -5919,9 +5918,7 @@ describe(runReplay.name, () => {
 		stage: string,
 	): ReplayRequest {
 		return {
-			runName: "run",
-			runDirectory: run.runDirectory,
-			replaysRoot: run.replaysRoot,
+			paths: run.paths,
 			stage,
 			instructions: "Current instructions",
 			controlSha: "control-sha",
@@ -5972,7 +5969,9 @@ describe(runReplay.name, () => {
 		expect(outcome.record.scorecard.input.commitSubjects).toEqual([
 			"replayed commit",
 		]);
-		expect(outcome.recordPath.startsWith(run.replaysRoot)).toBe(true);
+		expect(outcome.recordPath.startsWith(run.paths.replaysDirectory)).toBe(
+			true,
+		);
 		expect(outcome.recordPath).toContain(run.discuss.lineage);
 	});
 
@@ -6067,7 +6066,7 @@ describe(runReplay.name, () => {
 
 	it("fails loudly when the run predates initial checkpoints", async () => {
 		const run = await recordedRun();
-		await rm(join(run.runDirectory, "initial"), {
+		await rm(run.paths.checkpointDirectory("initial"), {
 			force: true,
 			recursive: true,
 		});
@@ -6228,10 +6227,11 @@ describe(runReplay.name, () => {
 		);
 		await mkdir(join(primary, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
-		const runDirectory = join(parent, "run.checkpoints");
+		const paths = benchmarkRunPaths(parent, "run");
+		const runDirectory = paths.checkpointsDirectory;
 		await recordCheckpoint(
 			primary,
-			join(runDirectory, "initial"),
+			paths.checkpointDirectory("initial"),
 			initialCheckpointInputs(
 				{
 					taskSha,
@@ -6371,9 +6371,7 @@ describe(runReplay.name, () => {
 				log: () => undefined,
 			},
 			{
-				runName: "run",
-				runDirectory,
-				replaysRoot: join(parent, "replays"),
+				paths,
 				stage: "discuss",
 				instructions: "Replayed instructions\n",
 				controlSha: "control-sha",
