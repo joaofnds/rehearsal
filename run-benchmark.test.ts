@@ -2218,6 +2218,60 @@ describe(createRunAbort.name, () => {
 		]);
 		expect(released).toEqual(registered);
 	});
+
+	it("kills commands, records the interruption, restores, and exits with the signal code", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-signal-"));
+		temporaryDirectories.push(directory);
+		const stageFile = join(directory, "shape.json");
+		const effects: string[] = [];
+		const handlers = new Map<
+			NodeJS.Signals,
+			(signal: NodeJS.Signals) => void
+		>();
+		const exited = Promise.withResolvers<number>();
+		let evidencePresentAtTeardown = false;
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => {
+					effects.push("kill");
+
+					return Promise.resolve();
+				},
+				registerSignal: (signal, handler) => {
+					handlers.set(signal, handler);
+				},
+				releaseSignal: () => undefined,
+				exit: (code) => {
+					effects.push("exit");
+					exited.resolve(code);
+				},
+				reportError: () => undefined,
+			},
+			{
+				artifactFile: join(directory, "run.json"),
+				teardown: async () => {
+					evidencePresentAtTeardown = await Bun.file(stageFile).exists();
+					effects.push("teardown");
+				},
+			},
+		);
+		abort.trackPendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		handlers.get("SIGTERM")?.("SIGTERM");
+
+		expect(effects).toEqual(["kill"]);
+		expect(await exited.promise).toBe(143);
+		expect(effects).toEqual(["kill", "teardown", "exit"]);
+		expect(evidencePresentAtTeardown).toBe(true);
+		expect(JSON.parse(await Bun.file(stageFile).text())).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			error: "run interrupted by SIGTERM",
+		});
+	});
 });
 
 describe(assertStageGradePassed.name, () => {

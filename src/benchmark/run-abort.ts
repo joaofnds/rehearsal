@@ -38,10 +38,22 @@ export interface RunAbort {
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
+	readonly teardown: () => Promise<void>;
 	readonly release: () => void;
 }
 
 const RUN_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+
+function signalExitCode(signal: NodeJS.Signals): number {
+	if (signal === "SIGTERM") {
+		return 143;
+	}
+	if (signal === "SIGHUP") {
+		return 129;
+	}
+
+	return 130;
+}
 
 export async function writeRunArtifact(
 	path: string,
@@ -77,7 +89,66 @@ export function createRunAbort(
 	let pendingArtifact: RunArtifact | undefined;
 	let pendingStage: PendingStage | undefined;
 	let abortRecorded: Promise<void> | undefined;
-	const restoreOnSignal = (_signal: NodeJS.Signals): void => undefined;
+	let teardownStarted: Promise<void> | undefined;
+	let abortStarted = false;
+
+	const markAborted = (reason: string): Promise<void> => {
+		abortRecorded ??= (async () => {
+			try {
+				if (pendingStage !== undefined) {
+					await writeStageJudgeFailure(pendingStage, reason);
+				}
+				if (pendingArtifact !== undefined) {
+					await writeRunArtifact(request.artifactFile, {
+						...pendingArtifact,
+						status: "FAILED",
+					});
+				}
+			} catch (error) {
+				dependencies.reportError(
+					`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		})();
+
+		return abortRecorded;
+	};
+	const teardown = (): Promise<void> => {
+		teardownStarted ??= request.teardown();
+
+		return teardownStarted;
+	};
+	const abortAndExit = async (signal: NodeJS.Signals): Promise<void> => {
+		try {
+			if (teardownStarted === undefined) {
+				await dependencies.killActiveCommands();
+			}
+			await markAborted(`run interrupted by ${signal}`);
+			await teardown();
+		} catch (error) {
+			dependencies.reportError(
+				error instanceof Error ? error.message : String(error),
+			);
+		} finally {
+			dependencies.exit(signalExitCode(signal));
+		}
+	};
+	const restoreOnSignal = (signal: NodeJS.Signals): void => {
+		dependencies.reportError(
+			`\nReceived ${signal}; restoring the target before exit.`,
+		);
+		if (abortStarted) {
+			return;
+		}
+
+		abortStarted = true;
+		void abortAndExit(signal);
+	};
+	const release = (): void => {
+		for (const signal of RUN_SIGNALS) {
+			dependencies.releaseSignal(signal, restoreOnSignal);
+		}
+	};
 
 	for (const signal of RUN_SIGNALS) {
 		dependencies.registerSignal(signal, restoreOnSignal);
@@ -90,31 +161,8 @@ export function createRunAbort(
 		trackPendingArtifact: (artifact) => {
 			pendingArtifact = artifact;
 		},
-		markAborted: (reason) => {
-			abortRecorded ??= (async () => {
-				try {
-					if (pendingStage !== undefined) {
-						await writeStageJudgeFailure(pendingStage, reason);
-					}
-					if (pendingArtifact !== undefined) {
-						await writeRunArtifact(request.artifactFile, {
-							...pendingArtifact,
-							status: "FAILED",
-						});
-					}
-				} catch (error) {
-					dependencies.reportError(
-						`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
-					);
-				}
-			})();
-
-			return abortRecorded;
-		},
-		release: () => {
-			for (const signal of RUN_SIGNALS) {
-				dependencies.releaseSignal(signal, restoreOnSignal);
-			}
-		},
+		markAborted,
+		teardown,
+		release,
 	};
 }
