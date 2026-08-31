@@ -5087,6 +5087,26 @@ describe(loadAttempts.name, () => {
 
 		expect(attempts).toHaveLength(1);
 	});
+
+	it("carries each replay's own corpus, model, and effort for the comparison guard", async () => {
+		const directory = await attemptFixture();
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(attempts[1]?.lineageInputs).toEqual({
+			corpusFiles: [{ path: "CLAUDE.md", sha256: "aa".repeat(32) }],
+			model: "sonnet",
+			effort: undefined,
+		});
+	});
+
+	it("leaves the original run's attempt without lineage inputs the stage file never held", async () => {
+		const directory = await attemptFixture();
+
+		const attempts = await loadAttempts(directory, "run1", "discuss", LINEAGE);
+
+		expect(attempts[0]?.lineageInputs).toBeUndefined();
+	});
 });
 
 describe(presentAttempts.name, () => {
@@ -5136,6 +5156,111 @@ describe(presentAttempts.name, () => {
 		);
 
 		expect(output).toContain("(identical)");
+	});
+
+	const lineageInputs = {
+		corpusFiles: [
+			{ path: "CLAUDE.md", sha256: "aa11" },
+			{ path: "skills/discuss/SKILL.md", sha256: "bb22" },
+		],
+		model: "sonnet",
+		effort: "high",
+	} as const;
+
+	it("presents attempts that share a consumed lineage", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+				{ ...attempt("replay r2", "A", "new\n"), lineageInputs },
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain("Attempts at checkpoint lineage-1:");
+	});
+
+	it("refuses attempts whose corpus differs, naming the file", () => {
+		expect(
+			presentAttempts(
+				"lineage-1",
+				[
+					{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+					{
+						...attempt("replay r2", "A", "new\n"),
+						lineageInputs: {
+							...lineageInputs,
+							corpusFiles: [
+								{ path: "CLAUDE.md", sha256: "aa11" },
+								{ path: "skills/discuss/SKILL.md", sha256: "changed" },
+							],
+						},
+					},
+				],
+				diffTexts,
+			),
+		).rejects.toThrow(/skills\/discuss\/SKILL\.md/u);
+	});
+
+	it("refuses attempts whose model differs, naming the models", () => {
+		expect(
+			presentAttempts(
+				"lineage-1",
+				[
+					{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+					{
+						...attempt("replay r2", "A", "new\n"),
+						lineageInputs: { ...lineageInputs, model: "opus" },
+					},
+				],
+				diffTexts,
+			),
+		).rejects.toThrow(/model sonnet.*opus/u);
+	});
+
+	it("refuses attempts whose effort differs, naming the efforts", () => {
+		expect(
+			presentAttempts(
+				"lineage-1",
+				[
+					{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+					{
+						...attempt("replay r2", "A", "new\n"),
+						lineageInputs: { ...lineageInputs, effort: "low" },
+					},
+				],
+				diffTexts,
+			),
+		).rejects.toThrow(/effort high.*low/u);
+	});
+
+	it("names the attempts whose lineages disagree", () => {
+		expect(
+			presentAttempts(
+				"lineage-1",
+				[
+					{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+					{
+						...attempt("replay r2", "A", "new\n"),
+						lineageInputs: { ...lineageInputs, model: "opus" },
+					},
+				],
+				diffTexts,
+			),
+		).rejects.toThrow(/original run run1.*replay r2/u);
+	});
+
+	it("presents attempts that record no lineage inputs, as records before this did", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				attempt("original run run1", "B", "old\n"),
+				attempt("replay r2", "A", "new\n"),
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain("Attempts at checkpoint lineage-1:");
 	});
 });
 

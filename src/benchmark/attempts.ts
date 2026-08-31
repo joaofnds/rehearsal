@@ -3,9 +3,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { CommandError, runCommand } from "./command";
+import type { HashedFile } from "./checkpoint";
 import type { ContextFile, Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
 import { readReplayRecord } from "./replay";
+
+/**
+ * The inputs that produced the checkpoint an attempt consumed. Two attempts
+ * are comparable only when these agree; a difference means the two ran
+ * against different corpora and their grades measure different things.
+ */
+export interface AttemptLineageInputs {
+	readonly corpusFiles: readonly HashedFile[];
+	readonly model: string;
+	readonly effort?: string | undefined;
+}
+
+export class LineageMismatchError extends Error {
+	public override name = "LineageMismatchError";
+}
 
 /**
  * One execution of a stage at a checkpoint: the original run's stage result
@@ -25,6 +41,7 @@ export interface Attempt {
 	readonly artifact?: ContextFile | undefined;
 	readonly changedPaths?: readonly string[] | undefined;
 	readonly diff?: string | undefined;
+	readonly lineageInputs?: AttemptLineageInputs | undefined;
 }
 
 const attemptScorecardSchema = z
@@ -59,6 +76,7 @@ function attemptFromScorecard(
 	label: string,
 	scorecard: AttemptScorecard,
 	totalCostUsd?: number,
+	lineageInputs?: AttemptLineageInputs,
 ): Attempt {
 	const { artifact, changedPaths, diff } = scorecard.input;
 
@@ -72,6 +90,7 @@ function attemptFromScorecard(
 		artifact,
 		changedPaths,
 		diff,
+		lineageInputs,
 	};
 }
 
@@ -79,7 +98,8 @@ function attemptFromScorecard(
  * The original run's stage file holds its scorecard only when the stage was
  * judged; a pending or failed marker is not an attempt. The stage session's
  * own cost lives in the run artifact, not the stage file, so the original
- * attempt carries no total.
+ * attempt carries neither a total nor lineage inputs: the guard compares the
+ * replays it can see rather than assuming the original's inputs.
  */
 async function loadOriginalAttempt(
 	runsDirectory: string,
@@ -138,6 +158,11 @@ export async function loadAttempts(
 				`replay ${record.timestamp}`,
 				attemptScorecardSchema.parse(record.scorecard),
 				record.stageCostUsd + record.productOwnerCostUsd + record.judgeCostUsd,
+				{
+					corpusFiles: record.corpusFiles,
+					model: record.model,
+					effort: record.effort,
+				},
 			),
 		);
 	}
@@ -185,6 +210,71 @@ function attemptContent(attempt: Attempt): string | undefined {
 	return attempt.artifact?.content ?? attempt.diff;
 }
 
+function lineageDifferences(
+	reference: AttemptLineageInputs,
+	other: AttemptLineageInputs,
+): string[] {
+	const differences: string[] = [];
+	if (reference.model !== other.model) {
+		differences.push(`model ${reference.model} against ${other.model}`);
+	}
+	if (reference.effort !== other.effort) {
+		differences.push(
+			`effort ${reference.effort ?? "none"} against ${other.effort ?? "none"}`,
+		);
+	}
+
+	const otherByPath = new Map(
+		other.corpusFiles.map((file) => [file.path, file.sha256]),
+	);
+	for (const file of reference.corpusFiles) {
+		const counterpart = otherByPath.get(file.path);
+		if (counterpart === undefined) {
+			differences.push(`${file.path} present in one attempt only`);
+			continue;
+		}
+		if (counterpart !== file.sha256) {
+			differences.push(`${file.path} differs`);
+		}
+
+		otherByPath.delete(file.path);
+	}
+	for (const path of otherByPath.keys()) {
+		differences.push(`${path} present in one attempt only`);
+	}
+
+	return differences.toSorted();
+}
+
+/**
+ * Grades from different corpora measure different things, so a side-by-side
+ * presentation of them would mislead rather than inform. Attempts recorded
+ * before lineage inputs existed carry none and are presented as before,
+ * because refusing them would break reading of every earlier run.
+ */
+function assertComparableLineages(attempts: readonly Attempt[]): void {
+	const labelled = attempts.filter(
+		(attempt): attempt is Attempt & { lineageInputs: AttemptLineageInputs } =>
+			attempt.lineageInputs !== undefined,
+	);
+	const [reference] = labelled;
+	if (!reference) {
+		return;
+	}
+
+	for (const attempt of labelled.slice(1)) {
+		const differences = lineageDifferences(
+			reference.lineageInputs,
+			attempt.lineageInputs,
+		);
+		if (differences.length > 0) {
+			throw new LineageMismatchError(
+				`Cannot compare ${reference.label} with ${attempt.label}: they consumed different inputs (${differences.join("; ")})`,
+			);
+		}
+	}
+}
+
 /**
  * Grades and cost line up for scanning; the latest attempt is then diffed
  * against each earlier one. For a delivery stage the comparable content is
@@ -195,6 +285,7 @@ export async function presentAttempts(
 	attempts: readonly Attempt[],
 	diff: typeof diffTexts = diffTexts,
 ): Promise<string> {
+	assertComparableLineages(attempts);
 	const lines = [`Attempts at checkpoint ${lineage}:`];
 
 	for (const [index, attempt] of attempts.entries()) {
