@@ -6,5 +6,6 @@
 - **Validation**: We use `zod` for everything. Do not add `class-validator/class-transformer`.
 - **Commits**: Conventional commit subjects (`type: description`, e.g. `feat: add audit worker`), matching the repository history.
 - **Testing**: We use the native `bun:test` runner. Do not install Jest. Run tests via `CONFIG_PATH=src/config/test.yaml bun run test:unit`.
+- **Stage hygiene**: Commit every workflow artifact a stage creates (glossary, documents, instruction references) before declaring the stage complete; never claim completion with uncommitted changes or an open question in the completion message.
 - **Backlog records**: Record acceptance criteria as backlog acceptance-criteria items (`backlog task edit <id> --ac "..."`), one directly observable behavior per item; prose in the card's sections does not count as acceptance criteria.
 - **Workflow artifacts**: Treat explicit task and product-brief facts as settled constraints. Carry every observable behavior into the current artifact; when producing a specification, also put it in the acceptance criteria so downstream stages receive the complete behavior contract. Do not reopen settled behavior as a question or defer it.

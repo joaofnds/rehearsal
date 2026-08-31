@@ -14,7 +14,7 @@
 		},
 		{
 			"id": "invented-scope",
-			"description": "FAIL when the shaped task adds material scope without an explicit requirement or Product Owner decision."
+			"description": "FAIL when the shaped task adds material product scope without an explicit requirement or Product Owner decision. Workflow record-keeping is never product scope: creating or extending the project glossary, referencing it from the project instructions, attaching documents, and editing the task card are all expected stage housekeeping and must not fail this blocker."
 		},
 		{
 			"id": "implementation-started",
