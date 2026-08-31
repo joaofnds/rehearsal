@@ -130,20 +130,48 @@ export async function resolveSkillDirectory(
 }
 
 /**
+ * Skills every stage reads regardless of which skill it invokes, so an edit
+ * to one changes every stage's corpus. A declared list: adding another global
+ * skill later is one entry here.
+ */
+export const GLOBAL_SKILLS: readonly string[] = ["doctrine"];
+
+/**
  * Corpus file paths are recorded relative to the corpus, not the machine, so
  * the same skill bytes produce the same lineage wherever they are installed.
+ * The global skills join every stage's corpus beside the installed
+ * instructions, because every stage reads them.
  */
 export async function captureStageCorpus(
 	skill: string,
 	instructions: string,
 	roots: readonly string[],
 ): Promise<readonly HashedFile[]> {
-	const directory = await resolveSkillDirectory(skill, roots);
-
-	return [
+	const files: HashedFile[] = [
 		{ path: "CLAUDE.md", sha256: sha256(instructions) },
-		...(await hashDirectory(directory, join("skills", skill))),
 	];
+
+	// The stage's own skill is hashed once even when it is a global one:
+	// hashing it twice would say nothing more and would make the corpus
+	// depend on which stage happens to invoke it.
+	for (const global of GLOBAL_SKILLS) {
+		files.push(
+			...(await hashDirectory(
+				await resolveSkillDirectory(global, roots),
+				join("skills", global),
+			)),
+		);
+	}
+	if (!GLOBAL_SKILLS.includes(skill)) {
+		files.push(
+			...(await hashDirectory(
+				await resolveSkillDirectory(skill, roots),
+				join("skills", skill),
+			)),
+		);
+	}
+
+	return files;
 }
 
 /**
