@@ -24,6 +24,11 @@ export const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 export type Effort = z.infer<typeof effortSchema>;
 export type WorkflowStage = string;
 
+export interface ConfirmationConfig {
+	readonly reps: number;
+	readonly approved: boolean;
+}
+
 export interface BenchmarkConfig {
 	readonly sourceDir: string;
 	readonly model: string;
@@ -32,37 +37,83 @@ export interface BenchmarkConfig {
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly pipelinePath: string;
+	readonly confirmation?: ConfirmationConfig | undefined;
 }
 
-function flagValues(args: readonly string[]): Map<string, string> {
+interface ParsedFlags {
+	readonly values: ReadonlyMap<string, string>;
+	readonly switches: ReadonlySet<string>;
+}
+
+const SWITCH_FLAGS = new Set(["--confirm", "--yes"]);
+
+function flagValues(args: readonly string[]): ParsedFlags {
 	const values = new Map<string, string>();
+	const switches = new Set<string>();
 
-	for (let index = 0; index < args.length; index += 2) {
+	for (let index = 0; index < args.length;) {
 		const key = args[index];
-		const value = args[index + 1];
-
-		if (
-			key === undefined ||
-			!key.startsWith("--") ||
-			value === undefined ||
-			value === ""
-		) {
+		if (key === undefined || !key.startsWith("--")) {
 			throw new Error(
 				`Invalid argument sequence near ${key ?? "end of input"}`,
 			);
 		}
+		if (SWITCH_FLAGS.has(key)) {
+			switches.add(key);
+			index += 1;
+			continue;
+		}
+
+		const value = args[index + 1];
+		if (value === undefined || value === "") {
+			throw new Error(`Invalid argument sequence near ${key}`);
+		}
 
 		values.set(key, value);
+		index += 2;
 	}
 
-	return values;
+	return { values, switches };
+}
+
+function parseConfirmation(flags: ParsedFlags): ConfirmationConfig | undefined {
+	const confirmation = flags.switches.has("--confirm");
+	const approved = flags.switches.has("--yes");
+	const repsText = flags.values.get("--reps");
+
+	if (!confirmation) {
+		if (repsText !== undefined || approved) {
+			throw new Error("Use --reps and --yes only with --confirm");
+		}
+
+		return undefined;
+	}
+
+	const reps = repsText === undefined ? 5 : Number(repsText);
+	if (!Number.isInteger(reps) || reps < 2) {
+		throw new Error("Confirmation reps must be an integer of at least 2");
+	}
+
+	return { reps, approved };
+}
+
+function withConfirmation<Config extends object>(
+	config: Config,
+	confirmation: ConfirmationConfig | undefined,
+): Config & { readonly confirmation?: ConfirmationConfig | undefined } {
+	if (confirmation === undefined) {
+		return config;
+	}
+
+	return { ...config, confirmation };
 }
 
 export function parseArgs(
 	args: readonly string[],
 	env: Readonly<Record<string, string | undefined>> = Bun.env,
 ): BenchmarkConfig {
-	const values = flagValues(args);
+	const flags = flagValues(args);
+	const { values } = flags;
 
 	const sourceDir = values.get("--target") ?? env["BENCHMARK_TARGET_DIR"];
 	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
@@ -96,20 +147,24 @@ export function parseArgs(
 	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
 		throw new Error("Session budget must be a positive number");
 	}
+	const confirmation = parseConfirmation(flags);
 
-	return {
-		sourceDir: resolve(sourceDir),
-		model,
-		effort,
-		judgeModel,
-		judgeEffort,
-		sessionBudgetUsd,
-		pipelinePath: controlRelativePath(
-			values.get("--pipeline") ??
-				env["BENCHMARK_PIPELINE"] ??
-				DEFAULT_PIPELINE_PATH,
-		),
-	};
+	return withConfirmation(
+		{
+			sourceDir: resolve(sourceDir),
+			model,
+			effort,
+			judgeModel,
+			judgeEffort,
+			sessionBudgetUsd,
+			pipelinePath: controlRelativePath(
+				values.get("--pipeline") ??
+					env["BENCHMARK_PIPELINE"] ??
+					DEFAULT_PIPELINE_PATH,
+			),
+		},
+		confirmation,
+	);
 }
 
 export interface ReplayCliConfig {
@@ -120,6 +175,7 @@ export interface ReplayCliConfig {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly confirmation?: ConfirmationConfig | undefined;
 }
 
 /**
@@ -131,7 +187,8 @@ export function parseReplayArgs(
 	args: readonly string[],
 	env: Readonly<Record<string, string | undefined>> = Bun.env,
 ): ReplayCliConfig {
-	const values = flagValues(args);
+	const flags = flagValues(args);
+	const { values } = flags;
 
 	const runName = values.get("--run");
 	const stage = values.get("--stage");
@@ -167,17 +224,21 @@ export function parseReplayArgs(
 	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
 		throw new Error("Session budget must be a positive number");
 	}
+	const confirmation = parseConfirmation(flags);
 
-	return {
-		runName,
-		stage,
-		model,
-		effort,
-		judgeModel:
-			values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model,
-		judgeEffort,
-		sessionBudgetUsd,
-	};
+	return withConfirmation(
+		{
+			runName,
+			stage,
+			model,
+			effort,
+			judgeModel:
+				values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model,
+			judgeEffort,
+			sessionBudgetUsd,
+		},
+		confirmation,
+	);
 }
 
 /**

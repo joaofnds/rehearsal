@@ -228,6 +228,23 @@ describe(parseArgs.name, () => {
 		expect(config.pipelinePath).toBe("pipelines/default.json");
 	});
 
+	it("selects a five-rep confirmation explicitly", () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+				"--confirm",
+			],
+			{},
+		);
+
+		expect(config.confirmation).toEqual({ reps: 5, approved: false });
+	});
+
 	it("defaults Judge effort to workflow effort", () => {
 		const config = parseArgs(
 			[
