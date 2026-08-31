@@ -1,11 +1,35 @@
 # Project Core Guidelines
 
-- **Stack**: NestJS, TypeScript, Bun.
-- **Database**: PostgreSQL with MikroORM. `bun run migrate` runs migrations. Follow the existing `defineEntity` persistence pattern instead of adding entity decorators.
-- **Formatting**: We strictly use Biome. Do not install/use ESLint or Prettier. Fix issues with `bun run check --apply`.
-- **Validation**: We use `zod` for everything. Do not add `class-validator/class-transformer`.
-- **Commits**: Conventional commit subjects (`type: description`, e.g. `feat: add audit worker`), matching the repository history.
-- **Testing**: We use the native `bun:test` runner. Do not install Jest. Run tests via `CONFIG_PATH=src/config/test.yaml bun run test:unit`.
-- **Stage hygiene**: Commit every workflow artifact a stage creates (glossary, documents, instruction references) before declaring the stage complete; never claim completion with uncommitted changes or an open question in the completion message.
-- **Backlog records**: Record acceptance criteria as backlog acceptance-criteria items (`backlog task edit <id> --ac "..."`), one directly observable behavior per item; prose in the card's sections does not count as acceptance criteria.
-- **Workflow artifacts**: Treat explicit task and product-brief facts as settled constraints. Carry every observable behavior into the current artifact; when producing a specification, also put it in the acceptance criteria so downstream stages receive the complete behavior contract. Do not reopen settled behavior as a question or defer it.
+- **What this is**: A benchmark harness that runs a workflow's stages against a
+  target repository, checkpoints each stage, and replays one stage from a
+  checkpoint so corpus edits can be graded. Entry points are `run-benchmark.ts`
+  and `replay-stage.ts`; the harness lives in `src/benchmark/`. Domain terms are
+  in [GLOSSARY.md](GLOSSARY.md); the direction is in `docs/vision.md` and
+  `docs/design.md`.
+- **Stack**: TypeScript on Bun. No framework, no database, no server. State is
+  files under `.benchmark-runs`.
+- **Formatting**: oxfmt. `bun run fmt` writes, `bun run fmt:check` verifies. Do
+  not install ESLint, Prettier, or Biome.
+- **Linting**: oxlint with type-aware rules, every category at error. Run
+  `bun run lint`. Tests are held to the same rules as source.
+- **Types**: `bun run typecheck` runs `tsc --noEmit`. Exact optional property
+  types are on: an optional field must be typed `?: T | undefined`.
+- **Validation**: We use `zod` for everything. Do not add
+  `class-validator/class-transformer`.
+- **Testing**: The native `bun:test` runner. Do not install Jest. Run the suite
+  with `bun test`.
+- **Commits**: Lowercase imperative subjects with no type prefix, matching the
+  repository history (`derive which checkpoints a corpus change makes stale`).
+  The body says why.
+- **Stage hygiene**: Commit every workflow artifact a stage creates (glossary,
+  documents, instruction references) before declaring the stage complete; never
+  claim completion with uncommitted changes or an open question in the
+  completion message.
+- **Backlog records**: Record acceptance criteria as backlog acceptance-criteria
+  items (`backlog task edit <id> --ac "..."`), one directly observable behavior
+  per item; prose in the card's sections does not count as acceptance criteria.
+- **Workflow artifacts**: Treat explicit task and product-brief facts as settled
+  constraints. Carry every observable behavior into the current artifact; when
+  producing a specification, also put it in the acceptance criteria so
+  downstream stages receive the complete behavior contract. Do not reopen
+  settled behavior as a question or defer it.
