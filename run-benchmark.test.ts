@@ -5662,7 +5662,7 @@ describe(runReplay.name, () => {
 		expect(fake.worktrees).toEqual([]);
 	});
 
-	it("labels the replay fresh when the corpus still matches the chain", async () => {
+	it("records the replay fresh when the corpus still matches the chain", async () => {
 		const run = await recordedRun([
 			{
 				path: "skills/discuss/SKILL.md",
@@ -5675,6 +5675,22 @@ describe(runReplay.name, () => {
 
 		expect(outcome.record.stale).toBe(false);
 		expect(outcome.record.staleness).toEqual([]);
+	});
+
+	it("prints when the checkpoint chain is fresh", async () => {
+		const run = await recordedRun([
+			{
+				path: "skills/discuss/SKILL.md",
+				sha256: createHash("sha256").update("discuss").digest("hex"),
+			},
+		]);
+		const fake = fakeReplayDependencies();
+
+		await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(
+			fake.log.filter((line) => line === "Checkpoint chain is fresh"),
+		).toEqual(["Checkpoint chain is fresh"]);
 	});
 
 	it("derives staleness from the request's instructions and the worktree's skills", async () => {
@@ -5696,7 +5712,7 @@ describe(runReplay.name, () => {
 		expect(upstream?.roots).toEqual(skillSearchRoots(worktree));
 	});
 
-	it("labels the replay stale and names the changed upstream file", async () => {
+	it("records the replay stale and names the changed upstream file", async () => {
 		const run = await recordedRun([
 			{ path: "skills/discuss/SKILL.md", sha256: "aa".repeat(32) },
 		]);
@@ -5708,8 +5724,23 @@ describe(runReplay.name, () => {
 		expect(outcome.record.staleness).toEqual([
 			{ stage: "discuss", causes: ["skills/discuss/SKILL.md changed"] },
 		]);
-		const printed = fake.log.join("\n");
-		expect(printed).toContain("skills/discuss/SKILL.md changed");
+	});
+
+	it("prints only stale checkpoint lines when the chain is stale", async () => {
+		const run = await recordedRun([
+			{ path: "skills/discuss/SKILL.md", sha256: "aa".repeat(32) },
+		]);
+		const fake = fakeReplayDependencies();
+
+		await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(
+			fake.log.filter(
+				(line) =>
+					line === "Checkpoint chain is fresh" ||
+					line.startsWith("Stale checkpoint "),
+			),
+		).toEqual(["Stale checkpoint discuss: skills/discuss/SKILL.md changed"]);
 	});
 
 	it("labels the replay stale when the model differs from the recorded run", async () => {

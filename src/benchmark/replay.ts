@@ -384,6 +384,9 @@ export async function runReplay(
 			),
 			{ model: request.model, effort: request.effort },
 		).filter(({ stale }) => stale);
+		if (staleness.length === 0) {
+			dependencies.log("Checkpoint chain is fresh");
+		}
 		for (const { stage, causes } of staleness) {
 			dependencies.log(`Stale checkpoint ${stage}: ${causes.join("; ")}`);
 		}
