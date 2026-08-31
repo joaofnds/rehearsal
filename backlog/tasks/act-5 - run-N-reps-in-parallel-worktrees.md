@@ -2,9 +2,10 @@
 id: ACT-5
 title: run N reps in parallel worktrees
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-08-31 12:57'
+updated_date: '2026-08-31 16:02'
 labels: []
 dependencies:
   - ACT-3
@@ -67,4 +68,6 @@ First test to write: drive a pure/injected confirmation coordinator with three f
 
 <!-- SECTION:NOTES:BEGIN -->
 Shaped from docs/vision.md, docs/design.md, docs/research.md, the completed ACT-3 replay primitive, current CLI/artifact contracts, and ACT-3 review findings. ACT-10 is a prerequisite because runBenchmark currently owns process-wide signal state and mutates the primary checkout; ACT-14 is a prerequisite because adding group and rep paths to the existing three duplicated layout implementations would deepen a known silent data-coupling defect.
+
+Build checkpoint 2026-08-31: confirmation CLI parsing and invalid-state guards; deterministic cost projection and approval dispatch; concurrent all-settled coordinator with stable rep identities; optional provider cost/token/turn retention across worker, Product Owner, and Judge calls; strict group and rep schemas; reliability and resource distributions; collision-free group layout; and frozen skill-corpus snapshot/install are committed through 6199229. Full suite: 281 pass, 0 fail; typecheck, lint, and format check pass. Production entry points are not yet switched: --confirm still reaches the legacy single-run path and must not be used until stage and pipeline confirmation executors are wired. Next test: run three replay reps through the coordinator with frozen checkpoint, corpus, and rubric inputs, proving overlapping detached worktrees, strict records, primary-checkout invariants, and cleanup.
 <!-- SECTION:NOTES:END -->
