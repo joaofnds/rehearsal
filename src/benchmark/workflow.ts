@@ -1,14 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { claudeArgs, readClaudeEnvelope, readStructuredOutput } from "./claude";
+import {
+	claudeArgs,
+	readClaudeCallMetrics,
+	readClaudeEnvelope,
+	readStructuredOutput,
+} from "./claude";
 import { runCommand } from "./command";
 import type { Effort, WorkflowStage } from "./config";
 import { CLAUDE_TIMEOUT_MS, MAX_STAGE_TURNS } from "./config";
-import type { StageTranscript } from "./contracts";
+import type { ClaudeCallMetrics, StageTranscript } from "./contracts";
 import { productAnswerSchema, stageTurnSchema } from "./contracts";
 
 export interface ProductOwnerSnapshot {
 	readonly sessionId: string;
 	readonly spentUsd: number;
+	readonly callMetrics?: readonly ClaudeCallMetrics[] | undefined;
 }
 
 export interface ProductOwner {
@@ -23,6 +29,45 @@ export interface ProductOwnerConfiguration {
 	readonly sessionBudgetUsd: number;
 	readonly task: string;
 	readonly productBrief: string;
+}
+
+export type ClaudeCommand = (
+	command: readonly string[],
+	directory: string,
+	options: { readonly timeoutMs: number },
+) => Promise<string>;
+
+export interface WorkflowStageRequest {
+	readonly targetDir: string;
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+	readonly productOwner: ProductOwner;
+	readonly taskId: string;
+	readonly stage: WorkflowStage;
+	readonly skill: string;
+}
+
+function appendCallMetrics(
+	callMetrics: readonly ClaudeCallMetrics[] | undefined,
+	metrics: ClaudeCallMetrics | undefined,
+): readonly ClaudeCallMetrics[] | undefined {
+	if (callMetrics === undefined || metrics === undefined) {
+		return undefined;
+	}
+
+	return [...callMetrics, metrics];
+}
+
+function withCallMetrics<Value extends object>(
+	value: Value,
+	callMetrics: readonly ClaudeCallMetrics[] | undefined,
+): Value & { readonly callMetrics?: readonly ClaudeCallMetrics[] | undefined } {
+	if (callMetrics === undefined) {
+		return value;
+	}
+
+	return { ...value, callMetrics };
 }
 
 function remainingBudget(limitUsd: number, spentUsd: number): number {
@@ -52,9 +97,11 @@ function continueStagePrompt(
  */
 export function createProductOwner(
 	configuration: ProductOwnerConfiguration,
+	runClaude: ClaudeCommand = runCommand,
 ): ProductOwner {
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
+	let callMetrics: readonly ClaudeCallMetrics[] | undefined = [];
 	let started = false;
 
 	return {
@@ -62,7 +109,7 @@ export function createProductOwner(
 			const prompt = started
 				? `The ${stage} session asks:\n\n${question}`
 				: `Feature request:\n\n${configuration.task}\n\nProduct brief:\n\n${configuration.productBrief}\n\nThe ${stage} session asks:\n\n${question}`;
-			const output = await runCommand(
+			const output = await runClaude(
 				[
 					...claudeArgs({
 						settings: {
@@ -88,31 +135,40 @@ export function createProductOwner(
 
 			sessionId = envelope.session_id;
 			spentUsd += envelope.total_cost_usd ?? 0;
+			callMetrics = appendCallMetrics(
+				callMetrics,
+				readClaudeCallMetrics(envelope),
+			);
 			started = true;
 
 			return readStructuredOutput(envelope, productAnswerSchema).answer;
 		},
-		snapshot: () => ({ sessionId, spentUsd }),
+		snapshot: () => withCallMetrics({ sessionId, spentUsd }, callMetrics),
 	};
 }
 
 export async function runWorkflowStage(
-	targetDir: string,
-	model: string,
-	effort: Effort | undefined,
-	sessionBudgetUsd: number,
-	productOwner: ProductOwner,
-	taskId: string,
-	stage: WorkflowStage,
-	skill: string,
+	request: WorkflowStageRequest,
+	runClaude: ClaudeCommand = runCommand,
 ): Promise<StageTranscript> {
+	const {
+		targetDir,
+		model,
+		effort,
+		sessionBudgetUsd,
+		productOwner,
+		taskId,
+		stage,
+		skill,
+	} = request;
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
+	let callMetrics: readonly ClaudeCallMetrics[] | undefined = [];
 	let prompt = stagePrompt(skill, taskId);
 	const exchanges: StageTranscript["exchanges"][number][] = [];
 
 	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
-		const output = await runCommand(
+		const output = await runClaude(
 			[
 				...claudeArgs({
 					settings: {
@@ -134,11 +190,18 @@ export async function runWorkflowStage(
 
 		sessionId = envelope.session_id;
 		spentUsd += envelope.total_cost_usd ?? 0;
+		callMetrics = appendCallMetrics(
+			callMetrics,
+			readClaudeCallMetrics(envelope),
+		);
 		console.log(agent.message);
 
 		if (agent.status === "COMPLETE") {
 			exchanges.push({ agent });
-			return { stage, sessionId, costUsd: spentUsd, exchanges };
+			return withCallMetrics(
+				{ stage, sessionId, costUsd: spentUsd, exchanges },
+				callMetrics,
+			);
 		}
 
 		const productOwnerAnswer = await productOwner.ask(stage, agent.message);

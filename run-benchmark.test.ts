@@ -153,6 +153,7 @@ import {
 	teardownTarget,
 } from "./src/benchmark/target";
 import type { ProductOwner } from "./src/benchmark/workflow";
+import { createProductOwner, runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUBRIC_IDS = [
 	"tests",
@@ -690,6 +691,118 @@ describe(readClaudeCallMetrics.name, () => {
 		);
 
 		expect(readClaudeCallMetrics(envelope)).toBeUndefined();
+	});
+});
+
+describe("workflow provider metrics", () => {
+	it("retains Product Owner call metrics", async () => {
+		const productOwner = createProductOwner(
+			{
+				directory: "/target",
+				model: "sonnet",
+				sessionBudgetUsd: 5,
+				task: "Build it",
+				productBrief: "Keep it small",
+			},
+			() =>
+				Promise.resolve(
+					JSON.stringify({
+						session_id: "po-session",
+						total_cost_usd: 0.2,
+						num_turns: 2,
+						usage: {
+							input_tokens: 50,
+							output_tokens: 10,
+							cache_read_input_tokens: 5,
+							cache_creation_input_tokens: 6,
+						},
+						structured_output: { answer: "Use the small scope" },
+					}),
+				),
+		);
+
+		await productOwner.ask("shape", "Which scope?");
+
+		expect(productOwner.snapshot()).toEqual({
+			sessionId: "po-session",
+			spentUsd: 0.2,
+			callMetrics: [
+				{
+					costUsd: 0.2,
+					inputTokens: 50,
+					outputTokens: 10,
+					cacheReadTokens: 5,
+					cacheWriteTokens: 6,
+					turns: 2,
+				},
+			],
+		});
+	});
+
+	it("retains every worker call and provider turn", async () => {
+		const responses = [
+			JSON.stringify({
+				session_id: "worker-session",
+				total_cost_usd: 0.3,
+				num_turns: 2,
+				usage: {
+					input_tokens: 60,
+					output_tokens: 12,
+					cache_read_input_tokens: 7,
+					cache_creation_input_tokens: 8,
+				},
+				structured_output: { status: "QUESTION", message: "Which scope?" },
+			}),
+			JSON.stringify({
+				session_id: "worker-session",
+				total_cost_usd: 0.4,
+				num_turns: 3,
+				usage: {
+					input_tokens: 70,
+					output_tokens: 14,
+					cache_read_input_tokens: 9,
+					cache_creation_input_tokens: 10,
+				},
+				structured_output: { status: "COMPLETE", message: "Shaped" },
+			}),
+		];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({ sessionId: "po-session", spentUsd: 0 }),
+		};
+
+		const transcript = await runWorkflowStage(
+			{
+				targetDir: "/target",
+				model: "sonnet",
+				effort: undefined,
+				sessionBudgetUsd: 5,
+				productOwner,
+				taskId: "ACT-5",
+				stage: "shape",
+				skill: "shape",
+			},
+			() => Promise.resolve(responses.shift() ?? ""),
+		);
+
+		expect(transcript.callMetrics).toEqual([
+			{
+				costUsd: 0.3,
+				inputTokens: 60,
+				outputTokens: 12,
+				cacheReadTokens: 7,
+				cacheWriteTokens: 8,
+				turns: 2,
+			},
+			{
+				costUsd: 0.4,
+				inputTokens: 70,
+				outputTokens: 14,
+				cacheReadTokens: 9,
+				cacheWriteTokens: 10,
+				turns: 3,
+			},
+		]);
 	});
 });
 
@@ -2920,16 +3033,7 @@ describe(runGradedStages.name, () => {
 			executed,
 			rubricsUsed,
 			dependencies: {
-				runWorkflowStage: (
-					_targetDir: string,
-					_model: string,
-					_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
-					_budget: number,
-					_productOwner: ProductOwner,
-					_taskId: string,
-					stage: string,
-					skill: string,
-				) => {
+				runWorkflowStage: ({ stage, skill }) => {
 					executed.push(skill);
 
 					return Promise.resolve({
@@ -3526,7 +3630,7 @@ describe(runGradedStages.name, () => {
 			runWorkflowStage: (
 				...args: Readonly<Parameters<(typeof dependencies)["runWorkflowStage"]>>
 			) => {
-				log.push(`run:${args[6]}`);
+				log.push(`run:${args[0].stage}`);
 
 				return dependencies.runWorkflowStage(...args);
 			},
@@ -6068,15 +6172,7 @@ describe(runReplay.name, () => {
 
 		const dependencies: ReplayDependencies = {
 			stageSession: {
-				runWorkflowStage: (
-					targetDir,
-					_model,
-					_effort,
-					_budget,
-					_productOwner,
-					_taskId,
-					stage,
-				) => {
+				runWorkflowStage: ({ targetDir, stage }) => {
 					stageDirs.push(targetDir);
 
 					return Promise.resolve({
@@ -6606,14 +6702,14 @@ describe(runReplay.name, () => {
 		const outcome = await runReplay(
 			{
 				stageSession: {
-					runWorkflowStage: async (targetDir, ...rest) => {
+					runWorkflowStage: async ({ targetDir, stage }) => {
 						await Bun.write(
 							join(targetDir, "backlog", "docs", "DOC-1 - replay-spec.md"),
 							"replayed spec\n",
 						);
 
 						return {
-							stage: rest[5],
+							stage,
 							sessionId: "session",
 							costUsd: 0.9,
 							exchanges: [],

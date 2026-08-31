@@ -345,16 +345,16 @@ export async function executeStageSession(
 		environment.skillRoots,
 	);
 	environment.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
-	const transcript = await dependencies.runWorkflowStage(
-		environment.targetDir,
-		environment.model,
-		environment.effort,
-		environment.sessionBudgetUsd,
-		environment.productOwner,
-		environment.taskId,
+	const transcript = await dependencies.runWorkflowStage({
+		targetDir: environment.targetDir,
+		model: environment.model,
+		effort: environment.effort,
+		sessionBudgetUsd: environment.sessionBudgetUsd,
+		productOwner: environment.productOwner,
+		taskId: environment.taskId,
 		stage,
-		definition.skill,
-	);
+		skill: definition.skill,
+	});
 
 	const currentTaskOutput = await dependencies.readTaskOutput(
 		environment.targetDir,
