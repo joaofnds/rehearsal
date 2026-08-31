@@ -8,6 +8,9 @@
   turns findings into rubric or instruction changes.
 - **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
   state, artifacts, and lineage.
+- **Confirmation run** — an explicitly requested group of at least two reps over
+  one frozen input set, used by the outer loop to produce a score; defaults to
+  five reps.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
 - **Corpus (instruction corpus)** — the instruction files under evaluation:
@@ -42,10 +45,16 @@
   the product brief; one session per run.
 - **Rep** — one repetition of a run; scores are distributions over reps, never
   a single rep.
+- **Rep outcome** — one binary reliability observation. A declared stage
+  succeeds with Judge grade A or B; the final outcome succeeds with Judge PASS.
+  A stop or execution failure is unsuccessful.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
 - **Rubric** — the frozen grading contract a Judge applies; per-stage under
   `rubrics/`, final in `rubric.md`.
+- **Score** — a statistical summary over a confirmation run's rep outcomes:
+  their distribution, success rate with standard error, and pass^k. A
+  single-rep Judge result is evidence, not a score.
 - **Run artifact** — the recorded evidence of a run under `.benchmark-runs/`.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
@@ -65,4 +74,7 @@
   unit test, with clean attribution and a proxy score.
 - **Target repository (template project)** — the real application repository,
   kept at a stable baseline, that tasks run against.
+- **Trajectory step** — one workflow-agent turn reported by the provider. PO and
+  Judge turns are excluded so the measure tracks corpus-induced workflow
+  behavior.
 - **Variant** — a named configuration: corpus version, model, and effort.
