@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { effortSchema } from "./config";
 import { claudeCallMetricsSchema, stageLetterGradeSchema } from "./contracts";
 
 const identitySchema = z
@@ -185,4 +186,102 @@ export function parseConfirmationRepRecord(
 	text: string,
 ): ConfirmationRepRecord {
 	return confirmationRepRecordSchema.parse(JSON.parse(text));
+}
+
+const frozenFileSchema = z
+	.object({
+		kind: z.enum([
+			"corpus",
+			"rubric",
+			"pipeline",
+			"instructions",
+			"task",
+			"product-brief",
+		]),
+		path: z.string().min(1),
+		sha256: z.string().regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
+	})
+	.strict();
+
+const frozenInputsSchema = z
+	.object({
+		lineage: lineageSchema,
+		files: z.array(frozenFileSchema).min(1),
+		model: z.string().min(1),
+		effort: effortSchema.optional(),
+		judgeModel: z.string().min(1),
+		judgeEffort: effortSchema.optional(),
+		sessionBudgetUsd: z.number().positive(),
+		pipelinePath: z.string().min(1),
+	})
+	.strict();
+
+const projectedCostSchema = z
+	.object({
+		reps: z.number().int().min(2),
+		perRepMaximumUsd: z.number().nonnegative(),
+		totalMaximumUsd: z.number().nonnegative(),
+	})
+	.strict();
+
+const repRecordReferenceSchema = z
+	.object({
+		repId: identitySchema,
+		ordinal: z.number().int().positive(),
+		path: z.string().min(1),
+	})
+	.strict();
+
+export const confirmationGroupRecordSchema = z
+	.object({
+		schemaVersion: z.literal(1),
+		groupId: identitySchema,
+		mode: z.enum(["stage", "pipeline"]),
+		reps: z.number().int().min(2),
+		declaredStages: z.array(z.string().min(1)).min(1),
+		inputs: frozenInputsSchema,
+		projectedCost: projectedCostSchema,
+		approval: z
+			.object({
+				method: z.enum(["interactive", "yes"]),
+				approved: z.literal(true),
+			})
+			.strict(),
+		repRecords: z.array(repRecordReferenceSchema),
+		reportFile: z.string().min(1),
+		makespanMs: elapsedSchema,
+	})
+	.strict()
+	.superRefine((record, context) => {
+		const referencesEveryRep =
+			record.repRecords.length === record.reps &&
+			record.repRecords.every(
+				(reference, index) =>
+					reference.ordinal === index + 1 &&
+					reference.repId === `${record.groupId}-rep-${index + 1}`,
+			);
+		if (!referencesEveryRep) {
+			context.addIssue({
+				code: "custom",
+				message: "Group must reference every requested rep exactly once",
+				path: ["repRecords"],
+			});
+		}
+		if (record.projectedCost.reps !== record.reps) {
+			context.addIssue({
+				code: "custom",
+				message: "Projected cost rep count must match the group",
+				path: ["projectedCost", "reps"],
+			});
+		}
+	});
+
+export type ConfirmationGroupRecord = z.infer<
+	typeof confirmationGroupRecordSchema
+>;
+
+export function parseConfirmationGroupRecord(
+	text: string,
+): ConfirmationGroupRecord {
+	return confirmationGroupRecordSchema.parse(JSON.parse(text));
 }

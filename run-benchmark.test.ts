@@ -12,8 +12,14 @@ import {
 	runConfirmation,
 } from "./src/benchmark/confirmation";
 import { buildReliabilityReport } from "./src/benchmark/confirmation-report";
-import type { ConfirmationRepRecord } from "./src/benchmark/confirmation-record";
-import { parseConfirmationRepRecord } from "./src/benchmark/confirmation-record";
+import type {
+	ConfirmationGroupRecord,
+	ConfirmationRepRecord,
+} from "./src/benchmark/confirmation-record";
+import {
+	parseConfirmationGroupRecord,
+	parseConfirmationRepRecord,
+} from "./src/benchmark/confirmation-record";
 import {
 	diffTexts,
 	loadAttempts,
@@ -843,6 +849,82 @@ describe(parseConfirmationRepRecord.name, () => {
 
 		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow(
 			"Worker trajectory steps must equal provider-reported worker turns",
+		);
+	});
+});
+
+describe(parseConfirmationGroupRecord.name, () => {
+	function groupRecord(): ConfirmationGroupRecord {
+		return {
+			schemaVersion: 1,
+			groupId: "group-1",
+			mode: "stage",
+			reps: 2,
+			declaredStages: ["build"],
+			inputs: {
+				lineage: {
+					kind: "CHECKPOINT",
+					lineage: "checkpoint-1",
+					targetSha: "a".repeat(40),
+				},
+				files: [
+					{
+						kind: "corpus",
+						path: "inputs/corpus/build/SKILL.md",
+						sha256: "b".repeat(64),
+					},
+					{
+						kind: "rubric",
+						path: "inputs/rubrics/build.json",
+						sha256: "c".repeat(64),
+					},
+				],
+				model: "sonnet",
+				effort: "high",
+				judgeModel: "opus",
+				judgeEffort: "high",
+				sessionBudgetUsd: 5,
+				pipelinePath: "pipelines/default.json",
+			},
+			projectedCost: {
+				reps: 2,
+				perRepMaximumUsd: 20,
+				totalMaximumUsd: 40,
+			},
+			approval: { method: "yes", approved: true },
+			repRecords: [
+				{
+					repId: "group-1-rep-1",
+					ordinal: 1,
+					path: "reps/group-1-rep-1/rep.json",
+				},
+				{
+					repId: "group-1-rep-2",
+					ordinal: 2,
+					path: "reps/group-1-rep-2/rep.json",
+				},
+			],
+			reportFile: "report.json",
+			makespanMs: 300,
+		};
+	}
+
+	it("accepts one frozen group envelope with every rep reference", () => {
+		const record = groupRecord();
+
+		expect(parseConfirmationGroupRecord(JSON.stringify(record))).toEqual(
+			record,
+		);
+	});
+
+	it("rejects a group missing a requested rep record", () => {
+		const record = {
+			...groupRecord(),
+			repRecords: groupRecord().repRecords.slice(1),
+		};
+
+		expect(() => parseConfirmationGroupRecord(JSON.stringify(record))).toThrow(
+			"Group must reference every requested rep exactly once",
 		);
 	});
 });
