@@ -44,7 +44,7 @@ import type {
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
-import type { JudgeAttempt } from "./judge-attempt";
+import type { JudgeAttempt, JudgeInvoker } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
@@ -217,6 +217,43 @@ export function buildFailedJudgeRunArtifact(
 		status: "FAILED",
 		failure: failure.message,
 	};
+}
+
+export interface FinalJudgeRequest {
+	readonly artifactFile: string;
+	readonly artifactInputs: RunArtifactBaseInputs;
+	readonly invoke?: JudgeInvoker | undefined;
+}
+
+export async function runFinalJudge(
+	request: FinalJudgeRequest,
+): Promise<JudgeResult> {
+	const { artifactInputs: inputs } = request;
+	const { config, evidence } = inputs;
+
+	try {
+		return await runJudge(
+			config.judgeModel,
+			config.judgeEffort,
+			config.sessionBudgetUsd,
+			inputs.rubric,
+			inputs.baselineContext,
+			evidence.diff,
+			evidence.changedPaths,
+			evidence.checkIntegrity,
+			evidence.localChecks,
+			request.invoke,
+		);
+	} catch (error) {
+		if (error instanceof JudgeOutputValidationError) {
+			await writeArtifact(
+				request.artifactFile,
+				buildFailedJudgeRunArtifact(inputs, error),
+			);
+		}
+
+		throw error;
+	}
 }
 
 /**
@@ -825,29 +862,10 @@ export async function runBenchmark(
 		};
 
 		console.log("\nJudge session");
-		let judge: JudgeResult;
-		try {
-			judge = await runJudge(
-				config.judgeModel,
-				config.judgeEffort,
-				config.sessionBudgetUsd,
-				rubric,
-				baselineContext,
-				evidence.diff,
-				evidence.changedPaths,
-				evidence.checkIntegrity,
-				evidence.localChecks,
-			);
-		} catch (error) {
-			if (error instanceof JudgeOutputValidationError) {
-				await writeArtifact(
-					runFiles.artifact,
-					buildFailedJudgeRunArtifact(artifactInputs, error),
-				);
-			}
-
-			throw error;
-		}
+		const judge = await runFinalJudge({
+			artifactFile: runFiles.artifact,
+			artifactInputs,
+		});
 		const { grade } = judge;
 		console.log(JSON.stringify(grade, null, 2));
 		const artifact = buildRunArtifact({
