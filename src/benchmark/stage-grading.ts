@@ -19,6 +19,8 @@ import {
 	stageJudgeOutputSchema,
 	stageRubricSchema,
 } from "./contracts";
+import type { JudgeAttempt } from "./judge-attempt";
+import { JudgeOutputValidationError } from "./judge-attempt";
 import type { StageDefinition, StageKind } from "./pipeline";
 
 const GRADE_ORDER: readonly StageLetterGrade[] = ["A", "B", "C", "D", "F"];
@@ -305,11 +307,14 @@ export async function runStageJudge(
 
 	try {
 		let costUsd = 0;
+		const attempts: JudgeAttempt[] = [];
 		let attemptPrompt = prompt;
 		for (let attempt = 1; ; attempt += 1) {
 			const output = await invokeJudge(attemptPrompt);
 			const envelope = readClaudeEnvelope(output);
-			costUsd += envelope.total_cost_usd ?? 0;
+			const attemptCostUsd = envelope.total_cost_usd ?? 0;
+			const payload = envelope.structured_output ?? envelope.result ?? null;
+			costUsd += attemptCostUsd;
 			try {
 				const stageOutput = applyAuthoritativeStageResults(
 					readStructuredOutput(envelope, stageJudgeOutputSchema),
@@ -317,6 +322,11 @@ export async function runStageJudge(
 				);
 				validateStageJudgeEvidence(stageOutput, input);
 				const grade = deriveStageGrade(stageOutput, source.rubric);
+				attempts.push({
+					payload,
+					costUsd: attemptCostUsd,
+					outcome: "ACCEPTED",
+				});
 
 				return {
 					stage: input.stage,
@@ -324,15 +334,27 @@ export async function runStageJudge(
 					rubric: source.rubric,
 					input,
 					prompt,
+					attempts,
 					costUsd,
 					grade,
 				};
 			} catch (error) {
+				const reason = error instanceof Error ? error.message : String(error);
+				attempts.push({
+					payload,
+					costUsd: attemptCostUsd,
+					outcome: "REJECTED",
+					error: reason,
+				});
 				if (attempt >= JUDGE_ATTEMPTS) {
-					throw error;
+					throw new JudgeOutputValidationError(
+						reason,
+						prompt,
+						attempts,
+						costUsd,
+					);
 				}
 
-				const reason = error instanceof Error ? error.message : String(error);
 				attemptPrompt = `${prompt}\n\nYour previous response was rejected: ${reason}. Correct it and return the full schema again.`;
 			}
 		}

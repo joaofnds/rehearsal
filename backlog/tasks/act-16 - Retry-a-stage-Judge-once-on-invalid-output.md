@@ -2,9 +2,10 @@
 id: ACT-16
 title: Retry a stage Judge once on invalid output
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 23:30'
-updated_date: '2026-08-31 05:23'
+updated_date: '2026-08-31 10:12'
 labels: []
 dependencies: []
 ordinal: 8008

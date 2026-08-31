@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { CheckpointRecord } from "./checkpoint";
 import type { Effort, WorkflowStage } from "./config";
+import type { JudgeAttempt } from "./judge-attempt";
 import type { PipelineDefinition, StageKind } from "./pipeline";
 
 /**
@@ -223,6 +224,7 @@ export interface StageScorecard {
 	readonly rubric: StageRubric;
 	readonly input: StageJudgeInput;
 	readonly prompt: string;
+	readonly attempts: readonly JudgeAttempt[];
 	readonly costUsd: number;
 	readonly grade: StageGrade;
 }

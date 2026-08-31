@@ -573,6 +573,7 @@ describe(collectCalibration.name, () => {
 				priorArtifacts: [],
 			},
 			prompt: "prompt",
+			attempts: [],
 			costUsd: 1,
 			grade: {
 				...stageJudgeOutput("PASS", "FAIL", "F"),
@@ -1647,6 +1648,9 @@ describe(runStageJudge.name, () => {
 			judgeResponse("not-a-path"),
 			judgeResponse("backlog-seed.md"),
 		];
+		const payloads = responses.map(
+			(response) => readClaudeEnvelope(response).structured_output,
+		);
 		const scorecard = await runStageJudge(
 			"sonnet",
 			undefined,
@@ -1666,6 +1670,20 @@ describe(runStageJudge.name, () => {
 		expect(prompts).toHaveLength(2);
 		expect(prompts[1]).toContain("Your previous response was rejected");
 		expect(prompts[1]).toContain("not-a-path");
+		expect(scorecard.attempts).toEqual([
+			{
+				payload: payloads[0],
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error:
+					"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+			},
+			{
+				payload: payloads[1],
+				costUsd: 0.1,
+				outcome: "ACCEPTED",
+			},
+		]);
 		expect(scorecard.costUsd).toBeCloseTo(0.2);
 		expect(scorecard.grade.grade).toBe("A");
 	});
@@ -1742,6 +1760,7 @@ describe(runGradedStages.name, () => {
 			),
 			input,
 			prompt: "prompt",
+			attempts: [],
 			costUsd: 0,
 			grade: {
 				...stageJudgeOutput("PASS", "PASS", verdict === "CONTINUE" ? "B" : "F"),
@@ -3122,6 +3141,7 @@ function stageScorecard(
 			priorArtifacts: [],
 		},
 		prompt: "prompt",
+		attempts: [],
 		costUsd: 1,
 		grade: deriveStageGrade(
 			{
@@ -4467,6 +4487,7 @@ describe(runReplay.name, () => {
 			},
 			input,
 			prompt: "prompt",
+			attempts: [],
 			costUsd: 0.5,
 			grade: {
 				hardBlockers: [],
@@ -5044,6 +5065,7 @@ describe(runReplay.name, () => {
 						rubric: loaded.rubric,
 						input,
 						prompt: "prompt",
+						attempts: [],
 						costUsd: 0.4,
 						grade: {
 							hardBlockers: [],
