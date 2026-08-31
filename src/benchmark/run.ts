@@ -42,6 +42,8 @@ import type {
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
+import type { JudgeAttempt } from "./judge-attempt";
+import { JudgeOutputValidationError } from "./judge-attempt";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
@@ -227,6 +229,33 @@ export interface PendingStage {
 	readonly file: string;
 	readonly stage: WorkflowStage;
 	readonly input: StageJudgeInput;
+	readonly failure?:
+		| {
+				readonly prompt: string;
+				readonly attempts: readonly JudgeAttempt[];
+				readonly costUsd: number;
+		  }
+		| undefined;
+}
+
+export async function writeStageJudgeFailure(
+	pending: PendingStage,
+	reason: string,
+): Promise<void> {
+	await Bun.write(
+		pending.file,
+		`${JSON.stringify(
+			{
+				status: "STAGE_JUDGE_FAILED",
+				stage: pending.stage,
+				error: reason,
+				input: pending.input,
+				...pending.failure,
+			},
+			null,
+			2,
+		)}\n`,
+	);
 }
 
 export interface StageContext {
@@ -465,14 +494,31 @@ export async function runGradedStages(
 				2,
 			)}\n`,
 		);
-		context.trackPendingStage({ file: stageFile, stage, input });
-		const scorecard = await dependencies.runStageJudge(
-			context.judgeModel,
-			context.judgeEffort,
-			context.sessionBudgetUsd,
-			input,
-			await loadStageRubric(definition),
-		);
+		const pendingStage = { file: stageFile, stage, input };
+		context.trackPendingStage(pendingStage);
+		let scorecard: StageScorecard;
+		try {
+			scorecard = await dependencies.runStageJudge(
+				context.judgeModel,
+				context.judgeEffort,
+				context.sessionBudgetUsd,
+				input,
+				await loadStageRubric(definition),
+			);
+		} catch (error) {
+			if (error instanceof JudgeOutputValidationError) {
+				context.trackPendingStage({
+					...pendingStage,
+					failure: {
+						prompt: error.prompt,
+						attempts: error.attempts,
+						costUsd: error.costUsd,
+					},
+				});
+			}
+
+			throw error;
+		}
 		context.trackPendingStage(undefined);
 		stageScorecards.push(scorecard);
 		const stageRecord = {
@@ -533,19 +579,7 @@ export async function runBenchmark(
 		abortRecorded ??= (async () => {
 			try {
 				if (pendingStage) {
-					await Bun.write(
-						pendingStage.file,
-						`${JSON.stringify(
-							{
-								status: "STAGE_JUDGE_FAILED",
-								stage: pendingStage.stage,
-								error: reason,
-								input: pendingStage.input,
-							},
-							null,
-							2,
-						)}\n`,
-					);
+					await writeStageJudgeFailure(pendingStage, reason);
 				}
 				if (pendingArtifact) {
 					await writeArtifact(runFiles.artifact, {

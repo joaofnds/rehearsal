@@ -77,6 +77,8 @@ import {
 	validateJudgeEvidence,
 	validateJudgeGrade,
 } from "./src/benchmark/judge";
+import type { JudgeAttempt } from "./src/benchmark/judge-attempt";
+import { JudgeOutputValidationError } from "./src/benchmark/judge-attempt";
 import type { RunManifest } from "./src/benchmark/manifest";
 import { loadRunManifest, writeRunManifest } from "./src/benchmark/manifest";
 import type {
@@ -92,6 +94,7 @@ import {
 	runReplay,
 } from "./src/benchmark/replay";
 import type {
+	PendingStage,
 	RunArtifactInputs,
 	StageContext,
 	StageDependencies,
@@ -101,6 +104,7 @@ import {
 	retainedCheckpointRecorder,
 	runBenchmark,
 	runGradedStages,
+	writeStageJudgeFailure,
 } from "./src/benchmark/run";
 import {
 	applyAuthoritativeStageResults,
@@ -1688,7 +1692,11 @@ describe(runStageJudge.name, () => {
 		expect(scorecard.grade.grade).toBe("A");
 	});
 
-	it("fails after the second invalid response", () => {
+	it("fails with both rejected attempts after the second invalid response", () => {
+		let calls = 0;
+		const response = judgeResponse("not-a-path");
+		const payload = readClaudeEnvelope(response).structured_output;
+
 		expect(
 			runStageJudge(
 				"sonnet",
@@ -1696,9 +1704,74 @@ describe(runStageJudge.name, () => {
 				5,
 				stageJudgeInput("shape"),
 				rubricSource,
-				() => Promise.resolve(judgeResponse("not-a-path")),
+				() => {
+					calls += 1;
+
+					return Promise.resolve(response);
+				},
 			),
-		).rejects.toThrow("cited unavailable evidence");
+		).rejects.toMatchObject({
+			name: "JudgeOutputValidationError",
+			costUsd: 0.2,
+			attempts: [
+				{
+					payload,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+				},
+				{
+					payload,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+				},
+			],
+		});
+		expect(calls).toBe(2);
+	});
+});
+
+describe(writeStageJudgeFailure.name, () => {
+	it("retains the frozen input and both rejected Judge attempts", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		temporaryDirectories.push(directory);
+		const file = join(directory, "shape.json");
+		const input = stageJudgeInput("shape");
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "first invalid payload" },
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error: "first validation error",
+			},
+			{
+				payload: { summary: "second invalid payload" },
+				costUsd: 0.2,
+				outcome: "REJECTED",
+				error: "second validation error",
+			},
+		];
+		const pending: PendingStage = {
+			file,
+			stage: "shape",
+			input,
+			failure: { prompt: "original prompt", attempts, costUsd: 0.3 },
+		};
+
+		await writeStageJudgeFailure(pending, "second validation error");
+
+		expect(JSON.parse(await Bun.file(file).text())).toEqual({
+			status: "STAGE_JUDGE_FAILED",
+			stage: "shape",
+			error: "second validation error",
+			input,
+			prompt: "original prompt",
+			attempts,
+			costUsd: 0.3,
+		});
 	});
 });
 
@@ -1930,6 +2003,43 @@ describe(runGradedStages.name, () => {
 			],
 			model: "opus",
 			effort: "high",
+		});
+	});
+
+	it("retains exhausted validation evidence on the pending stage", async () => {
+		const { dependencies } = fakeStageDependencies();
+		const attempts: readonly JudgeAttempt[] = [
+			{
+				payload: { summary: "invalid" },
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error: "invalid evidence",
+			},
+		];
+		const failure = new JudgeOutputValidationError(
+			"invalid evidence",
+			"original prompt",
+			attempts,
+			0.1,
+		);
+		const pendingStages: (PendingStage | undefined)[] = [];
+		const context = {
+			...(await stageContext()),
+			trackPendingStage: (pending: PendingStage | undefined) => {
+				pendingStages.push(pending);
+			},
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: () => Promise.reject(failure),
+		};
+
+		expect(runGradedStages(failing, context)).rejects.toBe(failure);
+
+		expect(pendingStages.at(-1)?.failure).toEqual({
+			prompt: "original prompt",
+			attempts,
+			costUsd: 0.1,
 		});
 	});
 
