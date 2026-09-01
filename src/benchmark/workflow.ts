@@ -168,6 +168,7 @@ export async function runWorkflowStage(
 	const exchanges: StageTranscript["exchanges"][number][] = [];
 
 	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
+		const budgetUsd = remainingBudget(sessionBudgetUsd, spentUsd);
 		let envelope;
 		let agent;
 		try {
@@ -177,7 +178,7 @@ export async function runWorkflowStage(
 						settings: {
 							model,
 							effort,
-							budgetUsd: remainingBudget(sessionBudgetUsd, spentUsd),
+							budgetUsd,
 						},
 						schema: stageTurnSchema,
 						access: "unrestricted",

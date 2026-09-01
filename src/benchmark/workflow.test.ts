@@ -232,4 +232,46 @@ describe("workflow provider metrics", () => {
 			});
 		},
 	);
+
+	it("does not classify budget exhaustion as a failed provider call", async () => {
+		const responses = [
+			JSON.stringify({
+				session_id: "worker-session",
+				total_cost_usd: 5,
+				structured_output: { status: "QUESTION", message: "Which scope?" },
+			}),
+		];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+
+		let failure: unknown;
+		try {
+			await runWorkflowStage(
+				{
+					targetDir: "/target",
+					model: "sonnet",
+					effort: undefined,
+					sessionBudgetUsd: 5,
+					productOwner,
+					taskId: "ACT-22.1",
+					stage: "shape",
+					skill: "shape",
+				},
+				() => Promise.resolve(responses.shift() ?? ""),
+			);
+		} catch (error) {
+			failure = error;
+		}
+
+		expect(failure).not.toBeInstanceOf(WorkflowExecutionError);
+		expect(failure).toMatchObject({
+			message: "Claude session exhausted its budget",
+		});
+	});
 });
