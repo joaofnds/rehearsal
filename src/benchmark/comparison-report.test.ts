@@ -3,9 +3,11 @@ import type { ConfirmationRepRecord } from "./confirmation-record";
 import { confirmationRepRecordSchema } from "./confirmation-record";
 import {
 	buildComparisonQuality,
+	buildComparisonResources,
 	buildPairedEstimate,
 } from "./comparison-report";
 import type { ComparisonArm } from "./comparison-record";
+import type { Immutable } from "./contracts";
 
 type StageFixtureOutcome = "pass" | "fail" | "error" | "not-reached";
 type FinalFixtureOutcome = "pass" | "fail" | "not-reached";
@@ -69,6 +71,7 @@ function repRecord(
 	groupId: string,
 	ordinal: number,
 	outcomes: Readonly<RepFixtureOutcomes>,
+	metricScale = 1,
 ): ConfirmationRepRecord {
 	const successful =
 		outcomes.discussion === "pass" &&
@@ -95,17 +98,17 @@ function repRecord(
 				{
 					role: "worker",
 					metrics: {
-						costUsd: ordinal,
-						inputTokens: ordinal * 10,
-						outputTokens: ordinal * 2,
-						cacheReadTokens: ordinal * 3,
-						cacheWriteTokens: ordinal * 4,
-						turns: ordinal,
+						costUsd: ordinal * metricScale,
+						inputTokens: ordinal * 10 * metricScale,
+						outputTokens: ordinal * 2 * metricScale,
+						cacheReadTokens: ordinal * 3 * metricScale,
+						cacheWriteTokens: ordinal * 4 * metricScale,
+						turns: ordinal * metricScale,
 					},
 				},
 			],
 		},
-		workerTrajectorySteps: ordinal,
+		workerTrajectorySteps: ordinal * metricScale,
 		elapsedMs: ordinal * 100,
 	});
 }
@@ -125,10 +128,23 @@ function qualityReps(
 	caseId: string,
 	role: ComparisonArm,
 	outcomes: readonly RepFixtureOutcomes[],
+	metricScale = 1,
 ): readonly ConfirmationRepRecord[] {
 	return outcomes.map((outcome, index) =>
-		repRecord(`${caseId}-${role}`, index + 1, outcome),
+		repRecord(`${caseId}-${role}`, index + 1, outcome, metricScale),
 	);
+}
+
+function withMissingMetrics(
+	record: Immutable<ConfirmationRepRecord>,
+	missing: string,
+): ConfirmationRepRecord {
+	return confirmationRepRecordSchema.parse({
+		...record,
+		outcome: "UNSUCCESSFUL",
+		metrics: { status: "MISSING", calls: [], missing: [missing] },
+		workerTrajectorySteps: 0,
+	});
 }
 
 describe(buildPairedEstimate.name, () => {
@@ -306,5 +322,123 @@ describe(buildComparisonQuality.name, () => {
 		expect(
 			report.contrasts.baselineMinusControl.quality.map(({ name }) => name),
 		).toEqual(["discuss", "build", "final"]);
+	});
+});
+
+describe(buildComparisonResources.name, () => {
+	it("reports complete resource means and unavailable missing-metric contrasts", () => {
+		const caseOneControl = [
+			repRecord("case-1-control", 1, FAIL, 0),
+			withMissingMetrics(
+				repRecord("case-1-control", 2, FAIL, 0),
+				"stage-judge call metrics",
+			),
+			repRecord("case-1-control", 3, FAIL, 0),
+			repRecord("case-1-control", 4, FAIL, 0),
+		];
+		const report = buildComparisonResources({
+			contract: {
+				mode: "pipeline",
+				declaredStages: ["discuss", "build"],
+				reps: 4,
+			},
+			cases: [
+				{
+					caseId: "case-1",
+					arms: {
+						baseline: qualityReps(
+							"case-1",
+							"baseline",
+							[PASS, PASS, PASS, PASS],
+							1,
+						),
+						candidate: qualityReps(
+							"case-1",
+							"candidate",
+							[PASS, PASS, PASS, PASS],
+							2,
+						),
+						control: caseOneControl,
+					},
+				},
+				{
+					caseId: "case-2",
+					arms: {
+						baseline: qualityReps(
+							"case-2",
+							"baseline",
+							[PASS, PASS, PASS, PASS],
+							1,
+						),
+						candidate: qualityReps(
+							"case-2",
+							"candidate",
+							[PASS, PASS, PASS, PASS],
+							3,
+						),
+						control: qualityReps(
+							"case-2",
+							"control",
+							[FAIL, FAIL, FAIL, FAIL],
+							0,
+						),
+					},
+				},
+			],
+		});
+
+		expect(report.cases[0]?.arms.candidate).toMatchObject({
+			status: "AVAILABLE",
+			completeReps: 4,
+			missingMetricReps: 0,
+			total: {
+				costUsd: { values: [2, 4, 6, 8], mean: 5 },
+				inputTokens: { values: [20, 40, 60, 80], mean: 50 },
+				outputTokens: { values: [4, 8, 12, 16], mean: 10 },
+				cacheReadTokens: { values: [6, 12, 18, 24], mean: 15 },
+				cacheWriteTokens: { values: [8, 16, 24, 32], mean: 20 },
+			},
+			workerTurns: { values: [2, 4, 6, 8], mean: 5 },
+		});
+		expect(report.cases[0]?.arms.control).toEqual({
+			status: "UNAVAILABLE",
+			completeReps: 3,
+			missingMetricReps: 1,
+			missingEvidence: [
+				{
+					repId: "case-1-control-rep-2",
+					ordinal: 2,
+					missing: ["stage-judge call metrics"],
+				},
+			],
+		});
+		expect(report.contrasts.candidateMinusBaseline.resources).toMatchObject({
+			status: "AVAILABLE",
+			total: {
+				costUsd: {
+					caseDeltas: [
+						{ caseId: "case-1", value: 2.5 },
+						{ caseId: "case-2", value: 5 },
+					],
+					meanDelta: 3.75,
+					standardError: 1.25,
+				},
+			},
+		});
+		expect(report.contrasts.candidateMinusControl.resources).toEqual({
+			status: "UNAVAILABLE",
+			missingEvidence: [
+				{
+					caseId: "case-1",
+					arm: "control",
+					repId: "case-1-control-rep-2",
+					ordinal: 2,
+					missing: ["stage-judge call metrics"],
+				},
+			],
+		});
+		expect(report.contrasts.baselineMinusControl.resources.status).toBe(
+			"UNAVAILABLE",
+		);
 	});
 });
