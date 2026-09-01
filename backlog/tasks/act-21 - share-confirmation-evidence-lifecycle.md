@@ -1,11 +1,11 @@
 ---
 id: ACT-21
 title: share confirmation evidence lifecycle
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-31 22:10'
-updated_date: '2026-09-01 08:51'
+updated_date: '2026-09-01 10:02'
 labels: []
 dependencies: []
 references:
@@ -13,6 +13,7 @@ references:
   - src/benchmark/pipeline-confirmation.ts
   - src/benchmark/confirmation-record.ts
   - run-benchmark.test.ts
+  - src/benchmark/confirmation-evidence.ts
 type: task
 ordinal: 14008
 ---
@@ -25,12 +26,12 @@ ACT-5 exposed duplicated frozen-file enumeration, metric completeness, rep failu
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Source inspection observes replay-confirmation.ts and pipeline-confirmation.ts calling one shared frozen-file writer and recursive byte-hashing enumerator, with group-relative paths and deterministic path order; neither orchestrator defines its own copy.
-- [ ] #2 A focused metrics-classification test supplies required worker, Product Owner, stage-Judge, and optional final-Judge attempts with both present and absent provider metrics, and observes MISSING status, every available call retained under its role, one missing reason per metric-less required attempt, and worker turns summed only from available worker calls.
-- [ ] #3 A two-stage pipeline confirmation test gives the first worker call metrics and the second no metrics, and observes an unsuccessful rep whose record retains the first call and its trajectory turns rather than erasing that evidence.
-- [ ] #4 A replay confirmation test containing only completed STOP and Judge-validation-rejection reps observes durable Judge evidence, retention refs for every cited result SHA, strict rep records, removed rep worktrees, and removal of their common temporary root.
-- [ ] #5 Existing replay and pipeline confirmation integration tests observe unchanged strict rep, group, and report shapes; completed outcomes clean up, pre-evidence failures preserve and log only created diagnostic worktrees, peers finish, and the temporary root remains only when it contains a preserved worktree.
-- [ ] #6 bun test, bun run typecheck, bun run lint, and bun run fmt:check all exit successfully.
+- [x] #1 Source inspection observes replay-confirmation.ts and pipeline-confirmation.ts calling one shared frozen-file writer and recursive byte-hashing enumerator, with group-relative paths and deterministic path order; neither orchestrator defines its own copy.
+- [x] #2 A focused metrics-classification test supplies required worker, Product Owner, stage-Judge, and optional final-Judge attempts with both present and absent provider metrics, and observes MISSING status, every available call retained under its role, one missing reason per metric-less required attempt, and worker turns summed only from available worker calls.
+- [x] #3 A two-stage pipeline confirmation test gives the first worker call metrics and the second no metrics, and observes an unsuccessful rep whose record retains the first call and its trajectory turns rather than erasing that evidence.
+- [x] #4 A replay confirmation test containing only completed STOP and Judge-validation-rejection reps observes durable Judge evidence, retention refs for every cited result SHA, strict rep records, removed rep worktrees, and removal of their common temporary root.
+- [x] #5 Existing replay and pipeline confirmation integration tests observe unchanged strict rep, group, and report shapes; completed outcomes clean up, pre-evidence failures preserve and log only created diagnostic worktrees, peers finish, and the temporary root remains only when it contains a preserved worktree.
+- [x] #6 bun test, bun run typecheck, bun run lint, and bun run fmt:check all exit successfully.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -69,4 +70,19 @@ Unknowns resolved from repository evidence:
 - The shared boundary ends at stable evidence policy. Replay checkpoint flow and pipeline stage flow vary for domain reasons and remain visible in their orchestrators.
 
 No decision was deferred.
+
+Build handoff 2026-09-01:
+- Added confirmation-evidence.ts as the single owner of frozen-file writing and sorted byte hashing, role-aware attempt metrics, completed and diagnostic rep settlement, strict group finalization, report persistence, and preservation-based temporary-root cleanup. Replay and pipeline retain their checkpoint/stage/final orchestration and mode-specific outcome construction; no caller remains on a local copy of these policies.
+- Corrected two observed drifts: completed replay Judge rejections now remove their empty temporary root, and a later pipeline worker metric omission marks the rep MISSING without erasing earlier worker calls or trajectory turns.
+- Added focused classifier, pipeline accumulation, replay completed-evidence, Judge-file durability, and retention-failure tests. Mutation observations: moving rep-record persistence before retention failed the settlement test at its record-absence assertion; removing rejected Judge evidence persistence failed the replay test with ENOENT at the cited evidence path.
+- Direct observation invoked the shared boundary with text and binary inputs: it returned deterministic group-relative sorted hashes, retained an available worker call while reporting one missing worker attempt and two trajectory turns, executed retention before cleanup, and left no completed worktree.
+- Final verification after review fixes: bun test observed 310 pass and 0 fail; bun run typecheck, bun run lint, and bun run fmt:check exited successfully. No paid provider or production confirmation run was executed.
+- Independent review: 0 blocking, 4 should-fix, 1 advisory note. Style, architecture, and security found nothing. Finding 1, pre-existing lossy mixed worker/Product Owner metrics and unrepresented failed Judge invocations, is tracked in ACT-22. Finding 2, replay tests not reading cited Judge files, was fixed and mutation-checked. Finding 3, retention-before-record ordering unpinned, was fixed and mutation-checked. Finding 4, repeated hand-assembled pipeline test dependencies, is already owned by ACT-13 acceptance criterion 2. Finding 5, duplicated group envelopes, was fixed by moving common construction into finalizeConfirmationGroup. Every finding is disposed; independent review is complete.
+- Refactor pass found no further small change after centralizing the group envelope. No behavior is implemented but unwired, and no open question remains.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shared confirmation evidence policy across stage replay and full pipeline execution. Frozen files, metric attempts, durable rep settlement, report/group persistence, and temporary-root cleanup now have one owner while each mode keeps direct orchestration. Replay cleans all completed outcomes, pipeline retains partial worker evidence, and strict artifacts remain unchanged. Observed 310 passing tests plus successful typecheck, lint, format check, focused mutation guards, and a direct shared-boundary invocation. Independent review has no unresolved finding; ACT-22 tracks pre-existing producer-level mixed-metric loss.
+<!-- SECTION:FINAL_SUMMARY:END -->
