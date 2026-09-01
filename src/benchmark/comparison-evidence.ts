@@ -1,10 +1,16 @@
+import { createHash } from "node:crypto";
+import { dirname, relative, resolve } from "node:path";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
 } from "./confirmation-record";
+import {
+	parseConfirmationGroupRecord,
+	parseConfirmationRepRecord,
+} from "./confirmation-record";
 import type { Immutable } from "./contracts";
-import { COMPARISON_ARMS } from "./comparison-record";
-import type { ComparisonArm } from "./comparison-record";
+import type { ComparisonArm, ComparisonManifest } from "./comparison-record";
+import { COMPARISON_ARMS, parseComparisonManifest } from "./comparison-record";
 
 type FrozenFile = ConfirmationGroupRecord["inputs"]["files"][number];
 
@@ -32,8 +38,306 @@ export interface ComparisonContract {
 	readonly reps: number;
 }
 
+export interface ComparisonEvidence {
+	readonly manifest: {
+		readonly path: string;
+		readonly sha256: string;
+	};
+	readonly cases: readonly ComparisonCaseEvidence[];
+	readonly contract: ComparisonContract;
+}
+
 export class ComparisonEvidenceError extends Error {
 	public override name = "ComparisonEvidenceError";
+}
+
+interface EvidenceLocation {
+	readonly caseId: string;
+	readonly arm: ComparisonArm | "all";
+	readonly field: string;
+}
+
+interface ReadEvidenceFileRequest extends EvidenceLocation {
+	readonly path: string;
+}
+
+interface EvidenceFile {
+	readonly bytes: Uint8Array;
+	readonly sha256: string;
+	readonly text: string;
+}
+
+function evidenceError(
+	location: Readonly<EvidenceLocation>,
+	message: string,
+): ComparisonEvidenceError {
+	return new ComparisonEvidenceError(
+		`case ${location.caseId} arm ${location.arm} field ${location.field}: ${message}`,
+	);
+}
+
+function sha256(bytes: Readonly<Uint8Array>): string {
+	return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function readEvidenceFile(
+	request: Readonly<ReadEvidenceFileRequest>,
+): Promise<EvidenceFile> {
+	const file = Bun.file(request.path);
+	if (!(await file.exists())) {
+		throw evidenceError(request, `no file at ${request.path}`);
+	}
+
+	const bytes = await file.bytes();
+
+	return {
+		bytes,
+		sha256: sha256(bytes),
+		text: new TextDecoder().decode(bytes),
+	};
+}
+
+interface LoadArmRequest {
+	readonly manifestDirectory: string;
+	readonly caseId: string;
+	readonly role: ComparisonArm;
+	readonly groupReference: string;
+}
+
+function assertRepMatchesGroup(
+	location: Readonly<EvidenceLocation>,
+	reference: ConfirmationGroupRecord["repRecords"][number],
+	record: Immutable<ConfirmationRepRecord>,
+	group: Immutable<ConfirmationGroupRecord>,
+): void {
+	if (record.groupId !== group.groupId) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.groupId` },
+			"rep group ID disagrees with its source group",
+		);
+	}
+	if (record.repId !== reference.repId) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.repId` },
+			"rep ID disagrees with its source group reference",
+		);
+	}
+	if (record.ordinal !== reference.ordinal) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.ordinal` },
+			"rep ordinal disagrees with its source group reference",
+		);
+	}
+	if (record.mode !== group.mode) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.mode` },
+			"rep mode disagrees with its source group",
+		);
+	}
+	if (!sameValue(record.lineage, group.inputs.lineage)) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.lineage` },
+			"rep lineage disagrees with its source group",
+		);
+	}
+
+	const repStages = record.stages.map(({ stage }) => stage);
+	if (!sameValue(repStages, group.declaredStages)) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.stages` },
+			"rep stages disagree with its source group",
+		);
+	}
+	if (
+		group.mode === "stage" &&
+		record.finalOutcome.status !== "NOT_APPLICABLE"
+	) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.finalOutcome` },
+			"stage rep final outcome must be not applicable",
+		);
+	}
+	if (
+		group.mode === "pipeline" &&
+		record.finalOutcome.status === "NOT_APPLICABLE"
+	) {
+		throw evidenceError(
+			{ ...location, field: `${location.field}.finalOutcome` },
+			"pipeline rep final outcome cannot be not applicable",
+		);
+	}
+}
+
+async function assertFrozenFiles(
+	request: Readonly<LoadArmRequest>,
+	groupPath: string,
+	group: Immutable<ConfirmationGroupRecord>,
+): Promise<void> {
+	const identities = new Set<string>();
+	for (const frozen of group.inputs.files) {
+		const identity = `${frozen.kind}:${frozen.path}`;
+		const field = `inputs.files[${identity}]`;
+		if (identities.has(identity)) {
+			throw evidenceError(
+				{ caseId: request.caseId, arm: request.role, field },
+				"duplicate frozen input path",
+			);
+		}
+
+		identities.add(identity);
+		const source = await readEvidenceFile({
+			caseId: request.caseId,
+			arm: request.role,
+			field: `${field}.path`,
+			path: resolve(dirname(groupPath), frozen.path),
+		});
+		if (source.sha256 !== frozen.sha256) {
+			throw evidenceError(
+				{ caseId: request.caseId, arm: request.role, field: `${field}.sha256` },
+				`recorded ${frozen.sha256} but found ${source.sha256}`,
+			);
+		}
+	}
+
+	if (!group.inputs.files.some(({ kind }) => kind === "corpus")) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.files.corpus",
+			},
+			"source group records no executed corpus",
+		);
+	}
+}
+
+async function loadRepRecords(
+	request: Readonly<LoadArmRequest>,
+	groupPath: string,
+	group: Immutable<ConfirmationGroupRecord>,
+): Promise<readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[]> {
+	const reps: DigestedRecord<Immutable<ConfirmationRepRecord>>[] = [];
+	for (const [index, reference] of group.repRecords.entries()) {
+		const field = `repRecords[${index}]`;
+		const path = resolve(dirname(groupPath), reference.path);
+		const source = await readEvidenceFile({
+			caseId: request.caseId,
+			arm: request.role,
+			field: `${field}.path`,
+			path,
+		});
+		let record: ConfirmationRepRecord;
+		try {
+			record = parseConfirmationRepRecord(source.text);
+		} catch {
+			throw evidenceError(
+				{ caseId: request.caseId, arm: request.role, field: `${field}.record` },
+				"invalid confirmation rep record",
+			);
+		}
+
+		assertRepMatchesGroup(
+			{ caseId: request.caseId, arm: request.role, field },
+			reference,
+			record,
+			group,
+		);
+		reps.push({
+			path: relative(request.manifestDirectory, path),
+			sha256: source.sha256,
+			record,
+		});
+	}
+
+	return reps;
+}
+
+async function loadArm(
+	request: Readonly<LoadArmRequest>,
+): Promise<ComparisonArmEvidence> {
+	const groupPath = resolve(request.manifestDirectory, request.groupReference);
+	const source = await readEvidenceFile({
+		caseId: request.caseId,
+		arm: request.role,
+		field: "group.path",
+		path: groupPath,
+	});
+	let group: ConfirmationGroupRecord;
+	try {
+		group = parseConfirmationGroupRecord(source.text);
+	} catch {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: "group.record" },
+			"invalid confirmation group record",
+		);
+	}
+
+	await assertFrozenFiles(request, groupPath, group);
+	const reps = await loadRepRecords(request, groupPath, group);
+
+	return {
+		role: request.role,
+		group: {
+			path: relative(request.manifestDirectory, groupPath),
+			sha256: source.sha256,
+			record: group,
+		},
+		reps,
+		executedCorpus: group.inputs.files.filter(({ kind }) => kind === "corpus"),
+	};
+}
+
+async function loadCase(
+	manifestDirectory: string,
+	benchmarkCase: ComparisonManifest["cases"][number],
+): Promise<ComparisonCaseEvidence> {
+	const baseline = await loadArm({
+		manifestDirectory,
+		caseId: benchmarkCase.caseId,
+		role: "baseline",
+		groupReference: benchmarkCase.arms.baseline,
+	});
+	const candidate = await loadArm({
+		manifestDirectory,
+		caseId: benchmarkCase.caseId,
+		role: "candidate",
+		groupReference: benchmarkCase.arms.candidate,
+	});
+	const control = await loadArm({
+		manifestDirectory,
+		caseId: benchmarkCase.caseId,
+		role: "control",
+		groupReference: benchmarkCase.arms.control,
+	});
+
+	return {
+		caseId: benchmarkCase.caseId,
+		arms: { baseline, candidate, control },
+	};
+}
+
+export async function loadComparisonEvidence(
+	manifestPath: string,
+): Promise<ComparisonEvidence> {
+	const absoluteManifestPath = resolve(manifestPath);
+	const source = await readEvidenceFile({
+		caseId: "manifest",
+		arm: "all",
+		field: "manifest.path",
+		path: absoluteManifestPath,
+	});
+	const manifest = parseComparisonManifest(source.text);
+	const manifestDirectory = dirname(absoluteManifestPath);
+	const cases: ComparisonCaseEvidence[] = [];
+	for (const benchmarkCase of manifest.cases) {
+		cases.push(await loadCase(manifestDirectory, benchmarkCase));
+	}
+
+	return {
+		manifest: { path: absoluteManifestPath, sha256: source.sha256 },
+		cases,
+		contract: assertComparableComparison(cases),
+	};
 }
 
 function sameValue<Value>(left: Value, right: Value): boolean {
