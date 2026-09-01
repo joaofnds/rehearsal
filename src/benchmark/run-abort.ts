@@ -236,14 +236,18 @@ export function createRunAbort(
 	};
 	const writeFailedArtifact = (
 		artifact: FailedJudgeRunArtifact,
-	): Promise<void> =>
-		enqueueTransition(() =>
-			writeRunArtifact(
+	): Promise<void> => {
+		pendingArtifact = artifact;
+
+		return enqueueTransition(async () => {
+			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
 				dependencies.persistence,
-			),
-		);
+			);
+			pendingArtifact = undefined;
+		});
+	};
 	const markAborted = (reason: string): Promise<void> => {
 		if (abortRecorded === undefined) {
 			abortRequested = true;

@@ -3313,6 +3313,7 @@ interface BlockedRunArtifactWrite {
 
 class ControlledRunArtifactPersistence implements RunArtifactPersistence {
 	public readonly files = new Map<string, string>();
+	public readonly writes: string[] = [];
 	public activeWrites = 0;
 	public maxActiveWrites = 0;
 	private nextFailure: Error | undefined;
@@ -3344,6 +3345,7 @@ class ControlledRunArtifactPersistence implements RunArtifactPersistence {
 	}
 
 	public async write(path: string, contents: string): Promise<void> {
+		this.writes.push(contents);
 		const blocked = this.nextWrite;
 		this.nextWrite = undefined;
 		const failure = this.nextFailure;
@@ -3368,6 +3370,7 @@ class ControlledRunArtifactPersistence implements RunArtifactPersistence {
 
 	public reset(): void {
 		this.files.clear();
+		this.writes.length = 0;
 		this.activeWrites = 0;
 		this.maxActiveWrites = 0;
 		this.nextFailure = undefined;
@@ -3477,6 +3480,48 @@ describe(createRunAbort.name, () => {
 		expect(JSON.parse(persistence.files.get(stageFile) ?? "")).toMatchObject({
 			status: "STAGE_JUDGE_FAILED",
 		});
+	});
+
+	it("does not start a queued normal stage transition after abort is requested", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const stageFile = "/runs/shape.json";
+		const blocked = persistence.blockNextWrite();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		const pendingWrite = abort.writePendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+		await blocked.started;
+		const completionWrite = abort.completeStage({
+			...stageScorecard("PASS"),
+			corpusFiles: [],
+			model: "sonnet",
+		});
+		const abortWrite = abort.markAborted("run interrupted");
+		blocked.release();
+		await Promise.all([pendingWrite, completionWrite, abortWrite]);
+
+		expect(
+			persistence.writes.map(
+				(contents) =>
+					z.object({ status: z.string() }).parse(JSON.parse(contents)).status,
+			),
+		).toEqual(["AWAITING_STAGE_JUDGE", "STAGE_JUDGE_FAILED"]);
 	});
 
 	it("records an interrupted pending run artifact as failed after the active write settles", async () => {
@@ -3660,6 +3705,81 @@ describe(createRunAbort.name, () => {
 			...completeArtifact,
 			status: "FAILED",
 		});
+	});
+
+	it("retries a failed final Judge artifact during abort recording", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const judgeFailure = new JudgeOutputValidationError({
+			message: "invalid Judge output",
+			prompt: "judge prompt",
+			attempts: [],
+			costUsd: 0,
+		});
+		const artifact = buildFailedJudgeRunArtifact(
+			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			judgeFailure,
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const persistenceFailure = persistence.failNextWrite();
+
+		expect(abort.writeFailedArtifact(artifact)).rejects.toBe(
+			persistenceFailure,
+		);
+		await abort.markAborted("run failed");
+
+		expect(JSON.parse(persistence.files.get(artifactFile) ?? "")).toEqual(
+			artifact,
+		);
+	});
+
+	it("does not rewrite a successfully persisted final Judge failure", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const judgeFailure = new JudgeOutputValidationError({
+			message: "invalid Judge output",
+			prompt: "judge prompt",
+			attempts: [],
+			costUsd: 0,
+		});
+		const artifact = buildFailedJudgeRunArtifact(
+			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			judgeFailure,
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writeFailedArtifact(artifact);
+		await abort.markAborted("later failure");
+
+		expect(persistence.writes).toHaveLength(1);
 	});
 
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
@@ -4388,7 +4508,12 @@ describe(runGradedStages.name, () => {
 
 		await runGradedStages(dependencies, context);
 
-		expect(persistence.files.has(context.stageFile("shape"))).toBe(true);
+		expect(
+			JSON.parse(persistence.files.get(context.stageFile("shape")) ?? ""),
+		).toMatchObject({
+			model: "sonnet",
+			grade: { verdict: "CONTINUE" },
+		});
 	});
 
 	it("retains commit subjects in awaiting and completed stage records", async () => {
