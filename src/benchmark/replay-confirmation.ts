@@ -25,6 +25,7 @@ import {
 } from "./confirmation-record";
 import type {
 	ConfirmationMetricAttempt,
+	ConfirmationRepResult,
 	FrozenFile,
 } from "./confirmation-evidence";
 import {
@@ -32,6 +33,8 @@ import {
 	frozenDirectoryFiles,
 	metricAttempts,
 	requiredMetricAttempts,
+	settleCompletedConfirmationRep,
+	settleDiagnosticConfirmationRep,
 	writeFrozenFile,
 } from "./confirmation-evidence";
 import { JudgeOutputValidationError } from "./judge-attempt";
@@ -77,11 +80,6 @@ export interface ReplayConfirmationOutcome {
 	readonly groupRecordFile: string;
 	readonly reportFile: string;
 	readonly repRecordFiles: readonly string[];
-}
-
-interface ReplayRepResult {
-	readonly recordFile: string;
-	readonly preservedWorktree: boolean;
 }
 
 async function freezeReplayInputs(
@@ -460,11 +458,6 @@ export async function runReplayConfirmation(
 					scorecardFile,
 					`${JSON.stringify(scorecard, null, 2)}\n`,
 				);
-				await recordRetentionRef(
-					frozen.manifest.sourceRoot,
-					`${request.groupId}/${plan.repId}`,
-					session.resultSha,
-				);
 				const record = completeRepRecord(
 					request,
 					frozen.plan.consumed,
@@ -479,16 +472,16 @@ export async function runReplayConfirmation(
 					stageElapsedMs,
 					now() - repStart,
 				);
-				await Bun.write(
-					repPaths.recordFile,
-					`${JSON.stringify(record, null, 2)}\n`,
-				);
-				await dependencies.removeWorktree(
-					frozen.manifest.sourceRoot,
-					plan.worktreePath,
-				);
-
-				return { recordFile: repPaths.recordFile, preservedWorktree: false };
+				return await settleCompletedConfirmationRep({
+					targetRoot: frozen.manifest.sourceRoot,
+					retentionName: `${request.groupId}/${plan.repId}`,
+					resultSha: session.resultSha,
+					recordFile: repPaths.recordFile,
+					recordContent: `${JSON.stringify(record, null, 2)}\n`,
+					worktreePath: plan.worktreePath,
+					recordRetentionRef,
+					removeWorktree: dependencies.removeWorktree,
+				});
 			} catch (error) {
 				const failure =
 					error instanceof Error ? error : new Error(String(error));
@@ -514,11 +507,6 @@ export async function runReplayConfirmation(
 							2,
 						)}\n`,
 					);
-					await recordRetentionRef(
-						frozen.manifest.sourceRoot,
-						`${request.groupId}/${plan.repId}`,
-						session.resultSha,
-					);
 					const record = rejectedJudgeRepRecord(
 						request,
 						frozen.plan.consumed,
@@ -533,21 +521,16 @@ export async function runReplayConfirmation(
 						now() - stageStart,
 						now() - repStart,
 					);
-					await Bun.write(
-						repPaths.recordFile,
-						`${JSON.stringify(record, null, 2)}\n`,
-					);
-					await dependencies.removeWorktree(
-						frozen.manifest.sourceRoot,
-						plan.worktreePath,
-					);
-
-					return { recordFile: repPaths.recordFile, preservedWorktree: false };
-				}
-				if (worktreeCreated) {
-					dependencies.log(
-						`Replay rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
-					);
+					return settleCompletedConfirmationRep({
+						targetRoot: frozen.manifest.sourceRoot,
+						retentionName: `${request.groupId}/${plan.repId}`,
+						resultSha: session.resultSha,
+						recordFile: repPaths.recordFile,
+						recordContent: `${JSON.stringify(record, null, 2)}\n`,
+						worktreePath: plan.worktreePath,
+						recordRetentionRef,
+						removeWorktree: dependencies.removeWorktree,
+					});
 				}
 				const record = failedRepRecord(
 					request,
@@ -558,26 +541,26 @@ export async function runReplayConfirmation(
 					failure.message,
 					now() - repStart,
 				);
-				await Bun.write(
-					repPaths.recordFile,
-					`${JSON.stringify(record, null, 2)}\n`,
-				);
-
-				return {
+				return settleDiagnosticConfirmationRep({
 					recordFile: repPaths.recordFile,
-					preservedWorktree: worktreeCreated,
-				};
+					recordContent: `${JSON.stringify(record, null, 2)}\n`,
+					worktreeCreated,
+					preservedMessage: `Replay rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+					log: dependencies.log,
+				});
 			}
 		},
 	);
 	const makespanMs = now() - makespanStart;
-	const repResults: readonly ReplayRepResult[] = results.map(({ outcome }) => {
-		if (outcome.status === "rejected") {
-			throw outcome.reason;
-		}
+	const repResults: readonly ConfirmationRepResult[] = results.map(
+		({ outcome }) => {
+			if (outcome.status === "rejected") {
+				throw outcome.reason;
+			}
 
-		return outcome.value;
-	});
+			return outcome.value;
+		},
+	);
 	const repRecordFiles = repResults.map(({ recordFile }) => recordFile);
 	const records = await Promise.all(
 		repRecordFiles.map(async (path) =>

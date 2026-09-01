@@ -41,6 +41,7 @@ import {
 } from "./confirmation-record";
 import type {
 	ConfirmationMetricAttempt,
+	ConfirmationRepResult,
 	FrozenFile,
 } from "./confirmation-evidence";
 import {
@@ -48,6 +49,8 @@ import {
 	frozenDirectoryFiles,
 	metricAttempts,
 	requiredMetricAttempts,
+	settleCompletedConfirmationRep,
+	settleDiagnosticConfirmationRep,
 	writeFrozenFile,
 } from "./confirmation-evidence";
 import { detachedStageDependencies } from "./replay";
@@ -288,11 +291,6 @@ interface PipelineRepPlan {
 	readonly worktreePath: string;
 }
 
-interface PipelineRepResult {
-	readonly recordFile: string;
-	readonly preservedWorktree: boolean;
-}
-
 interface StageClock {
 	readonly read: () => number | undefined;
 	readonly start: () => void;
@@ -334,7 +332,7 @@ async function runPipelineRep(
 	paths: ReturnType<typeof confirmationGroupPaths>,
 	plan: PipelineRepPlan,
 	now: () => number,
-): Promise<PipelineRepResult> {
+): Promise<ConfirmationRepResult> {
 	const repPaths = paths.rep(plan.repId);
 	await mkdir(repPaths.stagesDirectory, { recursive: true });
 	const repStart = now();
@@ -465,21 +463,16 @@ async function runPipelineRep(
 					workerTrajectorySteps: evidence.workerTrajectorySteps,
 					elapsedMs: now() - repStart,
 				});
-				await Bun.write(
-					repPaths.recordFile,
-					`${JSON.stringify(record, null, 2)}\n`,
-				);
-				await dependencies.recordRetentionRef(
-					request.source.root,
-					`${request.groupId}/${plan.repId}`,
-					currentSession.resultSha,
-				);
-				await dependencies.removeWorktree(
-					request.source.root,
-					plan.worktreePath,
-				);
-
-				return { recordFile: repPaths.recordFile, preservedWorktree: false };
+				return await settleCompletedConfirmationRep({
+					targetRoot: request.source.root,
+					retentionName: `${request.groupId}/${plan.repId}`,
+					resultSha: currentSession.resultSha,
+					recordFile: repPaths.recordFile,
+					recordContent: `${JSON.stringify(record, null, 2)}\n`,
+					worktreePath: plan.worktreePath,
+					recordRetentionRef: dependencies.recordRetentionRef,
+					removeWorktree: dependencies.removeWorktree,
+				});
 			}
 			({ resultSha: baselineSha } = currentSession);
 			if (currentSession.artifact !== undefined) {
@@ -567,18 +560,16 @@ async function runPipelineRep(
 			workerTrajectorySteps: evidence.workerTrajectorySteps,
 			elapsedMs: now() - repStart,
 		});
-		await dependencies.recordRetentionRef(
-			request.source.root,
-			`${request.groupId}/${plan.repId}`,
+		return await settleCompletedConfirmationRep({
+			targetRoot: request.source.root,
+			retentionName: `${request.groupId}/${plan.repId}`,
 			resultSha,
-		);
-		await Bun.write(
-			repPaths.recordFile,
-			`${JSON.stringify(record, null, 2)}\n`,
-		);
-		await dependencies.removeWorktree(request.source.root, plan.worktreePath);
-
-		return { recordFile: repPaths.recordFile, preservedWorktree: false };
+			recordFile: repPaths.recordFile,
+			recordContent: `${JSON.stringify(record, null, 2)}\n`,
+			worktreePath: plan.worktreePath,
+			recordRetentionRef: dependencies.recordRetentionRef,
+			removeWorktree: dependencies.removeWorktree,
+		});
 	} catch (error) {
 		const failure = error instanceof Error ? error : new Error(String(error));
 		const judgeFailure =
@@ -588,12 +579,6 @@ async function runPipelineRep(
 			worktreeCreated &&
 			productOwner !== undefined &&
 			(judgingFinal || currentSession !== undefined);
-		if (!completedJudgeRejection && worktreeCreated) {
-			dependencies.log(
-				`Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
-			);
-		}
-
 		if (stageClock.read() !== undefined && currentSession === undefined) {
 			workerAttempts.push({});
 		}
@@ -707,24 +692,28 @@ async function runPipelineRep(
 			workerTrajectorySteps: evidence.workerTrajectorySteps,
 			elapsedMs: now() - repStart,
 		});
-		await Bun.write(
-			repPaths.recordFile,
-			`${JSON.stringify(record, null, 2)}\n`,
-		);
 		if (completedJudgeRejection) {
 			const retainedSha = currentSession?.resultSha ?? resultSha;
-			await dependencies.recordRetentionRef(
-				request.source.root,
-				`${request.groupId}/${plan.repId}`,
-				retainedSha,
-			);
-			await dependencies.removeWorktree(request.source.root, plan.worktreePath);
+
+			return settleCompletedConfirmationRep({
+				targetRoot: request.source.root,
+				retentionName: `${request.groupId}/${plan.repId}`,
+				resultSha: retainedSha,
+				recordFile: repPaths.recordFile,
+				recordContent: `${JSON.stringify(record, null, 2)}\n`,
+				worktreePath: plan.worktreePath,
+				recordRetentionRef: dependencies.recordRetentionRef,
+				removeWorktree: dependencies.removeWorktree,
+			});
 		}
 
-		return {
+		return settleDiagnosticConfirmationRep({
 			recordFile: repPaths.recordFile,
-			preservedWorktree: worktreeCreated && !completedJudgeRejection,
-		};
+			recordContent: `${JSON.stringify(record, null, 2)}\n`,
+			worktreeCreated,
+			preservedMessage: `Pipeline rep ${plan.repId} failed; evidence preserved at ${plan.worktreePath}`,
+			log: dependencies.log,
+		});
 	}
 }
 

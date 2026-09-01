@@ -49,6 +49,65 @@ export async function frozenDirectoryFiles(
 	return files;
 }
 
+export interface ConfirmationRepResult {
+	readonly recordFile: string;
+	readonly preservedWorktree: boolean;
+}
+
+interface CompletedConfirmationRep {
+	readonly targetRoot: string;
+	readonly retentionName: string;
+	readonly resultSha: string;
+	readonly recordFile: string;
+	readonly recordContent: string;
+	readonly worktreePath: string;
+	readonly recordRetentionRef: (
+		targetRoot: string,
+		retentionName: string,
+		resultSha: string,
+	) => Promise<void>;
+	readonly removeWorktree: (
+		targetRoot: string,
+		worktreePath: string,
+	) => Promise<void>;
+}
+
+export async function settleCompletedConfirmationRep(
+	rep: Readonly<CompletedConfirmationRep>,
+): Promise<ConfirmationRepResult> {
+	await rep.recordRetentionRef(
+		rep.targetRoot,
+		rep.retentionName,
+		rep.resultSha,
+	);
+	await Bun.write(rep.recordFile, rep.recordContent);
+	await rep.removeWorktree(rep.targetRoot, rep.worktreePath);
+
+	return { recordFile: rep.recordFile, preservedWorktree: false };
+}
+
+interface DiagnosticConfirmationRep {
+	readonly recordFile: string;
+	readonly recordContent: string;
+	readonly worktreeCreated: boolean;
+	readonly preservedMessage: string;
+	readonly log: (message: string) => void;
+}
+
+export async function settleDiagnosticConfirmationRep(
+	rep: Readonly<DiagnosticConfirmationRep>,
+): Promise<ConfirmationRepResult> {
+	await Bun.write(rep.recordFile, rep.recordContent);
+	if (rep.worktreeCreated) {
+		rep.log(rep.preservedMessage);
+	}
+
+	return {
+		recordFile: rep.recordFile,
+		preservedWorktree: rep.worktreeCreated,
+	};
+}
+
 type MetricRole = "worker" | "product-owner" | "stage-judge" | "final-judge";
 
 export interface ConfirmationMetricAttempt {
