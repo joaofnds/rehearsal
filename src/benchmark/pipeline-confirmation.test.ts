@@ -1,291 +1,66 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
-import { installInstructions } from "./backlog";
-import {
-	captureStageCorpus,
-	materializeCheckpoint,
-	recordCheckpoint,
-} from "./checkpoint";
-import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
-import type {
-	ClaudeCallMetrics,
-	JudgeGrade,
-	LocalCheckResult,
-	StageJudgeInput,
-	StageRubric,
-	StageScorecard,
-} from "./contracts";
 import { JudgeOutputValidationError } from "./judge-attempt";
-import type { PipelineDefinition } from "./pipeline";
 import { runPipelineConfirmation } from "./pipeline-confirmation";
 import {
-	addWorktree,
-	assertBuildCommitted,
-	captureBuildCandidate,
-	changedPathsBetween,
-	removeWorktree,
-} from "./target";
-import { TestResources, commitAll } from "./test-support";
+	CONFIRMATION_METRIC,
+	PipelineConfirmationHarness,
+	completeFinalGrade,
+	pipelineStageScorecard,
+} from "./pipeline-confirmation-test-support";
+import { removeWorktree } from "./target";
+import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
 
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
-			},
-		],
-	};
-}
-
-const RUBRIC_IDS = [
-	"tests",
-	"worker",
-	"check-integrity",
-	"local-checks",
-] as const;
-
-function completeGrade(verdict: "PASS" | "FAIL"): JudgeGrade {
-	return {
-		requirements: RUBRIC_IDS.map((id) => requirement(id, verdict)),
-		verdict,
-		summary: "complete",
-	};
-}
-
-function requirement(
-	id: string,
-	status: "PASS" | "FAIL",
-): JudgeGrade["requirements"][number] {
-	return {
-		id,
-		status,
-		evidence: [
-			{
-				source: "diff",
-				path: "src/audit/example.ts",
-				claim: `${id} evidence`,
-			},
-		],
-	};
-}
-
 describe(runPipelineConfirmation.name, () => {
 	it("runs three frozen full-pipeline reps concurrently without changing the primary checkout", async () => {
-		const source = await testResources.createRepository();
-		await Bun.write(
-			join(source.directory, ".gitignore"),
-			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
-		);
-		await commitAll(source.directory, "chore: ignore workflow state");
-		const sourceHead = await runCommand(
-			["git", "rev-parse", "HEAD"],
-			source.directory,
-		);
-		const sourceSha = sourceHead.trim();
-		const parent = await mkdtemp(
-			join(tmpdir(), "rehearsal-pipeline-confirmation-"),
-		);
-		testResources.track(parent);
-		const corpusRoot = join(parent, "corpus");
-		for (const skill of ["discuss", "build", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill} corpus\n`);
-		}
-		const pipeline: PipelineDefinition = {
-			statuses: ["To Do", "Done"],
-			stages: [
-				{
-					name: "discuss",
-					kind: "planning",
-					skill: "discuss",
-					artifact: "spec",
-					rubric: "rubrics/discuss.json",
-					requiresAcceptanceCriteria: false,
-				},
-				{
-					name: "build",
-					kind: "delivery",
-					skill: "build",
-					rubric: "rubrics/build.json",
-				},
-			],
-		};
-		const stageRubric = {
-			hardBlockers: [],
-			requirements: [{ id: "scope", description: "Scope is explicit" }],
-			dimensions: [
-				{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
-			],
-		};
-		const metric: ClaudeCallMetrics = {
-			costUsd: 0.25,
-			inputTokens: 100,
-			outputTokens: 20,
-			cacheReadTokens: 30,
-			cacheWriteTokens: 40,
-			turns: 2,
-		};
-		const passingStageScorecard = (input: StageJudgeInput): StageScorecard => ({
-			stage: input.stage,
-			rubricPath: "rubrics/stage.json",
-			rubric: stageRubric,
-			input,
-			prompt: "prompt",
-			attempts: [
-				{
-					payload: { summary: "accepted" },
-					costUsd: metric.costUsd,
-					metrics: metric,
-					outcome: "ACCEPTED",
-				},
-			],
-			costUsd: metric.costUsd,
-			grade: {
-				hardBlockers: [],
-				requirements: [],
-				dimensions: [],
-				summary: "graded",
-				grade: "A",
-				verdict: "CONTINUE",
-			},
-		});
+		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const allStarted = Promise.withResolvers<boolean>();
 		const release = Promise.withResolvers<boolean>();
 		const events = new Map<number, string[]>();
-		const retained = new Map<string, string>();
-		const primaryBefore = {
-			head: await runCommand(["git", "rev-parse", "HEAD"], source.directory),
-			branch: await runCommand(
-				["git", "branch", "--show-current"],
-				source.directory,
-			),
-			status: await runCommand(
-				["git", "status", "--porcelain"],
-				source.directory,
-			),
-			base: await Bun.file(join(source.directory, "base.txt")).bytes(),
-		};
+		const primaryBefore = await repositoryState(harness.sourceRoot);
 
-		const execution = runPipelineConfirmation(
-			{
+		const execution = harness.run({}, (dependencies) => {
+			const { stageSession } = dependencies;
+			const { runWorkflowStage, captureStageCorpus } = stageSession;
+
+			return {
+				...dependencies,
 				stageSession: {
-					runWorkflowStage: async (workflowRequest) => {
-						const match = /-rep-(?<ordinal>\d+)$/u.exec(
-							workflowRequest.targetDir,
-						);
-						const ordinal = Number(match?.groups?.["ordinal"]);
+					...stageSession,
+					runWorkflowStage: async (request) => {
+						const ordinal = repOrdinal(request.targetDir);
 						const repEvents = events.get(ordinal) ?? [];
-						repEvents.push(workflowRequest.stage);
+						repEvents.push(request.stage);
 						events.set(ordinal, repEvents);
-						if (workflowRequest.stage === "discuss") {
+						if (request.stage === "discuss") {
 							if (events.size === 3) {
 								allStarted.resolve(true);
 							}
 							await release.promise;
-							await mkdir(join(workflowRequest.targetDir, "backlog", "docs"), {
-								recursive: true,
-							});
-							await Bun.write(
-								join(
-									workflowRequest.targetDir,
-									"backlog",
-									"docs",
-									"DOC-1 - spec.md",
-								),
-								"confirmed spec\n",
-							);
-						} else {
-							await Bun.write(
-								join(workflowRequest.targetDir, "change.txt"),
-								`rep ${ordinal}\n`,
-							);
-							await runCommand(
-								["git", "add", "change.txt"],
-								workflowRequest.targetDir,
-							);
-							await runCommand(
-								["git", "commit", "-m", "feat: implement change"],
-								workflowRequest.targetDir,
-							);
 						}
 
+						const result = await runWorkflowStage(request);
+
 						return {
-							stage: workflowRequest.stage,
-							sessionId: `${ordinal}-${workflowRequest.stage}`,
-							costUsd: metric.costUsd,
-							callMetrics: [metric],
-							exchanges: [],
+							...result,
+							sessionId: `${ordinal}-${request.stage}`,
 						};
 					},
-					readTaskOutput: () =>
-						Promise.resolve(
-							JSON.stringify({
-								task: {
-									acceptanceCriteria: ["done"],
-									documentation: ["DOC-1 - spec.md"],
-								},
-							}),
-						),
-					readTaskCard: () => Promise.resolve("confirmed task card"),
-					captureBuildCandidate,
-					assertPlanningStageCompleted: async (
-						targetDir,
-						baselineSha,
-						stage,
-					) => ({
-						taskState: `${stage.name}-state`,
-						artifact: {
-							path: "backlog/docs/DOC-1 - spec.md",
-							content: await Bun.file(
-								join(targetDir, "backlog", "docs", "DOC-1 - spec.md"),
-							).text(),
-						},
-						resultSha: baselineSha,
-						diff: "",
-						changedPaths: [],
-					}),
-					assertBuildCommitted,
-					changedPathsBetween,
-					captureCheckIntegrity: () =>
-						Promise.resolve(harnessResult("PASS", "checks match")),
-					captureTreatmentChecks: () =>
-						Promise.resolve(harnessResult("PASS", "all green")),
 					captureStageCorpus: async (skill, instructions, roots) => {
 						await Bun.sleep(500);
 
 						return captureStageCorpus(skill, instructions, roots);
 					},
 				},
-				runStageJudge: (_model, _effort, _budget, input, rubricSource) =>
-					Promise.resolve({
-						...passingStageScorecard(input),
-						rubricPath: rubricSource.rubricPath,
-						rubric: rubricSource.rubric,
-						attempts: [
-							{
-								payload: { summary: "accepted" },
-								costUsd: metric.costUsd,
-								metrics: metric,
-								outcome: "ACCEPTED",
-							},
-						],
-					}),
 				runFinalJudge: (request) => {
 					const { ordinal } = request;
 					const repEvents = events.get(ordinal) ?? [];
@@ -300,26 +75,26 @@ describe(runPipelineConfirmation.name, () => {
 								attempts: [
 									{
 										payload: { invalid: true },
-										costUsd: metric.costUsd,
-										metrics: metric,
+										costUsd: CONFIRMATION_METRIC.costUsd,
+										metrics: CONFIRMATION_METRIC,
 										outcome: "REJECTED",
 										error: "invalid output",
 									},
 								],
-								costUsd: metric.costUsd,
+								costUsd: CONFIRMATION_METRIC.costUsd,
 							}),
 						);
 					}
 
 					const acceptedAttempt = {
 						payload: { summary: "pass" },
-						costUsd: metric.costUsd,
-						metrics: metric,
+						costUsd: CONFIRMATION_METRIC.costUsd,
+						metrics: CONFIRMATION_METRIC,
 						outcome: "ACCEPTED" as const,
 					};
 
 					return Promise.resolve({
-						grade: completeGrade("PASS"),
+						grade: completeFinalGrade("PASS"),
 						prompt: "final prompt",
 						attempts:
 							ordinal === 2
@@ -333,66 +108,11 @@ describe(runPipelineConfirmation.name, () => {
 										acceptedAttempt,
 									]
 								: [acceptedAttempt],
-						costUsd: metric.costUsd,
+						costUsd: CONFIRMATION_METRIC.costUsd,
 					});
 				},
-				createTaskCommit: async (targetDir, _task, instructions) => ({
-					taskId: "TASK-1",
-					taskSha: await installInstructions(targetDir, instructions),
-				}),
-				runChecks: () => Promise.resolve(),
-				captureBaselineContext,
-				captureFileHashes,
-				addWorktree,
-				removeWorktree,
-				materializeCheckpoint,
-				recordCheckpoint,
-				recordRetentionRef: (_targetDir, runName, targetSha) => {
-					retained.set(runName, targetSha);
-
-					return Promise.resolve();
-				},
-				captureBuildCandidate,
-				log: () => undefined,
-			},
-			{
-				runsDirectory: parent,
-				groupId: "pipeline-confirmation-1",
-				reps: 3,
-				projectedCost: {
-					reps: 3,
-					perRepMaximumUsd: 45,
-					totalMaximumUsd: 135,
-				},
-				approvalMethod: "yes",
-				source: { root: source.directory, sha: sourceSha },
-				controlSha: "a".repeat(40),
-				pipelinePath: "pipelines/test.json",
-				pipeline,
-				task: "# Task\n\nImplement it.",
-				productBrief: "Product brief",
-				instructions: "Frozen instructions\n",
-				finalRubric: "1. `final`: pass the candidate\n",
-				stageRubrics: {
-					discuss: {
-						rubricPath: "rubrics/discuss.json",
-						content: "{}\n",
-						rubric: stageRubric,
-					},
-					build: {
-						rubricPath: "rubrics/build.json",
-						content: "{}\n",
-						rubric: stageRubric,
-					},
-				},
-				corpusRoots: [corpusRoot],
-				model: "sonnet",
-				effort: "high",
-				judgeModel: "opus",
-				judgeEffort: "high",
-				sessionBudgetUsd: 5,
-			},
-		);
+			};
+		});
 
 		await allStarted.promise;
 		expect(events.size).toBe(3);
@@ -427,7 +147,9 @@ describe(runPipelineConfirmation.name, () => {
 			evidence: { recordFile: "final.json" },
 		});
 		expect(
-			retained.get("pipeline-confirmation-1/pipeline-confirmation-1-rep-3"),
+			harness.retained.get(
+				"pipeline-confirmation-1/pipeline-confirmation-1-rep-3",
+			),
 		).toBe(
 			records[2]?.finalOutcome.status === "EXECUTION_FAILED"
 				? records[2].finalOutcome.evidence?.resultSha
@@ -461,22 +183,10 @@ describe(runPipelineConfirmation.name, () => {
 		);
 		expect(group.mode).toBe("pipeline");
 		expect(group.declaredStages).toEqual(["discuss", "build"]);
-		const primaryAfter = {
-			head: await runCommand(["git", "rev-parse", "HEAD"], source.directory),
-			branch: await runCommand(
-				["git", "branch", "--show-current"],
-				source.directory,
-			),
-			status: await runCommand(
-				["git", "status", "--porcelain"],
-				source.directory,
-			),
-			base: await Bun.file(join(source.directory, "base.txt")).bytes(),
-		};
-		expect(primaryAfter).toEqual(primaryBefore);
+		expect(await repositoryState(harness.sourceRoot)).toEqual(primaryBefore);
 		const worktrees = await runCommand(
 			["git", "worktree", "list", "--porcelain"],
-			source.directory,
+			harness.sourceRoot,
 		);
 		expect(
 			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
@@ -495,162 +205,10 @@ describe(runPipelineConfirmation.name, () => {
 	});
 
 	it("retains earlier pipeline worker metrics when a later stage omits them", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-pipeline-metrics-"));
-		testResources.track(parent);
-		const sourceRoot = join(parent, "source");
-		await mkdir(sourceRoot);
-		const corpusRoot = join(parent, "corpus");
-		for (const skill of ["discuss", "build", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
-		}
-		const pipeline: PipelineDefinition = {
-			statuses: ["To Do", "Done"],
-			stages: [
-				{
-					name: "discuss",
-					kind: "planning",
-					skill: "discuss",
-					artifact: "spec",
-					rubric: "rubrics/discuss.json",
-					requiresAcceptanceCriteria: false,
-				},
-				{
-					name: "build",
-					kind: "delivery",
-					skill: "build",
-					rubric: "rubrics/build.json",
-				},
-			],
-		};
-		const rubric: StageRubric = {
-			hardBlockers: [],
-			requirements: [],
-			dimensions: [],
-		};
-		const metric: ClaudeCallMetrics = {
-			costUsd: 0.25,
-			inputTokens: 100,
-			outputTokens: 20,
-			cacheReadTokens: 30,
-			cacheWriteTokens: 40,
-			turns: 2,
-		};
-		const taskSha = "b".repeat(40);
-		const resultSha = "c".repeat(40);
+		const harness = await PipelineConfirmationHarness.setup(testResources);
 
-		const outcome = await runPipelineConfirmation(
+		const outcome = await harness.run(
 			{
-				stageSession: {
-					runWorkflowStage: (request) => {
-						const transcript = {
-							stage: request.stage,
-							sessionId: `${request.targetDir}-${request.stage}`,
-							costUsd: metric.costUsd,
-							exchanges: [],
-						};
-						if (request.stage === "discuss") {
-							return Promise.resolve({ ...transcript, callMetrics: [metric] });
-						}
-
-						return Promise.resolve(transcript);
-					},
-					readTaskOutput: () =>
-						Promise.resolve(
-							JSON.stringify({
-								task: { acceptanceCriteria: ["done"], documentation: [] },
-							}),
-						),
-					readTaskCard: () => Promise.resolve("task card"),
-					captureBuildCandidate: () =>
-						Promise.resolve({
-							resultSha,
-							diff: "diff",
-							changedPaths: ["change.txt"],
-						}),
-					assertPlanningStageCompleted: (_targetDir, baselineSha, stage) =>
-						Promise.resolve({
-							taskState: `${stage.name}-state`,
-							artifact: { path: "backlog/docs/spec.md", content: "spec\n" },
-							resultSha: baselineSha,
-							diff: "",
-							changedPaths: [],
-						}),
-					assertBuildCommitted: () =>
-						Promise.resolve({
-							resultSha,
-							diff: "diff",
-							commitSubjects: ["feat: build"],
-						}),
-					changedPathsBetween: () => Promise.resolve(["change.txt"]),
-					captureCheckIntegrity: () =>
-						Promise.resolve(harnessResult("PASS", "checks match")),
-					captureTreatmentChecks: () =>
-						Promise.resolve(harnessResult("PASS", "checks pass")),
-					captureStageCorpus: () => Promise.resolve([]),
-				},
-				runStageJudge: (_model, _effort, _budget, input, source) =>
-					Promise.resolve({
-						stage: input.stage,
-						rubricPath: source.rubricPath,
-						rubric: source.rubric,
-						input,
-						prompt: "prompt",
-						attempts: [
-							{
-								payload: { summary: "accepted" },
-								costUsd: metric.costUsd,
-								metrics: metric,
-								outcome: "ACCEPTED",
-							},
-						],
-						costUsd: metric.costUsd,
-						grade: {
-							hardBlockers: [],
-							requirements: [],
-							dimensions: [],
-							summary: "accepted",
-							grade: "A",
-							verdict: "CONTINUE",
-						},
-					}),
-				runFinalJudge: () =>
-					Promise.resolve({
-						grade: completeGrade("PASS"),
-						prompt: "final prompt",
-						attempts: [
-							{
-								payload: { summary: "pass" },
-								costUsd: metric.costUsd,
-								metrics: metric,
-								outcome: "ACCEPTED",
-							},
-						],
-						costUsd: metric.costUsd,
-					}),
-				createTaskCommit: () => Promise.resolve({ taskId: "TASK-1", taskSha }),
-				runChecks: () => Promise.resolve(),
-				captureBaselineContext: () => Promise.resolve([]),
-				captureFileHashes: () => Promise.resolve(new Map<string, string>()),
-				addWorktree: async (_targetDir, _sha, worktreeDir) => {
-					await mkdir(worktreeDir, { recursive: true });
-				},
-				removeWorktree: async (_targetDir, worktreeDir) => {
-					await rm(worktreeDir, { force: true, recursive: true });
-				},
-				materializeCheckpoint,
-				recordCheckpoint,
-				recordRetentionRef: () => Promise.resolve(),
-				captureBuildCandidate: () =>
-					Promise.resolve({
-						resultSha,
-						diff: "diff",
-						changedPaths: ["change.txt"],
-					}),
-				log: () => undefined,
-			},
-			{
-				runsDirectory: parent,
 				groupId: "pipeline-metrics",
 				reps: 2,
 				projectedCost: {
@@ -658,31 +216,26 @@ describe(runPipelineConfirmation.name, () => {
 					perRepMaximumUsd: 45,
 					totalMaximumUsd: 90,
 				},
-				approvalMethod: "yes",
-				source: { root: sourceRoot, sha: "a".repeat(40) },
-				controlSha: "d".repeat(40),
-				pipelinePath: "pipelines/test.json",
-				pipeline,
-				task: "# Task\n\nImplement it.",
-				productBrief: "Brief",
-				instructions: "Instructions\n",
-				finalRubric: "1. `final`: pass\n",
-				stageRubrics: {
-					discuss: {
-						rubricPath: "rubrics/discuss.json",
-						content: "{}\n",
-						rubric,
+			},
+			(dependencies) => {
+				const { stageSession } = dependencies;
+				const { runWorkflowStage } = stageSession;
+
+				return {
+					...dependencies,
+					stageSession: {
+						...stageSession,
+						runWorkflowStage: async (request) => {
+							const result = await runWorkflowStage(request);
+							if (request.stage === "discuss") {
+								return result;
+							}
+							const { callMetrics: _callMetrics, ...withoutMetrics } = result;
+
+							return withoutMetrics;
+						},
 					},
-					build: {
-						rubricPath: "rubrics/build.json",
-						content: "{}\n",
-						rubric,
-					},
-				},
-				corpusRoots: [corpusRoot],
-				model: "sonnet",
-				judgeModel: "opus",
-				sessionBudgetUsd: 5,
+				};
 			},
 		);
 		const [recordFile] = outcome.repRecordFiles;
@@ -693,253 +246,90 @@ describe(runPipelineConfirmation.name, () => {
 		expect(record.metrics).toEqual({
 			status: "MISSING",
 			calls: [
-				{ role: "worker", metrics: metric },
-				{ role: "stage-judge", metrics: metric },
-				{ role: "stage-judge", metrics: metric },
-				{ role: "final-judge", metrics: metric },
+				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
+				{ role: "final-judge", metrics: CONFIRMATION_METRIC },
 			],
 			missing: ["worker call metrics"],
 		});
-		expect(record.workerTrajectorySteps).toBe(metric.turns);
+		expect(record.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
 	});
 
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
-		const source = await testResources.createRepository();
-		await Bun.write(
-			join(source.directory, ".gitignore"),
-			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
-		);
-		await commitAll(source.directory, "chore: ignore workflow state");
-		const sourceHead = await runCommand(
-			["git", "rev-parse", "HEAD"],
-			source.directory,
-		);
-		const sourceSha = sourceHead.trim();
-		const parent = await mkdtemp(
-			join(tmpdir(), "rehearsal-pipeline-failures-"),
-		);
-		testResources.track(parent);
-		const corpusRoot = join(parent, "corpus");
-		for (const skill of ["discuss", "build", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
-		}
-		const pipeline: PipelineDefinition = {
-			statuses: ["To Do", "Done"],
-			stages: [
-				{
-					name: "discuss",
-					kind: "planning",
-					skill: "discuss",
-					artifact: "spec",
-					rubric: "rubrics/discuss.json",
-					requiresAcceptanceCriteria: false,
-				},
-				{
-					name: "build",
-					kind: "delivery",
-					skill: "build",
-					rubric: "rubrics/build.json",
-				},
-			],
-		};
-		const rubric = {
-			hardBlockers: [],
-			requirements: [],
-			dimensions: [],
-		};
-		const metric: ClaudeCallMetrics = {
-			costUsd: 0.25,
-			inputTokens: 100,
-			outputTokens: 20,
-			cacheReadTokens: 30,
-			cacheWriteTokens: 40,
-			turns: 2,
-		};
+		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const failed = Promise.withResolvers<boolean>();
 		const finished: number[] = [];
-		const removed: string[] = [];
-		const logs: string[] = [];
-		const retained: string[] = [];
-		const outcome = await runPipelineConfirmation(
-			{
-				stageSession: {
-					runWorkflowStage: async (workflowRequest) => {
-						const match = /-rep-(?<ordinal>\d+)$/u.exec(
-							workflowRequest.targetDir,
-						);
-						const ordinal = Number(match?.groups?.["ordinal"]);
-						if (ordinal === 2) {
-							failed.resolve(true);
 
-							throw new Error("worker failed before evidence");
-						}
+		const outcome = await harness.run(
+			{ groupId: "pipeline-failures" },
+			(dependencies) => {
+				const { stageSession } = dependencies;
+				const { runWorkflowStage } = stageSession;
 
-						await failed.promise;
-						if (workflowRequest.stage === "discuss") {
-							finished.push(ordinal);
-						} else {
-							await Bun.write(
-								join(workflowRequest.targetDir, "change.txt"),
-								`rep ${ordinal}\n`,
-							);
-							await runCommand(
-								["git", "add", "change.txt"],
-								workflowRequest.targetDir,
-							);
-							await runCommand(
-								["git", "commit", "-m", "feat: implement change"],
-								workflowRequest.targetDir,
-							);
-						}
+				return {
+					...dependencies,
+					stageSession: {
+						...stageSession,
+						runWorkflowStage: async (request) => {
+							const ordinal = repOrdinal(request.targetDir);
+							if (ordinal === 2) {
+								failed.resolve(true);
 
-						return {
-							stage: workflowRequest.stage,
-							sessionId: `${ordinal}-${workflowRequest.stage}`,
-							costUsd: metric.costUsd,
-							callMetrics: [metric],
-							exchanges: [],
-						};
-					},
-					readTaskOutput: () =>
-						Promise.resolve(
-							JSON.stringify({
-								task: { acceptanceCriteria: ["done"], documentation: [] },
-							}),
-						),
-					readTaskCard: () => Promise.resolve("task card"),
-					captureBuildCandidate,
-					assertPlanningStageCompleted: (_target, baselineSha, stage) =>
-						Promise.resolve({
-							taskState: `${stage.name}-state`,
-							artifact: {
-								path: "backlog/docs/spec.md",
-								content: "spec\n",
-							},
-							resultSha: baselineSha,
-							diff: "",
-							changedPaths: [],
-						}),
-					assertBuildCommitted,
-					changedPathsBetween,
-					captureCheckIntegrity: () =>
-						Promise.resolve(harnessResult("PASS", "checks match")),
-					captureTreatmentChecks: () =>
-						Promise.resolve(harnessResult("PASS", "checks pass")),
-					captureStageCorpus,
-				},
-				runStageJudge: (_model, _effort, _budget, input, rubricSource) => {
-					if (
-						input.stage === "build" &&
-						input.transcript.sessionId.startsWith("3-")
-					) {
-						return Promise.reject(
-							new JudgeOutputValidationError({
-								message: "Judge rejected both attempts",
-								prompt: "prompt",
-								attempts: [
-									{
-										payload: { invalid: true },
-										costUsd: metric.costUsd,
-										metrics: metric,
-										outcome: "REJECTED",
-										error: "invalid output",
-									},
-								],
-								costUsd: metric.costUsd,
-							}),
-						);
-					}
+								throw new Error("worker failed before evidence");
+							}
 
-					return Promise.resolve({
-						stage: input.stage,
-						rubricPath: rubricSource.rubricPath,
-						rubric: rubricSource.rubric,
-						input,
-						prompt: "prompt",
-						attempts: [
-							{
-								payload: { summary: "stop" },
-								costUsd: metric.costUsd,
-								metrics: metric,
-								outcome: "ACCEPTED",
-							},
-						],
-						costUsd: metric.costUsd,
-						grade: {
-							hardBlockers: [],
-							requirements: [],
-							dimensions: [],
-							summary: input.transcript.sessionId.startsWith("3-")
-								? "continue"
-								: "stop",
-							grade: input.transcript.sessionId.startsWith("3-") ? "A" : "F",
-							verdict: input.transcript.sessionId.startsWith("3-")
-								? "CONTINUE"
-								: "STOP",
+							await failed.promise;
+							if (request.stage === "discuss") {
+								finished.push(ordinal);
+							}
+							const result = await runWorkflowStage(request);
+
+							return {
+								...result,
+								sessionId: `${ordinal}-${request.stage}`,
+							};
 						},
-					});
-				},
-				runFinalJudge: () =>
-					Promise.reject(new Error("final Judge is not reached")),
-				createTaskCommit: async (targetDir, _task, instructions) => ({
-					taskId: "TASK-1",
-					taskSha: await installInstructions(targetDir, instructions),
-				}),
-				runChecks: () => Promise.resolve(),
-				captureBaselineContext,
-				captureFileHashes,
-				addWorktree,
-				removeWorktree: async (targetDir, worktreeDir) => {
-					removed.push(worktreeDir);
-					await removeWorktree(targetDir, worktreeDir);
-				},
-				materializeCheckpoint,
-				recordCheckpoint,
-				recordRetentionRef: (_targetDir, runName) => {
-					retained.push(runName);
+					},
+					runStageJudge: (_model, _effort, _budget, input, source) => {
+						if (
+							input.stage === "build" &&
+							input.transcript.sessionId.startsWith("3-")
+						) {
+							return Promise.reject(
+								new JudgeOutputValidationError({
+									message: "Judge rejected both attempts",
+									prompt: "prompt",
+									attempts: [
+										{
+											payload: { invalid: true },
+											costUsd: CONFIRMATION_METRIC.costUsd,
+											metrics: CONFIRMATION_METRIC,
+											outcome: "REJECTED",
+											error: "invalid output",
+										},
+									],
+									costUsd: CONFIRMATION_METRIC.costUsd,
+								}),
+							);
+						}
 
-					return Promise.resolve();
-				},
-				captureBuildCandidate,
-				log: (message) => {
-					logs.push(message);
-				},
-			},
-			{
-				runsDirectory: parent,
-				groupId: "pipeline-failures",
-				reps: 3,
-				projectedCost: {
-					reps: 3,
-					perRepMaximumUsd: 45,
-					totalMaximumUsd: 135,
-				},
-				approvalMethod: "yes",
-				source: { root: source.directory, sha: sourceSha },
-				controlSha: "a".repeat(40),
-				pipelinePath: "pipelines/test.json",
-				pipeline,
-				task: "# Task\n\nImplement it.",
-				productBrief: "Brief",
-				instructions: "Instructions\n",
-				finalRubric: "1. `final`: pass\n",
-				stageRubrics: {
-					discuss: {
-						rubricPath: "rubrics/discuss.json",
-						content: "{}\n",
-						rubric,
+						const scorecard = pipelineStageScorecard(input, source);
+						const continues = input.transcript.sessionId.startsWith("3-");
+
+						return Promise.resolve({
+							...scorecard,
+							grade: {
+								...scorecard.grade,
+								summary: continues ? "continue" : "stop",
+								grade: continues ? "A" : "F",
+								verdict: continues ? "CONTINUE" : "STOP",
+							},
+						});
 					},
-					build: {
-						rubricPath: "rubrics/build.json",
-						content: "{}\n",
-						rubric,
-					},
-				},
-				corpusRoots: [corpusRoot],
-				model: "sonnet",
-				judgeModel: "opus",
-				sessionBudgetUsd: 5,
+					runFinalJudge: () =>
+						Promise.reject(new Error("final Judge is not reached")),
+				};
 			},
 		);
 		const records = await Promise.all(
@@ -947,6 +337,7 @@ describe(runPipelineConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
+
 		expect(finished.toSorted((left, right) => left - right)).toEqual([1, 3]);
 		expect(
 			records.map(({ stages }) => stages.map(({ status }) => status)),
@@ -959,16 +350,20 @@ describe(runPipelineConfirmation.name, () => {
 			records.every(({ outcome: result }) => result === "UNSUCCESSFUL"),
 		).toBe(true);
 		const preservedPath = records[1]?.worktreePath ?? "missing";
-		expect(logs).toContain(
+		expect(harness.logs).toContain(
 			`Pipeline rep pipeline-failures-rep-2 failed; evidence preserved at ${preservedPath}`,
 		);
 		const preserved = await stat(preservedPath);
 		expect(preserved.isDirectory()).toBe(true);
-		expect(removed).not.toContain(preservedPath);
-		expect(removed).toContain(records[2]?.worktreePath ?? "missing");
+		expect(harness.removed).not.toContain(preservedPath);
+		expect(harness.removed).toContain(records[2]?.worktreePath ?? "missing");
 		expect(records[0]?.metrics.status).toBe("COMPLETE");
-		expect(retained).toContain("pipeline-failures/pipeline-failures-rep-1");
-		expect(retained).toContain("pipeline-failures/pipeline-failures-rep-3");
+		expect(
+			harness.retained.has("pipeline-failures/pipeline-failures-rep-1"),
+		).toBe(true);
+		expect(
+			harness.retained.has("pipeline-failures/pipeline-failures-rep-3"),
+		).toBe(true);
 		const report = z
 			.object({
 				reliability: z.array(
@@ -980,6 +375,26 @@ describe(runPipelineConfirmation.name, () => {
 			name: "discuss",
 			successful: 1,
 		});
-		await removeWorktree(source.directory, preservedPath);
+		await removeWorktree(harness.sourceRoot, preservedPath);
 	});
 });
+
+function repOrdinal(targetDirectory: string): number {
+	const match = /-rep-(?<ordinal>\d+)$/u.exec(targetDirectory);
+
+	return Number(match?.groups?.["ordinal"]);
+}
+
+async function repositoryState(directory: string): Promise<{
+	readonly head: string;
+	readonly branch: string;
+	readonly status: string;
+	readonly base: Uint8Array;
+}> {
+	return {
+		head: await runCommand(["git", "rev-parse", "HEAD"], directory),
+		branch: await runCommand(["git", "branch", "--show-current"], directory),
+		status: await runCommand(["git", "status", "--porcelain"], directory),
+		base: await Bun.file(join(directory, "base.txt")).bytes(),
+	};
+}
