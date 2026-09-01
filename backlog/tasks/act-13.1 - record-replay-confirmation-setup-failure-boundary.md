@@ -1,7 +1,7 @@
 ---
 id: ACT-13.1
 title: record replay confirmation setup failure boundary
-status: Build
+status: Done
 assignee:
   - claude
 created_date: '2026-09-01 12:33'
@@ -20,11 +20,11 @@ Make every replay confirmation failure before the workflow callback name the set
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 When replay confirmation worktree creation rejects for one rep, that rep's persisted `EXECUTION_FAILED` stage error names worktree creation and retains the original error text, while the other reps still reach the workflow callback.
-- [ ] #2 When a replay confirmation operation after worktree creation rejects, the persisted stage error names that exact operation, the existing evidence-preserved log is emitted, and the failed rep's worktree remains registered for diagnosis.
-- [ ] #3 Setup-operation context covers every fallible step before `executeStageSession`: worktree creation, checkpoint materialization, instruction installation, corpus installation, delivery dependency installation, prior-artifact reading, baseline hash capture, and baseline-context capture.
-- [ ] #4 Confirmation rep/group records keep schema version 1 and their existing shape; successful reps, workflow/Judge failures, reliability calculation, and worktree cleanup behavior remain unchanged.
-- [ ] #5 The focused replay-confirmation suite and the full test, typecheck, lint, and format checks pass.
+- [x] #1 When replay confirmation worktree creation rejects for one rep, that rep's persisted `EXECUTION_FAILED` stage error names worktree creation and retains the original error text, while the other reps still reach the workflow callback.
+- [x] #2 When a replay confirmation operation after worktree creation rejects, the persisted stage error names that exact operation, the existing evidence-preserved log is emitted, and the failed rep's worktree remains registered for diagnosis.
+- [x] #3 Setup-operation context covers every fallible step before `executeStageSession`: worktree creation, checkpoint materialization, instruction installation, corpus installation, delivery dependency installation, prior-artifact reading, baseline hash capture, and baseline-context capture.
+- [x] #4 Confirmation rep/group records keep schema version 1 and their existing shape; successful reps, workflow/Judge failures, reliability calculation, and worktree cleanup behavior remain unchanged.
+- [x] #5 The focused replay-confirmation suite and the full test, typecheck, lint, and format checks pass.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,4 +64,18 @@ Unknowns resolved:
 Glossary terms added: none. "Setup operation" is diagnostic wording for the existing sequence before stage execution, not a new domain concept.
 
 No product decision was deferred.
+
+Build handoff 2026-09-01:
+- `runReplayConfirmation` now carries an active operation label across all eight pre-session setup steps and clears it before `executeStageSession`. Diagnostic rep errors prepend the active label and preserve the original cause; workflow and Judge errors retain their existing text.
+- The real-Git replay confirmation scenario injects a pre-worktree collision, a post-worktree checkpoint rejection, an unqualified workflow rejection, and a completed Judge rejection concurrently. It observed only reps 3 and 4 reach the workflow, only the completed rep's worktree removed, both created diagnostic worktrees preserved and logged, and the expected error attribution in all records.
+- Confirmation record/group schemas, schema version 1, reliability calculation, and evidence settlement APIs did not change. No provider or paid execution ran.
+- Full verification observed 354 passing tests, 0 failures, and 743 expectations across 31 files; typecheck, type-aware lint, formatting, and diff checks passed.
+- Refactor pass: no small safe replay restructuring was found. Pipeline confirmation remains on its independent unqualified setup path; ACT-24 records that follow-up and the option to share attribution only if shaping shows the two orchestration state machines can remain decoupled.
+- Independent review is not due: this is an internal, reversible diagnostic-string change with no outward-facing, irreversible, or security-surfaced behavior.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replay confirmation diagnostic records now name the exact setup operation that failed while retaining the underlying error. Worktree preservation, workflow and Judge attribution, strict record schemas, and successful execution behavior remain unchanged. The focused real-Git scenario and the full 354-test repository suite pass, along with typecheck, lint, and formatting. ACT-24 tracks equivalent pipeline-mode attribution separately.
+<!-- SECTION:FINAL_SUMMARY:END -->
