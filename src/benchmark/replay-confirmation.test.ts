@@ -678,9 +678,9 @@ describe(runReplayConfirmation.name, () => {
 			cacheWriteTokens: 40,
 			turns: 2,
 		};
-		const failed = Promise.withResolvers<boolean>();
 		const finished: number[] = [];
 		const removed: string[] = [];
+		const worktreeCreated: string[] = [];
 		const fake = new ReplayConfirmationHarness(testResources);
 		const execution = fake.runConfirmation(
 			{ paths, corpusRoots: [corpusRoot] },
@@ -694,13 +694,6 @@ describe(runReplayConfirmation.name, () => {
 							workflowRequest.targetDir,
 						);
 						const ordinal = Number(match?.groups?.["ordinal"]);
-						if (ordinal === 2) {
-							failed.resolve(true);
-
-							throw new Error("worker failed before evidence");
-						}
-
-						await failed.promise;
 						finished.push(ordinal);
 
 						return {
@@ -764,12 +757,25 @@ describe(runReplayConfirmation.name, () => {
 							dimensions: [],
 						},
 					}),
-				addWorktree,
+				addWorktree: async (targetDir, sha, worktreeDir) => {
+					if (worktreeDir.endsWith("-rep-1")) {
+						throw new Error("synthetic worktree collision");
+					}
+
+					await addWorktree(targetDir, sha, worktreeDir);
+					worktreeCreated.push(worktreeDir);
+				},
 				removeWorktree: async (targetDir, worktreeDir) => {
 					removed.push(worktreeDir);
 					await removeWorktree(targetDir, worktreeDir);
 				},
-				materializeCheckpoint,
+				materializeCheckpoint: (checkpointDir, worktreeDir) => {
+					if (worktreeDir.endsWith("-rep-2")) {
+						throw new Error("synthetic checkpoint rejection");
+					}
+
+					return materializeCheckpoint(checkpointDir, worktreeDir);
+				},
 				captureBaselineContext,
 				captureFileHashes,
 				installInstructions,
@@ -782,17 +788,25 @@ describe(runReplayConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
-		expect(finished.toSorted((left, right) => left - right)).toEqual([1, 3]);
+		expect(finished).toEqual([3]);
 		expect(records.map(({ stages }) => stages[0]?.status)).toEqual([
-			"JUDGED",
+			"EXECUTION_FAILED",
 			"EXECUTION_FAILED",
 			"EXECUTION_FAILED",
 		]);
+		expect(records[0]?.stages[0]).toMatchObject({
+			error: "worktree creation failed: synthetic worktree collision",
+		});
+		expect(records[1]?.stages[0]).toMatchObject({
+			error:
+				"checkpoint materialization failed: synthetic checkpoint rejection",
+		});
+		expect(worktreeCreated).toHaveLength(2);
 		expect(
 			removed.toSorted((left, right) => left.localeCompare(right)),
 		).toEqual(
 			records
-				.filter(({ ordinal }) => ordinal !== 2)
+				.filter(({ ordinal }) => ordinal === 3)
 				.map(({ worktreePath }) => worktreePath)
 				.toSorted((left, right) => left.localeCompare(right)),
 		);

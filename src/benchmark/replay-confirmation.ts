@@ -372,6 +372,7 @@ export async function runReplayConfirmation(
 			let productOwner: ProductOwner | undefined;
 			let session: StageSessionResult | undefined;
 			let stageStart = repStart;
+			let setupOperation: string | undefined = "worktree creation";
 			try {
 				await dependencies.addWorktree(
 					frozen.manifest.sourceRoot,
@@ -379,28 +380,35 @@ export async function runReplayConfirmation(
 					plan.worktreePath,
 				);
 				worktreeCreated = true;
+				setupOperation = "checkpoint materialization";
 				await dependencies.materializeCheckpoint(
 					frozen.checkpointDirectory,
 					plan.worktreePath,
 				);
+				setupOperation = "instruction installation";
 				const baseSha = await dependencies.installInstructions(
 					plan.worktreePath,
 					frozen.instructions,
 				);
+				setupOperation = "corpus installation";
 				await installStageCorpusSnapshot(
 					frozen.corpusDirectory,
 					plan.worktreePath,
 				);
 				if (frozen.plan.definition.kind === "delivery") {
+					setupOperation = "dependency installation";
 					await dependencies.installDependencies(plan.worktreePath);
 				}
+				setupOperation = "prior-artifact reading";
 				const priorArtifacts = await readPriorArtifacts(
 					plan.worktreePath,
 					frozen.plan.priorArtifacts,
 				);
+				setupOperation = "baseline hash capture";
 				const baselineHashes = await dependencies.captureFileHashes(
 					plan.worktreePath,
 				);
+				setupOperation = "baseline-context capture";
 				const baselineContext = await dependencies.captureBaselineContext(
 					plan.worktreePath,
 				);
@@ -413,6 +421,7 @@ export async function runReplayConfirmation(
 					productBrief: frozen.manifest.productBrief,
 				});
 				stageStart = now();
+				setupOperation = undefined;
 				session = await executeStageSession(
 					detachedStageDependencies(dependencies.stageSession),
 					{
@@ -476,6 +485,9 @@ export async function runReplayConfirmation(
 			} catch (error) {
 				const failure =
 					error instanceof Error ? error : new Error(String(error));
+				const diagnosticError = setupOperation
+					? `${setupOperation} failed: ${failure.message}`
+					: failure.message;
 				if (
 					failure instanceof JudgeOutputValidationError &&
 					worktreeCreated &&
@@ -529,7 +541,7 @@ export async function runReplayConfirmation(
 					plan.repId,
 					plan.ordinal,
 					plan.worktreePath,
-					failure.message,
+					diagnosticError,
 					now() - repStart,
 				);
 				return settleDiagnosticConfirmationRep({

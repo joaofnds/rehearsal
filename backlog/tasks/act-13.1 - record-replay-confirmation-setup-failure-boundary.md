@@ -2,7 +2,8 @@
 id: ACT-13.1
 title: record replay confirmation setup failure boundary
 status: Build
-assignee: []
+assignee:
+  - claude
 created_date: '2026-09-01 12:33'
 labels: []
 dependencies: []
