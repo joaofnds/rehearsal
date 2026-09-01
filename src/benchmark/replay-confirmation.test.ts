@@ -684,7 +684,7 @@ describe(runReplayConfirmation.name, () => {
 		const fake = new ReplayConfirmationHarness(testResources);
 		const execution = fake.runConfirmation(
 			{ paths, corpusRoots: [corpusRoot] },
-			{ groupId: "confirmation-failures" },
+			{ groupId: "confirmation-failures", reps: 4 },
 			(defaults) => ({
 				...defaults,
 				stageSession: {
@@ -695,6 +695,9 @@ describe(runReplayConfirmation.name, () => {
 						);
 						const ordinal = Number(match?.groups?.["ordinal"]);
 						finished.push(ordinal);
+						if (ordinal === 3) {
+							throw new Error("worker failed before evidence");
+						}
 
 						return {
 							stage: workflowRequest.stage,
@@ -718,7 +721,7 @@ describe(runReplayConfirmation.name, () => {
 					captureStageCorpus,
 				},
 				runStageJudge: (_model, _effort, _budget, input) => {
-					if (input.transcript.sessionId.endsWith("-rep-3")) {
+					if (input.transcript.sessionId.endsWith("-rep-4")) {
 						throw new JudgeOutputValidationError({
 							message: "Judge rejected both attempts",
 							prompt: "prompt",
@@ -788,8 +791,9 @@ describe(runReplayConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
-		expect(finished).toEqual([3]);
+		expect(finished.toSorted((left, right) => left - right)).toEqual([3, 4]);
 		expect(records.map(({ stages }) => stages[0]?.status)).toEqual([
+			"EXECUTION_FAILED",
 			"EXECUTION_FAILED",
 			"EXECUTION_FAILED",
 			"EXECUTION_FAILED",
@@ -801,18 +805,24 @@ describe(runReplayConfirmation.name, () => {
 			error:
 				"checkpoint materialization failed: synthetic checkpoint rejection",
 		});
-		expect(worktreeCreated).toHaveLength(2);
+		expect(records[2]?.stages[0]).toMatchObject({
+			error: "worker failed before evidence",
+		});
+		expect(worktreeCreated).toHaveLength(3);
 		expect(
 			removed.toSorted((left, right) => left.localeCompare(right)),
 		).toEqual(
 			records
-				.filter(({ ordinal }) => ordinal === 3)
+				.filter(({ ordinal }) => ordinal === 4)
 				.map(({ worktreePath }) => worktreePath)
 				.toSorted((left, right) => left.localeCompare(right)),
 		);
 		const preservedPath = records[1]?.worktreePath ?? "missing";
 		expect(fake.log).toContain(
 			`Replay rep confirmation-failures-rep-2 failed; evidence preserved at ${preservedPath}`,
+		);
+		expect(fake.log).toContain(
+			`Replay rep confirmation-failures-rep-3 failed; evidence preserved at ${records[2]?.worktreePath}`,
 		);
 		const preserved = await stat(preservedPath);
 		expect(preserved.isDirectory()).toBe(true);
@@ -822,7 +832,11 @@ describe(runReplayConfirmation.name, () => {
 		);
 		expect(
 			worktrees.split("\n").filter((line) => line.startsWith("worktree ")),
-		).toHaveLength(2);
+		).toHaveLength(3);
 		await removeWorktree(source.directory, preservedPath);
+		await removeWorktree(
+			source.directory,
+			records[2]?.worktreePath ?? "missing",
+		);
 	});
 });
