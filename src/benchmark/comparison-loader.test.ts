@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import {
+	chmod,
+	lstat,
+	mkdir,
+	mkdtemp,
+	readdir,
+	rm,
+	symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -18,6 +26,7 @@ import { runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
 import { loadComparisonEvidence } from "./comparison-evidence";
 import type { ComparisonArm } from "./comparison-record";
+import { comparisonReportPaths } from "./run-layout";
 
 function digest(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
@@ -88,6 +97,130 @@ class ComparisonEvidenceFixture {
 			this.manifestFile,
 			`${JSON.stringify({ schemaVersion: 1, cases }, null, 2)}\n`,
 		);
+	}
+
+	public async pointFrozenInputAt(
+		kind: ConfirmationGroupRecord["inputs"]["files"][number]["kind"],
+		path: string,
+	): Promise<void> {
+		const sha256 = digest(await Bun.file(path).text());
+		for (const caseId of ["case-1", "case-2"]) {
+			for (const role of ["baseline", "candidate", "control"] as const) {
+				const groupFile = this.groupFile(caseId, role);
+				const group = confirmationGroupRecordSchema.parse(
+					JSON.parse(await Bun.file(groupFile).text()),
+				);
+				const changed = confirmationGroupRecordSchema.parse({
+					...group,
+					inputs: {
+						...group.inputs,
+						files: group.inputs.files.map((file) =>
+							file.kind === kind ? { kind: file.kind, path, sha256 } : file,
+						),
+					},
+				});
+				await Bun.write(groupFile, `${JSON.stringify(changed, null, 2)}\n`);
+			}
+		}
+	}
+
+	public async usePipelineCheckpoints(
+		changedWorkflowRole?: ComparisonArm,
+	): Promise<void> {
+		for (const caseId of ["case-1", "case-2"]) {
+			for (const role of ["baseline", "candidate", "control"] as const) {
+				const groupFile = this.groupFile(caseId, role);
+				const group = confirmationGroupRecordSchema.parse(
+					JSON.parse(await Bun.file(groupFile).text()),
+				);
+				const checkpoint = {
+					stage: "initial",
+					targetSha: role.slice(0, 1).repeat(40),
+					lineage: `${role}-derived-lineage`,
+					upstream: `${role}-derived-upstream`,
+					model: "sonnet",
+					corpusFiles: [],
+					artifacts: [],
+					workflowState:
+						role === changedWorkflowRole
+							? [
+									{
+										path: "backlog/tasks/act.md",
+										sha256: "f".repeat(64),
+									},
+								]
+							: [],
+				};
+				const checkpointPath = join(
+					this.groupDirectory(caseId, role),
+					"inputs/checkpoint/checkpoint.json",
+				);
+				const checkpointText = `${JSON.stringify(checkpoint, null, 2)}\n`;
+				await Bun.write(checkpointPath, checkpointText);
+				const upstreamCorpus = `${role} upstream corpus\n`;
+				const upstreamCorpusPath = join(
+					this.groupDirectory(caseId, role),
+					"inputs/corpus/discuss/SKILL.md",
+				);
+				await Bun.write(upstreamCorpusPath, upstreamCorpus);
+				const changedGroup = confirmationGroupRecordSchema.parse({
+					...group,
+					mode: "pipeline",
+					inputs: {
+						...group.inputs,
+						files: [
+							...group.inputs.files.map((file) =>
+								file.path === "inputs/corpus/discuss/SKILL.md"
+									? {
+											kind: file.kind,
+											path: file.path,
+											sha256: digest(upstreamCorpus),
+										}
+									: file,
+							),
+							{
+								kind: "checkpoint",
+								path: relative(
+									this.groupDirectory(caseId, role),
+									checkpointPath,
+								),
+								sha256: digest(checkpointText),
+							},
+						],
+					},
+				});
+				await Bun.write(
+					groupFile,
+					`${JSON.stringify(changedGroup, null, 2)}\n`,
+				);
+
+				for (const ordinal of [1, 2]) {
+					const repFile = this.repFile(caseId, role, ordinal);
+					const rep = parseConfirmationRepRecord(
+						await Bun.file(repFile).text(),
+					);
+					await Bun.write(
+						repFile,
+						`${JSON.stringify(
+							{
+								...rep,
+								mode: "pipeline",
+								finalOutcome: {
+									status: "JUDGED",
+									verdict: "PASS",
+									evidence: {
+										resultSha: "e".repeat(40),
+										recordFile: "final.json",
+									},
+								},
+							},
+							null,
+							2,
+						)}\n`,
+					);
+				}
+			}
+		}
 	}
 
 	private groupDirectory(caseId: string, role: ComparisonArm): string {
@@ -375,6 +508,22 @@ describe(loadComparisonEvidence.name, () => {
 		);
 	});
 
+	it("normalizes only pipeline checkpoint identities derived from each corpus", async () => {
+		await fixture.usePipelineCheckpoints();
+
+		const evidence = await loadComparisonEvidence(fixture.manifestFile);
+
+		expect(evidence.contract.mode).toBe("pipeline");
+	});
+
+	it("rejects changed workflow state inside a pipeline checkpoint record", async () => {
+		await fixture.usePipelineCheckpoints("candidate");
+
+		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
+			"case case-1 arms baseline and candidate field inputs.files.checkpoint:inputs/checkpoint/checkpoint.json",
+		);
+	});
+
 	it("creates no comparison layout when source validation fails", async () => {
 		const runsDirectory = join(temporaryDirectory, "comparison-output");
 		await rm(fixture.repFile("case-1", "baseline", 1));
@@ -386,6 +535,44 @@ describe(loadComparisonEvidence.name, () => {
 			}),
 		).rejects.toThrow("case case-1 arm baseline field repRecords[0].path");
 		expect(await Bun.file(runsDirectory).exists()).toBe(false);
+	});
+
+	it("rejects a report destination that is also frozen source evidence", async () => {
+		const runsDirectory = join(temporaryDirectory, "comparison-output");
+		const manifestSha = digest(await Bun.file(fixture.manifestFile).text());
+		const { reportFile } = comparisonReportPaths(runsDirectory, manifestSha);
+		await mkdir(dirname(reportFile), { recursive: true });
+		await Bun.write(reportFile, "source task evidence\n");
+		await fixture.pointFrozenInputAt("task", reportFile);
+
+		expect(
+			writeComparisonReport({
+				manifestPath: fixture.manifestFile,
+				runsDirectory,
+			}),
+		).rejects.toThrow("destination overlaps source evidence");
+		expect(await Bun.file(reportFile).text()).toBe("source task evidence\n");
+	});
+
+	it("atomically replaces a destination symlink without changing its target", async () => {
+		const runsDirectory = join(temporaryDirectory, "comparison-output");
+		const manifestSha = digest(await Bun.file(fixture.manifestFile).text());
+		const { reportFile } = comparisonReportPaths(runsDirectory, manifestSha);
+		const symlinkTarget = join(temporaryDirectory, "outside-report.json");
+		await mkdir(dirname(reportFile), { recursive: true });
+		await Bun.write(symlinkTarget, "outside bytes\n");
+		await symlink(symlinkTarget, reportFile);
+
+		await writeComparisonReport({
+			manifestPath: fixture.manifestFile,
+			runsDirectory,
+		});
+
+		const reportStats = await lstat(reportFile);
+		expect(reportStats.isSymbolicLink()).toBe(false);
+		expect(await Bun.file(symlinkTarget).text()).toBe("outside bytes\n");
+		const report = parseComparisonReport(await Bun.file(reportFile).text());
+		expect(report.cases).toHaveLength(2);
 	});
 
 	it("writes one read-only comparison report without external execution", async () => {

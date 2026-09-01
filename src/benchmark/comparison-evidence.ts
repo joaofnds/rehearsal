@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
+import { realpath } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
+import { parseCheckpointRecord } from "./checkpoint";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
@@ -18,6 +20,7 @@ export interface DigestedRecord<Record> {
 	readonly path: string;
 	readonly sha256: string;
 	readonly record: Record;
+	readonly canonicalPath?: string;
 }
 
 export interface ComparisonArmEvidence {
@@ -25,6 +28,8 @@ export interface ComparisonArmEvidence {
 	readonly group: DigestedRecord<Immutable<ConfirmationGroupRecord>>;
 	readonly reps: readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[];
 	readonly executedCorpus: readonly FrozenFile[];
+	readonly controlledFiles: readonly FrozenFile[];
+	readonly sourcePaths: readonly string[];
 }
 
 export interface ComparisonCaseEvidence {
@@ -45,6 +50,7 @@ export interface ComparisonEvidence {
 	};
 	readonly cases: readonly ComparisonCaseEvidence[];
 	readonly contract: ComparisonContract;
+	readonly sourcePaths: readonly string[];
 }
 
 export class ComparisonEvidenceError extends Error {
@@ -62,6 +68,7 @@ interface ReadEvidenceFileRequest extends EvidenceLocation {
 }
 
 interface EvidenceFile {
+	readonly canonicalPath: string;
 	readonly sha256: string;
 	readonly text: string;
 }
@@ -90,6 +97,7 @@ async function readEvidenceFile(
 	const bytes = await file.bytes();
 
 	return {
+		canonicalPath: await realpath(request.path),
 		sha256: sha256(bytes),
 		text: new TextDecoder().decode(bytes),
 	};
@@ -183,13 +191,37 @@ function executedCorpusFiles(
 	});
 }
 
+interface VerifiedFrozenFiles {
+	readonly controlledFiles: readonly FrozenFile[];
+	readonly sourcePaths: readonly string[];
+}
+
+function controlledCheckpointDigest(text: string): string {
+	const checkpoint = parseCheckpointRecord(text);
+
+	return sha256(
+		new TextEncoder().encode(
+			JSON.stringify({
+				stage: checkpoint.stage,
+				model: checkpoint.model,
+				effort: checkpoint.effort,
+				corpusFiles: checkpoint.corpusFiles,
+				artifacts: checkpoint.artifacts,
+				workflowState: checkpoint.workflowState,
+			}),
+		),
+	);
+}
+
 async function assertFrozenFiles(
 	request: Readonly<LoadArmRequest>,
 	groupPath: string,
 	group: Immutable<ConfirmationGroupRecord>,
-): Promise<void> {
+): Promise<VerifiedFrozenFiles> {
 	const identities = new Set<string>();
 	const kinds = new Set<FrozenFile["kind"]>();
+	const controlledFiles: FrozenFile[] = [];
+	const sourcePaths: string[] = [];
 	for (const frozen of group.inputs.files) {
 		const identity = `${frozen.kind}:${frozen.path}`;
 		const field = `inputs.files[${identity}]`;
@@ -213,6 +245,25 @@ async function assertFrozenFiles(
 				{ caseId: request.caseId, arm: request.role, field: `${field}.sha256` },
 				`recorded ${frozen.sha256} but found ${source.sha256}`,
 			);
+		}
+		sourcePaths.push(source.canonicalPath);
+		if (frozen.kind !== "corpus" && frozen.kind !== "instructions") {
+			let normalizedDigest = frozen.sha256;
+			if (
+				group.mode === "pipeline" &&
+				frozen.kind === "checkpoint" &&
+				frozen.path.replaceAll("\\", "/").endsWith("/checkpoint.json")
+			) {
+				try {
+					normalizedDigest = controlledCheckpointDigest(source.text);
+				} catch {
+					throw evidenceError(
+						{ caseId: request.caseId, arm: request.role, field },
+						"invalid pipeline checkpoint record",
+					);
+				}
+			}
+			controlledFiles.push({ ...frozen, sha256: normalizedDigest });
 		}
 	}
 
@@ -246,6 +297,8 @@ async function assertFrozenFiles(
 			"source group records no executed corpus",
 		);
 	}
+
+	return { controlledFiles, sourcePaths };
 }
 
 async function loadRepRecords(
@@ -283,6 +336,7 @@ async function loadRepRecords(
 			path: relative(request.manifestDirectory, path),
 			sha256: source.sha256,
 			record,
+			canonicalPath: source.canonicalPath,
 		});
 	}
 
@@ -309,7 +363,7 @@ async function loadArm(
 		);
 	}
 
-	await assertFrozenFiles(request, groupPath, group);
+	const frozen = await assertFrozenFiles(request, groupPath, group);
 	const reps = await loadRepRecords(request, groupPath, group);
 
 	return {
@@ -318,9 +372,19 @@ async function loadArm(
 			path: relative(request.manifestDirectory, groupPath),
 			sha256: source.sha256,
 			record: group,
+			canonicalPath: source.canonicalPath,
 		},
 		reps,
 		executedCorpus: executedCorpusFiles(group),
+		controlledFiles: frozen.controlledFiles,
+		sourcePaths: [
+			source.canonicalPath,
+			...reps.map(
+				({ canonicalPath, path }) =>
+					canonicalPath ?? resolve(request.manifestDirectory, path),
+			),
+			...frozen.sourcePaths,
+		],
 	};
 }
 
@@ -374,6 +438,12 @@ export async function loadComparisonEvidence(
 		manifest: { path: absoluteManifestPath, sha256: source.sha256 },
 		cases,
 		contract: assertComparableComparison(cases),
+		sourcePaths: [
+			source.canonicalPath,
+			...cases.flatMap(({ arms }) =>
+				COMPARISON_ARMS.flatMap((role) => arms[role].sourcePaths),
+			),
+		],
 	};
 }
 
@@ -393,24 +463,9 @@ function sortedFiles(files: readonly FrozenFile[]): readonly FrozenFile[] {
 function controlledFileDifference(
 	left: readonly FrozenFile[],
 	right: readonly FrozenFile[],
-	mode: ComparisonContract["mode"],
 ): string | undefined {
-	const leftFiles = sortedFiles(
-		left.filter(
-			({ kind }) =>
-				kind !== "corpus" &&
-				kind !== "instructions" &&
-				!(mode === "pipeline" && kind === "checkpoint"),
-		),
-	);
-	const rightFiles = sortedFiles(
-		right.filter(
-			({ kind }) =>
-				kind !== "corpus" &&
-				kind !== "instructions" &&
-				!(mode === "pipeline" && kind === "checkpoint"),
-		),
-	);
+	const leftFiles = sortedFiles(left);
+	const rightFiles = sortedFiles(right);
 	const maximum = Math.max(leftFiles.length, rightFiles.length);
 	for (let index = 0; index < maximum; index += 1) {
 		const leftFile = leftFiles[index];
@@ -445,9 +500,8 @@ function controlledInputDifference(
 	}
 
 	const fileDifference = controlledFileDifference(
-		reference.files,
-		other.files,
-		comparison.reference.group.record.mode,
+		comparison.reference.controlledFiles,
+		comparison.other.controlledFiles,
 	);
 	if (fileDifference !== undefined) {
 		return fileDifference;

@@ -426,6 +426,10 @@ export type CheckpointRecord = Immutable<
 	z.infer<typeof checkpointRecordSchema>
 >;
 
+export function parseCheckpointRecord(text: string): CheckpointRecord {
+	return checkpointRecordSchema.parse(JSON.parse(text));
+}
+
 export interface CheckpointInputs {
 	readonly stage: string;
 	readonly targetSha: string;
@@ -504,8 +508,8 @@ export async function recordCheckpoint(
 export async function readCheckpointRecord(
 	directory: string,
 ): Promise<CheckpointRecord> {
-	return checkpointRecordSchema.parse(
-		JSON.parse(await Bun.file(join(directory, RECORD_FILE)).text()),
+	return parseCheckpointRecord(
+		await Bun.file(join(directory, RECORD_FILE)).text(),
 	);
 }
 

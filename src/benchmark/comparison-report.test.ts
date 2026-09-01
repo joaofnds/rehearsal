@@ -219,6 +219,10 @@ function reportArmEvidence(
 			record: rep,
 		})),
 		executedCorpus: [corpus],
+		controlledFiles: record.inputs.files.filter(
+			({ kind }) => kind !== "corpus" && kind !== "instructions",
+		),
+		sourcePaths: [],
 	};
 }
 
@@ -254,6 +258,7 @@ function reportEvidence(): ComparisonEvidence {
 			declaredStages: ["discuss", "build"],
 			reps: 4,
 		},
+		sourcePaths: [],
 	};
 }
 
@@ -434,16 +439,162 @@ describe(buildComparisonQuality.name, () => {
 				standardError: 0.029296875,
 			},
 		});
-		expect(
-			report.contrasts.candidateMinusControl.quality.map(({ name }) => name),
-		).toEqual(["discuss", "build", "final"]);
-		expect(
-			report.contrasts.baselineMinusControl.quality.map(({ name }) => name),
-		).toEqual(["discuss", "build", "final"]);
+		expect(report.contrasts.candidateMinusControl.quality[0]).toEqual({
+			name: "discuss",
+			successRate: {
+				caseDeltas: [
+					{ caseId: "case-1", value: 1 },
+					{ caseId: "case-2", value: 1 },
+				],
+				meanDelta: 1,
+				standardError: 0,
+			},
+			passK: {
+				caseDeltas: [
+					{ caseId: "case-1", value: 1 },
+					{ caseId: "case-2", value: 1 },
+				],
+				meanDelta: 1,
+				standardError: 0,
+			},
+		});
+		expect(report.contrasts.baselineMinusControl.quality[0]).toEqual({
+			name: "discuss",
+			successRate: {
+				caseDeltas: [
+					{ caseId: "case-1", value: 0.5 },
+					{ caseId: "case-2", value: 0.25 },
+				],
+				meanDelta: 0.375,
+				standardError: 0.125,
+			},
+			passK: {
+				caseDeltas: [
+					{ caseId: "case-1", value: 0.0625 },
+					{ caseId: "case-2", value: 0.00390625 },
+				],
+				meanDelta: 0.033203125,
+				standardError: 0.029296875,
+			},
+		});
 	});
 });
 
 describe(buildComparisonResources.name, () => {
+	it("reports per-role observations and exact estimates for every resource contrast", () => {
+		const report = buildComparisonResources({
+			contract: {
+				mode: "pipeline",
+				declaredStages: ["discuss", "build"],
+				reps: 4,
+			},
+			cases: [
+				{
+					caseId: "case-1",
+					arms: {
+						baseline: qualityReps(
+							"case-1",
+							"baseline",
+							[PASS, PASS, PASS, PASS],
+							1,
+						),
+						candidate: qualityReps(
+							"case-1",
+							"candidate",
+							[PASS, PASS, PASS, PASS],
+							2,
+						),
+						control: qualityReps(
+							"case-1",
+							"control",
+							[PASS, PASS, PASS, PASS],
+							0,
+						),
+					},
+				},
+				{
+					caseId: "case-2",
+					arms: {
+						baseline: qualityReps(
+							"case-2",
+							"baseline",
+							[PASS, PASS, PASS, PASS],
+							1,
+						),
+						candidate: qualityReps(
+							"case-2",
+							"candidate",
+							[PASS, PASS, PASS, PASS],
+							3,
+						),
+						control: qualityReps(
+							"case-2",
+							"control",
+							[PASS, PASS, PASS, PASS],
+							0,
+						),
+					},
+				},
+			],
+		});
+		const candidate = report.cases[0]?.arms.candidate;
+		if (candidate?.status !== "AVAILABLE") {
+			throw new Error("candidate resources should be available");
+		}
+		expect(candidate.perRole.worker).toEqual(candidate.total);
+		expect(candidate.perRole["product-owner"].costUsd).toEqual({
+			values: [0, 0, 0, 0],
+			mean: 0,
+		});
+		expect(candidate.perRole["stage-judge"].inputTokens).toEqual({
+			values: [0, 0, 0, 0],
+			mean: 0,
+		});
+		expect(candidate.perRole["final-judge"].cacheWriteTokens).toEqual({
+			values: [0, 0, 0, 0],
+			mean: 0,
+		});
+
+		const expectedEstimate = (
+			first: number,
+			second: number,
+		): ReturnType<typeof buildPairedEstimate> => ({
+			caseDeltas: [
+				{ caseId: "case-1", value: first },
+				{ caseId: "case-2", value: second },
+			],
+			meanDelta: (first + second) / 2,
+			standardError: Math.abs(first - second) / 2,
+		});
+		const contrasts = [
+			["candidateMinusBaseline", [2.5, 5]],
+			["candidateMinusControl", [5, 7.5]],
+			["baselineMinusControl", [2.5, 2.5]],
+		] as const;
+		const coefficients = [
+			["costUsd", 1],
+			["inputTokens", 10],
+			["outputTokens", 2],
+			["cacheReadTokens", 3],
+			["cacheWriteTokens", 4],
+		] as const;
+		for (const [name, [first, second]] of contrasts) {
+			const { resources } = report.contrasts[name];
+			if (resources.status !== "AVAILABLE") {
+				throw new Error(`${name} resources should be available`);
+			}
+			for (const [metric, coefficient] of coefficients) {
+				expect(resources.total[metric]).toEqual(
+					expectedEstimate(first * coefficient, second * coefficient),
+				);
+				expect(resources.perRole.worker[metric]).toEqual(
+					resources.total[metric],
+				);
+			}
+			expect(resources.workerTurns).toEqual(expectedEstimate(first, second));
+		}
+	});
+
 	it("reports complete resource means and unavailable missing-metric contrasts", () => {
 		const caseOneControl = [
 			repRecord("case-1-control", 1, FAIL, 0),

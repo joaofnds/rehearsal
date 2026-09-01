@@ -1,4 +1,6 @@
-import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { loadComparisonEvidence } from "./comparison-evidence";
 import { buildComparisonReport } from "./comparison-report";
 import { comparisonReportPaths } from "./run-layout";
@@ -6,6 +8,45 @@ import { comparisonReportPaths } from "./run-layout";
 export interface WriteComparisonReportRequest {
 	readonly manifestPath: string;
 	readonly runsDirectory: string;
+}
+
+async function canonicalExistingPath(
+	path: string,
+): Promise<string | undefined> {
+	try {
+		return await realpath(path);
+	} catch {
+		return undefined;
+	}
+}
+
+async function assertReportDoesNotReplaceEvidence(
+	reportFile: string,
+	sourcePaths: readonly string[],
+): Promise<void> {
+	const absoluteReportFile = resolve(reportFile);
+	const existingTarget = await canonicalExistingPath(absoluteReportFile);
+	if (
+		sourcePaths.includes(absoluteReportFile) ||
+		(existingTarget !== undefined && sourcePaths.includes(existingTarget))
+	) {
+		throw new Error(
+			`Comparison report destination overlaps source evidence: ${absoluteReportFile}`,
+		);
+	}
+}
+
+async function writeReportAtomically(
+	path: string,
+	content: string,
+): Promise<void> {
+	const temporaryPath = `${path}.${randomUUID()}.tmp`;
+	try {
+		await writeFile(temporaryPath, content, { flag: "wx" });
+		await rename(temporaryPath, path);
+	} finally {
+		await rm(temporaryPath, { force: true });
+	}
 }
 
 export async function writeComparisonReport(
@@ -17,9 +58,16 @@ export async function writeComparisonReport(
 		request.runsDirectory,
 		evidence.manifest.sha256,
 	);
+	await assertReportDoesNotReplaceEvidence(
+		paths.reportFile,
+		evidence.sourcePaths,
+	);
 
 	await mkdir(paths.directory, { recursive: true });
-	await Bun.write(paths.reportFile, `${JSON.stringify(report, null, 2)}\n`);
+	await writeReportAtomically(
+		paths.reportFile,
+		`${JSON.stringify(report, null, 2)}\n`,
+	);
 
 	return paths.reportFile;
 }
