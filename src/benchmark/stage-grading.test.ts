@@ -1,0 +1,828 @@
+import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
+import { readClaudeEnvelope, readStructuredOutput } from "./claude";
+import type {
+	LocalCheckResult,
+	StageJudgeOutput,
+	StageScorecard,
+} from "./contracts";
+import { StageValidationError, stageJudgeOutputSchema } from "./contracts";
+import {
+	applyAuthoritativeStageResults,
+	captureStageJudgeInput,
+	deriveStageGrade,
+	parseStageRubric,
+	runStageJudge,
+	validateStageJudgeEvidence,
+} from "./stage-grading";
+import { PROJECT_ROOT } from "./test-support";
+
+function stageJudgeOutput(
+	blocker: "PASS" | "FAIL",
+	requirementStatus: "PASS" | "FAIL",
+	dimensionGrade: "A" | "B" | "C" | "D" | "F",
+): StageJudgeOutput {
+	return {
+		hardBlockers: [
+			{
+				id: "invalid-stage-delivery",
+				status: "PASS",
+				evidence: [stageEvidence("task", "backlog-seed.md")],
+			},
+			{
+				id: "contradiction",
+				status: blocker,
+				evidence: [stageEvidence("artifact", "backlog/docs/spec.md")],
+			},
+		],
+		requirements: [
+			{
+				id: "scope",
+				status: requirementStatus,
+				evidence: [stageEvidence("artifact", "backlog/docs/spec.md")],
+			},
+		],
+		dimensions: [
+			{
+				id: "clarity",
+				grade: dimensionGrade,
+				evidence: [stageEvidence("artifact", "backlog/docs/spec.md")],
+			},
+		],
+		summary: "stage grade",
+	};
+}
+
+function stageJudgeInput(
+	stage: string,
+	overrides: Partial<StageScorecard["input"]> = {},
+): StageScorecard["input"] {
+	return {
+		stage,
+		kind: stage === "build" ? "delivery" : "planning",
+		task: "Task",
+		productBrief: "Brief",
+		instructions: "Instructions",
+		baselineContext: [],
+		taskState: "State",
+		transcript: {
+			stage,
+			sessionId: "session",
+			costUsd: 1,
+			exchanges: [],
+		},
+		priorArtifacts: [],
+		...overrides,
+	};
+}
+
+function harnessResult(
+	status: "PASS" | "FAIL",
+	claim: string,
+): LocalCheckResult {
+	return {
+		status,
+		evidence: [
+			{
+				source: "local-checks" as const,
+				path: "harness",
+				claim,
+			},
+		],
+	};
+}
+
+function passingStageOutput(
+	rubric: ReturnType<typeof parseStageRubric>,
+): StageJudgeOutput {
+	return {
+		hardBlockers: rubric.hardBlockers.map(({ id }) => ({
+			id,
+			status: "PASS" as const,
+			evidence: [stageEvidence("task", "backlog-seed.md")],
+		})),
+		requirements: rubric.requirements.map(({ id }) => ({
+			id,
+			status: "PASS" as const,
+			evidence: [stageEvidence("task", "backlog-seed.md")],
+		})),
+		dimensions: rubric.dimensions.map(({ id }) => ({
+			id,
+			grade: "A" as const,
+			evidence: [stageEvidence("task", "backlog-seed.md")],
+		})),
+		summary: "pass",
+	};
+}
+
+function stageEvidence(
+	source: StageJudgeOutput["requirements"][number]["evidence"][number]["source"],
+	path: string,
+): StageJudgeOutput["requirements"][number]["evidence"][number] {
+	return { source, path, claim: "evidence" };
+}
+
+describe(deriveStageGrade.name, () => {
+	const rubric = parseStageRubric(
+		JSON.stringify({
+			stage: "discuss",
+			hardBlockers: [
+				{
+					id: "invalid-stage-delivery",
+					description: "Valid delivery",
+				},
+				{ id: "contradiction", description: "No conflict" },
+			],
+			requirements: [{ id: "scope", description: "Scope is explicit" }],
+			dimensions: [
+				{
+					id: "clarity",
+					description: "Clear output",
+					good: "Concrete",
+					excellent: "Precise",
+				},
+			],
+		}),
+	);
+
+	it("continues when every requirement passes and quality is B", () => {
+		const grade = deriveStageGrade(
+			stageJudgeOutput("PASS", "PASS", "B"),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("B");
+		expect(grade.verdict).toBe("CONTINUE");
+	});
+
+	it("stops with F when a hard blocker is triggered", () => {
+		const grade = deriveStageGrade(
+			stageJudgeOutput("FAIL", "PASS", "A"),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(grade.verdict).toBe("STOP");
+	});
+
+	it("caps a missing requirement below B", () => {
+		const grade = deriveStageGrade(
+			stageJudgeOutput("PASS", "FAIL", "A"),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("C");
+		expect(grade.verdict).toBe("STOP");
+	});
+
+	it("uses the worst quality dimension without averaging", () => {
+		const grade = deriveStageGrade(
+			stageJudgeOutput("PASS", "PASS", "C"),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("C");
+		expect(grade.verdict).toBe("STOP");
+	});
+
+	it("rejects IDs reused across rubric sections", () => {
+		expect(() =>
+			parseStageRubric(
+				JSON.stringify({
+					stage: "discuss",
+					hardBlockers: [
+						{
+							id: "invalid-stage-delivery",
+							description: "Valid delivery",
+						},
+						{ id: "same", description: "Blocker" },
+					],
+					requirements: [{ id: "same", description: "Requirement" }],
+					dimensions: [
+						{
+							id: "quality",
+							description: "Quality",
+							good: "Good",
+							excellent: "Excellent",
+						},
+					],
+				}),
+			),
+		).toThrow("IDs must be unique");
+	});
+
+	it("parses a rubric a stage adopts under any name", () => {
+		const parsed = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "sources", description: "Cites sources" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+
+		expect(parsed.requirements.map(({ id }) => id)).toEqual(["sources"]);
+	});
+
+	it("requires delivery-only blockers of a delivery stage under any name", () => {
+		expect(() =>
+			parseStageRubric(
+				JSON.stringify({
+					hardBlockers: [
+						{ id: "invalid-stage-delivery", description: "Valid delivery" },
+					],
+					requirements: [{ id: "scope", description: "Scope" }],
+					dimensions: [
+						{
+							id: "clarity",
+							description: "Clarity",
+							good: "Good",
+							excellent: "Excellent",
+						},
+					],
+				}),
+				"delivery",
+			),
+		).toThrow("false-test-safety");
+	});
+
+	it("rejects removal of a harness-owned blocker", () => {
+		expect(() =>
+			parseStageRubric(
+				JSON.stringify({
+					stage: "discuss",
+					hardBlockers: [],
+					requirements: [{ id: "scope", description: "Scope" }],
+					dimensions: [
+						{
+							id: "clarity",
+							description: "Clarity",
+							good: "Good",
+							excellent: "Excellent",
+						},
+					],
+				}),
+			),
+		).toThrow("must retain harness blockers");
+	});
+});
+
+describe(applyAuthoritativeStageResults.name, () => {
+	it("forces a delivery stage under any name to F when local checks fail", async () => {
+		const rubric = parseStageRubric(
+			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+			"delivery",
+		);
+		const input = {
+			...stageJudgeInput("build", {
+				localChecks: harnessResult("FAIL", "unit tests exited 1"),
+				checkIntegrity: harnessResult("PASS", "check definitions match"),
+			}),
+			stage: "ship",
+			kind: "delivery" as const,
+		};
+
+		const grade = deriveStageGrade(
+			applyAuthoritativeStageResults(passingStageOutput(rubric), input),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(
+			grade.hardBlockers.find(({ id }) => id === "unfinished-delivery")?.status,
+		).toBe("FAIL");
+	});
+
+	it("forces Build to F when local checks fail", async () => {
+		const rubric = parseStageRubric(
+			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+		);
+		const output = passingStageOutput(rubric);
+		const input = stageJudgeInput("build", {
+			localChecks: harnessResult("FAIL", "unit tests exited 1"),
+			checkIntegrity: harnessResult("PASS", "check definitions match"),
+		});
+
+		const grade = deriveStageGrade(
+			applyAuthoritativeStageResults(output, input),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(
+			grade.hardBlockers.find(({ id }) => id === "unfinished-delivery")?.status,
+		).toBe("FAIL");
+	});
+
+	it("forces Build to F when check definitions change", async () => {
+		const rubric = parseStageRubric(
+			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+		);
+		const output = passingStageOutput(rubric);
+		const input = stageJudgeInput("build", {
+			localChecks: harnessResult("PASS", "unit tests passed"),
+			checkIntegrity: harnessResult("FAIL", "package.json changed"),
+		});
+
+		const grade = deriveStageGrade(
+			applyAuthoritativeStageResults(output, input),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(
+			grade.hardBlockers.find(({ id }) => id === "false-test-safety")?.status,
+		).toBe("FAIL");
+	});
+
+	it("forces a malformed stage delivery to F", async () => {
+		const rubric = parseStageRubric(
+			await Bun.file(join(PROJECT_ROOT, "rubrics", "shape.json")).text(),
+		);
+		const output = passingStageOutput(rubric);
+		const input = stageJudgeInput("discuss", {
+			harnessFailure: "Discuss completed without its durable spec document",
+		});
+
+		const grade = deriveStageGrade(
+			applyAuthoritativeStageResults(output, input),
+			rubric,
+		);
+
+		expect(grade.grade).toBe("F");
+		expect(
+			grade.hardBlockers.find(({ id }) => id === "invalid-stage-delivery")
+				?.status,
+		).toBe("FAIL");
+	});
+});
+
+describe(captureStageJudgeInput.name, () => {
+	it("turns invalid stage delivery into Judge evidence", async () => {
+		const fallback = stageJudgeInput("discuss");
+
+		const input = await captureStageJudgeInput(fallback, () =>
+			Promise.reject(
+				new StageValidationError(
+					"Discuss completed without its durable spec document",
+				),
+			),
+		);
+
+		expect(input.harnessFailure).toBe(
+			"Discuss completed without its durable spec document",
+		);
+		expect(input).toEqual({
+			...fallback,
+			harnessFailure: "Discuss completed without its durable spec document",
+		});
+	});
+
+	it("propagates infrastructure failures", () => {
+		const result = captureStageJudgeInput(stageJudgeInput("discuss"), () =>
+			Promise.reject(new Error("git executable unavailable")),
+		);
+
+		expect(result).rejects.toThrow("git executable unavailable");
+	});
+});
+
+describe(validateStageJudgeEvidence.name, () => {
+	it("accepts a fragment within a frozen JSON source", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				stage: "discuss",
+				hardBlockers: [
+					{
+						id: "invalid-stage-delivery",
+						description: "Valid delivery",
+					},
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [
+						stageEvidence("transcript", "discuss.transcript.json#exchanges"),
+					],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("discuss"));
+		}).not.toThrow();
+	});
+
+	it("accepts a citation naming its whole source", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("diff", "diff")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, {
+				...stageJudgeInput("build"),
+				diff: "d",
+				changedPaths: ["src/a.ts"],
+			});
+		}).not.toThrow();
+	});
+
+	it("accepts a whole-source citation in the input's own field spelling", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("baseline-context", "baselineContext")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("shape"));
+		}).not.toThrow();
+	});
+
+	it("accepts a whole-source citation carrying a fragment", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "Valid delivery" },
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("product-brief", "product-brief#details")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("build"));
+		}).not.toThrow();
+	});
+
+	it("rejects citations outside the frozen stage input", () => {
+		const rubric = parseStageRubric(
+			JSON.stringify({
+				stage: "discuss",
+				hardBlockers: [
+					{
+						id: "invalid-stage-delivery",
+						description: "Valid delivery",
+					},
+				],
+				requirements: [{ id: "scope", description: "Scope" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "Clarity",
+						good: "Good",
+						excellent: "Excellent",
+					},
+				],
+			}),
+		);
+		const base = passingStageOutput(rubric);
+		const output: StageJudgeOutput = {
+			...base,
+			requirements: [
+				{
+					id: "scope",
+					status: "PASS",
+					evidence: [stageEvidence("artifact", "backlog/docs/missing-spec.md")],
+				},
+				...base.requirements.slice(1),
+			],
+		};
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("discuss"));
+		}).toThrow("cited unavailable evidence");
+	});
+});
+
+describe(runStageJudge.name, () => {
+	function judgeResponse(
+		evidencePath: string,
+		evidenceSource: StageJudgeOutput["requirements"][number]["evidence"][number]["source"] = "task",
+	): string {
+		const item = (id: string): StageJudgeOutput["requirements"][number] => ({
+			id,
+			status: "PASS",
+			evidence: [
+				{ source: evidenceSource, path: evidencePath, claim: "grounded" },
+			],
+		});
+
+		return JSON.stringify({
+			session_id: "judge-session",
+			total_cost_usd: 0.1,
+			structured_output: {
+				hardBlockers: [item("invalid-stage-delivery")],
+				requirements: [item("scope")],
+				dimensions: [
+					{
+						id: "clarity",
+						grade: "A",
+						evidence: [
+							{
+								source: evidenceSource,
+								path: evidencePath,
+								claim: "grounded",
+							},
+						],
+					},
+				],
+				summary: "graded",
+			},
+		});
+	}
+
+	const rubricSource = {
+		rubricPath: "rubrics/shape.json",
+		content: "{}",
+		rubric: {
+			hardBlockers: [
+				{ id: "invalid-stage-delivery", description: "Valid delivery" },
+			],
+			requirements: [{ id: "scope", description: "Scope" }],
+			dimensions: [
+				{ id: "clarity", description: "Clear", good: "g", excellent: "e" },
+			],
+		},
+	};
+
+	it("accepts commit subjects as citable stage evidence", async () => {
+		let prompt = "";
+		const input = stageJudgeInput("build", {
+			commitSubjects: ["add audit event"],
+		});
+
+		const scorecard = await runStageJudge(
+			"sonnet",
+			undefined,
+			5,
+			input,
+			rubricSource,
+			(judgePrompt) => {
+				prompt = judgePrompt;
+
+				return Promise.resolve(
+					judgeResponse("commitSubjects", "commit-subjects"),
+				);
+			},
+		);
+
+		expect(scorecard.grade.grade).toBe("A");
+		expect(prompt).toContain(
+			"commitSubjects (or commit-subjects) as the whole-source path for commit-subjects",
+		);
+		expect(() => {
+			validateStageJudgeEvidence(
+				{
+					...scorecard.grade,
+					requirements: [
+						{
+							id: "scope",
+							status: "PASS",
+							evidence: [stageEvidence("commit-subjects", "commit-subjects")],
+						},
+					],
+				},
+				input,
+			);
+		}).not.toThrow();
+	});
+
+	it("rejects commit subject citations when the stage has no history", () => {
+		const output = readStructuredOutput(
+			readClaudeEnvelope(judgeResponse("commitSubjects", "commit-subjects")),
+			stageJudgeOutputSchema,
+		);
+
+		expect(() => {
+			validateStageJudgeEvidence(output, stageJudgeInput("build"));
+		}).toThrow(
+			"cited unavailable evidence for invalid-stage-delivery: commit-subjects:commitSubjects",
+		);
+	});
+
+	it("retries once with the rejection quoted and sums the costs", async () => {
+		const prompts: string[] = [];
+		const responses = [
+			judgeResponse("not-a-path"),
+			judgeResponse("backlog-seed.md"),
+		];
+		const payloads = responses.map(
+			(response) => readClaudeEnvelope(response).structured_output,
+		);
+		const scorecard = await runStageJudge(
+			"sonnet",
+			undefined,
+			5,
+			stageJudgeInput("shape"),
+			rubricSource,
+			(prompt) => {
+				prompts.push(prompt);
+				const next = responses.shift();
+				if (next === undefined) {
+					throw new Error("no scripted response left");
+				}
+				return Promise.resolve(next);
+			},
+		);
+
+		expect(prompts).toHaveLength(2);
+		expect(prompts[1]).toContain("Your previous response was rejected");
+		expect(prompts[1]).toContain("not-a-path");
+		expect(scorecard.attempts).toEqual([
+			{
+				payload: payloads[0],
+				costUsd: 0.1,
+				outcome: "REJECTED",
+				error:
+					"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+			},
+			{
+				payload: payloads[1],
+				costUsd: 0.1,
+				outcome: "ACCEPTED",
+			},
+		]);
+		expect(scorecard.costUsd).toBeCloseTo(0.2);
+		expect(scorecard.grade.grade).toBe("A");
+	});
+
+	it("fails with both rejected attempts after the second invalid response", () => {
+		let calls = 0;
+		const response = judgeResponse("not-a-path");
+		const payload = readClaudeEnvelope(response).structured_output;
+
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => {
+					calls += 1;
+
+					return Promise.resolve(response);
+				},
+			),
+		).rejects.toMatchObject({
+			name: "JudgeOutputValidationError",
+			costUsd: 0.2,
+			attempts: [
+				{
+					payload,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+				},
+				{
+					payload,
+					costUsd: 0.1,
+					outcome: "REJECTED",
+					error:
+						"Stage Judge cited unavailable evidence for invalid-stage-delivery: task:not-a-path",
+				},
+			],
+		});
+		expect(calls).toBe(2);
+	});
+
+	it("does not retry an invocation failure", () => {
+		let calls = 0;
+		const failure = new Error("Stage Judge command timed out");
+
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => {
+					calls += 1;
+
+					return Promise.reject(failure);
+				},
+			),
+		).rejects.toBe(failure);
+		expect(calls).toBe(1);
+	});
+
+	it("does not retry a Claude error envelope", () => {
+		let calls = 0;
+
+		expect(
+			runStageJudge(
+				"sonnet",
+				undefined,
+				5,
+				stageJudgeInput("shape"),
+				rubricSource,
+				() => {
+					calls += 1;
+
+					return Promise.resolve(
+						JSON.stringify({
+							session_id: "judge-session",
+							is_error: true,
+							result: "Claude session failed",
+						}),
+					);
+				},
+			),
+		).rejects.toThrow("Claude session failed");
+		expect(calls).toBe(1);
+	});
+});
