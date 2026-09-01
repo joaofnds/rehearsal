@@ -7,7 +7,10 @@ import {
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import { runCommand } from "./command";
-import { JudgeOutputValidationError } from "./judge-attempt";
+import {
+	JudgeExecutionError,
+	JudgeOutputValidationError,
+} from "./judge-attempt";
 import { runPipelineConfirmation } from "./pipeline-confirmation";
 import {
 	CONFIRMATION_METRIC,
@@ -17,6 +20,7 @@ import {
 } from "./pipeline-confirmation-test-support";
 import { removeWorktree } from "./target";
 import { TestResources } from "./test-support";
+import { WorkflowExecutionError } from "./workflow";
 
 const testResources = TestResources.forEachTest();
 
@@ -255,6 +259,62 @@ describe(runPipelineConfirmation.name, () => {
 		expect(record.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
 	});
 
+	it("retains worker calls carried by a failed stage execution", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run(
+			{
+				groupId: "worker-execution-metrics",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 45,
+					totalMaximumUsd: 90,
+				},
+			},
+			(dependencies) => {
+				const { stageSession } = dependencies;
+				const { runWorkflowStage } = stageSession;
+
+				return {
+					...dependencies,
+					stageSession: {
+						...stageSession,
+						runWorkflowStage: (request) => {
+							if (
+								request.stage === "discuss" &&
+								repOrdinal(request.targetDir) === 1
+							) {
+								return Promise.reject(
+									new WorkflowExecutionError({
+										cause: new Error("worker invocation failed"),
+										providerCalls: [{ metrics: CONFIRMATION_METRIC }, {}],
+									}),
+								);
+							}
+
+							return runWorkflowStage(request);
+						},
+					},
+				};
+			},
+		);
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		const [failed] = records;
+		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
+
+		expect(failed?.metrics).toEqual({
+			status: "MISSING",
+			calls: [{ role: "worker", metrics: CONFIRMATION_METRIC }],
+			missing: ["worker call metrics", "stage-judge call metrics"],
+		});
+		expect(failed?.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
+	});
+
 	it("carries Product Owner provider calls into pipeline evidence", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 
@@ -319,7 +379,22 @@ describe(runPipelineConfirmation.name, () => {
 							input.stage === "build" &&
 							repOrdinal(input.transcript.sessionId) === 1
 						) {
-							return Promise.reject(new Error("stage Judge invocation failed"));
+							return Promise.reject(
+								new JudgeExecutionError({
+									cause: new Error("stage Judge invocation failed"),
+									prompt: "prompt",
+									attempts: [
+										{
+											payload: { invalid: true },
+											costUsd: CONFIRMATION_METRIC.costUsd,
+											metrics: CONFIRMATION_METRIC,
+											outcome: "REJECTED",
+											error: "invalid output",
+										},
+									],
+									costUsd: CONFIRMATION_METRIC.costUsd,
+								}),
+							);
 						}
 
 						return runStageJudge(model, effort, budget, input, source);
@@ -356,6 +431,7 @@ describe(runPipelineConfirmation.name, () => {
 			calls: [
 				{ role: "worker", metrics: CONFIRMATION_METRIC },
 				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
 				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
 			],
 			missing: ["stage-judge call metrics"],

@@ -28,7 +28,10 @@ import type {
 	StageScorecard,
 } from "./contracts";
 import type { JudgeResult } from "./judge";
-import { JudgeOutputValidationError } from "./judge-attempt";
+import {
+	JudgeExecutionError,
+	JudgeOutputValidationError,
+} from "./judge-attempt";
 import type { PipelineDefinition } from "./pipeline";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
@@ -62,6 +65,7 @@ import type {
 	SourceBaseline,
 } from "./target";
 import type { ProductOwner, createProductOwner } from "./workflow";
+import { WorkflowExecutionError } from "./workflow";
 
 interface LoadedStageRubric {
 	readonly rubricPath: string;
@@ -568,15 +572,24 @@ async function runPipelineRep(
 		const failure = error instanceof Error ? error : new Error(String(error));
 		const judgeFailure =
 			failure instanceof JudgeOutputValidationError ? failure : undefined;
+		const judgeExecutionFailure =
+			failure instanceof JudgeExecutionError ? failure : undefined;
 		const completedJudgeRejection =
 			judgeFailure !== undefined &&
 			worktreeCreated &&
 			productOwner !== undefined &&
 			(judgingFinal || currentSession !== undefined);
-		if (stageClock.read() !== undefined && currentSession === undefined) {
+		if (failure instanceof WorkflowExecutionError) {
+			workerCalls.push(...failure.providerCalls);
+		} else if (
+			stageClock.read() !== undefined &&
+			currentSession === undefined
+		) {
 			workerCalls.push({});
 		}
-		if (judgingStage && judgeFailure === undefined) {
+		if (judgingStage && judgeExecutionFailure !== undefined) {
+			stageJudgeCalls.push(...judgeExecutionFailure.providerCalls);
+		} else if (judgingStage && judgeFailure === undefined) {
 			stageJudgeCalls.push({});
 		}
 		let stages = [...stageOutcomes];
@@ -672,7 +685,9 @@ async function runPipelineRep(
 			worker: workerCalls,
 			productOwner: productOwner?.snapshot().providerCalls,
 			stageJudge: stageJudgeCalls,
-			finalJudge: judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
+			finalJudge: judgingFinal
+				? (judgeExecutionFailure?.providerCalls ?? judgeFailure?.attempts ?? [])
+				: undefined,
 		});
 		const record = confirmationRepRecordSchema.parse({
 			schemaVersion: 1,

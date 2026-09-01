@@ -25,7 +25,10 @@ import {
 	settleDiagnosticConfirmationRep,
 	writeFrozenFile,
 } from "./confirmation-evidence";
-import { JudgeOutputValidationError } from "./judge-attempt";
+import {
+	JudgeExecutionError,
+	JudgeOutputValidationError,
+} from "./judge-attempt";
 import { loadRunManifest } from "./manifest";
 import {
 	detachedStageDependencies,
@@ -39,6 +42,7 @@ import { executeStageSession } from "./run";
 import { confirmationGroupPaths } from "./run-layout";
 import { recordRetentionRef } from "./target";
 import type { ProductOwner } from "./workflow";
+import { WorkflowExecutionError } from "./workflow";
 
 interface FrozenReplayInputs {
 	readonly manifest: Awaited<ReturnType<typeof loadRunManifest>>;
@@ -186,6 +190,13 @@ interface JudgeRejection {
 	readonly costUsd: number;
 }
 
+interface FailedStageEvidence {
+	readonly workerCalls: readonly ProviderCall[];
+	readonly productOwnerCalls: readonly ProviderCall[];
+	readonly stageJudgeCalls: readonly ProviderCall[];
+	readonly elapsedMs: number;
+}
+
 function completeRepRecord(
 	request: ReplayConfirmationRequest,
 	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
@@ -299,7 +310,25 @@ function failedRepRecord(
 	worktreePath: string,
 	error: string,
 	elapsedMs: number,
+	stageEvidence?: FailedStageEvidence,
 ): ConfirmationRepRecord {
+	const evidence =
+		stageEvidence === undefined
+			? {
+					metrics: {
+						status: "MISSING" as const,
+						calls: [],
+						missing: ["stage evidence"],
+					},
+					workerTrajectorySteps: 0,
+				}
+			: collectConfirmationMetrics({
+					worker: stageEvidence.workerCalls,
+					productOwner: stageEvidence.productOwnerCalls,
+					stageJudge: stageEvidence.stageJudgeCalls,
+					finalJudge: undefined,
+				});
+
 	return confirmationRepRecordSchema.parse({
 		schemaVersion: 1,
 		groupId: request.groupId,
@@ -317,18 +346,14 @@ function failedRepRecord(
 			{
 				stage: request.stage,
 				status: "EXECUTION_FAILED",
-				elapsedMs,
+				elapsedMs: stageEvidence?.elapsedMs ?? elapsedMs,
 				error,
 				worktreePath,
 			},
 		],
 		finalOutcome: { status: "NOT_APPLICABLE" },
-		metrics: {
-			status: "MISSING",
-			calls: [],
-			missing: ["stage evidence"],
-		},
-		workerTrajectorySteps: 0,
+		metrics: evidence.metrics,
+		workerTrajectorySteps: evidence.workerTrajectorySteps,
 		elapsedMs,
 	});
 }
@@ -532,6 +557,29 @@ export async function runReplayConfirmation(
 						removeWorktree: dependencies.removeWorktree,
 					});
 				}
+				let stageEvidence: FailedStageEvidence | undefined;
+				if (
+					failure instanceof JudgeExecutionError &&
+					session !== undefined &&
+					productOwner !== undefined
+				) {
+					stageEvidence = {
+						workerCalls: session.transcript.providerCalls,
+						productOwnerCalls: productOwner.snapshot().providerCalls,
+						stageJudgeCalls: failure.providerCalls,
+						elapsedMs: now() - stageStart,
+					};
+				} else if (
+					failure instanceof WorkflowExecutionError &&
+					productOwner !== undefined
+				) {
+					stageEvidence = {
+						workerCalls: failure.providerCalls,
+						productOwnerCalls: productOwner.snapshot().providerCalls,
+						stageJudgeCalls: [],
+						elapsedMs: now() - stageStart,
+					};
+				}
 				const record = failedRepRecord(
 					request,
 					frozen.plan.consumed,
@@ -540,6 +588,7 @@ export async function runReplayConfirmation(
 					plan.worktreePath,
 					diagnosticError,
 					now() - repStart,
+					stageEvidence,
 				);
 				return settleDiagnosticConfirmationRep({
 					recordFile: repPaths.recordFile,

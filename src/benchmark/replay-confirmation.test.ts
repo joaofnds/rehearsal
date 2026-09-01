@@ -19,7 +19,10 @@ import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
 import type { ClaudeCallMetrics } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
-import { JudgeOutputValidationError } from "./judge-attempt";
+import {
+	JudgeExecutionError,
+	JudgeOutputValidationError,
+} from "./judge-attempt";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
 import { runReplayConfirmation } from "./replay-confirmation";
@@ -430,6 +433,72 @@ describe(runReplayConfirmation.name, () => {
 			],
 			missing: ["product-owner call metrics"],
 		});
+	});
+
+	it("retains completed stage evidence when the Judge invocation fails", async () => {
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const fake = new ReplayConfirmationHarness(testResources);
+		const recorded = await fake.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "replay-judge-corpus-"));
+		testResources.track(corpusRoot);
+		for (const skill of ["discuss", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+		}
+
+		const outcome = await fake.runConfirmation(
+			{ paths: recorded.paths, corpusRoots: [corpusRoot] },
+			{ groupId: "judge-execution-evidence", reps: 2 },
+			(dependencies) => ({
+				...dependencies,
+				installInstructions: () => Promise.resolve(recorded.manifest.taskSha),
+				createProductOwner: () => ({
+					ask: () => Promise.resolve("Use the small scope"),
+					snapshot: () => ({
+						sessionId: "po-session",
+						spentUsd: metric.costUsd,
+						providerCalls: [{ metrics: metric }],
+					}),
+				}),
+				stageSession: {
+					...dependencies.stageSession,
+					runWorkflowStage: async (request) => ({
+						...(await dependencies.stageSession.runWorkflowStage(request)),
+						providerCalls: [{ metrics: metric }],
+					}),
+				},
+				runStageJudge: () =>
+					Promise.reject(
+						new JudgeExecutionError({
+							cause: new Error("stage Judge invocation failed"),
+							prompt: "prompt",
+							attempts: [],
+							costUsd: 0,
+						}),
+					),
+			}),
+		);
+		const [recordFile] = outcome.repRecordFiles;
+		const record = parseConfirmationRepRecord(
+			await Bun.file(recordFile ?? "missing").text(),
+		);
+
+		expect(record.metrics).toEqual({
+			status: "MISSING",
+			calls: [
+				{ role: "worker", metrics: metric },
+				{ role: "product-owner", metrics: metric },
+			],
+			missing: ["stage-judge call metrics"],
+		});
+		expect(record.workerTrajectorySteps).toBe(metric.turns);
 	});
 
 	it("removes the temporary root after every replay rep completes with durable evidence", async () => {
