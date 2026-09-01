@@ -3412,6 +3412,37 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("records pending stage state when abort precedes its first write", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const stageFile = "/runs/shape.json";
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		const pendingWrite = abort.writePendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+		const abortWrite = abort.markAborted("run interrupted");
+		await Promise.all([pendingWrite, abortWrite]);
+
+		expect(JSON.parse(persistence.files.get(stageFile) ?? "")).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+		});
+	});
+
 	it("refuses a normal stage transition after abort is requested", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const stageFile = "/runs/shape.json";
