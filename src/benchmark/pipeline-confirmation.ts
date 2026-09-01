@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { createTaskCommit } from "./backlog";
@@ -27,18 +27,8 @@ import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition } from "./pipeline";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
-import {
-	buildReliabilityReport,
-	buildResourceReport,
-} from "./confirmation-report";
-import type {
-	ConfirmationGroupRecord,
-	ConfirmationRepRecord,
-} from "./confirmation-record";
-import {
-	confirmationGroupRecordSchema,
-	confirmationRepRecordSchema,
-} from "./confirmation-record";
+import type { ConfirmationRepRecord } from "./confirmation-record";
+import { confirmationRepRecordSchema } from "./confirmation-record";
 import type {
 	ConfirmationMetricAttempt,
 	ConfirmationRepResult,
@@ -46,6 +36,7 @@ import type {
 } from "./confirmation-evidence";
 import {
 	collectConfirmationMetrics,
+	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
 	metricAttempts,
 	requiredMetricAttempts,
@@ -752,73 +743,41 @@ export async function runPipelineConfirmation(
 
 		return outcome.value;
 	});
-	const repRecordFiles = repResults.map(({ recordFile }) => recordFile);
-	const records = await Promise.all(
-		repRecordFiles.map(async (path) =>
-			confirmationRepRecordSchema.parse(
-				JSON.parse(await Bun.file(path).text()),
-			),
-		),
-	);
-	const reliability = buildReliabilityReport(
-		request.pipeline.stages.map(({ name }) => name),
-		records.map((record) => {
-			if (record.finalOutcome.status === "NOT_APPLICABLE") {
-				throw new Error(
-					"Pipeline rep cannot have a not-applicable final outcome",
-				);
-			}
 
-			return {
-				metricsComplete: record.metrics.status === "COMPLETE",
-				stages: record.stages,
-				finalOutcome: record.finalOutcome,
-			};
-		}),
-	);
-	const resources = buildResourceReport(
-		request.pipeline.stages.map(({ name }) => name),
-		records,
-		makespanMs,
-	);
-	await Bun.write(
-		paths.reportFile,
-		`${JSON.stringify({ reliability, resources }, null, 2)}\n`,
-	);
-	const group: ConfirmationGroupRecord = confirmationGroupRecordSchema.parse({
-		schemaVersion: 1,
-		groupId: request.groupId,
+	return finalizeConfirmationGroup({
 		mode: "pipeline",
-		reps: request.reps,
 		declaredStages: request.pipeline.stages.map(({ name }) => name),
-		inputs: {
-			lineage: { kind: "SOURCE", sha: request.source.sha },
-			files: frozen.files,
-			model: request.model,
-			effort: request.effort,
-			judgeModel: request.judgeModel,
-			judgeEffort: request.judgeEffort,
-			sessionBudgetUsd: request.sessionBudgetUsd,
-			pipelinePath: request.pipelinePath,
-		},
-		projectedCost: request.projectedCost,
-		approval: { method: request.approvalMethod, approved: true },
-		repRecords: repRecordFiles.map((path, index) => ({
-			repId: `${request.groupId}-rep-${index + 1}`,
-			ordinal: index + 1,
-			path: relative(paths.directory, path),
-		})),
-		reportFile: relative(paths.directory, paths.reportFile),
-		makespanMs,
-	});
-	await Bun.write(paths.groupFile, `${JSON.stringify(group, null, 2)}\n`);
-	if (repResults.every(({ preservedWorktree }) => !preservedWorktree)) {
-		await rm(worktreesDirectory, { force: true, recursive: true });
-	}
-
-	return {
-		groupRecordFile: paths.groupFile,
+		repResults,
+		worktreesDirectory,
+		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
-		repRecordFiles,
-	};
+		makespanMs,
+		groupRecordContent: (repRecordFiles) =>
+			JSON.stringify({
+				schemaVersion: 1,
+				groupId: request.groupId,
+				mode: "pipeline",
+				reps: request.reps,
+				declaredStages: request.pipeline.stages.map(({ name }) => name),
+				inputs: {
+					lineage: { kind: "SOURCE", sha: request.source.sha },
+					files: frozen.files,
+					model: request.model,
+					effort: request.effort,
+					judgeModel: request.judgeModel,
+					judgeEffort: request.judgeEffort,
+					sessionBudgetUsd: request.sessionBudgetUsd,
+					pipelinePath: request.pipelinePath,
+				},
+				projectedCost: request.projectedCost,
+				approval: { method: request.approvalMethod, approved: true },
+				repRecords: repRecordFiles.map((path, index) => ({
+					repId: `${request.groupId}-rep-${index + 1}`,
+					ordinal: index + 1,
+					path: relative(paths.directory, path),
+				})),
+				reportFile: relative(paths.directory, paths.reportFile),
+				makespanMs,
+			}),
+	});
 }

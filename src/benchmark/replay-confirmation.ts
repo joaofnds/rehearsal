@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
@@ -11,18 +11,8 @@ import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import type { ClaudeCallMetrics, StageScorecard } from "./contracts";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
-import {
-	buildReliabilityReport,
-	buildResourceReport,
-} from "./confirmation-report";
-import type {
-	ConfirmationGroupRecord,
-	ConfirmationRepRecord,
-} from "./confirmation-record";
-import {
-	confirmationGroupRecordSchema,
-	confirmationRepRecordSchema,
-} from "./confirmation-record";
+import type { ConfirmationRepRecord } from "./confirmation-record";
+import { confirmationRepRecordSchema } from "./confirmation-record";
 import type {
 	ConfirmationMetricAttempt,
 	ConfirmationRepResult,
@@ -30,6 +20,7 @@ import type {
 } from "./confirmation-evidence";
 import {
 	collectConfirmationMetrics,
+	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
 	metricAttempts,
 	requiredMetricAttempts,
@@ -561,66 +552,45 @@ export async function runReplayConfirmation(
 			return outcome.value;
 		},
 	);
-	const repRecordFiles = repResults.map(({ recordFile }) => recordFile);
-	const records = await Promise.all(
-		repRecordFiles.map(async (path) =>
-			confirmationRepRecordSchema.parse(
-				JSON.parse(await Bun.file(path).text()),
-			),
-		),
-	);
-	const reliability = buildReliabilityReport(
-		[request.stage],
-		records.map((record) => ({
-			metricsComplete: record.metrics.status === "COMPLETE",
-			stages: record.stages,
-			finalOutcome: { status: "NOT_REACHED" },
-		})),
-	).slice(0, 1);
-	const resources = buildResourceReport([request.stage], records, makespanMs);
-	await Bun.write(
-		paths.reportFile,
-		`${JSON.stringify({ reliability, resources }, null, 2)}\n`,
-	);
-	const groupRecord: ConfirmationGroupRecord =
-		confirmationGroupRecordSchema.parse({
-			schemaVersion: 1,
-			groupId: request.groupId,
-			mode: "stage",
-			reps: request.reps,
-			declaredStages: [request.stage],
-			inputs: {
-				lineage: {
-					kind: "CHECKPOINT",
-					lineage: frozen.plan.consumed.lineage,
-					targetSha: frozen.plan.consumed.targetSha,
-				},
-				files: frozen.files,
-				model: request.model,
-				effort: request.effort,
-				judgeModel: request.judgeModel,
-				judgeEffort: request.judgeEffort,
-				sessionBudgetUsd: request.sessionBudgetUsd,
-				pipelinePath: frozen.manifest.pipelinePath,
-			},
-			projectedCost: request.projectedCost,
-			approval: { method: request.approvalMethod, approved: true },
-			repRecords: repRecordFiles.map((path, index) => ({
-				repId: `${request.groupId}-rep-${index + 1}`,
-				ordinal: index + 1,
-				path: relative(paths.directory, path),
-			})),
-			reportFile: relative(paths.directory, paths.reportFile),
-			makespanMs,
-		});
-	await Bun.write(paths.groupFile, `${JSON.stringify(groupRecord, null, 2)}\n`);
-	if (repResults.every(({ preservedWorktree }) => !preservedWorktree)) {
-		await rm(worktreesDirectory, { force: true, recursive: true });
-	}
 
-	return {
-		groupRecordFile: paths.groupFile,
+	return finalizeConfirmationGroup({
+		mode: "stage",
+		declaredStages: [request.stage],
+		repResults,
+		worktreesDirectory,
+		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
-		repRecordFiles,
-	};
+		makespanMs,
+		groupRecordContent: (repRecordFiles) =>
+			JSON.stringify({
+				schemaVersion: 1,
+				groupId: request.groupId,
+				mode: "stage",
+				reps: request.reps,
+				declaredStages: [request.stage],
+				inputs: {
+					lineage: {
+						kind: "CHECKPOINT",
+						lineage: frozen.plan.consumed.lineage,
+						targetSha: frozen.plan.consumed.targetSha,
+					},
+					files: frozen.files,
+					model: request.model,
+					effort: request.effort,
+					judgeModel: request.judgeModel,
+					judgeEffort: request.judgeEffort,
+					sessionBudgetUsd: request.sessionBudgetUsd,
+					pipelinePath: frozen.manifest.pipelinePath,
+				},
+				projectedCost: request.projectedCost,
+				approval: { method: request.approvalMethod, approved: true },
+				repRecords: repRecordFiles.map((path, index) => ({
+					repId: `${request.groupId}-rep-${index + 1}`,
+					ordinal: index + 1,
+					path: relative(paths.directory, path),
+				})),
+				reportFile: relative(paths.directory, paths.reportFile),
+				makespanMs,
+			}),
+	});
 }

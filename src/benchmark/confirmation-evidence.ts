@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
-import { readdir } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ClaudeCallMetrics } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
 } from "./confirmation-record";
+import {
+	confirmationGroupRecordSchema,
+	confirmationRepRecordSchema,
+} from "./confirmation-record";
+import {
+	buildReliabilityReport,
+	buildResourceReport,
+} from "./confirmation-report";
 
 export type FrozenFile = ConfirmationGroupRecord["inputs"]["files"][number];
 
@@ -105,6 +113,95 @@ export async function settleDiagnosticConfirmationRep(
 	return {
 		recordFile: rep.recordFile,
 		preservedWorktree: rep.worktreeCreated,
+	};
+}
+
+interface ConfirmationGroupFinalization {
+	readonly mode: "stage" | "pipeline";
+	readonly declaredStages: readonly string[];
+	readonly repResults: readonly ConfirmationRepResult[];
+	readonly worktreesDirectory: string;
+	readonly groupFile: string;
+	readonly reportFile: string;
+	readonly makespanMs: number;
+	readonly groupRecordContent: (repRecordFiles: readonly string[]) => string;
+}
+
+export interface ConfirmationGroupOutcome {
+	readonly groupRecordFile: string;
+	readonly reportFile: string;
+	readonly repRecordFiles: readonly string[];
+}
+
+export async function finalizeConfirmationGroup(
+	finalization: Readonly<ConfirmationGroupFinalization>,
+): Promise<ConfirmationGroupOutcome> {
+	const repRecordFiles = finalization.repResults.map(
+		({ recordFile }) => recordFile,
+	);
+	const records = await Promise.all(
+		repRecordFiles.map(async (path) =>
+			confirmationRepRecordSchema.parse(
+				JSON.parse(await Bun.file(path).text()),
+			),
+		),
+	);
+	const reliabilityInputs = records.map((record) => {
+		if (finalization.mode === "stage") {
+			return {
+				metricsComplete: record.metrics.status === "COMPLETE",
+				stages: record.stages,
+				finalOutcome: { status: "NOT_REACHED" as const },
+			};
+		}
+		if (record.finalOutcome.status === "NOT_APPLICABLE") {
+			throw new Error(
+				"Pipeline rep cannot have a not-applicable final outcome",
+			);
+		}
+
+		return {
+			metricsComplete: record.metrics.status === "COMPLETE",
+			stages: record.stages,
+			finalOutcome: record.finalOutcome,
+		};
+	});
+	const reliability = buildReliabilityReport(
+		finalization.declaredStages,
+		reliabilityInputs,
+	);
+	const report = {
+		reliability:
+			finalization.mode === "stage"
+				? reliability.slice(0, finalization.declaredStages.length)
+				: reliability,
+		resources: buildResourceReport(
+			finalization.declaredStages,
+			records,
+			finalization.makespanMs,
+		),
+	};
+	await Bun.write(
+		finalization.reportFile,
+		`${JSON.stringify(report, null, 2)}\n`,
+	);
+	const group = confirmationGroupRecordSchema.parse(
+		JSON.parse(finalization.groupRecordContent(repRecordFiles)),
+	);
+	await Bun.write(
+		finalization.groupFile,
+		`${JSON.stringify(group, null, 2)}\n`,
+	);
+	if (
+		finalization.repResults.every(({ preservedWorktree }) => !preservedWorktree)
+	) {
+		await rm(finalization.worktreesDirectory, { force: true, recursive: true });
+	}
+
+	return {
+		groupRecordFile: finalization.groupFile,
+		reportFile: finalization.reportFile,
+		repRecordFiles,
 	};
 }
 
