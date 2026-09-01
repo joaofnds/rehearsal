@@ -27,6 +27,7 @@ export interface RunAbortDependencies {
 	) => void;
 	readonly exit: (code: number) => void;
 	readonly reportError: (message: string) => void;
+	readonly persistence: RunArtifactPersistence;
 }
 
 export interface RunAbortRequest {
@@ -35,6 +36,7 @@ export interface RunAbortRequest {
 }
 
 export interface RunAbort {
+	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
@@ -43,6 +45,16 @@ export interface RunAbort {
 }
 
 const RUN_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+
+export interface RunArtifactPersistence {
+	readonly write: (path: string, contents: string) => Promise<void>;
+}
+
+export const fileRunArtifactPersistence: RunArtifactPersistence = {
+	write: async (path, contents) => {
+		await Bun.write(path, contents);
+	},
+};
 
 function signalExitCode(signal: NodeJS.Signals): number {
 	if (signal === "SIGTERM") {
@@ -58,15 +70,17 @@ function signalExitCode(signal: NodeJS.Signals): number {
 export async function writeRunArtifact(
 	path: string,
 	artifact: RunArtifact,
+	persistence: RunArtifactPersistence = fileRunArtifactPersistence,
 ): Promise<void> {
-	await Bun.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
+	await persistence.write(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
 export async function writeStageJudgeFailure(
 	pending: PendingStage,
 	reason: string,
+	persistence: RunArtifactPersistence = fileRunArtifactPersistence,
 ): Promise<void> {
-	await Bun.write(
+	await persistence.write(
 		pending.file,
 		`${JSON.stringify(
 			{
@@ -90,32 +104,96 @@ export function createRunAbort(
 	let pendingStage: PendingStage | undefined;
 	let abortRecorded: Promise<void> | undefined;
 	let teardownStarted: Promise<void> | undefined;
-	let abortStarted = false;
+	let signalAbortStarted = false;
+	let abortRequested = false;
+	let transitionReady = Promise.resolve();
 
+	const enqueueTransition = async (
+		transition: () => Promise<void>,
+	): Promise<void> => {
+		const previousTransition = transitionReady;
+		const currentTransition = Promise.withResolvers<undefined>();
+		transitionReady = currentTransition.promise;
+		await previousTransition;
+
+		try {
+			await transition();
+		} finally {
+			currentTransition.resolve(undefined);
+		}
+	};
+	const enqueueNormalTransition = (
+		transition: () => Promise<void>,
+	): Promise<void> => {
+		if (abortRequested) {
+			return Promise.resolve();
+		}
+
+		return enqueueTransition(async () => {
+			if (!abortRequested) {
+				await transition();
+			}
+		});
+	};
+	const writePendingStage = (pending: PendingStage): Promise<void> => {
+		if (abortRequested) {
+			return Promise.resolve();
+		}
+
+		pendingStage = pending;
+
+		return enqueueNormalTransition(() =>
+			dependencies.persistence.write(
+				pending.file,
+				`${JSON.stringify(
+					{
+						status: "AWAITING_STAGE_JUDGE",
+						stage: pending.stage,
+						input: pending.input,
+					},
+					null,
+					2,
+				)}\n`,
+			),
+		);
+	};
 	const markAborted = (reason: string): Promise<void> => {
-		abortRecorded ??= (async () => {
-			if (pendingStage !== undefined) {
-				try {
-					await writeStageJudgeFailure(pendingStage, reason);
-				} catch (error) {
-					dependencies.reportError(
-						`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
-					);
+		if (abortRecorded === undefined) {
+			abortRequested = true;
+			const stageToFail = pendingStage;
+			const artifactToFail = pendingArtifact;
+			abortRecorded = enqueueTransition(async () => {
+				if (stageToFail !== undefined) {
+					try {
+						await writeStageJudgeFailure(
+							stageToFail,
+							reason,
+							dependencies.persistence,
+						);
+					} catch (error) {
+						dependencies.reportError(
+							`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
+						);
+					}
 				}
-			}
-			if (pendingArtifact !== undefined) {
-				try {
-					await writeRunArtifact(request.artifactFile, {
-						...pendingArtifact,
-						status: "FAILED",
-					});
-				} catch (error) {
-					dependencies.reportError(
-						`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
-					);
+				if (artifactToFail !== undefined) {
+					try {
+						await writeRunArtifact(
+							request.artifactFile,
+							{
+								...artifactToFail,
+								status: "FAILED",
+							},
+							dependencies.persistence,
+						);
+					} catch (error) {
+						dependencies.reportError(
+							`Failed to update run artifacts: ${error instanceof Error ? error.message : String(error)}`,
+						);
+					}
 				}
-			}
-		})();
+			});
+		}
 
 		return abortRecorded;
 	};
@@ -147,11 +225,11 @@ export function createRunAbort(
 		dependencies.reportError(
 			`\nReceived ${signal}; restoring the target before exit.`,
 		);
-		if (abortStarted) {
+		if (signalAbortStarted) {
 			return;
 		}
 
-		abortStarted = true;
+		signalAbortStarted = true;
 		void abortAndExit(signal);
 	};
 	const release = (): void => {
@@ -165,6 +243,7 @@ export function createRunAbort(
 	}
 
 	return {
+		writePendingStage,
 		trackPendingStage: (pending) => {
 			pendingStage = pending;
 		},

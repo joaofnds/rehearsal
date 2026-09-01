@@ -51,7 +51,11 @@ import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
-import { createRunAbort, writeRunArtifact } from "./run-abort";
+import {
+	createRunAbort,
+	fileRunArtifactPersistence,
+	writeRunArtifact,
+} from "./run-abort";
 import type { BenchmarkRunPaths } from "./run-layout";
 import {
 	benchmarkRunPaths,
@@ -598,6 +602,7 @@ export async function runBenchmark(
 			},
 			exit: (code) => process.exit(code),
 			reportError: console.error,
+			persistence: fileRunArtifactPersistence,
 		},
 		{
 			artifactFile: runFiles.artifactFile,

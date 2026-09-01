@@ -138,9 +138,13 @@ import {
 	runFinalJudge,
 	runGradedStages,
 } from "./src/benchmark/run";
-import type { PendingStage } from "./src/benchmark/run-abort";
+import type {
+	PendingStage,
+	RunArtifactPersistence,
+} from "./src/benchmark/run-abort";
 import {
 	createRunAbort,
+	fileRunArtifactPersistence,
 	writeStageJudgeFailure,
 } from "./src/benchmark/run-abort";
 import {
@@ -3302,7 +3306,87 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 });
 
+interface BlockedRunArtifactWrite {
+	readonly started: Promise<undefined>;
+	readonly release: () => void;
+}
+
+class ControlledRunArtifactPersistence implements RunArtifactPersistence {
+	public readonly files = new Map<string, string>();
+	private nextWrite:
+		| {
+				readonly started: PromiseWithResolvers<undefined>;
+				readonly released: PromiseWithResolvers<undefined>;
+		  }
+		| undefined;
+
+	public blockNextWrite(): BlockedRunArtifactWrite {
+		const started = Promise.withResolvers<undefined>();
+		const released = Promise.withResolvers<undefined>();
+		this.nextWrite = { started, released };
+
+		return {
+			started: started.promise,
+			release: () => {
+				released.resolve(undefined);
+			},
+		};
+	}
+
+	public async write(path: string, contents: string): Promise<void> {
+		const blocked = this.nextWrite;
+		this.nextWrite = undefined;
+		if (blocked !== undefined) {
+			blocked.started.resolve(undefined);
+			await blocked.released.promise;
+		}
+
+		this.files.set(path, contents);
+	}
+
+	public reset(): void {
+		this.files.clear();
+		this.nextWrite = undefined;
+	}
+}
+
 describe(createRunAbort.name, () => {
+	it("records an interrupted pending stage as failed after the active write settles", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const stageFile = "/runs/shape.json";
+		const blocked = persistence.blockNextWrite();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const pending: PendingStage = {
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		};
+
+		const pendingWrite = abort.writePendingStage(pending);
+		await blocked.started;
+		const abortWrite = abort.markAborted("run interrupted");
+		blocked.release();
+		await Promise.all([pendingWrite, abortWrite]);
+
+		expect(JSON.parse(persistence.files.get(stageFile) ?? "")).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			error: "run interrupted",
+		});
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		temporaryDirectories.push(directory);
@@ -3319,6 +3403,7 @@ describe(createRunAbort.name, () => {
 				releaseSignal: () => undefined,
 				exit: () => undefined,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile,
@@ -3363,6 +3448,7 @@ describe(createRunAbort.name, () => {
 				},
 				exit: () => undefined,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: "/tmp/run.json",
@@ -3407,6 +3493,7 @@ describe(createRunAbort.name, () => {
 					exited.resolve(code);
 				},
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: join(directory, "run.json"),
@@ -3453,6 +3540,7 @@ describe(createRunAbort.name, () => {
 				releaseSignal: () => undefined,
 				exit: exited.resolve,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: join(directory, "run.json"),
@@ -3494,6 +3582,7 @@ describe(createRunAbort.name, () => {
 				releaseSignal: () => undefined,
 				exit: () => undefined,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile,
@@ -3526,6 +3615,7 @@ describe(createRunAbort.name, () => {
 				releaseSignal: () => undefined,
 				exit: () => undefined,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: join(directory, "run.json"),
@@ -3558,6 +3648,7 @@ describe(createRunAbort.name, () => {
 				releaseSignal: () => undefined,
 				exit: () => undefined,
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: "/tmp/run.json",
@@ -3603,6 +3694,7 @@ describe(createRunAbort.name, () => {
 					exited.resolve(undefined);
 				},
 				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
 			},
 			{
 				artifactFile: "/tmp/run.json",
