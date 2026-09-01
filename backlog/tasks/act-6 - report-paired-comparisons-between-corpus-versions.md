@@ -2,9 +2,10 @@
 id: ACT-6
 title: report paired comparisons between corpus versions
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-09-01 10:36'
+updated_date: '2026-09-01 10:41'
 labels: []
 dependencies:
   - ACT-4
