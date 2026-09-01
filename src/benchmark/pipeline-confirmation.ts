@@ -746,38 +746,26 @@ export async function runPipelineConfirmation(
 
 	return finalizeConfirmationGroup({
 		mode: "pipeline",
+		groupId: request.groupId,
+		reps: request.reps,
 		declaredStages: request.pipeline.stages.map(({ name }) => name),
+		inputs: {
+			lineage: { kind: "SOURCE", sha: request.source.sha },
+			files: frozen.files,
+			model: request.model,
+			effort: request.effort,
+			judgeModel: request.judgeModel,
+			judgeEffort: request.judgeEffort,
+			sessionBudgetUsd: request.sessionBudgetUsd,
+			pipelinePath: request.pipelinePath,
+		},
+		projectedCost: request.projectedCost,
+		approvalMethod: request.approvalMethod,
 		repResults,
 		worktreesDirectory,
+		groupDirectory: paths.directory,
 		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
 		makespanMs,
-		groupRecordContent: (repRecordFiles) =>
-			JSON.stringify({
-				schemaVersion: 1,
-				groupId: request.groupId,
-				mode: "pipeline",
-				reps: request.reps,
-				declaredStages: request.pipeline.stages.map(({ name }) => name),
-				inputs: {
-					lineage: { kind: "SOURCE", sha: request.source.sha },
-					files: frozen.files,
-					model: request.model,
-					effort: request.effort,
-					judgeModel: request.judgeModel,
-					judgeEffort: request.judgeEffort,
-					sessionBudgetUsd: request.sessionBudgetUsd,
-					pipelinePath: request.pipelinePath,
-				},
-				projectedCost: request.projectedCost,
-				approval: { method: request.approvalMethod, approved: true },
-				repRecords: repRecordFiles.map((path, index) => ({
-					repId: `${request.groupId}-rep-${index + 1}`,
-					ordinal: index + 1,
-					path: relative(paths.directory, path),
-				})),
-				reportFile: relative(paths.directory, paths.reportFile),
-				makespanMs,
-			}),
 	});
 }

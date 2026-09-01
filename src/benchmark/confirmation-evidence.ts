@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
+import type { ConfirmationCostProjection } from "./confirmation";
+import type { Effort } from "./config";
 import type { ClaudeCallMetrics } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
@@ -118,13 +120,37 @@ export async function settleDiagnosticConfirmationRep(
 
 interface ConfirmationGroupFinalization {
 	readonly mode: "stage" | "pipeline";
+	readonly groupId: string;
+	readonly reps: number;
 	readonly declaredStages: readonly string[];
+	readonly inputs: ConfirmationGroupInputs;
+	readonly projectedCost: ConfirmationCostProjection;
+	readonly approvalMethod: "interactive" | "yes";
 	readonly repResults: readonly ConfirmationRepResult[];
 	readonly worktreesDirectory: string;
+	readonly groupDirectory: string;
 	readonly groupFile: string;
 	readonly reportFile: string;
 	readonly makespanMs: number;
-	readonly groupRecordContent: (repRecordFiles: readonly string[]) => string;
+}
+
+type ConfirmationGroupLineage =
+	| { readonly kind: "SOURCE"; readonly sha: string }
+	| {
+			readonly kind: "CHECKPOINT";
+			readonly lineage: string;
+			readonly targetSha: string;
+	  };
+
+interface ConfirmationGroupInputs {
+	readonly lineage: ConfirmationGroupLineage;
+	readonly files: readonly Readonly<FrozenFile>[];
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+	readonly pipelinePath: string;
 }
 
 export interface ConfirmationGroupOutcome {
@@ -185,9 +211,23 @@ export async function finalizeConfirmationGroup(
 		finalization.reportFile,
 		`${JSON.stringify(report, null, 2)}\n`,
 	);
-	const group = confirmationGroupRecordSchema.parse(
-		JSON.parse(finalization.groupRecordContent(repRecordFiles)),
-	);
+	const group = confirmationGroupRecordSchema.parse({
+		schemaVersion: 1,
+		groupId: finalization.groupId,
+		mode: finalization.mode,
+		reps: finalization.reps,
+		declaredStages: finalization.declaredStages,
+		inputs: finalization.inputs,
+		projectedCost: finalization.projectedCost,
+		approval: { method: finalization.approvalMethod, approved: true },
+		repRecords: repRecordFiles.map((path, index) => ({
+			repId: `${finalization.groupId}-rep-${index + 1}`,
+			ordinal: index + 1,
+			path: relative(finalization.groupDirectory, path),
+		})),
+		reportFile: relative(finalization.groupDirectory, finalization.reportFile),
+		makespanMs: finalization.makespanMs,
+	});
 	await Bun.write(
 		finalization.groupFile,
 		`${JSON.stringify(group, null, 2)}\n`,

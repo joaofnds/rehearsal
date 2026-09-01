@@ -555,42 +555,30 @@ export async function runReplayConfirmation(
 
 	return finalizeConfirmationGroup({
 		mode: "stage",
+		groupId: request.groupId,
+		reps: request.reps,
 		declaredStages: [request.stage],
+		inputs: {
+			lineage: {
+				kind: "CHECKPOINT",
+				lineage: frozen.plan.consumed.lineage,
+				targetSha: frozen.plan.consumed.targetSha,
+			},
+			files: frozen.files,
+			model: request.model,
+			effort: request.effort,
+			judgeModel: request.judgeModel,
+			judgeEffort: request.judgeEffort,
+			sessionBudgetUsd: request.sessionBudgetUsd,
+			pipelinePath: frozen.manifest.pipelinePath,
+		},
+		projectedCost: request.projectedCost,
+		approvalMethod: request.approvalMethod,
 		repResults,
 		worktreesDirectory,
+		groupDirectory: paths.directory,
 		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
 		makespanMs,
-		groupRecordContent: (repRecordFiles) =>
-			JSON.stringify({
-				schemaVersion: 1,
-				groupId: request.groupId,
-				mode: "stage",
-				reps: request.reps,
-				declaredStages: [request.stage],
-				inputs: {
-					lineage: {
-						kind: "CHECKPOINT",
-						lineage: frozen.plan.consumed.lineage,
-						targetSha: frozen.plan.consumed.targetSha,
-					},
-					files: frozen.files,
-					model: request.model,
-					effort: request.effort,
-					judgeModel: request.judgeModel,
-					judgeEffort: request.judgeEffort,
-					sessionBudgetUsd: request.sessionBudgetUsd,
-					pipelinePath: frozen.manifest.pipelinePath,
-				},
-				projectedCost: request.projectedCost,
-				approval: { method: request.approvalMethod, approved: true },
-				repRecords: repRecordFiles.map((path, index) => ({
-					repId: `${request.groupId}-rep-${index + 1}`,
-					ordinal: index + 1,
-					path: relative(paths.directory, path),
-				})),
-				reportFile: relative(paths.directory, paths.reportFile),
-				makespanMs,
-			}),
 	});
 }
