@@ -197,15 +197,22 @@ export function buildPairedEstimate(
 	};
 }
 
-function armQuality(
+function assertExpectedRepCount(
 	contract: Immutable<ComparisonContract>,
 	reps: readonly Immutable<ConfirmationRepRecord>[],
-): readonly ReliabilitySummary[] {
+): void {
 	if (reps.length !== contract.reps) {
 		throw new Error(
 			`Comparison arm has ${reps.length} reps; expected ${contract.reps}`,
 		);
 	}
+}
+
+function armQuality(
+	contract: Immutable<ComparisonContract>,
+	reps: readonly Immutable<ConfirmationRepRecord>[],
+): readonly ReliabilitySummary[] {
+	assertExpectedRepCount(contract, reps);
 
 	const inputs = reps.map((rep) => {
 		if (contract.mode === "stage") {
@@ -347,11 +354,7 @@ function armResources(
 	contract: Immutable<ComparisonContract>,
 	reps: readonly Immutable<ConfirmationRepRecord>[],
 ): ArmResources {
-	if (reps.length !== contract.reps) {
-		throw new Error(
-			`Comparison arm has ${reps.length} reps; expected ${contract.reps}`,
-		);
-	}
+	assertExpectedRepCount(contract, reps);
 
 	const missingEvidence = reps.flatMap((rep) =>
 		rep.metrics.status === "MISSING"

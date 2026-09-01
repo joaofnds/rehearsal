@@ -62,7 +62,6 @@ interface ReadEvidenceFileRequest extends EvidenceLocation {
 }
 
 interface EvidenceFile {
-	readonly bytes: Uint8Array;
 	readonly sha256: string;
 	readonly text: string;
 }
@@ -91,7 +90,6 @@ async function readEvidenceFile(
 	const bytes = await file.bytes();
 
 	return {
-		bytes,
 		sha256: sha256(bytes),
 		text: new TextDecoder().decode(bytes),
 	};
