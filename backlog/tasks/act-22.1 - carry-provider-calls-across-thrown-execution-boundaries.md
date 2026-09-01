@@ -1,16 +1,22 @@
 ---
 id: ACT-22.1
 title: carry provider calls across thrown execution boundaries
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-01 14:48'
+updated_date: '2026-09-01 17:16'
 labels: []
 dependencies: []
 references:
+  - src/benchmark/contracts.ts
   - src/benchmark/workflow.ts
+  - src/benchmark/workflow.test.ts
   - src/benchmark/judge-attempt.ts
-  - src/benchmark/replay-confirmation.ts
+  - src/benchmark/judge.test.ts
   - src/benchmark/pipeline-confirmation.ts
+  - src/benchmark/pipeline-confirmation.test.ts
+  - src/benchmark/replay-confirmation.ts
+  - src/benchmark/replay-confirmation.test.ts
 parent_task_id: ACT-22
 type: bug
 ordinal: 19008
@@ -19,12 +25,39 @@ ordinal: 19008
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Provider-call histories remain local when a worker or Judge throws after earlier calls produced evidence. Carry the accumulated calls on typed execution failures so confirmation records retain observed metrics and add one explicit missing call for the invocation that failed before returning evidence.
+Goal: Preserve every completed provider call when worker or Judge execution fails after earlier calls, while representing the call that failed before producing evidence as one metric-less Provider call.
+
+Today runWorkflowStage and runJudgeAttempts keep their histories in local arrays and throw errors that do not carry them. Confirmation therefore cannot retain earlier call metrics, and replay confirmation also replaces completed worker and Product Owner histories with generic stage evidence when a stage Judge fails with an ordinary invocation error.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A worker whose first provider response has metrics and whose later invocation or response processing fails produces diagnostic confirmation evidence that retains the first call and marks the failed call missing.
-- [ ] #2 A Judge whose first response is rejected with metrics and whose retry invocation fails exposes both ordered provider calls: the rejected call with metrics and one missing call.
-- [ ] #3 Replay confirmation whose worker and Product Owner completed with provider calls before an ordinary stage-Judge invocation failure retains both histories, adds one missing stage-Judge call, and reports the rep metrics as MISSING.
+- [ ] #1 A worker whose first provider response has metrics and whose next provider invocation, envelope read, or structured-output read fails exposes a typed workflow execution failure with the two ordered Provider calls: the first with metrics and the failed call without metrics. Diagnostic pipeline confirmation retains the available worker metrics and reports the rep metrics as MISSING.
+- [ ] #2 A Judge whose first response is rejected with metrics and whose retry invocation fails exposes a typed Judge execution failure with the two ordered Provider calls: the rejected call with metrics and the failed call without metrics. The rejected Judge attempt remains available and no third invocation occurs.
+- [ ] #3 Replay confirmation whose worker and Product Owner completed with Provider calls before an ordinary stage-Judge invocation failure writes a diagnostic rep that retains both completed histories, adds exactly one missing stage-Judge call, reports the rep metrics as MISSING, and derives workerTrajectorySteps from the retained worker metrics.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add role-specific typed execution failures at the producer boundaries. A workflow failure carries earlier successful worker calls plus one metric-less call when the current invocation, envelope read, or structured-output read fails. A Judge execution failure carries prior rejected attempts, their cost and prompt context, plus one metric-less call when the current invocation or envelope read fails.
+2. Consume those typed call histories in pipeline and replay confirmation. Keep role attribution in confirmation, preserve the Product Owner snapshot already available there, and do not infer or double-count calls when the producer supplied evidence.
+3. Make replay diagnostic settlement evidence-aware after stage execution starts: use retained worker, Product Owner, and stage-Judge calls for worker or Judge failures, while leaving pre-stage setup failures on the existing generic stage-evidence diagnostic.
+4. Add producer contract regressions first, then durable pipeline and replay confirmation regressions. Run the focused tests followed by format checking, lint, type checking, and the full test suite.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Shaping decisions and resolved unknowns:
+- Language: Provider call and Judge attempt already exist in GLOSSARY.md. Execution failure is an implementation boundary, not a new domain term, so no glossary entry is added.
+- Failure taxonomy: a rejected Judge response remains a Judge attempt because it returned parseable call evidence. An invocation or envelope failure is a typed Judge execution failure. A worker invocation, envelope, or structured-output failure is a typed workflow execution failure because no StageTranscript can be returned.
+- Placeholder rule: append exactly one metric-less Provider call only for the current call that failed before producer evidence was returned. Preserve all earlier calls in order. A terminal Judge validation rejection keeps its existing JudgeOutputValidationError and attempts without an extra placeholder.
+- Ownership: producers carry their local histories on the typed error; confirmation only assigns roles and classifies completeness. This avoids reconstructing completed calls from orchestration flags.
+- Product Owner scope: a Product Owner invocation failure is not added to this card. The settled behavior requires preservation of a completed Product Owner snapshot when a worker or Judge fails.
+- Diagnostic scope: pipeline covers the worker failure observation; replay covers the ordinary stage-Judge failure observation. Existing setup-failure diagnostics remain unchanged.
+- Compatibility: no durable record schema or migration changes. Only newly produced diagnostic confirmation records gain evidence that is currently discarded.
+- Open questions: none.
+
+First test to write: in src/benchmark/workflow.test.ts, script one valid worker QUESTION envelope with complete metrics followed by a rejected provider invocation. Assert that runWorkflowStage rejects with the typed workflow execution failure whose Provider calls equal [{ metrics: firstCall }, {}]. Before running, predict the current test will receive the original invocation Error with no Provider-call history.
+<!-- SECTION:NOTES:END -->
