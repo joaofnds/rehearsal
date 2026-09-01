@@ -1,14 +1,17 @@
 ---
 id: ACT-19
 title: Harden corpusDifferences against duplicate paths
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-31 04:12'
-updated_date: '2026-09-01 08:11'
+updated_date: '2026-09-01 08:31'
 labels: []
 dependencies: []
 references:
+  - src/benchmark/checkpoint.ts
+  - run-benchmark.test.ts
+modified_files:
   - src/benchmark/checkpoint.ts
   - run-benchmark.test.ts
 type: bug
@@ -25,10 +28,10 @@ ordinal: 11008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `corpusDifferences` given a duplicate path in its left corpus throws an error that names that path, even when both entries have the same hash.
-- [ ] #2 `corpusDifferences` given a duplicate path in its right corpus throws an error that names that path, even when both entries have the same hash.
-- [ ] #3 `corpusDifferences` retains the existing sorted modified, missing-from-right, and missing-from-left results for path-unique corpora.
-- [ ] #4 `bun test`, `bun run typecheck`, `bun run lint`, and `bun run fmt:check` pass.
+- [x] #1 `corpusDifferences` given a duplicate path in its left corpus throws an error that names that path, even when both entries have the same hash.
+- [x] #2 `corpusDifferences` given a duplicate path in its right corpus throws an error that names that path, even when both entries have the same hash.
+- [x] #3 `corpusDifferences` retains the existing sorted modified, missing-from-right, and missing-from-left results for path-unique corpora.
+- [x] #4 `bun test`, `bun run typecheck`, `bun run lint`, and `bun run fmt:check` pass.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -51,3 +54,41 @@ Acceptance observations are the structured criteria above.
 
 First test to write: call `corpusDifferences` with two identical left-hand entries for path `a` and one matching right-hand entry; expect an error naming `a`. Observe it fail because the function currently returns `["a removed"]`.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Build handoff (2026-09-01)
+
+Changed:
+- `corpusDifferences` now asserts path uniqueness independently for its left and right corpora before comparing them. Duplicate entries throw `Duplicate corpus path: <path>`, including equal-hash duplicates.
+- Public-API tests cover duplicate paths on both sides and characterize the existing sorted modified, removed, and added result for valid corpora.
+- Commits: `bd6c059` rejects duplicate left paths, `324229b` rejects duplicate right paths, and `7fee512` characterizes path-unique output.
+
+Available but not wired / old path:
+- None. Checkpoint staleness and attempt-lineage comparison already call `corpusDifferences`, so both receive the guard. No caller remains on an old traversal.
+
+Observed:
+- Red, left: `rejects a duplicate path in the left corpus` received `["a removed"]` and did not throw. After `bd6c059`, it passed.
+- Red, right: `rejects a duplicate path in the right corpus` received `[]` and did not throw. After `324229b`, both duplicate-side tests passed.
+- Characterization: the valid-corpus test passed on its first run with `["a changed", "b removed", "c added"]`, preserving existing behavior.
+- Focused `bun test --test-name-pattern "corpusDifferences"`: 3 pass, 0 fail.
+- Full `bun test`: 306 pass, 0 fail, 610 expectations. `bun run typecheck`, `bun run lint`, `bun run fmt:check`, and `git diff --check HEAD~3..HEAD` completed successfully.
+- Direct `bun -e` invocation printed `left: Duplicate corpus path: a`, `right: Duplicate corpus path: a`, and `valid: ["a changed","b removed","c added"]`.
+
+Not verified:
+- No paid benchmark run was executed; the changed behavior is the exported deterministic comparator and was observed directly.
+
+Stopped work:
+- The first red attempt exposed a missing value import in the new test setup (`ReferenceError: corpusDifferences is not defined`). The import was corrected before observing the behavioral red; no production defect was involved.
+
+Refactor and review:
+- The refactor pass found no wider structural opportunity; the local uniqueness assertion centralizes the new invariant without changing callers.
+- Independent review is not due: the change is an internal, reversible pure-function guard and is not outward-facing, irreversible, or security-surfaced. Author-side style, architecture, security, specification, testing, and refactoring checks found no remaining issue.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+`corpusDifferences` now rejects duplicate paths on either input side before comparison and names the invalid path, while path-unique modified, removed, added, and sorted results remain unchanged. Direct execution observed both rejection branches and valid output; all 306 tests, typecheck, lint, format, and diff checks passed. No independent review trigger applies.
+<!-- SECTION:FINAL_SUMMARY:END -->
