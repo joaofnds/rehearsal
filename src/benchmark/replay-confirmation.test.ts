@@ -689,23 +689,23 @@ describe(runReplayConfirmation.name, () => {
 				...defaults,
 				stageSession: {
 					...defaults.stageSession,
-					runWorkflowStage: async (workflowRequest) => {
+					runWorkflowStage: (workflowRequest) => {
 						const match = /-rep-(?<ordinal>\d+)$/u.exec(
 							workflowRequest.targetDir,
 						);
 						const ordinal = Number(match?.groups?.["ordinal"]);
 						finished.push(ordinal);
 						if (ordinal === 3) {
-							throw new Error("worker failed before evidence");
+							return Promise.reject(new Error("worker failed before evidence"));
 						}
 
-						return {
+						return Promise.resolve({
 							stage: workflowRequest.stage,
 							sessionId: workflowRequest.targetDir,
 							costUsd: metric.costUsd,
 							callMetrics: [metric],
 							exchanges: [],
-						};
+						});
 					},
 					assertPlanningStageCompleted: (_targetDir, baselineSha, stage) =>
 						Promise.resolve({

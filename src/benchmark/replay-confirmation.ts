@@ -485,9 +485,10 @@ export async function runReplayConfirmation(
 			} catch (error) {
 				const failure =
 					error instanceof Error ? error : new Error(String(error));
-				const diagnosticError = setupOperation
-					? `${setupOperation} failed: ${failure.message}`
-					: failure.message;
+				const diagnosticError =
+					setupOperation === undefined
+						? failure.message
+						: `${setupOperation} failed: ${failure.message}`;
 				if (
 					failure instanceof JudgeOutputValidationError &&
 					worktreeCreated &&
