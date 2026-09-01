@@ -56,6 +56,9 @@
   their distribution, success rate with standard error, and pass^k. A
   single-rep Judge result is evidence, not a score.
 - **Run artifact** — the recorded evidence of a run under `.benchmark-runs/`.
+- **Run artifact transition** — one persistence operation that advances a run's
+  main or stage record. Transitions are serialized; abort recording is terminal
+  and cannot be overwritten by a later normal transition.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
