@@ -52,6 +52,19 @@ export interface WorkflowStageRequest {
 	readonly skill: string;
 }
 
+export class WorkflowExecutionError extends Error {
+	public readonly providerCalls: readonly ProviderCall[];
+
+	public constructor(props: {
+		readonly cause: unknown;
+		readonly providerCalls: readonly ProviderCall[];
+	}) {
+		super("Worker execution failed", { cause: props.cause });
+		this.name = "WorkflowExecutionError";
+		this.providerCalls = props.providerCalls;
+	}
+}
+
 function providerCall(metrics: ClaudeCallMetrics | undefined): ProviderCall {
 	return metrics === undefined ? {} : { metrics };
 }
@@ -155,25 +168,34 @@ export async function runWorkflowStage(
 	const exchanges: StageTranscript["exchanges"][number][] = [];
 
 	for (let turn = 0; turn < MAX_STAGE_TURNS; turn += 1) {
-		const output = await runClaude(
-			[
-				...claudeArgs({
-					settings: {
-						model,
-						effort,
-						budgetUsd: remainingBudget(sessionBudgetUsd, spentUsd),
-					},
-					schema: stageTurnSchema,
-					access: "unrestricted",
-					session: { id: sessionId, resume: turn > 0 },
-				}),
-				prompt,
-			],
-			targetDir,
-			{ timeoutMs: CLAUDE_TIMEOUT_MS },
-		);
-		const envelope = readClaudeEnvelope(output);
-		const agent = readStructuredOutput(envelope, stageTurnSchema);
+		let envelope;
+		let agent;
+		try {
+			const output = await runClaude(
+				[
+					...claudeArgs({
+						settings: {
+							model,
+							effort,
+							budgetUsd: remainingBudget(sessionBudgetUsd, spentUsd),
+						},
+						schema: stageTurnSchema,
+						access: "unrestricted",
+						session: { id: sessionId, resume: turn > 0 },
+					}),
+					prompt,
+				],
+				targetDir,
+				{ timeoutMs: CLAUDE_TIMEOUT_MS },
+			);
+			envelope = readClaudeEnvelope(output);
+			agent = readStructuredOutput(envelope, stageTurnSchema);
+		} catch (error) {
+			throw new WorkflowExecutionError({
+				cause: error,
+				providerCalls: [...providerCalls, {}],
+			});
+		}
 
 		sessionId = envelope.session_id;
 		spentUsd += envelope.total_cost_usd ?? 0;

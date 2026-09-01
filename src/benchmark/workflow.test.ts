@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { ProductOwner } from "./workflow";
-import { createProductOwner, runWorkflowStage } from "./workflow";
+import {
+	createProductOwner,
+	runWorkflowStage,
+	WorkflowExecutionError,
+} from "./workflow";
 
 describe("workflow provider metrics", () => {
 	it("retains Product Owner calls when later metrics are absent", async () => {
@@ -144,4 +148,88 @@ describe("workflow provider metrics", () => {
 			{},
 		]);
 	});
+
+	it.each([
+		{
+			boundary: "invocation",
+			laterResponse: new Error("worker invocation failed"),
+		},
+		{ boundary: "envelope decoding", laterResponse: "{" },
+		{
+			boundary: "structured output decoding",
+			laterResponse: JSON.stringify({
+				session_id: "worker-session",
+				structured_output: { status: "COMPLETE" },
+			}),
+		},
+	])(
+		"carries completed calls across $boundary failure",
+		async ({ laterResponse }) => {
+			const firstCall = {
+				costUsd: 0.3,
+				inputTokens: 60,
+				outputTokens: 12,
+				cacheReadTokens: 7,
+				cacheWriteTokens: 8,
+				turns: 2,
+			};
+			const responses: (string | Error)[] = [
+				JSON.stringify({
+					session_id: "worker-session",
+					total_cost_usd: firstCall.costUsd,
+					num_turns: firstCall.turns,
+					usage: {
+						input_tokens: firstCall.inputTokens,
+						output_tokens: firstCall.outputTokens,
+						cache_read_input_tokens: firstCall.cacheReadTokens,
+						cache_creation_input_tokens: firstCall.cacheWriteTokens,
+					},
+					structured_output: { status: "QUESTION", message: "Which scope?" },
+				}),
+				laterResponse,
+			];
+			const productOwner: ProductOwner = {
+				ask: () => Promise.resolve("Use the small scope"),
+				snapshot: () => ({
+					sessionId: "po-session",
+					spentUsd: 0,
+					providerCalls: [],
+				}),
+			};
+
+			const execution = runWorkflowStage(
+				{
+					targetDir: "/target",
+					model: "sonnet",
+					effort: undefined,
+					sessionBudgetUsd: 5,
+					productOwner,
+					taskId: "ACT-22.1",
+					stage: "shape",
+					skill: "shape",
+				},
+				() => {
+					const response = responses.shift();
+					if (response instanceof Error) {
+						return Promise.reject(response);
+					}
+
+					return Promise.resolve(response ?? "");
+				},
+			);
+
+			let failure: unknown;
+			try {
+				await execution;
+			} catch (error) {
+				failure = error;
+			}
+
+			expect(failure).toBeInstanceOf(WorkflowExecutionError);
+			expect(failure).toMatchObject({
+				name: "WorkflowExecutionError",
+				providerCalls: [{ metrics: firstCall }, {}],
+			});
+		},
+	);
 });
