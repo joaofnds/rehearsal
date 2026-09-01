@@ -278,6 +278,18 @@ export interface CorpusDifferenceWording {
 	readonly missingFromLeft: (path: string) => string;
 }
 
+function assertUniqueCorpusPaths(files: readonly HashedFile[]): void {
+	const paths = new Set<string>();
+
+	for (const file of files) {
+		if (paths.has(file.path)) {
+			throw new Error(`Duplicate corpus path: ${file.path}`);
+		}
+
+		paths.add(file.path);
+	}
+}
+
 /**
  * Every way two sets of hashed files disagree, each named by its path so a
  * reader learns which file it was, not merely that one differed. Sorted, so
@@ -288,6 +300,8 @@ export function corpusDifferences(
 	right: readonly HashedFile[],
 	wording: CorpusDifferenceWording,
 ): string[] {
+	assertUniqueCorpusPaths(left);
+
 	const rightByPath = new Map(right.map((file) => [file.path, file.sha256]));
 	const differences: string[] = [];
 

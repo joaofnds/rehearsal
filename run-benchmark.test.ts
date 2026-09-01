@@ -46,6 +46,7 @@ import {
 import type { CheckpointRecord, HashedFile } from "./src/benchmark/checkpoint";
 import {
 	captureStageCorpus,
+	corpusDifferences,
 	deriveStaleness,
 	hashWorkflowState,
 	initialCheckpointInputs,
@@ -6940,6 +6941,21 @@ describe(initialCheckpointInputs.name, () => {
 
 		expect(inputs.effort).toBeUndefined();
 		expect(JSON.stringify(inputs)).not.toContain('"effort"');
+	});
+});
+
+describe(corpusDifferences.name, () => {
+	const wording = {
+		modified: (path: string) => `${path} changed`,
+		missingFromRight: (path: string) => `${path} removed`,
+		missingFromLeft: (path: string) => `${path} added`,
+	};
+	const file = { path: "a", sha256: "hash" } as const;
+
+	it("rejects a duplicate path in the left corpus", () => {
+		expect(() => corpusDifferences([file, file], [file], wording)).toThrow(
+			/Duplicate corpus path: a/u,
+		);
 	});
 });
 
