@@ -25,6 +25,7 @@ import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
 } from "./src/benchmark/confirmation-record";
+import { collectConfirmationMetrics } from "./src/benchmark/confirmation-evidence";
 import {
 	diffTexts,
 	loadAttempts,
@@ -1094,6 +1095,45 @@ describe(buildReliabilityReport.name, () => {
 			Object.fromEntries([["A", 1]]),
 			{ PASS: 1 },
 		]);
+	});
+});
+
+describe(collectConfirmationMetrics.name, () => {
+	it("retains available calls while marking every metric-less required attempt", () => {
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+
+		const evidence = collectConfirmationMetrics({
+			worker: [{ metrics: metric }, {}],
+			productOwner: [{ metrics: metric }, {}],
+			stageJudge: [{ metrics: metric }, {}],
+			finalJudge: [{ metrics: metric }, {}],
+		});
+
+		expect(evidence).toEqual({
+			metrics: {
+				status: "MISSING",
+				calls: [
+					{ role: "worker", metrics: metric },
+					{ role: "product-owner", metrics: metric },
+					{ role: "stage-judge", metrics: metric },
+					{ role: "final-judge", metrics: metric },
+				],
+				missing: [
+					"worker call metrics",
+					"product-owner call metrics",
+					"stage-judge call metrics",
+					"final-judge call metrics",
+				],
+			},
+			workerTrajectorySteps: 2,
+		});
 	});
 });
 
@@ -8782,7 +8822,7 @@ describe(runReplay.name, () => {
 		);
 		expect(
 			await Promise.all(
-				records.map(async (record) => {
+				records.map((record) => {
 					const [stage] = record.stages;
 					if (
 						stage?.status === "NOT_REACHED" ||
