@@ -54,6 +54,9 @@
   Today, `discuss`, `grill`, and `plan`.
 - **Product Owner (PO)** — the dynamic agent that answers stage questions from
   the product brief; one session per run.
+- **Provider call** — one invocation of the model provider by a worker, Product
+  Owner, or Judge. Its evidence may include usage metrics; the call remains
+  explicit when those metrics are absent.
 - **Rep** — one repetition of a run; scores are distributions over reps, never
   a single rep.
 - **Rep outcome** — one binary reliability observation. A declared stage
