@@ -301,6 +301,7 @@ export function corpusDifferences(
 	wording: CorpusDifferenceWording,
 ): string[] {
 	assertUniqueCorpusPaths(left);
+	assertUniqueCorpusPaths(right);
 
 	const rightByPath = new Map(right.map((file) => [file.path, file.sha256]));
 	const differences: string[] = [];

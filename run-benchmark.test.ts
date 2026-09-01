@@ -6957,6 +6957,12 @@ describe(corpusDifferences.name, () => {
 			/Duplicate corpus path: a/u,
 		);
 	});
+
+	it("rejects a duplicate path in the right corpus", () => {
+		expect(() => corpusDifferences([file], [file, file], wording)).toThrow(
+			/Duplicate corpus path: a/u,
+		);
+	});
 });
 
 describe(deriveStaleness.name, () => {
