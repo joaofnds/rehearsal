@@ -8,6 +8,8 @@
   turns findings into rubric or instruction changes.
 - **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
   state, artifacts, and lineage.
+- **Check-integrity file** — a target-relative file declared by the pipeline
+  whose presence and bytes are frozen at baseline and compared after delivery.
 - **Confirmation run** — an explicitly requested group of at least two reps over
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
@@ -91,6 +93,8 @@
   unit test, with clean attribution and a proxy score.
 - **Target repository (template project)** — the real application repository,
   kept at a stable baseline, that tasks run against.
+- **Target check** — one command declared by the pipeline and run against the
+  target repository both at baseline and after delivery.
 - **Trajectory step** — one workflow-agent turn reported by the provider. PO and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
