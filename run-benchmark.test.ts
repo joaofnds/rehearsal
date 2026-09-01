@@ -9497,6 +9497,215 @@ describe(runPipelineConfirmation.name, () => {
 		expect(temporaryRootExists).toBe(false);
 	});
 
+	it("retains earlier pipeline worker metrics when a later stage omits them", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-pipeline-metrics-"));
+		temporaryDirectories.push(parent);
+		const sourceRoot = join(parent, "source");
+		await mkdir(sourceRoot);
+		const corpusRoot = join(parent, "corpus");
+		for (const skill of ["discuss", "build", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+		}
+		const pipeline: PipelineDefinition = {
+			statuses: ["To Do", "Done"],
+			stages: [
+				{
+					name: "discuss",
+					kind: "planning",
+					skill: "discuss",
+					artifact: "spec",
+					rubric: "rubrics/discuss.json",
+					requiresAcceptanceCriteria: false,
+				},
+				{
+					name: "build",
+					kind: "delivery",
+					skill: "build",
+					rubric: "rubrics/build.json",
+				},
+			],
+		};
+		const rubric: StageRubric = {
+			hardBlockers: [],
+			requirements: [],
+			dimensions: [],
+		};
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const taskSha = "b".repeat(40);
+		const resultSha = "c".repeat(40);
+
+		const outcome = await runPipelineConfirmation(
+			{
+				stageSession: {
+					runWorkflowStage: (request) => {
+						const transcript = {
+							stage: request.stage,
+							sessionId: `${request.targetDir}-${request.stage}`,
+							costUsd: metric.costUsd,
+							exchanges: [],
+						};
+						if (request.stage === "discuss") {
+							return Promise.resolve({ ...transcript, callMetrics: [metric] });
+						}
+
+						return Promise.resolve(transcript);
+					},
+					readTaskOutput: () =>
+						Promise.resolve(
+							JSON.stringify({
+								task: { acceptanceCriteria: ["done"], documentation: [] },
+							}),
+						),
+					readTaskCard: () => Promise.resolve("task card"),
+					captureBuildCandidate: () =>
+						Promise.resolve({
+							resultSha,
+							diff: "diff",
+							changedPaths: ["change.txt"],
+						}),
+					assertPlanningStageCompleted: (_targetDir, baselineSha, stage) =>
+						Promise.resolve({
+							taskState: `${stage.name}-state`,
+							artifact: { path: "backlog/docs/spec.md", content: "spec\n" },
+							resultSha: baselineSha,
+							diff: "",
+							changedPaths: [],
+						}),
+					assertBuildCommitted: () =>
+						Promise.resolve({
+							resultSha,
+							diff: "diff",
+							commitSubjects: ["feat: build"],
+						}),
+					changedPathsBetween: () => Promise.resolve(["change.txt"]),
+					captureCheckIntegrity: () =>
+						Promise.resolve(harnessResult("PASS", "checks match")),
+					captureTreatmentChecks: () =>
+						Promise.resolve(harnessResult("PASS", "checks pass")),
+					captureStageCorpus: () => Promise.resolve([]),
+				},
+				runStageJudge: (_model, _effort, _budget, input, source) =>
+					Promise.resolve({
+						stage: input.stage,
+						rubricPath: source.rubricPath,
+						rubric: source.rubric,
+						input,
+						prompt: "prompt",
+						attempts: [
+							{
+								payload: { summary: "accepted" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+						costUsd: metric.costUsd,
+						grade: {
+							hardBlockers: [],
+							requirements: [],
+							dimensions: [],
+							summary: "accepted",
+							grade: "A",
+							verdict: "CONTINUE",
+						},
+					}),
+				runFinalJudge: () =>
+					Promise.resolve({
+						grade: completeGrade("PASS"),
+						prompt: "final prompt",
+						attempts: [
+							{
+								payload: { summary: "pass" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+						costUsd: metric.costUsd,
+					}),
+				createTaskCommit: () => Promise.resolve({ taskId: "TASK-1", taskSha }),
+				runChecks: () => Promise.resolve(),
+				captureBaselineContext: () => Promise.resolve([]),
+				captureFileHashes: () => Promise.resolve(new Map<string, string>()),
+				addWorktree: async (_targetDir, _sha, worktreeDir) => {
+					await mkdir(worktreeDir, { recursive: true });
+				},
+				removeWorktree: async (_targetDir, worktreeDir) => {
+					await rm(worktreeDir, { force: true, recursive: true });
+				},
+				materializeCheckpoint,
+				recordCheckpoint,
+				recordRetentionRef: () => Promise.resolve(),
+				captureBuildCandidate: () =>
+					Promise.resolve({
+						resultSha,
+						diff: "diff",
+						changedPaths: ["change.txt"],
+					}),
+				log: () => undefined,
+			},
+			{
+				runsDirectory: parent,
+				groupId: "pipeline-metrics",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 45,
+					totalMaximumUsd: 90,
+				},
+				approvalMethod: "yes",
+				source: { root: sourceRoot, sha: "a".repeat(40) },
+				controlSha: "d".repeat(40),
+				pipelinePath: "pipelines/test.json",
+				pipeline,
+				task: "# Task\n\nImplement it.",
+				productBrief: "Brief",
+				instructions: "Instructions\n",
+				finalRubric: "1. `final`: pass\n",
+				stageRubrics: {
+					discuss: {
+						rubricPath: "rubrics/discuss.json",
+						content: "{}\n",
+						rubric,
+					},
+					build: {
+						rubricPath: "rubrics/build.json",
+						content: "{}\n",
+						rubric,
+					},
+				},
+				corpusRoots: [corpusRoot],
+				model: "sonnet",
+				judgeModel: "opus",
+				sessionBudgetUsd: 5,
+			},
+		);
+		const [recordFile] = outcome.repRecordFiles;
+		const record = parseConfirmationRepRecord(
+			await Bun.file(recordFile ?? "missing").text(),
+		);
+
+		expect(record.metrics).toEqual({
+			status: "MISSING",
+			calls: [
+				{ role: "worker", metrics: metric },
+				{ role: "stage-judge", metrics: metric },
+				{ role: "stage-judge", metrics: metric },
+				{ role: "final-judge", metrics: metric },
+			],
+			missing: ["worker call metrics"],
+		});
+		expect(record.workerTrajectorySteps).toBe(metric.turns);
+	});
+
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
 		const source = await createRepository();
 		await Bun.write(

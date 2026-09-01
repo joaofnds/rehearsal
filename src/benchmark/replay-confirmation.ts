@@ -24,6 +24,12 @@ import {
 	confirmationGroupRecordSchema,
 	confirmationRepRecordSchema,
 } from "./confirmation-record";
+import type { ConfirmationMetricAttempt } from "./confirmation-evidence";
+import {
+	collectConfirmationMetrics,
+	metricAttempts,
+	requiredMetricAttempts,
+} from "./confirmation-evidence";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import { loadRunManifest } from "./manifest";
 import {
@@ -241,65 +247,11 @@ async function freezeReplayInputs(
 	};
 }
 
-interface CallWithOptionalMetrics {
-	readonly metrics?: ClaudeCallMetrics | undefined;
-}
-
 interface JudgeRejection {
 	readonly message: string;
 	readonly prompt: string;
-	readonly attempts: readonly CallWithOptionalMetrics[];
+	readonly attempts: readonly ConfirmationMetricAttempt[];
 	readonly costUsd: number;
-}
-
-function collectMetrics(
-	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
-	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
-	judgeAttempts: readonly CallWithOptionalMetrics[],
-): Pick<ConfirmationRepRecord, "metrics" | "workerTrajectorySteps"> {
-	const calls: {
-		role: "worker" | "product-owner" | "stage-judge";
-		metrics: ClaudeCallMetrics;
-	}[] = [];
-	const missing: string[] = [];
-	if (workerMetrics === undefined || workerMetrics.length === 0) {
-		missing.push("worker call metrics");
-	} else {
-		for (const metrics of workerMetrics) {
-			calls.push({ role: "worker", metrics });
-		}
-	}
-	if (productOwnerMetrics === undefined) {
-		missing.push("product-owner call metrics");
-	} else {
-		for (const metrics of productOwnerMetrics) {
-			calls.push({ role: "product-owner", metrics });
-		}
-	}
-	if (judgeAttempts.length === 0) {
-		missing.push("stage-judge call metrics");
-	}
-	for (const attempt of judgeAttempts) {
-		const { metrics } = attempt;
-		if (metrics === undefined) {
-			missing.push("stage-judge call metrics");
-
-			continue;
-		}
-
-		calls.push({ role: "stage-judge", metrics });
-	}
-	const workerTrajectorySteps = calls
-		.filter(({ role }) => role === "worker")
-		.reduce((total, call) => total + call.metrics.turns, 0);
-
-	return {
-		metrics:
-			missing.length === 0
-				? { status: "COMPLETE", calls }
-				: { status: "MISSING", calls, missing },
-		workerTrajectorySteps,
-	};
 }
 
 function completeRepRecord(
@@ -316,11 +268,12 @@ function completeRepRecord(
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
-	const evidence = collectMetrics(
-		workerMetrics,
-		productOwnerMetrics,
-		scorecard.attempts,
-	);
+	const evidence = collectConfirmationMetrics({
+		worker: requiredMetricAttempts(workerMetrics),
+		productOwner: metricAttempts(productOwnerMetrics),
+		stageJudge: scorecard.attempts,
+		finalJudge: undefined,
+	});
 	const successful =
 		evidence.metrics.status === "COMPLETE" &&
 		scorecard.grade.verdict === "CONTINUE" &&
@@ -370,11 +323,12 @@ function rejectedJudgeRepRecord(
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
-	const evidence = collectMetrics(
-		workerMetrics,
-		productOwnerMetrics,
-		error.attempts,
-	);
+	const evidence = collectConfirmationMetrics({
+		worker: requiredMetricAttempts(workerMetrics),
+		productOwner: metricAttempts(productOwnerMetrics),
+		stageJudge: error.attempts,
+		finalJudge: undefined,
+	});
 
 	return confirmationRepRecordSchema.parse({
 		schemaVersion: 1,

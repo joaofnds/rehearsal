@@ -22,12 +22,7 @@ import type {
 	runChecks,
 } from "./checks";
 import type { Effort } from "./config";
-import type {
-	ClaudeCallMetrics,
-	ContextFile,
-	StageRubric,
-	StageScorecard,
-} from "./contracts";
+import type { ContextFile, StageRubric, StageScorecard } from "./contracts";
 import type { JudgeResult } from "./judge";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition } from "./pipeline";
@@ -45,6 +40,12 @@ import {
 	confirmationGroupRecordSchema,
 	confirmationRepRecordSchema,
 } from "./confirmation-record";
+import type { ConfirmationMetricAttempt } from "./confirmation-evidence";
+import {
+	collectConfirmationMetrics,
+	metricAttempts,
+	requiredMetricAttempts,
+} from "./confirmation-evidence";
 import { detachedStageDependencies } from "./replay";
 import type {
 	BuildEvidence,
@@ -334,90 +335,6 @@ async function freezePipelineInputs(
 	};
 }
 
-interface MetricCall {
-	readonly role: "worker" | "product-owner" | "stage-judge" | "final-judge";
-	readonly metrics: ClaudeCallMetrics;
-}
-
-interface CallWithOptionalMetrics {
-	readonly metrics?: ClaudeCallMetrics | undefined;
-}
-
-interface AttemptMetricCollection {
-	readonly calls: readonly MetricCall[];
-	readonly missing: readonly string[];
-}
-
-function appendMetrics(
-	current: readonly ClaudeCallMetrics[] | undefined,
-	next: readonly ClaudeCallMetrics[] | undefined,
-): ClaudeCallMetrics[] | undefined {
-	return current === undefined || next === undefined || next.length === 0
-		? undefined
-		: [...current, ...next];
-}
-
-function collectAttemptMetrics(
-	role: "stage-judge" | "final-judge",
-	attempts: readonly CallWithOptionalMetrics[],
-): AttemptMetricCollection {
-	const calls: MetricCall[] = [];
-	const missing: string[] = [];
-	if (attempts.length === 0) {
-		missing.push(`${role} call metrics`);
-	}
-	for (const { metrics } of attempts) {
-		if (metrics === undefined) {
-			missing.push(`${role} call metrics`);
-		} else {
-			calls.push({ role, metrics });
-		}
-	}
-
-	return { calls, missing };
-}
-
-function repMetrics(
-	worker: readonly ClaudeCallMetrics[] | undefined,
-	productOwner: readonly ClaudeCallMetrics[] | undefined,
-	stageJudge: readonly CallWithOptionalMetrics[],
-	finalJudge: readonly CallWithOptionalMetrics[] | undefined,
-): Pick<ConfirmationRepRecord, "metrics" | "workerTrajectorySteps"> {
-	const calls: MetricCall[] = [];
-	const missing: string[] = [];
-	if (worker === undefined || worker.length === 0) {
-		missing.push("worker call metrics");
-	}
-	if (productOwner === undefined) {
-		missing.push("product-owner call metrics");
-	}
-	for (const metrics of worker ?? []) {
-		calls.push({ role: "worker", metrics });
-	}
-	for (const metrics of productOwner ?? []) {
-		calls.push({ role: "product-owner", metrics });
-	}
-	const stageJudgeEvidence = collectAttemptMetrics("stage-judge", stageJudge);
-	calls.push(...stageJudgeEvidence.calls);
-	missing.push(...stageJudgeEvidence.missing);
-	if (finalJudge !== undefined) {
-		const finalJudgeEvidence = collectAttemptMetrics("final-judge", finalJudge);
-		calls.push(...finalJudgeEvidence.calls);
-		missing.push(...finalJudgeEvidence.missing);
-	}
-
-	return {
-		metrics:
-			missing.length === 0
-				? { status: "COMPLETE", calls }
-				: { status: "MISSING", calls, missing },
-		workerTrajectorySteps: (worker ?? []).reduce(
-			(total, metrics) => total + metrics.turns,
-			0,
-		),
-	};
-}
-
 interface PipelineRepPlan {
 	readonly repId: string;
 	readonly ordinal: number;
@@ -475,8 +392,8 @@ async function runPipelineRep(
 	await mkdir(repPaths.stagesDirectory, { recursive: true });
 	const repStart = now();
 	const stageOutcomes: ConfirmationRepRecord["stages"] = [];
-	let workerMetrics: ClaudeCallMetrics[] | undefined = [];
-	const stageJudgeAttempts: CallWithOptionalMetrics[] = [];
+	const workerAttempts: ConfirmationMetricAttempt[] = [];
+	const stageJudgeAttempts: ConfirmationMetricAttempt[] = [];
 	const priorArtifacts: ContextFile[] = [];
 	let upstream = frozen.initialCheckpoint.lineage;
 	let baselineSha = frozen.taskSha;
@@ -540,9 +457,8 @@ async function runPipelineRep(
 				definition,
 				priorArtifacts,
 			);
-			workerMetrics = appendMetrics(
-				workerMetrics,
-				currentSession.transcript.callMetrics,
+			workerAttempts.push(
+				...requiredMetricAttempts(currentSession.transcript.callMetrics),
 			);
 			const rubric = request.stageRubrics[definition.name];
 			if (rubric === undefined) {
@@ -578,12 +494,12 @@ async function runPipelineRep(
 						reason: `${definition.name} Judge stopped the rep`,
 					});
 				}
-				const evidence = repMetrics(
-					workerMetrics,
-					productOwner.snapshot().callMetrics,
-					stageJudgeAttempts,
-					undefined,
-				);
+				const evidence = collectConfirmationMetrics({
+					worker: workerAttempts,
+					productOwner: metricAttempts(productOwner.snapshot().callMetrics),
+					stageJudge: stageJudgeAttempts,
+					finalJudge: undefined,
+				});
 				const record = confirmationRepRecordSchema.parse({
 					schemaVersion: 1,
 					groupId: request.groupId,
@@ -667,12 +583,12 @@ async function runPipelineRep(
 			repPaths.finalFile,
 			`${JSON.stringify(finalJudge, null, 2)}\n`,
 		);
-		const evidence = repMetrics(
-			workerMetrics,
-			productOwner.snapshot().callMetrics,
-			stageJudgeAttempts,
-			finalJudge.attempts,
-		);
+		const evidence = collectConfirmationMetrics({
+			worker: workerAttempts,
+			productOwner: metricAttempts(productOwner.snapshot().callMetrics),
+			stageJudge: stageJudgeAttempts,
+			finalJudge: finalJudge.attempts,
+		});
 		const successful =
 			evidence.metrics.status === "COMPLETE" &&
 			stageOutcomes.every(
@@ -732,7 +648,7 @@ async function runPipelineRep(
 		}
 
 		if (stageClock.read() !== undefined && currentSession === undefined) {
-			workerMetrics = undefined;
+			workerAttempts.push({});
 		}
 		let stages = [...stageOutcomes];
 		let finalOutcome: ConfirmationRepRecord["finalOutcome"];
@@ -823,12 +739,12 @@ async function runPipelineRep(
 			};
 		}
 
-		const evidence = repMetrics(
-			workerMetrics,
-			productOwner?.snapshot().callMetrics,
-			stageJudgeAttempts,
-			judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
-		);
+		const evidence = collectConfirmationMetrics({
+			worker: workerAttempts,
+			productOwner: metricAttempts(productOwner?.snapshot().callMetrics),
+			stageJudge: stageJudgeAttempts,
+			finalJudge: judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
+		});
 		const record = confirmationRepRecordSchema.parse({
 			schemaVersion: 1,
 			groupId: request.groupId,

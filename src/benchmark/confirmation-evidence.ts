@@ -14,6 +14,20 @@ export interface ConfirmationMetricAttempts {
 	readonly finalJudge: readonly ConfirmationMetricAttempt[] | undefined;
 }
 
+export function metricAttempts(
+	metrics: readonly ClaudeCallMetrics[] | undefined,
+): readonly ConfirmationMetricAttempt[] | undefined {
+	return metrics?.map((value) => ({ metrics: value }));
+}
+
+export function requiredMetricAttempts(
+	metrics: readonly ClaudeCallMetrics[] | undefined,
+): readonly ConfirmationMetricAttempt[] {
+	const attempts = metricAttempts(metrics);
+
+	return attempts === undefined || attempts.length === 0 ? [{}] : attempts;
+}
+
 interface RoleAttempts {
 	readonly role: MetricRole;
 	readonly attempts: readonly ConfirmationMetricAttempt[];
