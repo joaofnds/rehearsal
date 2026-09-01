@@ -255,6 +255,39 @@ describe(runPipelineConfirmation.name, () => {
 		expect(record.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
 	});
 
+	it("carries Product Owner provider calls into pipeline evidence", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run({}, (dependencies) => ({
+			...dependencies,
+			createProductOwner: () => ({
+				ask: () => Promise.resolve("Use the small scope"),
+				snapshot: () => ({
+					sessionId: "po-session",
+					spentUsd: CONFIRMATION_METRIC.costUsd,
+					providerCalls: [{ metrics: CONFIRMATION_METRIC }, {}],
+				}),
+			}),
+		}));
+		const [recordFile] = outcome.repRecordFiles;
+		const record = parseConfirmationRepRecord(
+			await Bun.file(recordFile ?? "missing").text(),
+		);
+
+		expect(record.metrics).toEqual({
+			status: "MISSING",
+			calls: [
+				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "product-owner", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
+				{ role: "final-judge", metrics: CONFIRMATION_METRIC },
+			],
+			missing: ["product-owner call metrics"],
+		});
+	});
+
 	it("marks a later stage Judge invocation failure as a missing provider call", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 

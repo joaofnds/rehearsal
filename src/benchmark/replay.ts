@@ -30,7 +30,7 @@ import { executeStageSession } from "./run";
 import type { BenchmarkRunPaths } from "./run-layout";
 import type { loadStageRubric, runStageJudge } from "./stage-grading";
 import type { addWorktree, removeWorktree } from "./target";
-import { createProductOwner } from "./workflow";
+import type { createProductOwner } from "./workflow";
 
 export class ReplayError extends Error {
 	public override name = "ReplayError";
@@ -121,6 +121,7 @@ export function resolveReplay(
 
 export interface ReplayDependencies {
 	readonly stageSession: StageSessionDependencies;
+	readonly createProductOwner: typeof createProductOwner;
 	readonly runStageJudge: typeof runStageJudge;
 	readonly loadStageRubric: typeof loadStageRubric;
 	readonly addWorktree: typeof addWorktree;
@@ -394,7 +395,7 @@ export async function runReplay(
 		const baselineHashes = await dependencies.captureFileHashes(worktreeDir);
 		const baselineContext =
 			await dependencies.captureBaselineContext(worktreeDir);
-		const productOwner = createProductOwner({
+		const productOwner = dependencies.createProductOwner({
 			directory: productOwnerDirectory,
 			model: request.model,
 			effort: request.effort,

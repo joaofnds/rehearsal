@@ -43,7 +43,7 @@ import {
 	recordRetentionRef,
 	removeWorktree,
 } from "./src/benchmark/target";
-import { runWorkflowStage } from "./src/benchmark/workflow";
+import { createProductOwner, runWorkflowStage } from "./src/benchmark/workflow";
 
 async function main(): Promise<void> {
 	if (Bun.version !== REQUIRED_BUN_VERSION) {
@@ -90,6 +90,7 @@ async function main(): Promise<void> {
 
 				return runPipelineConfirmation(
 					{
+						createProductOwner,
 						stageSession: {
 							runWorkflowStage,
 							readTaskOutput,

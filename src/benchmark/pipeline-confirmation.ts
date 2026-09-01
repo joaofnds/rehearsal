@@ -61,8 +61,7 @@ import type {
 	removeWorktree,
 	SourceBaseline,
 } from "./target";
-import type { ProductOwner } from "./workflow";
-import { createProductOwner } from "./workflow";
+import type { ProductOwner, createProductOwner } from "./workflow";
 
 interface LoadedStageRubric {
 	readonly rubricPath: string;
@@ -81,6 +80,7 @@ export interface PipelineFinalJudgeRequest {
 
 export interface PipelineConfirmationDependencies {
 	readonly stageSession: StageSessionDependencies;
+	readonly createProductOwner: typeof createProductOwner;
 	readonly runStageJudge: (
 		model: string,
 		effort: Effort | undefined,
@@ -330,8 +330,8 @@ async function runPipelineRep(
 	await mkdir(repPaths.stagesDirectory, { recursive: true });
 	const repStart = now();
 	const stageOutcomes: ConfirmationRepRecord["stages"] = [];
-	const workerAttempts: ProviderCall[] = [];
-	const stageJudgeAttempts: ProviderCall[] = [];
+	const workerCalls: ProviderCall[] = [];
+	const stageJudgeCalls: ProviderCall[] = [];
 	const priorArtifacts: ContextFile[] = [];
 	let upstream = frozen.initialCheckpoint.lineage;
 	let baselineSha = frozen.taskSha;
@@ -356,7 +356,7 @@ async function runPipelineRep(
 			frozen.checkpointDirectory,
 			plan.worktreePath,
 		);
-		productOwner = createProductOwner({
+		productOwner = dependencies.createProductOwner({
 			directory: join(repPaths.directory, "product-owner"),
 			model: request.model,
 			effort: request.effort,
@@ -396,7 +396,7 @@ async function runPipelineRep(
 				definition,
 				priorArtifacts,
 			);
-			workerAttempts.push(...currentSession.transcript.providerCalls);
+			workerCalls.push(...currentSession.transcript.providerCalls);
 			const rubric = request.stageRubrics[definition.name];
 			if (rubric === undefined) {
 				throw new Error(`No frozen rubric for ${definition.name}`);
@@ -410,7 +410,7 @@ async function runPipelineRep(
 				rubric,
 			);
 			judgingStage = false;
-			stageJudgeAttempts.push(...scorecard.attempts);
+			stageJudgeCalls.push(...scorecard.attempts);
 			const stageFile = repPaths.stageFile(definition.name);
 			await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
 			stageOutcomes.push({
@@ -434,9 +434,9 @@ async function runPipelineRep(
 					});
 				}
 				const evidence = collectConfirmationMetrics({
-					worker: workerAttempts,
+					worker: workerCalls,
 					productOwner: productOwner.snapshot().providerCalls,
-					stageJudge: stageJudgeAttempts,
+					stageJudge: stageJudgeCalls,
 					finalJudge: undefined,
 				});
 				const record = confirmationRepRecordSchema.parse({
@@ -518,9 +518,9 @@ async function runPipelineRep(
 			`${JSON.stringify(finalJudge, null, 2)}\n`,
 		);
 		const evidence = collectConfirmationMetrics({
-			worker: workerAttempts,
+			worker: workerCalls,
 			productOwner: productOwner.snapshot().providerCalls,
-			stageJudge: stageJudgeAttempts,
+			stageJudge: stageJudgeCalls,
 			finalJudge: finalJudge.attempts,
 		});
 		const successful =
@@ -574,10 +574,10 @@ async function runPipelineRep(
 			productOwner !== undefined &&
 			(judgingFinal || currentSession !== undefined);
 		if (stageClock.read() !== undefined && currentSession === undefined) {
-			workerAttempts.push({});
+			workerCalls.push({});
 		}
 		if (judgingStage && judgeFailure === undefined) {
-			stageJudgeAttempts.push({});
+			stageJudgeCalls.push({});
 		}
 		let stages = [...stageOutcomes];
 		let finalOutcome: ConfirmationRepRecord["finalOutcome"];
@@ -621,7 +621,7 @@ async function runPipelineRep(
 				| { readonly resultSha: string; readonly recordFile: string }
 				| undefined;
 			if (completedJudgeRejection && judgeFailure !== undefined) {
-				stageJudgeAttempts.push(...judgeFailure.attempts);
+				stageJudgeCalls.push(...judgeFailure.attempts);
 				const stageFile = repPaths.stageFile(failedStage.name);
 				await Bun.write(
 					stageFile,
@@ -669,9 +669,9 @@ async function runPipelineRep(
 		}
 
 		const evidence = collectConfirmationMetrics({
-			worker: workerAttempts,
+			worker: workerCalls,
 			productOwner: productOwner?.snapshot().providerCalls,
-			stageJudge: stageJudgeAttempts,
+			stageJudge: stageJudgeCalls,
 			finalJudge: judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
 		});
 		const record = confirmationRepRecordSchema.parse({

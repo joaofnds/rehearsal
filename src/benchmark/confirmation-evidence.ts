@@ -247,39 +247,41 @@ export async function finalizeConfirmationGroup(
 
 type MetricRole = "worker" | "product-owner" | "stage-judge" | "final-judge";
 
-export interface ConfirmationMetricAttempts {
+export interface ConfirmationProviderCalls {
 	readonly worker: readonly ProviderCall[];
 	readonly productOwner: readonly ProviderCall[] | undefined;
 	readonly stageJudge: readonly ProviderCall[];
 	readonly finalJudge: readonly ProviderCall[] | undefined;
 }
 
-interface RoleAttempts {
+interface RoleCalls {
 	readonly role: MetricRole;
-	readonly attempts: readonly ProviderCall[];
+	readonly calls: readonly ProviderCall[];
 }
 
 export function collectConfirmationMetrics(
-	attempts: ConfirmationMetricAttempts,
+	providerCalls: ConfirmationProviderCalls,
 ): Pick<ConfirmationRepRecord, "metrics" | "workerTrajectorySteps"> {
-	const required: RoleAttempts[] = [
+	const required: RoleCalls[] = [
 		{
 			role: "worker",
-			attempts: attempts.worker.length === 0 ? [{}] : attempts.worker,
+			calls: providerCalls.worker.length === 0 ? [{}] : providerCalls.worker,
 		},
 		{
 			role: "product-owner",
-			attempts: attempts.productOwner ?? [{}],
+			calls: providerCalls.productOwner ?? [{}],
 		},
 		{
 			role: "stage-judge",
-			attempts: attempts.stageJudge.length === 0 ? [{}] : attempts.stageJudge,
+			calls:
+				providerCalls.stageJudge.length === 0 ? [{}] : providerCalls.stageJudge,
 		},
 	];
-	if (attempts.finalJudge !== undefined) {
+	if (providerCalls.finalJudge !== undefined) {
 		required.push({
 			role: "final-judge",
-			attempts: attempts.finalJudge.length === 0 ? [{}] : attempts.finalJudge,
+			calls:
+				providerCalls.finalJudge.length === 0 ? [{}] : providerCalls.finalJudge,
 		});
 	}
 
@@ -289,14 +291,14 @@ export function collectConfirmationMetrics(
 	}[] = [];
 	const missing: string[] = [];
 	for (const group of required) {
-		for (const attempt of group.attempts) {
-			if (attempt.metrics === undefined) {
+		for (const call of group.calls) {
+			if (call.metrics === undefined) {
 				missing.push(`${group.role} call metrics`);
 
 				continue;
 			}
 
-			calls.push({ role: group.role, metrics: attempt.metrics });
+			calls.push({ role: group.role, metrics: call.metrics });
 		}
 	}
 	const workerTrajectorySteps = calls

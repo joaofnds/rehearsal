@@ -363,6 +363,75 @@ describe(runReplayConfirmation.name, () => {
 		).toHaveLength(1);
 	});
 
+	it("carries Product Owner provider calls into replay evidence", async () => {
+		const metric: ClaudeCallMetrics = {
+			costUsd: 0.25,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 2,
+		};
+		const fake = new ReplayConfirmationHarness(testResources);
+		const recorded = await fake.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "replay-po-corpus-"));
+		testResources.track(corpusRoot);
+		for (const skill of ["discuss", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+		}
+
+		const outcome = await fake.runConfirmation(
+			{ paths: recorded.paths, corpusRoots: [corpusRoot] },
+			{},
+			(dependencies) => ({
+				...dependencies,
+				installInstructions: () => Promise.resolve(recorded.manifest.taskSha),
+				createProductOwner: () => ({
+					ask: () => Promise.resolve("Use the small scope"),
+					snapshot: () => ({
+						sessionId: "po-session",
+						spentUsd: metric.costUsd,
+						providerCalls: [{ metrics: metric }, {}],
+					}),
+				}),
+				stageSession: {
+					...dependencies.stageSession,
+					runWorkflowStage: async (request) => ({
+						...(await dependencies.stageSession.runWorkflowStage(request)),
+						providerCalls: [{ metrics: metric }],
+					}),
+				},
+				runStageJudge: (_model, _effort, _budget, input) =>
+					Promise.resolve({
+						...replayScorecard(input),
+						attempts: [
+							{
+								payload: { summary: "accepted" },
+								costUsd: metric.costUsd,
+								metrics: metric,
+								outcome: "ACCEPTED",
+							},
+						],
+					}),
+			}),
+		);
+		const [recordFile] = outcome.repRecordFiles;
+		const record = parseConfirmationRepRecord(
+			await Bun.file(recordFile ?? "missing").text(),
+		);
+
+		expect(record.metrics).toEqual({
+			status: "MISSING",
+			calls: [
+				{ role: "worker", metrics: metric },
+				{ role: "product-owner", metrics: metric },
+				{ role: "stage-judge", metrics: metric },
+			],
+			missing: ["product-owner call metrics"],
+		});
+	});
+
 	it("removes the temporary root after every replay rep completes with durable evidence", async () => {
 		const source = await testResources.createRepository();
 		await Bun.write(

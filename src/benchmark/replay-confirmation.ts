@@ -39,7 +39,6 @@ import { executeStageSession } from "./run";
 import { confirmationGroupPaths } from "./run-layout";
 import { recordRetentionRef } from "./target";
 import type { ProductOwner } from "./workflow";
-import { createProductOwner } from "./workflow";
 
 interface FrozenReplayInputs {
 	readonly manifest: Awaited<ReturnType<typeof loadRunManifest>>;
@@ -409,7 +408,7 @@ export async function runReplayConfirmation(
 				const baselineContext = await dependencies.captureBaselineContext(
 					plan.worktreePath,
 				);
-				productOwner = createProductOwner({
+				productOwner = dependencies.createProductOwner({
 					directory: join(repPaths.directory, "product-owner"),
 					model: request.model,
 					effort: request.effort,

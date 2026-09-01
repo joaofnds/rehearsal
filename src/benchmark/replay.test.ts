@@ -35,6 +35,7 @@ import {
 	ReplayConfirmationHarness,
 	replayScorecard,
 } from "./replay-confirmation-test-support";
+import { createProductOwner } from "./workflow";
 
 const testResources = TestResources.forEachTest();
 
@@ -709,6 +710,7 @@ describe(runReplay.name, () => {
 		const judged: StageJudgeInput[] = [];
 		const outcome = await runReplay(
 			{
+				createProductOwner,
 				stageSession: {
 					runWorkflowStage: async ({ targetDir, stage }) => {
 						await Bun.write(

@@ -53,7 +53,7 @@ import {
 	git,
 	removeWorktree,
 } from "./src/benchmark/target";
-import { runWorkflowStage } from "./src/benchmark/workflow";
+import { createProductOwner, runWorkflowStage } from "./src/benchmark/workflow";
 
 const RUNS_DIRECTORY = benchmarkRunsDirectory(CONTROL_DIR);
 
@@ -106,6 +106,7 @@ async function main(): Promise<void> {
 	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
 	await resolveRunDirectory(paths);
 	const replayDependencies: ReplayDependencies = {
+		createProductOwner,
 		stageSession: {
 			runWorkflowStage,
 			readTaskOutput,

@@ -29,6 +29,7 @@ import {
 	changedPathsBetween,
 	removeWorktree,
 } from "./target";
+import { createProductOwner } from "./workflow";
 import { commitAll, harnessResult } from "./test-support";
 
 interface ConfirmationResources {
@@ -151,6 +152,7 @@ export class PipelineConfirmationHarness {
 
 	private defaultDependencies(): PipelineConfirmationDependencies {
 		return {
+			createProductOwner,
 			stageSession: {
 				runWorkflowStage: async (request) => {
 					if (request.stage === "discuss") {

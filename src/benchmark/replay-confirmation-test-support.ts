@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import { materializeCheckpoint, recordCheckpoint } from "./checkpoint";
+import { runCommand } from "./command";
 import type { StageJudgeInput, StageScorecard } from "./contracts";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
@@ -12,7 +13,8 @@ import type { ReplayConfirmationRequest } from "./replay-confirmation";
 import { runReplayConfirmation } from "./replay-confirmation";
 import type { BenchmarkRunPaths } from "./run-layout";
 import { benchmarkRunPaths } from "./run-layout";
-import { harnessResult } from "./test-support";
+import { commitAll, harnessResult } from "./test-support";
+import { createProductOwner } from "./workflow";
 
 interface DirectoryTracker {
 	readonly track: (directory: string) => void;
@@ -75,6 +77,21 @@ export class ReplayConfirmationHarness {
 		this.resources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const stateDir = join(directory, "state");
+		const sourceRoot = join(directory, "primary");
+		await mkdir(sourceRoot);
+		await runCommand(["git", "init", "-b", "main"], sourceRoot);
+		await runCommand(
+			["git", "config", "user.name", "Benchmark Test"],
+			sourceRoot,
+		);
+		await runCommand(
+			["git", "config", "user.email", "benchmark@example.com"],
+			sourceRoot,
+		);
+		await Bun.write(join(sourceRoot, "base.txt"), "base\n");
+		await commitAll(sourceRoot, "chore: base");
+		const head = await runCommand(["git", "rev-parse", "HEAD"], sourceRoot);
+		const taskSha = head.trim();
 		await mkdir(join(stateDir, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(stateDir, "backlog", "config.yml"), "statuses: []\n");
 		const initial = await recordCheckpoint(
@@ -82,7 +99,7 @@ export class ReplayConfirmationHarness {
 			paths.checkpointDirectory("initial"),
 			{
 				stage: "initial",
-				targetSha: "task-sha",
+				targetSha: taskSha,
 				upstream: "root-key",
 				model: "sonnet",
 				corpusFiles: [],
@@ -95,7 +112,7 @@ export class ReplayConfirmationHarness {
 			paths.checkpointDirectory("discuss"),
 			{
 				stage: "discuss",
-				targetSha: "task-sha",
+				targetSha: taskSha,
 				upstream: initial.lineage,
 				model: "sonnet",
 				corpusFiles: discussCorpus,
@@ -114,7 +131,7 @@ export class ReplayConfirmationHarness {
 			paths.checkpointDirectory("build"),
 			{
 				stage: "build",
-				targetSha: "candidate-sha",
+				targetSha: taskSha,
 				upstream: discuss.lineage,
 				model: "sonnet",
 				corpusFiles: [
@@ -129,10 +146,10 @@ export class ReplayConfirmationHarness {
 		const manifest: RunManifest = {
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "run-control-sha",
-			sourceRoot: join(directory, "primary"),
-			sourceSha: "source-sha",
+			sourceRoot,
+			sourceSha: taskSha,
 			taskId: "TASK-1",
-			taskSha: "task-sha",
+			taskSha,
 			task: "Task text",
 			productBrief: "Brief text",
 			model: "sonnet",
@@ -206,6 +223,7 @@ export class ReplayConfirmationHarness {
 
 	private defaultDependencies(): ReplayDependencies {
 		return {
+			createProductOwner,
 			stageSession: {
 				runWorkflowStage: ({ targetDir, stage }) => {
 					this.stageDirs.push(targetDir);
