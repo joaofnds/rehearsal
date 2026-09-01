@@ -56,6 +56,37 @@ describe("workflow provider metrics", () => {
 		});
 	});
 
+	it("keeps an earlier Product Owner snapshot unchanged", async () => {
+		const responses = [
+			JSON.stringify({
+				session_id: "po-session",
+				total_cost_usd: 0.2,
+				structured_output: { answer: "Use the small scope" },
+			}),
+			JSON.stringify({
+				session_id: "po-session",
+				total_cost_usd: 0.2,
+				structured_output: { answer: "Keep the same scope" },
+			}),
+		];
+		const productOwner = createProductOwner(
+			{
+				directory: "/target",
+				model: "sonnet",
+				sessionBudgetUsd: 5,
+				task: "Build it",
+				productBrief: "Keep it small",
+			},
+			() => Promise.resolve(responses.shift() ?? ""),
+		);
+		await productOwner.ask("shape", "Which scope?");
+		const firstSnapshot = productOwner.snapshot();
+
+		await productOwner.ask("shape", "Any constraints?");
+
+		expect(firstSnapshot.providerCalls).toHaveLength(1);
+	});
+
 	it("retains every worker call and provider turn", async () => {
 		const responses = [
 			JSON.stringify({

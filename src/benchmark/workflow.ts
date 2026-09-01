@@ -126,7 +126,11 @@ export function createProductOwner(
 
 			return readStructuredOutput(envelope, productAnswerSchema).answer;
 		},
-		snapshot: () => ({ sessionId, spentUsd, providerCalls }),
+		snapshot: () => ({
+			sessionId,
+			spentUsd,
+			providerCalls: [...providerCalls],
+		}),
 	};
 }
 
