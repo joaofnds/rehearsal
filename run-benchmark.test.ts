@@ -6952,6 +6952,22 @@ describe(corpusDifferences.name, () => {
 	};
 	const file = { path: "a", sha256: "hash" } as const;
 
+	it("reports path-unique differences in sorted order", () => {
+		const differences = corpusDifferences(
+			[
+				{ path: "b", sha256: "same" },
+				{ path: "a", sha256: "old" },
+			],
+			[
+				{ path: "c", sha256: "same" },
+				{ path: "a", sha256: "new" },
+			],
+			wording,
+		);
+
+		expect(differences).toEqual(["a changed", "b removed", "c added"]);
+	});
+
 	it("rejects a duplicate path in the left corpus", () => {
 		expect(() => corpusDifferences([file, file], [file], wording)).toThrow(
 			/Duplicate corpus path: a/u,
