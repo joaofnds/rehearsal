@@ -1,17 +1,49 @@
 ---
 id: ACT-13
 title: split run-benchmark.test.ts into per-module test files
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 21:27'
-updated_date: '2026-09-01 11:59'
+updated_date: '2026-09-01 12:34'
 labels: []
 dependencies: []
 references:
   - run-benchmark.test.ts
   - src/benchmark
   - package.json
+modified_files:
+  - run-benchmark.test.ts
+  - src/benchmark/attempts.test.ts
+  - src/benchmark/backlog.test.ts
+  - src/benchmark/benchmark-command.test.ts
+  - src/benchmark/calibration.test.ts
+  - src/benchmark/checkpoint.test.ts
+  - src/benchmark/checks.test.ts
+  - src/benchmark/claude.test.ts
+  - src/benchmark/command.test.ts
+  - src/benchmark/config.test.ts
+  - src/benchmark/confirmation-evidence.test.ts
+  - src/benchmark/confirmation-record.test.ts
+  - src/benchmark/confirmation-report.test.ts
+  - src/benchmark/confirmation.test.ts
+  - src/benchmark/contracts.test.ts
+  - src/benchmark/judge.test.ts
+  - src/benchmark/manifest.test.ts
+  - src/benchmark/pipeline-confirmation-test-support.ts
+  - src/benchmark/pipeline-confirmation.test.ts
+  - src/benchmark/pipeline.test.ts
+  - src/benchmark/replay-command.test.ts
+  - src/benchmark/replay-confirmation-test-support.ts
+  - src/benchmark/replay-confirmation.test.ts
+  - src/benchmark/replay.test.ts
+  - src/benchmark/run-abort.test.ts
+  - src/benchmark/run-layout.test.ts
+  - src/benchmark/run.test.ts
+  - src/benchmark/stage-grading.test.ts
+  - src/benchmark/target.test.ts
+  - src/benchmark/test-support.ts
+  - src/benchmark/workflow.test.ts
 type: task
 ordinal: 5008
 ---
@@ -24,11 +56,11 @@ The single test file is over 4000 lines and covers every module in src/benchmark
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every top-level suite migrated from `run-benchmark.test.ts` lives in `src/benchmark/<owner>.test.ts` beside the production module whose public behavior it exercises; the root file is absent, no empty test files are created for untested modules, and existing comparison test files remain focused on their current owners.
-- [ ] #2 `benchmark-command.test.ts` and `replay-command.test.ts` each contain separate focused observations for debug dispatch and confirmation dispatch, retaining the exact debug label, projected-cost approval ordering, rep count, and request routing behavior covered before the split.
-- [ ] #3 `replay-confirmation.test.ts` and `pipeline-confirmation.test.ts` obtain complete, production-typed dependency and request defaults from shared test harnesses and express each scenario through typed overrides; their test bodies no longer hand-assemble the full dependency records.
-- [ ] #4 Shared temporary-directory and Git repository fixtures have one test-support owner, clean up after each scenario, and leave each per-module test independently runnable with `bun test <test-file>`.
-- [ ] #5 A pre-split and post-split test-name inventory is identical, including the 310 tests currently in `run-benchmark.test.ts`; the full suite reports zero failures, and `bun run typecheck`, `bun run lint`, and `bun run fmt:check` exit successfully.
+- [x] #1 Every top-level suite migrated from `run-benchmark.test.ts` lives in `src/benchmark/<owner>.test.ts` beside the production module whose public behavior it exercises; the root file is absent, no empty test files are created for untested modules, and existing comparison test files remain focused on their current owners.
+- [x] #2 `benchmark-command.test.ts` and `replay-command.test.ts` each contain separate focused observations for debug dispatch and confirmation dispatch, retaining the exact debug label, projected-cost approval ordering, rep count, and request routing behavior covered before the split.
+- [x] #3 `replay-confirmation.test.ts` and `pipeline-confirmation.test.ts` obtain complete, production-typed dependency and request defaults from shared test harnesses and express each scenario through typed overrides; their test bodies no longer hand-assemble the full dependency records.
+- [x] #4 Shared temporary-directory and Git repository fixtures have one test-support owner, clean up after each scenario, and leave each per-module test independently runnable with `bun test <test-file>`.
+- [x] #5 A pre-split and post-split test-name inventory is identical, including the 310 tests currently in `run-benchmark.test.ts`; the full suite reports zero failures, and `bun run typecheck`, `bun run lint`, and `bun run fmt:check` exit successfully.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -76,4 +108,17 @@ Unknowns resolved from repository evidence:
 - No paid benchmark or provider run is needed; this task changes test organization only.
 
 No decision was deferred.
+
+Build handoff 2026-09-01:
+- Removed the 10,501-line root test file and colocated its 310 tests with 27 production owners. Existing comparison tests stayed focused; the resulting 31 test files all pass when run independently.
+- Kept command debug and confirmation dispatch as distinct observations. Shared `TestResources` owns temporary directories, Git repositories, commits, and cleanup; typed replay and pipeline confirmation harnesses provide complete dependency/request defaults with scenario overrides.
+- Direct acceptance observation compared the saved pre-split and post-split inventories: all 354 test names are identical. The full suite reports 354 pass, 0 fail, and 738 expectations. Typecheck, type-aware lint, format check, and diff check pass. No paid provider was invoked.
+- Refactor pass centralized generic harness results and aligned replay/pipeline support naming and ownership. No production behavior or API changed. This internal, reversible test-only reorganization did not require independent review under the review gate.
+- One replay-confirmation failure appeared once during an isolation sweep and did not recur in 230 focused repetitions; all subsequent acceptance checks passed. Because its cause is unconfirmed, no speculative fix was included. ACT-13.1 records the reproduction gap and discriminating probes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Split the monolithic benchmark test suite into module-owned files, removed `run-benchmark.test.ts`, and added shared typed fixtures for repository lifecycle plus replay/pipeline confirmation scenarios. All 31 test files pass independently; the exact 354-test inventory is preserved, with 354 passing tests and 738 expectations. Typecheck, lint, and formatting pass. ACT-13.1 tracks one non-reproduced verification flake without changing this behavior-preserving refactor.
+<!-- SECTION:FINAL_SUMMARY:END -->
