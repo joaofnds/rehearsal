@@ -229,7 +229,7 @@ function artifactBaseInputs(
 		rubricIds: ["scope"],
 		baselineContext: [],
 		taskId: "TASK-1",
-		productOwner: { sessionId: "po", spentUsd: 0 },
+		productOwner: { sessionId: "po", spentUsd: 0, providerCalls: [] },
 		workflow: [],
 		stageScorecards: [],
 		checkpoints: [],

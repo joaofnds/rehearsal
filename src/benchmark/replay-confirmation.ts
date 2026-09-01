@@ -8,7 +8,11 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 } from "./checkpoint";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
-import type { ClaudeCallMetrics, StageScorecard } from "./contracts";
+import type {
+	ClaudeCallMetrics,
+	ProviderCall,
+	StageScorecard,
+} from "./contracts";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { ConfirmationRepRecord } from "./confirmation-record";
@@ -22,7 +26,6 @@ import {
 	collectConfirmationMetrics,
 	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
-	metricAttempts,
 	requiredMetricAttempts,
 	settleCompletedConfirmationRep,
 	settleDiagnosticConfirmationRep,
@@ -200,13 +203,13 @@ function completeRepRecord(
 	scorecardFile: string,
 	scorecard: StageScorecard,
 	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
-	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	productOwnerCalls: readonly ProviderCall[],
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
 	const evidence = collectConfirmationMetrics({
 		worker: requiredMetricAttempts(workerMetrics),
-		productOwner: metricAttempts(productOwnerMetrics),
+		productOwner: productOwnerCalls,
 		stageJudge: scorecard.attempts,
 		finalJudge: undefined,
 	});
@@ -255,13 +258,13 @@ function rejectedJudgeRepRecord(
 	recordFile: string,
 	error: JudgeRejection,
 	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
-	productOwnerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	productOwnerCalls: readonly ProviderCall[],
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
 	const evidence = collectConfirmationMetrics({
 		worker: requiredMetricAttempts(workerMetrics),
-		productOwner: metricAttempts(productOwnerMetrics),
+		productOwner: productOwnerCalls,
 		stageJudge: error.attempts,
 		finalJudge: undefined,
 	});
@@ -468,7 +471,7 @@ export async function runReplayConfirmation(
 					relative(repPaths.directory, scorecardFile),
 					scorecard,
 					session.transcript.callMetrics,
-					productOwner.snapshot().callMetrics,
+					productOwner.snapshot().providerCalls,
 					stageElapsedMs,
 					now() - repStart,
 				);
@@ -521,7 +524,7 @@ export async function runReplayConfirmation(
 						relative(repPaths.directory, scorecardFile),
 						failure,
 						session.transcript.callMetrics,
-						productOwner.snapshot().callMetrics,
+						productOwner.snapshot().providerCalls,
 						now() - stageStart,
 						now() - repStart,
 					);

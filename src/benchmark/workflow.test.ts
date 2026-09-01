@@ -3,7 +3,26 @@ import type { ProductOwner } from "./workflow";
 import { createProductOwner, runWorkflowStage } from "./workflow";
 
 describe("workflow provider metrics", () => {
-	it("retains Product Owner call metrics", async () => {
+	it("retains Product Owner calls when later metrics are absent", async () => {
+		const responses = [
+			JSON.stringify({
+				session_id: "po-session",
+				total_cost_usd: 0.2,
+				num_turns: 2,
+				usage: {
+					input_tokens: 50,
+					output_tokens: 10,
+					cache_read_input_tokens: 5,
+					cache_creation_input_tokens: 6,
+				},
+				structured_output: { answer: "Use the small scope" },
+			}),
+			JSON.stringify({
+				session_id: "po-session",
+				total_cost_usd: 0.2,
+				structured_output: { answer: "Keep the same scope" },
+			}),
+		];
 		const productOwner = createProductOwner(
 			{
 				directory: "/target",
@@ -12,37 +31,27 @@ describe("workflow provider metrics", () => {
 				task: "Build it",
 				productBrief: "Keep it small",
 			},
-			() =>
-				Promise.resolve(
-					JSON.stringify({
-						session_id: "po-session",
-						total_cost_usd: 0.2,
-						num_turns: 2,
-						usage: {
-							input_tokens: 50,
-							output_tokens: 10,
-							cache_read_input_tokens: 5,
-							cache_creation_input_tokens: 6,
-						},
-						structured_output: { answer: "Use the small scope" },
-					}),
-				),
+			() => Promise.resolve(responses.shift() ?? ""),
 		);
 
 		await productOwner.ask("shape", "Which scope?");
+		await productOwner.ask("shape", "Any constraints?");
 
 		expect(productOwner.snapshot()).toEqual({
 			sessionId: "po-session",
-			spentUsd: 0.2,
-			callMetrics: [
+			spentUsd: 0.4,
+			providerCalls: [
 				{
-					costUsd: 0.2,
-					inputTokens: 50,
-					outputTokens: 10,
-					cacheReadTokens: 5,
-					cacheWriteTokens: 6,
-					turns: 2,
+					metrics: {
+						costUsd: 0.2,
+						inputTokens: 50,
+						outputTokens: 10,
+						cacheReadTokens: 5,
+						cacheWriteTokens: 6,
+						turns: 2,
+					},
 				},
+				{},
 			],
 		});
 	});
@@ -76,7 +85,11 @@ describe("workflow provider metrics", () => {
 		];
 		const productOwner: ProductOwner = {
 			ask: () => Promise.resolve("Use the small scope"),
-			snapshot: () => ({ sessionId: "po-session", spentUsd: 0 }),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
 		};
 
 		const transcript = await runWorkflowStage(

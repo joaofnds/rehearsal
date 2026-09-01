@@ -8,13 +8,17 @@ import {
 import { runCommand } from "./command";
 import type { Effort, WorkflowStage } from "./config";
 import { CLAUDE_TIMEOUT_MS, MAX_STAGE_TURNS } from "./config";
-import type { ClaudeCallMetrics, StageTranscript } from "./contracts";
+import type {
+	ClaudeCallMetrics,
+	ProviderCall,
+	StageTranscript,
+} from "./contracts";
 import { productAnswerSchema, stageTurnSchema } from "./contracts";
 
 export interface ProductOwnerSnapshot {
 	readonly sessionId: string;
 	readonly spentUsd: number;
-	readonly callMetrics?: readonly ClaudeCallMetrics[] | undefined;
+	readonly providerCalls: readonly ProviderCall[];
 }
 
 export interface ProductOwner {
@@ -59,6 +63,10 @@ function appendCallMetrics(
 	return [...callMetrics, metrics];
 }
 
+function providerCall(metrics: ClaudeCallMetrics | undefined): ProviderCall {
+	return metrics === undefined ? {} : { metrics };
+}
+
 function withCallMetrics<Value extends object>(
 	value: Value,
 	callMetrics: readonly ClaudeCallMetrics[] | undefined,
@@ -101,7 +109,7 @@ export function createProductOwner(
 ): ProductOwner {
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
-	let callMetrics: readonly ClaudeCallMetrics[] | undefined = [];
+	const providerCalls: ProviderCall[] = [];
 	let started = false;
 
 	return {
@@ -135,15 +143,12 @@ export function createProductOwner(
 
 			sessionId = envelope.session_id;
 			spentUsd += envelope.total_cost_usd ?? 0;
-			callMetrics = appendCallMetrics(
-				callMetrics,
-				readClaudeCallMetrics(envelope),
-			);
+			providerCalls.push(providerCall(readClaudeCallMetrics(envelope)));
 			started = true;
 
 			return readStructuredOutput(envelope, productAnswerSchema).answer;
 		},
-		snapshot: () => withCallMetrics({ sessionId, spentUsd }, callMetrics),
+		snapshot: () => ({ sessionId, spentUsd, providerCalls }),
 	};
 }
 

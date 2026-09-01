@@ -218,6 +218,10 @@ export interface StageExchange {
 	readonly productOwnerAnswer?: string | undefined;
 }
 
+export interface ProviderCall {
+	readonly metrics?: ClaudeCallMetrics | undefined;
+}
+
 export interface StageTranscript {
 	readonly stage: WorkflowStage;
 	readonly sessionId: string;

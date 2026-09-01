@@ -38,7 +38,6 @@ import {
 	collectConfirmationMetrics,
 	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
-	metricAttempts,
 	requiredMetricAttempts,
 	settleCompletedConfirmationRep,
 	settleDiagnosticConfirmationRep,
@@ -432,7 +431,7 @@ async function runPipelineRep(
 				}
 				const evidence = collectConfirmationMetrics({
 					worker: workerAttempts,
-					productOwner: metricAttempts(productOwner.snapshot().callMetrics),
+					productOwner: productOwner.snapshot().providerCalls,
 					stageJudge: stageJudgeAttempts,
 					finalJudge: undefined,
 				});
@@ -516,7 +515,7 @@ async function runPipelineRep(
 		);
 		const evidence = collectConfirmationMetrics({
 			worker: workerAttempts,
-			productOwner: metricAttempts(productOwner.snapshot().callMetrics),
+			productOwner: productOwner.snapshot().providerCalls,
 			stageJudge: stageJudgeAttempts,
 			finalJudge: finalJudge.attempts,
 		});
@@ -664,7 +663,7 @@ async function runPipelineRep(
 
 		const evidence = collectConfirmationMetrics({
 			worker: workerAttempts,
-			productOwner: metricAttempts(productOwner?.snapshot().callMetrics),
+			productOwner: productOwner?.snapshot().providerCalls,
 			stageJudge: stageJudgeAttempts,
 			finalJudge: judgingFinal ? (judgeFailure?.attempts ?? []) : undefined,
 		});

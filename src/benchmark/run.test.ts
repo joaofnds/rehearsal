@@ -242,7 +242,7 @@ function artifactBaseInputs(
 		rubricIds: ["scope"],
 		baselineContext: [],
 		taskId: "TASK-1",
-		productOwner: { sessionId: "po", spentUsd: 0 },
+		productOwner: { sessionId: "po", spentUsd: 0, providerCalls: [] },
 		workflow: [],
 		stageScorecards: [],
 		checkpoints: [],
@@ -502,7 +502,11 @@ describe(runGradedStages.name, () => {
 			sessionBudgetUsd: 5,
 			productOwner: {
 				ask: () => Promise.reject(new Error("no product owner in this test")),
-				snapshot: () => ({ sessionId: "po", spentUsd: 0 }),
+				snapshot: () => ({
+					sessionId: "po",
+					spentUsd: 0,
+					providerCalls: [],
+				}),
 			},
 			task: "Task",
 			productBrief: "Brief",
