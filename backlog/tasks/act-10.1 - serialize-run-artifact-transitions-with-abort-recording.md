@@ -1,11 +1,11 @@
 ---
 id: ACT-10.1
 title: serialize run artifact transitions with abort recording
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-08-31 13:50'
-updated_date: '2026-09-01 00:35'
+updated_date: '2026-09-01 01:21'
 labels: []
 dependencies: []
 parent_task_id: ACT-10
@@ -23,15 +23,15 @@ Goal: serialize every run artifact transition with abort recording so interrupti
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A controlled persistence test requests abort while the AWAITING_STAGE_JUDGE write is blocked; after all writes settle, the stage record is STAGE_JUDGE_FAILED.
-- [ ] #2 A controlled persistence test requests abort while the AWAITING_HUMAN_REVIEW write is blocked; after all writes settle, the main artifact is FAILED.
-- [ ] #3 A controlled persistence test requests abort while the COMPLETE write is blocked; after all writes settle, the main artifact is FAILED.
-- [ ] #4 The FAILED artifact produced by interruption during COMPLETE persistence retains the completed calibration evidence.
-- [ ] #5 A controlled persistence test observes at most one active run artifact transition.
-- [ ] #6 A controlled persistence test observes that no normal transition starts after abort is requested.
-- [ ] #7 A controlled persistence test requests abort before a pending write starts and observes the abort path record that pending state.
-- [ ] #8 A controlled persistence test fails a terminal write, then requests abort and observes the abort path record the retained pending state.
-- [ ] #9 A controlled persistence test completes a terminal write, then requests abort and observes no rewrite of that terminal record.
+- [x] #1 A controlled persistence test requests abort while the AWAITING_STAGE_JUDGE write is blocked; after all writes settle, the stage record is STAGE_JUDGE_FAILED.
+- [x] #2 A controlled persistence test requests abort while the AWAITING_HUMAN_REVIEW write is blocked; after all writes settle, the main artifact is FAILED.
+- [x] #3 A controlled persistence test requests abort while the COMPLETE write is blocked; after all writes settle, the main artifact is FAILED.
+- [x] #4 The FAILED artifact produced by interruption during COMPLETE persistence retains the completed calibration evidence.
+- [x] #5 A controlled persistence test observes at most one active run artifact transition.
+- [x] #6 A controlled persistence test observes that no normal transition starts after abort is requested.
+- [x] #7 A controlled persistence test requests abort before a pending write starts and observes the abort path record that pending state.
+- [x] #8 A controlled persistence test fails a terminal write, then requests abort and observes the abort path record the retained pending state.
+- [x] #9 A controlled persistence test completes a terminal write, then requests abort and observes no rewrite of that terminal record.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -69,5 +69,42 @@ First test to write: block the fake persistence operation for AWAITING_STAGE_JUD
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Shape completed 2026-09-01. No product decision remains: the ACT-10 independent review supplies the required terminal-abort behavior, and repository inspection settled scope and pending-state timing. Added "run artifact transition" to GLOSSARY.md. Build starts with the controlled blocked-stage-write test described in the plan.
+Build handoff, 2026-09-01
+
+What changed:
+- `createRunAbort` now owns an injected run-artifact persistence boundary and serializes every stage, main-artifact, abort, and final-Judge failure transition with an await-based handoff lock.
+- Abort latches synchronously, snapshots pending evidence before waiting for an active write, queues terminal FAILED records behind that write, and refuses later normal transitions.
+- `runGradedStages` reports pending state before AWAITING_STAGE_JUDGE persistence, keeps STOP stages pending through calibration, and clears state only after the terminal scorecard succeeds.
+- `runBenchmark` routes AWAITING_HUMAN_REVIEW and COMPLETE through the same boundary; COMPLETE becomes pending before persistence, so interrupted FAILED records retain calibration.
+- Final-Judge validation failures use an injected failed-artifact transition instead of bypassing lifecycle persistence.
+- Added the `StageJudgeRecord` domain contract and a controlled persistence Fake covering blocked, failed, and overlapping writes.
+
+Commits:
+- 009cf30 fix: serialize pending stage abort writes
+- 0c53224 fix: make stage abort terminal
+- cbb64cd fix: route stage records through transitions
+- 0a38182 fix: serialize pending run artifact aborts
+- b9abcf4 fix: preserve interrupted completion evidence
+- 8131127 fix: route main artifacts through transitions
+- 2bb5872 test: guard pre-write pending stage state
+- 9dc4960 fix: serialize final Judge failures
+
+What became possible but is not wired:
+- The controlled persistence boundary can drive future artifact-transition tests without filesystem timing. No benchmark-run artifact caller remains on the old direct-write path; confirmation records have separate lifecycles and are outside this task.
+
+Observed:
+- TDD red: the first blocked-stage test failed because `writePendingStage` did not exist; caller wiring failed because the controlled persistence map stayed empty; pending-main, COMPLETE, and final-Judge tests each failed at their missing transition operation or bypass.
+- Mutation observations: removing successful terminal clearing changed a later abort from COMPLETE to FAILED; clearing in `finally` left AWAITING_HUMAN_REVIEW after a terminal write failure; removing the queue wait raised active writers from one to two; moving pending assignment into the queued stage write left no abort record. Each restored implementation made its focused test green.
+- Fresh focused transition run: 37 pass, 0 fail.
+- Fresh full suite: 300 pass, 0 fail, 603 assertions. Fresh `bun run typecheck`, `bun run lint`, and `bun run fmt:check` passed.
+- Direct observation outside the suite used delayed persistence backed by real Bun file writes, interrupted the pending stage write, then read `{"stageStatus":"STAGE_JUDGE_FAILED","artifactStatus":"FAILED"}` from disk.
+
+Not verified:
+- No paid full benchmark or real OS signal exit was run. Signal delivery, cancellation, teardown, and exit-code behavior remains covered through the injected process boundary from ACT-10.
+
+Stopped on:
+- Nothing. Refactor pass found no separate small structural change; ACT-13 already tracks splitting the monolithic test file.
+
+Review:
+- Independent review is due because this changes interruption safety, terminal evidence ordering, and the core benchmark lifecycle.
 <!-- SECTION:NOTES:END -->
