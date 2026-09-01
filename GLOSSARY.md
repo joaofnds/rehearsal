@@ -11,10 +11,21 @@
 - **Confirmation run** — an explicitly requested group of at least two reps over
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
+- **Comparison** — a deterministic report over completed confirmation evidence
+  for at least two benchmark cases, each containing the baseline, candidate,
+  and control arms. It does not execute paid sessions.
+- **Comparison arm** — one role in a comparison: baseline, candidate, or the
+  mandatory minimal-corpus control. An arm uses the same corpus snapshot across
+  every benchmark case.
+- **Benchmark case** — one frozen task with its source or checkpoint and all
+  non-corpus inputs; the independent unit on which comparison arms are paired.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
 - **Corpus (instruction corpus)** — the instruction files under evaluation:
   the installed `CLAUDE.md`, the stage skills, and related agent configuration.
+- **Corpus snapshot** — the exact frozen project-instruction and stage/global
+  skill bytes used by a confirmation group. A control-repository commit alone
+  does not identify it because installed skills may live outside that repository.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
 - **Delivery stage** — a stage whose artifact is committed code; its
@@ -80,4 +91,4 @@
 - **Trajectory step** — one workflow-agent turn reported by the provider. PO and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
-- **Variant** — a named configuration: corpus version, model, and effort.
+- **Variant** — a named configuration: corpus snapshot, model, and effort.

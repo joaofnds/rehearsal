@@ -50,8 +50,10 @@ but the tool refuses to present comparisons whose lineages differ.
   state, artifacts, lineage.
 - **Lineage** — hash of everything that produced a checkpoint: upstream
   checkpoint, corpus files feeding the stage, model, effort.
-- **CorpusVersion** — the corpus at a commit of the control repository.
-- **Variant** — (CorpusVersion, model, effort).
+- **Corpus snapshot** — the exact frozen project-instruction and stage/global
+  skill bytes. A control-repository commit alone does not identify one because
+  installed skills may live outside that repository.
+- **Variant** — (corpus snapshot, model, effort).
 - **Run** — one pipeline execution for a (task, variant); **Rep** — one of N
   repetitions; scores are distributions over reps.
 - **Judge** — deterministic check or rubric-scored LLM evaluation attached to
