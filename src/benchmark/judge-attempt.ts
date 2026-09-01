@@ -1,5 +1,8 @@
 import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
 import type { ClaudeCallMetrics, ClaudeEnvelope } from "./contracts";
+import { JudgeExecutionError } from "./judge-execution-error";
+
+export { JudgeExecutionError } from "./judge-execution-error";
 
 export type JudgeInvoker = (prompt: string) => Promise<string>;
 
@@ -65,8 +68,18 @@ export async function runJudgeAttempts<Value>(
 	const attempts: JudgeAttempt[] = [];
 	let attemptPrompt = prompt;
 	for (let attempt = 1; ; attempt += 1) {
-		const output = await invoke(attemptPrompt);
-		const envelope = readClaudeEnvelope(output);
+		let envelope;
+		try {
+			const output = await invoke(attemptPrompt);
+			envelope = readClaudeEnvelope(output);
+		} catch (error) {
+			throw new JudgeExecutionError({
+				cause: error,
+				prompt,
+				attempts,
+				costUsd,
+			});
+		}
 		const attemptCostUsd = envelope.total_cost_usd ?? 0;
 		const metrics = readClaudeCallMetrics(envelope);
 		const payload = envelope.structured_output ?? envelope.result ?? null;

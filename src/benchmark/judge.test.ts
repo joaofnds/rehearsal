@@ -7,6 +7,7 @@ import {
 	validateJudgeEvidence,
 } from "./judge";
 import type { JudgeInvoker } from "./judge-attempt";
+import { JudgeExecutionError } from "./judge-attempt";
 import { harnessResult } from "./test-support";
 
 const RUBRIC_IDS = [
@@ -224,6 +225,74 @@ describe(runJudge.name, () => {
 		expect(calls).toBe(2);
 	});
 
+	it("carries a rejected attempt when the retry invocation fails", async () => {
+		let calls = 0;
+		const invocationFailure = new Error("Judge command timed out");
+		const invalidGrade = withFirstRequirement(completeGrade("PASS"), {
+			...requirement(RUBRIC_IDS[0], "PASS"),
+			evidence: [
+				{
+					source: "diff",
+					path: "src/missing.ts",
+					claim: "unavailable evidence",
+				},
+			],
+		});
+		const firstCall = {
+			costUsd: 0.1,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 3,
+		};
+
+		let failure: unknown;
+		try {
+			await gradeWith(() => {
+				calls += 1;
+				if (calls === 2) {
+					return Promise.reject(invocationFailure);
+				}
+
+				return Promise.resolve(
+					JSON.stringify({
+						session_id: "judge-session",
+						total_cost_usd: firstCall.costUsd,
+						num_turns: firstCall.turns,
+						usage: {
+							input_tokens: firstCall.inputTokens,
+							output_tokens: firstCall.outputTokens,
+							cache_read_input_tokens: firstCall.cacheReadTokens,
+							cache_creation_input_tokens: firstCall.cacheWriteTokens,
+						},
+						structured_output: invalidGrade,
+					}),
+				);
+			});
+		} catch (error) {
+			failure = error;
+		}
+
+		expect(failure).toBeInstanceOf(JudgeExecutionError);
+		expect(failure).toMatchObject({
+			cause: invocationFailure,
+			costUsd: 0.1,
+			attempts: [
+				{
+					payload: invalidGrade,
+					costUsd: 0.1,
+					metrics: firstCall,
+					outcome: "REJECTED",
+					error:
+						"Judge cited unavailable evidence for tests: diff:src/missing.ts",
+				},
+			],
+			providerCalls: [{ metrics: firstCall }, {}],
+		});
+		expect(calls).toBe(2);
+	});
+
 	it("does not retry an invocation failure", () => {
 		let calls = 0;
 		const failure = new Error("Judge command timed out");
@@ -234,7 +303,13 @@ describe(runJudge.name, () => {
 
 				return Promise.reject(failure);
 			}),
-		).rejects.toBe(failure);
+		).rejects.toMatchObject({
+			name: "JudgeExecutionError",
+			cause: failure,
+			attempts: [],
+			providerCalls: [{}],
+			costUsd: 0,
+		});
 		expect(calls).toBe(1);
 	});
 
