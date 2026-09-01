@@ -782,8 +782,7 @@ export async function runBenchmark(
 			judge,
 			reviewFile: runFiles.reviewFile,
 		});
-		await writeRunArtifact(runFiles.artifactFile, artifact);
-		abort.trackPendingArtifact(artifact);
+		await abort.writePendingArtifact(artifact);
 		console.log(`Run artifact: ${runFiles.artifactFile}`);
 		console.log(`Human review: ${runFiles.reviewFile}`);
 
@@ -806,12 +805,11 @@ export async function runBenchmark(
 			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		});
-		await writeRunArtifact(runFiles.artifactFile, {
+		await abort.completeArtifact({
 			...artifact,
 			status: "COMPLETE",
 			calibration,
 		});
-		abort.trackPendingArtifact(undefined);
 		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

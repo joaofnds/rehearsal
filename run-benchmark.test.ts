@@ -3313,6 +3313,9 @@ interface BlockedRunArtifactWrite {
 
 class ControlledRunArtifactPersistence implements RunArtifactPersistence {
 	public readonly files = new Map<string, string>();
+	public activeWrites = 0;
+	public maxActiveWrites = 0;
+	private nextFailure: Error | undefined;
 	private nextWrite:
 		| {
 				readonly started: PromiseWithResolvers<undefined>;
@@ -3333,19 +3336,41 @@ class ControlledRunArtifactPersistence implements RunArtifactPersistence {
 		};
 	}
 
+	public failNextWrite(): Error {
+		const failure = new Error("persistence failed");
+		this.nextFailure = failure;
+
+		return failure;
+	}
+
 	public async write(path: string, contents: string): Promise<void> {
 		const blocked = this.nextWrite;
 		this.nextWrite = undefined;
-		if (blocked !== undefined) {
-			blocked.started.resolve(undefined);
-			await blocked.released.promise;
-		}
+		const failure = this.nextFailure;
+		this.nextFailure = undefined;
+		this.activeWrites += 1;
+		this.maxActiveWrites = Math.max(this.maxActiveWrites, this.activeWrites);
 
-		this.files.set(path, contents);
+		try {
+			if (blocked !== undefined) {
+				blocked.started.resolve(undefined);
+				await blocked.released.promise;
+			}
+			if (failure !== undefined) {
+				throw failure;
+			}
+
+			this.files.set(path, contents);
+		} finally {
+			this.activeWrites -= 1;
+		}
 	}
 
 	public reset(): void {
 		this.files.clear();
+		this.activeWrites = 0;
+		this.maxActiveWrites = 0;
+		this.nextFailure = undefined;
 		this.nextWrite = undefined;
 	}
 }
@@ -3505,6 +3530,107 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("runs at most one artifact transition at a time", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const blocked = persistence.blockNextWrite();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		const pendingWrite = abort.writePendingArtifact(artifact);
+		await blocked.started;
+		const completionWrite = abort.completeArtifact({
+			...artifact,
+			status: "COMPLETE",
+		});
+		blocked.release();
+		await Promise.all([pendingWrite, completionWrite]);
+
+		expect(persistence.maxActiveWrites).toBe(1);
+	});
+
+	it("leaves a successful terminal artifact unchanged on a later abort", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const completeArtifact = { ...artifact, status: "COMPLETE" as const };
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writePendingArtifact(artifact);
+		await abort.completeArtifact(completeArtifact);
+		await abort.markAborted("later failure");
+
+		expect(JSON.parse(persistence.files.get(artifactFile) ?? "")).toEqual(
+			completeArtifact,
+		);
+	});
+
+	it("retains pending state after a terminal artifact write fails", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const completeArtifact = { ...artifact, status: "COMPLETE" as const };
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+		await abort.writePendingArtifact(artifact);
+		const failure = persistence.failNextWrite();
+
+		expect(abort.completeArtifact(completeArtifact)).rejects.toBe(failure);
+		await abort.markAborted("run failed");
+
+		expect(JSON.parse(persistence.files.get(artifactFile) ?? "")).toEqual({
+			...completeArtifact,
+			status: "FAILED",
+		});
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		temporaryDirectories.push(directory);
@@ -3535,7 +3661,7 @@ describe(createRunAbort.name, () => {
 		};
 
 		abort.updatePendingStage(pendingStage);
-		abort.trackPendingArtifact(artifact);
+		await abort.writePendingArtifact(artifact);
 		await abort.markAborted("stage Judge failed");
 
 		expect(JSON.parse(await Bun.file(stageFile).text())).toMatchObject({
@@ -3712,7 +3838,7 @@ describe(createRunAbort.name, () => {
 			stage: "shape",
 			input: stageJudgeInput("shape"),
 		});
-		abort.trackPendingArtifact(artifact);
+		await abort.writePendingArtifact(artifact);
 
 		await abort.markAborted("stage Judge failed");
 

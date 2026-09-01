@@ -46,7 +46,6 @@ export interface RunAbort {
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly writePendingArtifact: (artifact: RunArtifact) => Promise<void>;
 	readonly completeArtifact: (artifact: RunArtifact) => Promise<void>;
-	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
 	readonly teardown: () => Promise<void>;
 	readonly release: () => void;
@@ -327,9 +326,6 @@ export function createRunAbort(
 		completeStage,
 		writePendingArtifact,
 		completeArtifact,
-		trackPendingArtifact: (artifact) => {
-			pendingArtifact = artifact;
-		},
 		markAborted,
 		teardown,
 		release,
