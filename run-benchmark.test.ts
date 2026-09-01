@@ -3387,6 +3387,42 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("refuses a normal stage transition after abort is requested", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const stageFile = "/runs/shape.json";
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		await abort.writePendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		const abortWrite = abort.markAborted("run interrupted");
+		const completionWrite = abort.completeStage({
+			...stageScorecard("PASS"),
+			corpusFiles: [],
+			model: "sonnet",
+		});
+		await Promise.all([abortWrite, completionWrite]);
+
+		expect(JSON.parse(persistence.files.get(stageFile) ?? "")).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+		});
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		temporaryDirectories.push(directory);

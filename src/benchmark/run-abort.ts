@@ -1,5 +1,9 @@
 import type { WorkflowStage } from "./config";
-import type { RunArtifact, StageJudgeInput } from "./contracts";
+import type {
+	RunArtifact,
+	StageJudgeInput,
+	StageJudgeRecord,
+} from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 
 export interface PendingStage {
@@ -37,6 +41,7 @@ export interface RunAbortRequest {
 
 export interface RunAbort {
 	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
+	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
@@ -157,6 +162,24 @@ export function createRunAbort(
 			),
 		);
 	};
+	const completeStage = (record: StageJudgeRecord): Promise<void> => {
+		if (abortRequested) {
+			return Promise.resolve();
+		}
+		if (pendingStage === undefined) {
+			return Promise.reject(new Error("No stage transition is pending"));
+		}
+
+		const { file } = pendingStage;
+
+		return enqueueNormalTransition(async () => {
+			await dependencies.persistence.write(
+				file,
+				`${JSON.stringify(record, null, 2)}\n`,
+			);
+			pendingStage = undefined;
+		});
+	};
 	const markAborted = (reason: string): Promise<void> => {
 		if (abortRecorded === undefined) {
 			abortRequested = true;
@@ -244,6 +267,7 @@ export function createRunAbort(
 
 	return {
 		writePendingStage,
+		completeStage,
 		trackPendingStage: (pending) => {
 			pendingStage = pending;
 		},
