@@ -40,6 +40,7 @@ import type {
 	LocalCheckResult,
 	RunArtifactEvidence,
 	StageJudgeInput,
+	StageJudgeRecord,
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
@@ -289,7 +290,10 @@ export interface StageContext {
 	readonly stageFile: (stage: WorkflowStage) => string;
 	readonly checkpointDirectory: (stage: WorkflowStage) => string;
 	readonly log: (message: string) => void;
-	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
+	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
+	readonly updatePendingStage: (pending: PendingStage) => void;
+	readonly writeStageProgress: (record: StageJudgeRecord) => Promise<void>;
+	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly calibrateStageFailure: (
 		stageScorecards: readonly StageScorecard[],
 	) => Promise<CalibrationResult>;
@@ -506,16 +510,8 @@ export async function runGradedStages(
 
 		context.log(`\n${stage} stage Judge`);
 		const stageFile = context.stageFile(stage);
-		await Bun.write(
-			stageFile,
-			`${JSON.stringify(
-				{ status: "AWAITING_STAGE_JUDGE", stage, input },
-				null,
-				2,
-			)}\n`,
-		);
 		const pendingStage = { file: stageFile, stage, input };
-		context.trackPendingStage(pendingStage);
+		await context.writePendingStage(pendingStage);
 		let scorecard: StageScorecard;
 		try {
 			scorecard = await dependencies.runStageJudge(
@@ -527,7 +523,7 @@ export async function runGradedStages(
 			);
 		} catch (error) {
 			if (error instanceof JudgeOutputValidationError) {
-				context.trackPendingStage({
+				context.updatePendingStage({
 					...pendingStage,
 					failure: {
 						prompt: error.prompt,
@@ -539,22 +535,22 @@ export async function runGradedStages(
 
 			throw error;
 		}
-		context.trackPendingStage(undefined);
 		stageScorecards.push(scorecard);
-		const stageRecord = {
+		const stageRecord: StageJudgeRecord = {
 			...scorecard,
 			corpusFiles,
 			model: context.model,
 			effort: context.effort,
 		};
-		await Bun.write(stageFile, `${JSON.stringify(stageRecord, null, 2)}\n`);
+		const writeStageRecord =
+			scorecard.grade.verdict === "STOP"
+				? context.writeStageProgress
+				: context.completeStage;
+		await writeStageRecord(stageRecord);
 		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			const calibration = await context.calibrateStageFailure(stageScorecards);
-			await Bun.write(
-				stageFile,
-				`${JSON.stringify({ ...stageRecord, calibration }, null, 2)}\n`,
-			);
+			await context.completeStage({ ...stageRecord, calibration });
 		}
 		assertStageGradePassed(scorecard);
 
@@ -717,7 +713,10 @@ export async function runBenchmark(
 					stageFile: runFiles.stageFile,
 					checkpointDirectory: runFiles.checkpointDirectory,
 					log: console.log,
-					trackPendingStage: abort.trackPendingStage,
+					writePendingStage: abort.writePendingStage,
+					updatePendingStage: abort.updatePendingStage,
+					writeStageProgress: abort.writeStageProgress,
+					completeStage: abort.completeStage,
 					calibrateStageFailure: async (scorecards) => {
 						const calibration = await collectCalibration({
 							rl,

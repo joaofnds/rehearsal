@@ -3452,7 +3452,7 @@ describe(createRunAbort.name, () => {
 			input: stageJudgeInput("shape"),
 		};
 
-		abort.trackPendingStage(pendingStage);
+		abort.updatePendingStage(pendingStage);
 		abort.trackPendingArtifact(artifact);
 		await abort.markAborted("stage Judge failed");
 
@@ -3539,7 +3539,7 @@ describe(createRunAbort.name, () => {
 				},
 			},
 		);
-		abort.trackPendingStage({
+		abort.updatePendingStage({
 			file: stageFile,
 			stage: "shape",
 			input: stageJudgeInput("shape"),
@@ -3587,7 +3587,7 @@ describe(createRunAbort.name, () => {
 				},
 			},
 		);
-		abort.trackPendingStage({
+		abort.updatePendingStage({
 			file: stageFile,
 			stage: "shape",
 			input: stageJudgeInput("shape"),
@@ -3625,7 +3625,7 @@ describe(createRunAbort.name, () => {
 				teardown: () => Promise.resolve(),
 			},
 		);
-		abort.trackPendingStage({
+		abort.updatePendingStage({
 			file: directory,
 			stage: "shape",
 			input: stageJudgeInput("shape"),
@@ -3658,7 +3658,7 @@ describe(createRunAbort.name, () => {
 				teardown: () => Promise.resolve(),
 			},
 		);
-		abort.trackPendingStage({
+		abort.updatePendingStage({
 			file: stageFile,
 			stage: "shape",
 			input: stageJudgeInput("shape"),
@@ -4030,6 +4030,20 @@ describe(runGradedStages.name, () => {
 	async function stageContext(): Promise<StageContext> {
 		const stageDirectory = await mkdtemp(join(tmpdir(), "rehearsal-stages-"));
 		temporaryDirectories.push(stageDirectory);
+		const transitions = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
+			},
+			{
+				artifactFile: join(stageDirectory, "run.json"),
+				teardown: () => Promise.resolve(),
+			},
+		);
 
 		return {
 			targetDir: stageDirectory,
@@ -4053,7 +4067,10 @@ describe(runGradedStages.name, () => {
 			checkpointDirectory: (stage: string) =>
 				join(stageDirectory, "checkpoints", stage),
 			log: () => undefined,
-			trackPendingStage: () => undefined,
+			writePendingStage: transitions.writePendingStage,
+			updatePendingStage: transitions.updatePendingStage,
+			writeStageProgress: transitions.writeStageProgress,
+			completeStage: transitions.completeStage,
 			calibrateStageFailure: (): Promise<CalibrationResult> =>
 				Promise.reject(new Error("calibration not expected")),
 		};
@@ -4105,6 +4122,34 @@ describe(runGradedStages.name, () => {
 			model: "opus",
 			effort: "high",
 		});
+	});
+
+	it("persists stage records through the run transition boundary", async () => {
+		const { dependencies } = fakeStageDependencies();
+		const persistence = new ControlledRunArtifactPersistence();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const context = {
+			...(await stageContext()),
+			writePendingStage: abort.writePendingStage,
+			completeStage: abort.completeStage,
+		};
+
+		await runGradedStages(dependencies, context);
+
+		expect(persistence.files.has(context.stageFile("shape"))).toBe(true);
 	});
 
 	it("retains commit subjects in awaiting and completed stage records", async () => {
@@ -4199,7 +4244,7 @@ describe(runGradedStages.name, () => {
 		const pendingStages: (PendingStage | undefined)[] = [];
 		const context = {
 			...(await stageContext()),
-			trackPendingStage: (pending: PendingStage | undefined) => {
+			updatePendingStage: (pending: PendingStage) => {
 				pendingStages.push(pending);
 			},
 		};

@@ -41,8 +41,9 @@ export interface RunAbortRequest {
 
 export interface RunAbort {
 	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
+	readonly updatePendingStage: (pending: PendingStage) => void;
+	readonly writeStageProgress: (record: StageJudgeRecord) => Promise<void>;
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
-	readonly trackPendingStage: (pending: PendingStage | undefined) => void;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
 	readonly teardown: () => Promise<void>;
@@ -162,6 +163,23 @@ export function createRunAbort(
 			),
 		);
 	};
+	const writeStageProgress = (record: StageJudgeRecord): Promise<void> => {
+		if (abortRequested) {
+			return Promise.resolve();
+		}
+		if (pendingStage === undefined) {
+			return Promise.reject(new Error("No stage transition is pending"));
+		}
+
+		const { file } = pendingStage;
+
+		return enqueueNormalTransition(() =>
+			dependencies.persistence.write(
+				file,
+				`${JSON.stringify(record, null, 2)}\n`,
+			),
+		);
+	};
 	const completeStage = (record: StageJudgeRecord): Promise<void> => {
 		if (abortRequested) {
 			return Promise.resolve();
@@ -267,10 +285,13 @@ export function createRunAbort(
 
 	return {
 		writePendingStage,
-		completeStage,
-		trackPendingStage: (pending) => {
-			pendingStage = pending;
+		updatePendingStage: (pending) => {
+			if (!abortRequested) {
+				pendingStage = pending;
+			}
 		},
+		writeStageProgress,
+		completeStage,
 		trackPendingArtifact: (artifact) => {
 			pendingArtifact = artifact;
 		},
