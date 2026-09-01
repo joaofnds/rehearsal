@@ -288,8 +288,8 @@ describe(buildPairedEstimate.name, () => {
 		const cases = [
 			{
 				caseId: "case-1",
-				minuend: [1, 1],
-				subtrahend: [0, 1],
+				minuend: [1, 0],
+				subtrahend: [1, 0],
 			},
 			{
 				caseId: "case-2",
@@ -302,11 +302,19 @@ describe(buildPairedEstimate.name, () => {
 		const reversed = buildPairedEstimate(
 			cases.map((benchmarkCase) => ({
 				caseId: benchmarkCase.caseId,
-				minuend: benchmarkCase.minuend.toReversed(),
+				minuend: benchmarkCase.minuend,
 				subtrahend: benchmarkCase.subtrahend.toReversed(),
 			})),
 		);
 
+		expect(forward).toEqual({
+			caseDeltas: [
+				{ caseId: "case-1", value: 0 },
+				{ caseId: "case-2", value: 1 },
+			],
+			meanDelta: 0.5,
+			standardError: 0.5,
+		});
 		expect(reversed).toEqual(forward);
 	});
 });
