@@ -2,9 +2,10 @@
 id: ACT-13
 title: split run-benchmark.test.ts into per-module test files
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 21:27'
-updated_date: '2026-09-01 11:51'
+updated_date: '2026-09-01 11:59'
 labels: []
 dependencies: []
 references:
