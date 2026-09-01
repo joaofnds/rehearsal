@@ -25,7 +25,10 @@ import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
 } from "./src/benchmark/confirmation-record";
-import { collectConfirmationMetrics } from "./src/benchmark/confirmation-evidence";
+import {
+	collectConfirmationMetrics,
+	settleCompletedConfirmationRep,
+} from "./src/benchmark/confirmation-evidence";
 import {
 	diffTexts,
 	loadAttempts,
@@ -1134,6 +1137,44 @@ describe(collectConfirmationMetrics.name, () => {
 			},
 			workerTrajectorySteps: 2,
 		});
+	});
+});
+
+describe(settleCompletedConfirmationRep.name, () => {
+	it("leaves no rep record or cleanup after retention fails", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settlement-"));
+		temporaryDirectories.push(directory);
+		const worktreePath = join(directory, "worktree");
+		await mkdir(worktreePath);
+		const recordFile = join(directory, "rep.json");
+		let removed = false;
+
+		const settlement = settleCompletedConfirmationRep({
+			targetRoot: directory,
+			retentionName: "group/rep",
+			resultSha: "a".repeat(40),
+			recordFile,
+			recordContent: "{}\n",
+			worktreePath,
+			recordRetentionRef: () => Promise.reject(new Error("retention failed")),
+			removeWorktree: () => {
+				removed = true;
+
+				return Promise.resolve();
+			},
+		});
+
+		expect(settlement).rejects.toThrow("retention failed");
+		expect(
+			await stat(recordFile).then(
+				() => true,
+				() => false,
+			),
+		).toBe(false);
+		expect(await stat(worktreePath).then((entry) => entry.isDirectory())).toBe(
+			true,
+		);
+		expect(removed).toBe(false);
 	});
 });
 
@@ -8851,6 +8892,33 @@ describe(runReplay.name, () => {
 				return `${stage.evidence.resultSha}\n`;
 			}),
 		);
+		const evidenceReferences = records.map(
+			({ stages }) =>
+				z
+					.object({ evidence: z.object({ recordFile: z.string() }) })
+					.parse(stages[0]).evidence,
+		);
+		const judgeEvidence = await Promise.all(
+			evidenceReferences.map(async ({ recordFile }, index) =>
+				z
+					.unknown()
+					.parse(
+						JSON.parse(
+							await Bun.file(
+								join(
+									dirname(outcome.repRecordFiles[index] ?? "missing"),
+									recordFile,
+								),
+							).text(),
+						),
+					),
+			),
+		);
+
+		expect(judgeEvidence).toMatchObject([
+			{ grade: { verdict: "STOP" } },
+			{ status: "REJECTED", attempts: [{ outcome: "REJECTED" }] },
+		]);
 		expect(
 			await stat(temporaryRoot).then(
 				() => true,
