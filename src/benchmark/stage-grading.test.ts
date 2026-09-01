@@ -777,7 +777,13 @@ describe(runStageJudge.name, () => {
 					return Promise.reject(failure);
 				},
 			),
-		).rejects.toBe(failure);
+		).rejects.toMatchObject({
+			name: "JudgeExecutionError",
+			cause: failure,
+			attempts: [],
+			providerCalls: [{}],
+			costUsd: 0,
+		});
 		expect(calls).toBe(1);
 	});
 
