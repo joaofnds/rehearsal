@@ -2,9 +2,10 @@
 id: ACT-21
 title: share confirmation evidence lifecycle
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-31 22:10'
-updated_date: '2026-09-01 08:43'
+updated_date: '2026-09-01 08:51'
 labels: []
 dependencies: []
 references:

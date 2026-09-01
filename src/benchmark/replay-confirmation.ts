@@ -82,6 +82,11 @@ export interface ReplayConfirmationOutcome {
 	readonly repRecordFiles: readonly string[];
 }
 
+interface ReplayRepResult {
+	readonly recordFile: string;
+	readonly preservedWorktree: boolean;
+}
+
 function sha256(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
 }
@@ -582,7 +587,7 @@ export async function runReplayConfirmation(
 					plan.worktreePath,
 				);
 
-				return repPaths.recordFile;
+				return { recordFile: repPaths.recordFile, preservedWorktree: false };
 			} catch (error) {
 				const failure =
 					error instanceof Error ? error : new Error(String(error));
@@ -636,7 +641,7 @@ export async function runReplayConfirmation(
 						plan.worktreePath,
 					);
 
-					return repPaths.recordFile;
+					return { recordFile: repPaths.recordFile, preservedWorktree: false };
 				}
 				if (worktreeCreated) {
 					dependencies.log(
@@ -657,18 +662,22 @@ export async function runReplayConfirmation(
 					`${JSON.stringify(record, null, 2)}\n`,
 				);
 
-				return repPaths.recordFile;
+				return {
+					recordFile: repPaths.recordFile,
+					preservedWorktree: worktreeCreated,
+				};
 			}
 		},
 	);
 	const makespanMs = now() - makespanStart;
-	const repRecordFiles = results.map(({ outcome }) => {
+	const repResults: readonly ReplayRepResult[] = results.map(({ outcome }) => {
 		if (outcome.status === "rejected") {
 			throw outcome.reason;
 		}
 
 		return outcome.value;
 	});
+	const repRecordFiles = repResults.map(({ recordFile }) => recordFile);
 	const records = await Promise.all(
 		repRecordFiles.map(async (path) =>
 			confirmationRepRecordSchema.parse(
@@ -721,7 +730,7 @@ export async function runReplayConfirmation(
 			makespanMs,
 		});
 	await Bun.write(paths.groupFile, `${JSON.stringify(groupRecord, null, 2)}\n`);
-	if (records.every(({ stages }) => stages[0]?.status === "JUDGED")) {
+	if (repResults.every(({ preservedWorktree }) => !preservedWorktree)) {
 		await rm(worktreesDirectory, { force: true, recursive: true });
 	}
 
