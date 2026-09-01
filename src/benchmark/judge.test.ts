@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { JudgeGrade, LocalCheckResult } from "./contracts";
+import type { JudgeGrade } from "./contracts";
 import {
 	applyHarnessResults,
 	parseRubricIds,
@@ -7,6 +7,7 @@ import {
 	validateJudgeEvidence,
 } from "./judge";
 import type { JudgeInvoker } from "./judge-attempt";
+import { harnessResult } from "./test-support";
 
 const RUBRIC_IDS = [
 	"tests",
@@ -27,22 +28,6 @@ function requirement(
 				source: "diff",
 				path: "src/audit/example.ts",
 				claim: `${id} evidence`,
-			},
-		],
-	};
-}
-
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
 			},
 		],
 	};

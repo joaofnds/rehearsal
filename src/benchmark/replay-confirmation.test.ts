@@ -26,12 +26,11 @@ import { runReplayConfirmation } from "./replay-confirmation";
 import { benchmarkRunPaths } from "./run-layout";
 import type { loadStageRubric } from "./stage-grading";
 import { addWorktree, removeWorktree } from "./target";
-import { TestResources, commitAll } from "./test-support";
+import { TestResources, commitAll, harnessResult } from "./test-support";
 import {
 	ReplayConfirmationHarness,
-	harnessResult,
 	replayScorecard,
-} from "./confirmation-test-support";
+} from "./replay-confirmation-test-support";
 
 const testResources = TestResources.forEachTest();
 

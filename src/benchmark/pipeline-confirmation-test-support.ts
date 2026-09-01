@@ -29,8 +29,7 @@ import {
 	changedPathsBetween,
 	removeWorktree,
 } from "./target";
-import { commitAll } from "./test-support";
-import { harnessResult } from "./confirmation-test-support";
+import { commitAll, harnessResult } from "./test-support";
 
 interface ConfirmationResources {
 	readonly track: (directory: string) => void;

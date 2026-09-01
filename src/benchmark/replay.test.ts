@@ -16,7 +16,7 @@ import {
 } from "./checkpoint";
 import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
-import type { LocalCheckResult, StageJudgeInput } from "./contracts";
+import type { StageJudgeInput } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
@@ -30,29 +30,13 @@ import {
 import { benchmarkRunPaths } from "./run-layout";
 import { loadStageRubric } from "./stage-grading";
 import { addWorktree, removeWorktree } from "./target";
-import { TestResources, commitAll } from "./test-support";
+import { TestResources, commitAll, harnessResult } from "./test-support";
 import {
 	ReplayConfirmationHarness,
 	replayScorecard,
-} from "./confirmation-test-support";
+} from "./replay-confirmation-test-support";
 
 const testResources = TestResources.forEachTest();
-
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
-			},
-		],
-	};
-}
 
 describe(loadRunCheckpoints.name, () => {
 	it("loads every recorded checkpoint by its stage name", async () => {

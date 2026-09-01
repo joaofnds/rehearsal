@@ -10,7 +10,6 @@ import { parseArgs } from "./config";
 import type {
 	CalibrationResult,
 	JudgeGrade,
-	LocalCheckResult,
 	StageJudgeInput,
 	StageJudgeOutput,
 	StageRubric,
@@ -35,7 +34,7 @@ import {
 	runFinalJudge,
 	runGradedStages,
 } from "./run";
-import { PROJECT_ROOT, TestResources } from "./test-support";
+import { PROJECT_ROOT, TestResources, harnessResult } from "./test-support";
 import type { PendingStage, RunArtifactPersistence } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
 import {
@@ -144,22 +143,6 @@ function stageJudgeOutput(
 			},
 		],
 		summary: "stage grade",
-	};
-}
-
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
-			},
-		],
 	};
 }
 

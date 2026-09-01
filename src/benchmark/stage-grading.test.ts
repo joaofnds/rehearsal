@@ -1,11 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { readClaudeEnvelope, readStructuredOutput } from "./claude";
-import type {
-	LocalCheckResult,
-	StageJudgeOutput,
-	StageScorecard,
-} from "./contracts";
+import type { StageJudgeOutput, StageScorecard } from "./contracts";
 import { StageValidationError, stageJudgeOutputSchema } from "./contracts";
 import {
 	applyAuthoritativeStageResults,
@@ -15,7 +11,7 @@ import {
 	runStageJudge,
 	validateStageJudgeEvidence,
 } from "./stage-grading";
-import { PROJECT_ROOT } from "./test-support";
+import { PROJECT_ROOT, harnessResult } from "./test-support";
 
 function stageJudgeOutput(
 	blocker: "PASS" | "FAIL",
@@ -73,22 +69,6 @@ function stageJudgeInput(
 		},
 		priorArtifacts: [],
 		...overrides,
-	};
-}
-
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
-			},
-		],
 	};
 }
 

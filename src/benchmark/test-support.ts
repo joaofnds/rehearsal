@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "./command";
+import type { LocalCheckResult } from "./contracts";
 
 export const PROJECT_ROOT = join(import.meta.dir, "../..");
 
@@ -64,4 +65,20 @@ export async function commitAll(
 ): Promise<void> {
 	await runCommand(["git", "add", "."], directory);
 	await runCommand(["git", "commit", "-m", message], directory);
+}
+
+export function harnessResult(
+	status: "PASS" | "FAIL",
+	claim: string,
+): LocalCheckResult {
+	return {
+		status,
+		evidence: [
+			{
+				source: "local-checks",
+				path: "harness",
+				claim,
+			},
+		],
+	};
 }

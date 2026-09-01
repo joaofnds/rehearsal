@@ -4,15 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import { materializeCheckpoint, recordCheckpoint } from "./checkpoint";
-import type {
-	LocalCheckResult,
-	StageJudgeInput,
-	StageScorecard,
-} from "./contracts";
+import type { StageJudgeInput, StageScorecard } from "./contracts";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
 import type { ReplayDependencies } from "./replay";
 import { benchmarkRunPaths } from "./run-layout";
+import { harnessResult } from "./test-support";
 
 interface DirectoryTracker {
 	readonly track: (directory: string) => void;
@@ -336,21 +333,5 @@ export function replayScorecard(
 			grade: verdict === "CONTINUE" ? "B" : "F",
 			verdict,
 		},
-	};
-}
-
-export function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks",
-				path: "harness",
-				claim,
-			},
-		],
 	};
 }

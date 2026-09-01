@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { z } from "zod";
 import type {
 	CalibrationResult,
-	LocalCheckResult,
 	StageJudgeOutput,
 	StageScorecard,
 } from "./contracts";
@@ -22,7 +21,7 @@ import {
 	writeStageJudgeFailure,
 } from "./run-abort";
 import { deriveStageGrade, parseStageRubric } from "./stage-grading";
-import { TestResources } from "./test-support";
+import { TestResources, harnessResult } from "./test-support";
 
 const testResources = TestResources.forEachTest();
 
@@ -291,22 +290,6 @@ function stageEvidence(
 	path: string,
 ): StageJudgeOutput["requirements"][number]["evidence"][number] {
 	return { source, path, claim: "evidence" };
-}
-
-function harnessResult(
-	status: "PASS" | "FAIL",
-	claim: string,
-): LocalCheckResult {
-	return {
-		status,
-		evidence: [
-			{
-				source: "local-checks" as const,
-				path: "harness",
-				claim,
-			},
-		],
-	};
 }
 
 describe(writeStageJudgeFailure.name, () => {
