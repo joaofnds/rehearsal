@@ -1,11 +1,11 @@
 ---
 id: ACT-10.1
 title: serialize run artifact transitions with abort recording
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-31 13:50'
-updated_date: '2026-09-01 01:21'
+updated_date: '2026-09-01 01:41'
 labels: []
 dependencies: []
 parent_task_id: ACT-10
@@ -106,5 +106,28 @@ Stopped on:
 - Nothing. Refactor pass found no separate small structural change; ACT-13 already tracks splitting the monolithic test file.
 
 Review:
-- Independent review is due because this changes interruption safety, terminal evidence ordering, and the core benchmark lifecycle.
+- Independent review was required because this changes interruption safety, terminal evidence ordering, and the core benchmark lifecycle; its closed disposition follows.
+
+Independent review, 2026-09-01
+--------------------------------
+One fresh reviewer examined every changed file across style, architecture, spec conformance, security, testing, and refactoring. Wholesale rework was not required.
+
+Findings and dispositions:
+1. [blocking, correctness, FIXED 4d94ad1] `writeFailedArtifact` did not retain a failed final-Judge artifact before persistence, so one failed write followed by `markAborted` had no candidate to retry. Added pending-before-write and clear-after-success semantics. The new focused test failed with no persisted file before the fix; afterward it observed the retry persist the original FAILED artifact. A companion test kills omission of the successful clear.
+2. [blocking, testing, FIXED 4d94ad1] Acceptance criterion 6 was not pinned: a queued normal transition could enter persistence after abort and the existing final-state assertion could still pass after the later FAILED write. The controlled Fake now records every write entry; a blocked-pending/queued-completion test observes only AWAITING_STAGE_JUDGE and STAGE_JUDGE_FAILED. Removing the execution-time abort guard made the test fail on the unexpected scorecard write.
+3. [should-fix, testing, FIXED 4d94ad1] The stage-loop boundary test checked only that a path existed, which the pending write already satisfied. It now requires the completed scorecard model and CONTINUE verdict. Replacing terminal transition persistence with direct Bun.write made it fail with the remaining AWAITING_STAGE_JUDGE record.
+
+No findings under style, security, or refactoring. Architecture and spec findings are disposed above. No axis was skipped.
+
+Post-fix observation:
+- Fresh full suite: 303 pass, 0 fail, 607 assertions. Fresh `bun run typecheck`, `bun run lint`, and `bun run fmt:check` passed.
+- A direct real-filesystem probe injected one final-Judge artifact persistence failure, called abort recording, and printed `{"attempts":2,"status":"FAILED","failure":"invalid Judge output"}` after reading the retried file.
+
+The review is closed; every finding is fixed and verified.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Serialized all benchmark-run artifact transitions behind one persistence boundary. Abort now latches before waiting, snapshots pending stage and main evidence, writes terminal FAILED records after active writes settle, suppresses queued normal transitions, and retains failed final-Judge artifacts for retry. Stage and main orchestration no longer bypass the boundary. Controlled tests cover pending, COMPLETE, failure, clearing, overlap, and queued-write timing; mutation probes killed each load-bearing regression. Independent review found two blocking defects and one should-fix test gap; all were fixed in 4d94ad1. Fresh verification: 303 tests passed with 607 assertions; typecheck, lint, and format passed. Direct filesystem observations read STAGE_JUDGE_FAILED and FAILED after interruption and confirmed failed-artifact retry on attempt two. No paid benchmark or real OS signal exit was run.
+<!-- SECTION:FINAL_SUMMARY:END -->
