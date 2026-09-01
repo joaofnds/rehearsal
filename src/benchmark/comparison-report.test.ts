@@ -1,12 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import type { ConfirmationRepRecord } from "./confirmation-record";
-import { confirmationRepRecordSchema } from "./confirmation-record";
+import type {
+	ConfirmationGroupRecord,
+	ConfirmationRepRecord,
+} from "./confirmation-record";
 import {
+	confirmationGroupRecordSchema,
+	confirmationRepRecordSchema,
+} from "./confirmation-record";
+import type {
+	ComparisonArmEvidence,
+	ComparisonEvidence,
+} from "./comparison-evidence";
+import {
+	buildComparisonReport,
 	buildComparisonQuality,
 	buildComparisonResources,
 	buildPairedEstimate,
 } from "./comparison-report";
 import type { ComparisonArm } from "./comparison-record";
+import { parseComparisonReport } from "./comparison-record";
 import type { Immutable } from "./contracts";
 
 type StageFixtureOutcome = "pass" | "fail" | "error" | "not-reached";
@@ -145,6 +157,104 @@ function withMissingMetrics(
 		metrics: { status: "MISSING", calls: [], missing: [missing] },
 		workerTrajectorySteps: 0,
 	});
+}
+
+function reportArmEvidence(
+	caseId: string,
+	role: ComparisonArm,
+	reps: readonly Immutable<ConfirmationRepRecord>[],
+): ComparisonArmEvidence {
+	const groupId = `${caseId}-${role}`;
+	const corpus = {
+		kind: "corpus" as const,
+		path: "inputs/corpus/SKILL.md",
+		sha256: { baseline: "1", candidate: "2", control: "3" }[role].repeat(64),
+	};
+	const record: ConfirmationGroupRecord = confirmationGroupRecordSchema.parse({
+		schemaVersion: 1,
+		groupId,
+		mode: "pipeline",
+		reps: 4,
+		declaredStages: ["discuss", "build"],
+		inputs: {
+			lineage: { kind: "SOURCE", sha: "a".repeat(40) },
+			files: [
+				corpus,
+				{
+					kind: "task",
+					path: "inputs/task.md",
+					sha256: (caseId === "case-1" ? "4" : "5").repeat(64),
+				},
+			],
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+			pipelinePath: "pipelines/default.json",
+		},
+		projectedCost: {
+			reps: 4,
+			perRepMaximumUsd: 30,
+			totalMaximumUsd: 120,
+		},
+		approval: { method: "yes", approved: true },
+		repRecords: reps.map((rep) => ({
+			repId: rep.repId,
+			ordinal: rep.ordinal,
+			path: `reps/${rep.repId}/rep.json`,
+		})),
+		reportFile: "report.json",
+		makespanMs: 400,
+	});
+
+	return {
+		role,
+		group: {
+			path: `groups/${groupId}/group.json`,
+			sha256: "6".repeat(64),
+			record,
+		},
+		reps: reps.map((rep) => ({
+			path: `groups/${groupId}/reps/${rep.repId}/rep.json`,
+			sha256: "7".repeat(64),
+			record: rep,
+		})),
+		executedCorpus: [corpus],
+	};
+}
+
+function reportEvidence(): ComparisonEvidence {
+	const cases = ["case-1", "case-2"].map((caseId) => {
+		const baseline = qualityReps(caseId, "baseline", [PASS, PASS, FAIL, FAIL]);
+		const candidate = qualityReps(caseId, "candidate", [
+			PASS,
+			PASS,
+			PASS,
+			PASS,
+		]);
+		const control = qualityReps(caseId, "control", [FAIL, FAIL, FAIL, FAIL]);
+
+		return {
+			caseId,
+			arms: {
+				baseline: reportArmEvidence(caseId, "baseline", baseline),
+				candidate: reportArmEvidence(caseId, "candidate", candidate),
+				control: reportArmEvidence(caseId, "control", control),
+			},
+		};
+	});
+
+	return {
+		manifest: {
+			path: "/tmp/comparison.json",
+			sha256: "8".repeat(64),
+		},
+		cases,
+		contract: {
+			mode: "pipeline",
+			declaredStages: ["discuss", "build"],
+			reps: 4,
+		},
+	};
 }
 
 describe(buildPairedEstimate.name, () => {
@@ -440,5 +550,43 @@ describe(buildComparisonResources.name, () => {
 		expect(report.contrasts.baselineMinusControl.resources.status).toBe(
 			"UNAVAILABLE",
 		);
+	});
+});
+
+describe(buildComparisonReport.name, () => {
+	it("records strict versioned results and all frozen source provenance", () => {
+		const report = buildComparisonReport(reportEvidence());
+		const candidate = report.cases.at(0)?.arms.candidate;
+
+		expect(parseComparisonReport(JSON.stringify(report))).toEqual(report);
+		expect(report.schemaVersion).toBe(1);
+		expect(report.manifest).toEqual({ sha256: "8".repeat(64) });
+		expect(report.mode).toBe("pipeline");
+		expect(report.declaredStages).toEqual(["discuss", "build"]);
+		expect(report.reps).toBe(4);
+		expect(candidate?.role).toBe("candidate");
+		expect(candidate?.source.group).toEqual({
+			path: "groups/case-1-candidate/group.json",
+			sha256: "6".repeat(64),
+		});
+		expect(candidate?.source.reps.at(0)).toEqual({
+			repId: "case-1-candidate-rep-1",
+			ordinal: 1,
+			path: "groups/case-1-candidate/reps/case-1-candidate-rep-1/rep.json",
+			sha256: "7".repeat(64),
+		});
+		expect(candidate?.executedCorpus).toEqual([
+			{
+				path: "inputs/corpus/SKILL.md",
+				sha256: "2".repeat(64),
+			},
+		]);
+		expect(report.contrasts.candidateMinusBaseline.minuend).toBe("candidate");
+		expect(report.contrasts.candidateMinusBaseline.subtrahend).toBe("baseline");
+		expect(() =>
+			parseComparisonReport(
+				JSON.stringify({ ...report, unexpected: "not strict" }),
+			),
+		).toThrow();
 	});
 });

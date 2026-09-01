@@ -130,3 +130,199 @@ export function parseComparisonManifest(text: string): ComparisonManifest {
 		`case ${context.caseId} arm ${context.arm} field ${context.field}: ${issue.message}`,
 	);
 }
+
+const sha256Schema = z
+	.string()
+	.regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest");
+const digestedPathSchema = z
+	.object({ path: z.string().min(1), sha256: sha256Schema })
+	.strict();
+const sourceRepSchema = digestedPathSchema
+	.extend({
+		repId: identitySchema,
+		ordinal: z.number().int().positive(),
+	})
+	.strict();
+const reliabilitySummarySchema = z
+	.object({
+		name: z.string().min(1),
+		requested: z.number().int().positive(),
+		attempted: z.number().int().nonnegative(),
+		notReached: z.number().int().nonnegative(),
+		failed: z.number().int().nonnegative(),
+		successful: z.number().int().nonnegative(),
+		gradeDistribution: z.record(
+			z.string().min(1),
+			z.number().int().nonnegative(),
+		),
+		successRate: z.number().min(0).max(1),
+		standardError: z.number().nonnegative(),
+		passK: z.number().min(0).max(1),
+	})
+	.strict();
+const caseDeltaSchema = z
+	.object({ caseId: identitySchema, value: z.number() })
+	.strict();
+const pairedEstimateSchema = z
+	.object({
+		caseDeltas: z.array(caseDeltaSchema).min(2),
+		meanDelta: z.number(),
+		standardError: z.number().nonnegative(),
+	})
+	.strict();
+const metricValueSummarySchema = z
+	.object({
+		values: z.array(z.number().nonnegative()).min(1),
+		mean: z.number().nonnegative(),
+	})
+	.strict();
+const resourceMetricSummarySchema = z
+	.object({
+		costUsd: metricValueSummarySchema,
+		inputTokens: metricValueSummarySchema,
+		outputTokens: metricValueSummarySchema,
+		cacheReadTokens: metricValueSummarySchema,
+		cacheWriteTokens: metricValueSummarySchema,
+	})
+	.strict();
+const resourceRolesSummarySchema = z
+	.object({
+		worker: resourceMetricSummarySchema,
+		"product-owner": resourceMetricSummarySchema,
+		"stage-judge": resourceMetricSummarySchema,
+		"final-judge": resourceMetricSummarySchema,
+	})
+	.strict();
+const missingResourceEvidenceSchema = z
+	.object({
+		repId: identitySchema,
+		ordinal: z.number().int().positive(),
+		missing: z.array(z.string().min(1)).min(1),
+	})
+	.strict();
+const armResourcesSchema = z.discriminatedUnion("status", [
+	z
+		.object({
+			status: z.literal("AVAILABLE"),
+			completeReps: z.number().int().positive(),
+			missingMetricReps: z.literal(0),
+			perRole: resourceRolesSummarySchema,
+			total: resourceMetricSummarySchema,
+			workerTurns: metricValueSummarySchema,
+		})
+		.strict(),
+	z
+		.object({
+			status: z.literal("UNAVAILABLE"),
+			completeReps: z.number().int().nonnegative(),
+			missingMetricReps: z.number().int().positive(),
+			missingEvidence: z.array(missingResourceEvidenceSchema).min(1),
+		})
+		.strict(),
+]);
+const reportArmSchema = z
+	.object({
+		role: comparisonArmSchema,
+		source: z
+			.object({
+				group: digestedPathSchema,
+				reps: z.array(sourceRepSchema).min(1),
+			})
+			.strict(),
+		executedCorpus: z.array(digestedPathSchema).min(1),
+		quality: z.array(reliabilitySummarySchema).min(1),
+		resources: armResourcesSchema,
+	})
+	.strict();
+const reportCaseSchema = z
+	.object({
+		caseId: identitySchema,
+		arms: z
+			.object({
+				baseline: reportArmSchema,
+				candidate: reportArmSchema,
+				control: reportArmSchema,
+			})
+			.strict(),
+	})
+	.strict();
+const qualityContrastSchema = z
+	.object({
+		name: z.string().min(1),
+		successRate: pairedEstimateSchema,
+		passK: pairedEstimateSchema,
+	})
+	.strict();
+const resourceMetricEstimatesSchema = z
+	.object({
+		costUsd: pairedEstimateSchema,
+		inputTokens: pairedEstimateSchema,
+		outputTokens: pairedEstimateSchema,
+		cacheReadTokens: pairedEstimateSchema,
+		cacheWriteTokens: pairedEstimateSchema,
+	})
+	.strict();
+const resourceRolesEstimatesSchema = z
+	.object({
+		worker: resourceMetricEstimatesSchema,
+		"product-owner": resourceMetricEstimatesSchema,
+		"stage-judge": resourceMetricEstimatesSchema,
+		"final-judge": resourceMetricEstimatesSchema,
+	})
+	.strict();
+const contrastResourcesSchema = z.discriminatedUnion("status", [
+	z
+		.object({
+			status: z.literal("AVAILABLE"),
+			perRole: resourceRolesEstimatesSchema,
+			total: resourceMetricEstimatesSchema,
+			workerTurns: pairedEstimateSchema,
+		})
+		.strict(),
+	z
+		.object({
+			status: z.literal("UNAVAILABLE"),
+			missingEvidence: z
+				.array(
+					missingResourceEvidenceSchema
+						.extend({ caseId: identitySchema, arm: comparisonArmSchema })
+						.strict(),
+				)
+				.min(1),
+		})
+		.strict(),
+]);
+const reportContrastSchema = z
+	.object({
+		minuend: comparisonArmSchema,
+		subtrahend: comparisonArmSchema,
+		quality: z.array(qualityContrastSchema).min(1),
+		resources: contrastResourcesSchema,
+	})
+	.strict();
+
+export const comparisonReportSchema = z
+	.object({
+		schemaVersion: z.literal(1),
+		manifest: z.object({ sha256: sha256Schema }).strict(),
+		mode: z.enum(["stage", "pipeline"]),
+		declaredStages: z.array(z.string().min(1)).min(1),
+		reps: z.number().int().min(2),
+		cases: z.array(reportCaseSchema).min(2),
+		contrasts: z
+			.object({
+				candidateMinusBaseline: reportContrastSchema,
+				candidateMinusControl: reportContrastSchema,
+				baselineMinusControl: reportContrastSchema,
+			})
+			.strict(),
+	})
+	.strict();
+
+export type ComparisonReport = Immutable<
+	z.infer<typeof comparisonReportSchema>
+>;
+
+export function parseComparisonReport(text: string): ComparisonReport {
+	return comparisonReportSchema.parse(JSON.parse(text));
+}
