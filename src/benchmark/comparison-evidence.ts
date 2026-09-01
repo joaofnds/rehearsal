@@ -168,12 +168,30 @@ function assertRepMatchesGroup(
 	}
 }
 
+function executedCorpusFiles(
+	group: Immutable<ConfirmationGroupRecord>,
+): readonly FrozenFile[] {
+	const corpus = group.inputs.files.filter(({ kind }) => kind === "corpus");
+	if (group.mode === "pipeline") {
+		return corpus;
+	}
+
+	const [selectedStage] = group.declaredStages;
+	return corpus.filter((file) => {
+		const segments = file.path.replaceAll("\\", "/").split("/");
+		const corpusIndex = segments.lastIndexOf("corpus");
+
+		return segments[corpusIndex + 1] === selectedStage;
+	});
+}
+
 async function assertFrozenFiles(
 	request: Readonly<LoadArmRequest>,
 	groupPath: string,
 	group: Immutable<ConfirmationGroupRecord>,
 ): Promise<void> {
 	const identities = new Set<string>();
+	const kinds = new Set<FrozenFile["kind"]>();
 	for (const frozen of group.inputs.files) {
 		const identity = `${frozen.kind}:${frozen.path}`;
 		const field = `inputs.files[${identity}]`;
@@ -185,6 +203,7 @@ async function assertFrozenFiles(
 		}
 
 		identities.add(identity);
+		kinds.add(frozen.kind);
 		const source = await readEvidenceFile({
 			caseId: request.caseId,
 			arm: request.role,
@@ -199,7 +218,27 @@ async function assertFrozenFiles(
 		}
 	}
 
-	if (!group.inputs.files.some(({ kind }) => kind === "corpus")) {
+	for (const kind of [
+		"checkpoint",
+		"corpus",
+		"rubric",
+		"pipeline",
+		"instructions",
+		"task",
+		"product-brief",
+	] as const) {
+		if (!kinds.has(kind)) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: `inputs.files.${kind}`,
+				},
+				`source group records no ${kind} input`,
+			);
+		}
+	}
+	if (executedCorpusFiles(group).length === 0) {
 		throw evidenceError(
 			{
 				caseId: request.caseId,
@@ -283,7 +322,7 @@ async function loadArm(
 			record: group,
 		},
 		reps,
-		executedCorpus: group.inputs.files.filter(({ kind }) => kind === "corpus"),
+		executedCorpus: executedCorpusFiles(group),
 	};
 }
 
@@ -346,8 +385,8 @@ function sameValue<Value>(left: Value, right: Value): boolean {
 
 function sortedFiles(files: readonly FrozenFile[]): readonly FrozenFile[] {
 	return files.toSorted((left, right) => {
-		const leftIdentity = `${left.kind}:${left.path}:${left.sha256}`;
-		const rightIdentity = `${right.kind}:${right.path}:${right.sha256}`;
+		const leftIdentity = `${left.kind}:${left.path}`;
+		const rightIdentity = `${right.kind}:${right.path}`;
 
 		return leftIdentity.localeCompare(rightIdentity);
 	});
@@ -357,8 +396,12 @@ function controlledFileDifference(
 	left: readonly FrozenFile[],
 	right: readonly FrozenFile[],
 ): string | undefined {
-	const leftFiles = sortedFiles(left.filter(({ kind }) => kind !== "corpus"));
-	const rightFiles = sortedFiles(right.filter(({ kind }) => kind !== "corpus"));
+	const leftFiles = sortedFiles(
+		left.filter(({ kind }) => kind !== "corpus" && kind !== "instructions"),
+	);
+	const rightFiles = sortedFiles(
+		right.filter(({ kind }) => kind !== "corpus" && kind !== "instructions"),
+	);
 	const maximum = Math.max(leftFiles.length, rightFiles.length);
 	for (let index = 0; index < maximum; index += 1) {
 		const leftFile = leftFiles[index];

@@ -36,6 +36,11 @@ export interface ConfirmationGroupPaths {
 	readonly rep: (repId: string) => ConfirmationRepPaths;
 }
 
+export interface ComparisonReportPaths {
+	readonly directory: string;
+	readonly reportFile: string;
+}
+
 export function benchmarkRunsDirectory(controlDirectory: string): string {
 	return join(controlDirectory, ".benchmark-runs");
 }
@@ -111,4 +116,13 @@ export function confirmationGroupPaths(
 			};
 		},
 	};
+}
+
+export function comparisonReportPaths(
+	runsDirectory: string,
+	manifestDigest: string,
+): ComparisonReportPaths {
+	const directory = join(runsDirectory, "comparisons", manifestDigest);
+
+	return { directory, reportFile: join(directory, "report.json") };
 }

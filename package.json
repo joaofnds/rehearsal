@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"benchmark": "bun run run-benchmark.ts",
+		"compare": "bun run compare-confirmations.ts",
 		"replay": "bun run replay-stage.ts",
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",

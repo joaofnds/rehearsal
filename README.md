@@ -340,6 +340,44 @@ The directory is ignored by Git. Each artifact records:
 
 The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. If both returned final Judge payloads fail harness validation, the harness instead writes a `FAILED` main artifact without a grade; it retains the completed workflow, stage scorecards, frozen candidate evidence, original prompt, both payloads, both validation errors, per-call costs, and aggregate cost. A run that aborts after the preliminary artifact rewrites it with status `FAILED`. A stage Judge failure rewrites its stage file as `STAGE_JUDGE_FAILED`; an exhausted output-validation retry retains the original prompt and both attempts in addition to the error and frozen input. Invocation and Claude-envelope failures retain the earlier one-call failure records. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
 
+## Comparing Confirmation Groups
+
+Comparison reporting reads completed confirmation evidence and never starts a provider session or worktree. Give it a versioned manifest with at least two benchmark cases. Paths are relative to the manifest, and every case has exactly the baseline, candidate, and user-provided minimal-corpus control arms:
+
+```json
+{
+	"schemaVersion": 1,
+	"cases": [
+		{
+			"caseId": "case-1",
+			"arms": {
+				"baseline": "groups/case-1-baseline/group.json",
+				"candidate": "groups/case-1-candidate/group.json",
+				"control": "groups/case-1-control/group.json"
+			}
+		},
+		{
+			"caseId": "case-2",
+			"arms": {
+				"baseline": "groups/case-2-baseline/group.json",
+				"candidate": "groups/case-2-candidate/group.json",
+				"control": "groups/case-2-control/group.json"
+			}
+		}
+	]
+}
+```
+
+```sh
+bun run compare path/to/comparison.json
+```
+
+The command validates and hashes the manifest, source groups, reps, and frozen inputs before creating anything. It recomputes quality and resource statistics from rep records rather than trusting confirmation `report.json` files, then prints the deterministic report path:
+
+```text
+.benchmark-runs/comparisons/<manifest-sha256>/report.json
+```
+
 ## Tuning Loop
 
 1. Commit a clean control state.

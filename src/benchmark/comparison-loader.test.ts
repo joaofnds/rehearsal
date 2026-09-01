@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -12,11 +12,35 @@ import {
 	confirmationRepRecordSchema,
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
+import { writeComparisonReport } from "./comparison-command";
+import { parseComparisonReport } from "./comparison-record";
+import { runCommand } from "./command";
+import { CONTROL_DIR } from "./config";
 import { loadComparisonEvidence } from "./comparison-evidence";
 import type { ComparisonArm } from "./comparison-record";
 
 function digest(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
+}
+
+async function directoryDigests(
+	directory: string,
+): Promise<Readonly<Record<string, string>>> {
+	const digests: Record<string, string> = {};
+	const entries = await readdir(directory, { recursive: true });
+	for (const entry of entries.toSorted()) {
+		const path = join(directory, entry);
+		const file = Bun.file(path);
+		if (!(await file.exists()) || file.type === "directory") {
+			continue;
+		}
+
+		digests[entry] = createHash("sha256")
+			.update(await file.bytes())
+			.digest("hex");
+	}
+
+	return digests;
 }
 
 class ComparisonEvidenceFixture {
@@ -95,6 +119,31 @@ class ComparisonEvidenceFixture {
 				kind: "corpus" as const,
 				path: "inputs/corpus/build/SKILL.md",
 				content: `${role} corpus\n`,
+			},
+			{
+				kind: "corpus" as const,
+				path: "inputs/corpus/discuss/SKILL.md",
+				content: `${caseId} upstream corpus\n`,
+			},
+			{
+				kind: "instructions" as const,
+				path: "inputs/instructions.md",
+				content: `${role} corpus\n`,
+			},
+			{
+				kind: "pipeline" as const,
+				path: "inputs/pipeline.json",
+				content: '{"stages":["build"]}\n',
+			},
+			{
+				kind: "product-brief" as const,
+				path: "inputs/product-brief.md",
+				content: `${caseId} brief\n`,
+			},
+			{
+				kind: "rubric" as const,
+				path: "inputs/rubric.json",
+				content: `${caseId} rubric\n`,
 			},
 			{
 				kind: "task" as const,
@@ -223,6 +272,7 @@ class ComparisonEvidenceFixture {
 describe(loadComparisonEvidence.name, () => {
 	let temporaryDirectory: string;
 	let fixture: ComparisonEvidenceFixture;
+	let writtenReportFile: string | undefined;
 
 	beforeEach(async () => {
 		temporaryDirectory = await mkdtemp(
@@ -233,6 +283,9 @@ describe(loadComparisonEvidence.name, () => {
 	});
 
 	afterEach(async () => {
+		if (writtenReportFile !== undefined) {
+			await rm(dirname(writtenReportFile), { force: true, recursive: true });
+		}
 		await rm(temporaryDirectory, { force: true, recursive: true });
 	});
 
@@ -272,6 +325,22 @@ describe(loadComparisonEvidence.name, () => {
 		);
 	});
 
+	it("names an invalid source group before report creation", async () => {
+		await Bun.write(fixture.groupFile("case-2", "baseline"), "{}\n");
+
+		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
+			"case case-2 arm baseline field group.record",
+		);
+	});
+
+	it("names a missing referenced rep record", async () => {
+		await rm(fixture.repFile("case-2", "control", 1));
+
+		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
+			"case case-2 arm control field repRecords[0].path",
+		);
+	});
+
 	it("names an invalid referenced rep record", async () => {
 		await Bun.write(fixture.repFile("case-1", "candidate", 2), "{}\n");
 
@@ -304,5 +373,65 @@ describe(loadComparisonEvidence.name, () => {
 		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
 			"case case-2 arm candidate field inputs.files[corpus:inputs/corpus/build/SKILL.md].sha256",
 		);
+	});
+
+	it("creates no comparison layout when source validation fails", async () => {
+		const runsDirectory = join(temporaryDirectory, "comparison-output");
+		await rm(fixture.repFile("case-1", "baseline", 1));
+
+		expect(
+			writeComparisonReport({
+				manifestPath: fixture.manifestFile,
+				runsDirectory,
+			}),
+		).rejects.toThrow("case case-1 arm baseline field repRecords[0].path");
+		expect(await Bun.file(runsDirectory).exists()).toBe(false);
+	});
+
+	it("writes one read-only comparison report without external execution", async () => {
+		const trapsDirectory = join(temporaryDirectory, "traps");
+		const externalCallMarker = join(
+			temporaryDirectory,
+			"unexpected-external-call",
+		);
+		await mkdir(trapsDirectory);
+		for (const command of ["claude", "git"]) {
+			const trap = join(trapsDirectory, command);
+			await Bun.write(
+				trap,
+				'#!/bin/sh\ntouch "$EXTERNAL_CALL_MARKER"\nexit 97\n',
+			);
+			await chmod(trap, 0o755);
+		}
+		const before = await directoryDigests(temporaryDirectory);
+
+		const output = await runCommand(
+			[
+				process.execPath,
+				"run",
+				join(CONTROL_DIR, "compare-confirmations.ts"),
+				fixture.manifestFile,
+			],
+			CONTROL_DIR,
+			{
+				env: {
+					EXTERNAL_CALL_MARKER: externalCallMarker,
+					PATH: `${trapsDirectory}:${Bun.env["PATH"] ?? ""}`,
+				},
+			},
+		);
+		writtenReportFile = output.trim().replace("Comparison report: ", "");
+		const after = await directoryDigests(temporaryDirectory);
+		const report = parseComparisonReport(
+			await Bun.file(writtenReportFile).text(),
+		);
+
+		expect(output).toBe(`Comparison report: ${writtenReportFile}\n`);
+		expect(writtenReportFile).toContain(
+			join(".benchmark-runs", "comparisons", report.manifest.sha256),
+		);
+		expect(report.cases).toHaveLength(2);
+		expect(after).toEqual(before);
+		expect(await Bun.file(externalCallMarker).exists()).toBe(false);
 	});
 });

@@ -126,6 +126,40 @@ const CORPUS_DIGESTS = {
 	control: "3".repeat(64),
 } as const;
 
+interface ChangedContract {
+	readonly mode?: "stage" | "pipeline" | undefined;
+	readonly stages?: string[] | undefined;
+	readonly reps?: number | undefined;
+}
+
+function casesWithChangedControl(
+	change: Immutable<ChangedContract>,
+): readonly ComparisonCaseEvidence[] {
+	const first = benchmarkCase("case-1", CORPUS_DIGESTS);
+	const changedControl = arm(
+		"control",
+		groupRecord({
+			groupId: "case-1-control",
+			corpusDigest: CORPUS_DIGESTS.control,
+			mode: change.mode,
+			stages: change.stages,
+			reps: change.reps,
+		}),
+	);
+
+	return [
+		{
+			caseId: first.caseId,
+			arms: {
+				baseline: first.arms.baseline,
+				candidate: first.arms.candidate,
+				control: changedControl,
+			},
+		},
+		benchmarkCase("case-2", CORPUS_DIGESTS),
+	];
+}
+
 describe(assertComparableComparison.name, () => {
 	it("accepts corpus treatment differences with matched controlled inputs", () => {
 		const cases = [
@@ -185,29 +219,26 @@ describe(assertComparableComparison.name, () => {
 	});
 
 	it("rejects a changed reportable group contract", () => {
-		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
-		const changedControl = arm(
-			"control",
-			groupRecord({
-				groupId: "case-1-control",
-				corpusDigest: CORPUS_DIGESTS.control,
-				stages: ["shape", "build"],
-			}),
-		);
-		const cases = [
-			{
-				caseId: first.caseId,
-				arms: {
-					baseline: first.arms.baseline,
-					candidate: first.arms.candidate,
-					control: changedControl,
-				},
-			},
-			benchmarkCase("case-2", CORPUS_DIGESTS),
-		];
+		const cases = casesWithChangedControl({ stages: ["discuss", "build"] });
 
 		expect(() => assertComparableComparison(cases)).toThrow(
 			"case case-1 arm control field declaredStages differs from case case-1 arm baseline",
+		);
+	});
+
+	it("rejects a changed confirmation mode", () => {
+		const cases = casesWithChangedControl({ mode: "pipeline" });
+
+		expect(() => assertComparableComparison(cases)).toThrow(
+			"case case-1 arm control field mode differs from case case-1 arm baseline",
+		);
+	});
+
+	it("rejects a changed requested rep count", () => {
+		const cases = casesWithChangedControl({ reps: 3 });
+
+		expect(() => assertComparableComparison(cases)).toThrow(
+			"case case-1 arm control field reps differs from case case-1 arm baseline",
 		);
 	});
 });
