@@ -155,9 +155,14 @@ describe(runReplayConfirmation.name, () => {
 			instructions: await Bun.file(join(primary, "CLAUDE.md")).bytes(),
 		};
 
-		const execution = runReplayConfirmation(
-			{
+		const fake = new ReplayConfirmationHarness(testResources);
+		const execution = fake.runConfirmation(
+			{ paths, corpusRoots: [corpusRoot] },
+			{ effort: "high", judgeEffort: "high" },
+			(defaults) => ({
+				...defaults,
 				stageSession: {
+					...defaults.stageSession,
 					runWorkflowStage: async (workflowRequest) => {
 						const ordinal = consumedInputs.push({
 							targetDir: workflowRequest.targetDir,
@@ -280,27 +285,7 @@ describe(runReplayConfirmation.name, () => {
 				installDependencies: () =>
 					Promise.reject(new Error("not a delivery stage")),
 				log: () => undefined,
-			},
-			{
-				paths,
-				stage: "discuss",
-				instructions,
-				controlSha: "control-sha",
-				model: "sonnet",
-				effort: "high",
-				judgeModel: "opus",
-				judgeEffort: "high",
-				sessionBudgetUsd: 5,
-				groupId: "confirmation-stage-1",
-				reps: 3,
-				corpusRoots: [corpusRoot],
-				projectedCost: {
-					reps: 3,
-					perRepMaximumUsd: 20,
-					totalMaximumUsd: 60,
-				},
-				approvalMethod: "yes",
-			},
+			}),
 		);
 
 		await allStarted.promise;
@@ -459,11 +444,13 @@ describe(runReplayConfirmation.name, () => {
 		const removed: string[] = [];
 		const fake = new ReplayConfirmationHarness(testResources);
 
-		const outcome = await runReplayConfirmation(
-			{
-				...fake.dependencies,
+		const outcome = await fake.runConfirmation(
+			{ paths, corpusRoots: [corpusRoot] },
+			{ groupId: "confirmation-cleanup", reps: 2 },
+			(defaults) => ({
+				...defaults,
 				stageSession: {
-					...fake.dependencies.stageSession,
+					...defaults.stageSession,
 					runWorkflowStage: (workflowRequest) =>
 						Promise.resolve({
 							stage: workflowRequest.stage,
@@ -527,25 +514,7 @@ describe(runReplayConfirmation.name, () => {
 				captureBaselineContext,
 				captureFileHashes,
 				installInstructions,
-			},
-			{
-				paths,
-				stage: "discuss",
-				instructions: "Frozen instructions\n",
-				controlSha: "control-sha",
-				model: "sonnet",
-				judgeModel: "opus",
-				sessionBudgetUsd: 5,
-				groupId: "confirmation-cleanup",
-				reps: 2,
-				corpusRoots: [corpusRoot],
-				projectedCost: {
-					reps: 2,
-					perRepMaximumUsd: 20,
-					totalMaximumUsd: 40,
-				},
-				approvalMethod: "yes",
-			},
+			}),
 		);
 		const records = await Promise.all(
 			outcome.repRecordFiles.map(async (path) =>
@@ -713,11 +682,13 @@ describe(runReplayConfirmation.name, () => {
 		const finished: number[] = [];
 		const removed: string[] = [];
 		const fake = new ReplayConfirmationHarness(testResources);
-		const execution = runReplayConfirmation(
-			{
-				...fake.dependencies,
+		const execution = fake.runConfirmation(
+			{ paths, corpusRoots: [corpusRoot] },
+			{ groupId: "confirmation-failures" },
+			(defaults) => ({
+				...defaults,
 				stageSession: {
-					...fake.dependencies.stageSession,
+					...defaults.stageSession,
 					runWorkflowStage: async (workflowRequest) => {
 						const match = /-rep-(?<ordinal>\d+)$/u.exec(
 							workflowRequest.targetDir,
@@ -802,25 +773,7 @@ describe(runReplayConfirmation.name, () => {
 				captureBaselineContext,
 				captureFileHashes,
 				installInstructions,
-			},
-			{
-				paths,
-				stage: "discuss",
-				instructions: "Frozen instructions\n",
-				controlSha: "control-sha",
-				model: "sonnet",
-				judgeModel: "opus",
-				sessionBudgetUsd: 5,
-				groupId: "confirmation-failures",
-				reps: 3,
-				corpusRoots: [corpusRoot],
-				projectedCost: {
-					reps: 3,
-					perRepMaximumUsd: 20,
-					totalMaximumUsd: 60,
-				},
-				approvalMethod: "yes",
-			},
+			}),
 		);
 
 		const outcome = await execution;

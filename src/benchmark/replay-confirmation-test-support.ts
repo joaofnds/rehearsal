@@ -8,6 +8,9 @@ import type { StageJudgeInput, StageScorecard } from "./contracts";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
 import type { ReplayDependencies } from "./replay";
+import type { ReplayConfirmationRequest } from "./replay-confirmation";
+import { runReplayConfirmation } from "./replay-confirmation";
+import type { BenchmarkRunPaths } from "./run-layout";
 import { benchmarkRunPaths } from "./run-layout";
 import { harnessResult } from "./test-support";
 
@@ -29,6 +32,15 @@ export interface RecordedRun {
 export type ReplayDependencyOverride = (
 	defaults: ReplayDependencies,
 ) => ReplayDependencies;
+
+export interface ReplayConfirmationInputs {
+	readonly paths: BenchmarkRunPaths;
+	readonly corpusRoots: readonly string[];
+}
+
+export type ReplayConfirmationRequestOverride = Partial<
+	Omit<ReplayConfirmationRequest, "paths" | "corpusRoots">
+>;
 
 export class ReplayConfirmationHarness {
 	public readonly dependencies: ReplayDependencies;
@@ -156,6 +168,40 @@ export class ReplayConfirmationHarness {
 		await writeRunManifest(paths.manifestFile, manifest);
 
 		return { paths, manifest, initial, discuss, build };
+	}
+
+	public runConfirmation(
+		inputs: ReplayConfirmationInputs,
+		requestOverride: ReplayConfirmationRequestOverride = {},
+		...dependencyOverrides: readonly ReplayDependencyOverride[]
+	): ReturnType<typeof runReplayConfirmation> {
+		let { dependencies } = this;
+		for (const override of dependencyOverrides) {
+			dependencies = override(dependencies);
+		}
+		const { paths, corpusRoots } = inputs;
+		const { reps = 3 } = requestOverride;
+		const request: ReplayConfirmationRequest = {
+			paths,
+			stage: "discuss",
+			instructions: "Frozen instructions\n",
+			controlSha: "control-sha",
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+			groupId: "confirmation-stage-1",
+			reps,
+			corpusRoots,
+			projectedCost: {
+				reps,
+				perRepMaximumUsd: 20,
+				totalMaximumUsd: reps * 20,
+			},
+			approvalMethod: "yes",
+			...requestOverride,
+		};
+
+		return runReplayConfirmation(dependencies, request);
 	}
 
 	private defaultDependencies(): ReplayDependencies {
