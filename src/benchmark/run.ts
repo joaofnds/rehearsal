@@ -52,11 +52,7 @@ import { writeRunManifest } from "./manifest";
 import type { PipelineDefinition, StageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
-import {
-	createRunAbort,
-	fileRunArtifactPersistence,
-	writeRunArtifact,
-} from "./run-abort";
+import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
 import type { BenchmarkRunPaths } from "./run-layout";
 import {
 	benchmarkRunPaths,
@@ -199,8 +195,10 @@ export function buildFailedJudgeRunArtifact(
 }
 
 export interface FinalJudgeRequest {
-	readonly artifactFile: string;
 	readonly artifactInputs: RunArtifactBaseInputs;
+	readonly writeFailedArtifact: (
+		artifact: FailedJudgeRunArtifact,
+	) => Promise<void>;
 	readonly invoke?: JudgeInvoker | undefined;
 }
 
@@ -225,8 +223,7 @@ export async function runFinalJudge(
 		);
 	} catch (error) {
 		if (error instanceof JudgeOutputValidationError) {
-			await writeRunArtifact(
-				request.artifactFile,
+			await request.writeFailedArtifact(
 				buildFailedJudgeRunArtifact(inputs, error),
 			);
 		}
@@ -772,8 +769,8 @@ export async function runBenchmark(
 
 		console.log("\nJudge session");
 		const judge = await runFinalJudge({
-			artifactFile: runFiles.artifactFile,
 			artifactInputs,
+			writeFailedArtifact: abort.writeFailedArtifact,
 		});
 		const { grade } = judge;
 		console.log(JSON.stringify(grade, null, 2));

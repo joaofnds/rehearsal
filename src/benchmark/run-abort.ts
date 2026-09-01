@@ -1,5 +1,6 @@
 import type { WorkflowStage } from "./config";
 import type {
+	FailedJudgeRunArtifact,
 	RunArtifact,
 	StageJudgeInput,
 	StageJudgeRecord,
@@ -46,6 +47,9 @@ export interface RunAbort {
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly writePendingArtifact: (artifact: RunArtifact) => Promise<void>;
 	readonly completeArtifact: (artifact: RunArtifact) => Promise<void>;
+	readonly writeFailedArtifact: (
+		artifact: FailedJudgeRunArtifact,
+	) => Promise<void>;
 	readonly markAborted: (reason: string) => Promise<void>;
 	readonly teardown: () => Promise<void>;
 	readonly release: () => void;
@@ -230,6 +234,16 @@ export function createRunAbort(
 			pendingArtifact = undefined;
 		});
 	};
+	const writeFailedArtifact = (
+		artifact: FailedJudgeRunArtifact,
+	): Promise<void> =>
+		enqueueTransition(() =>
+			writeRunArtifact(
+				request.artifactFile,
+				artifact,
+				dependencies.persistence,
+			),
+		);
 	const markAborted = (reason: string): Promise<void> => {
 		if (abortRecorded === undefined) {
 			abortRequested = true;
@@ -326,6 +340,7 @@ export function createRunAbort(
 		completeStage,
 		writePendingArtifact,
 		completeArtifact,
+		writeFailedArtifact,
 		markAborted,
 		teardown,
 		release,

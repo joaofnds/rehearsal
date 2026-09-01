@@ -5317,6 +5317,21 @@ describe(buildRunArtifact.name, () => {
 			const directory = await mkdtemp(join(tmpdir(), "rehearsal-final-judge-"));
 			temporaryDirectories.push(directory);
 			const artifactFile = join(directory, "run.json");
+			const persistence = new ControlledRunArtifactPersistence();
+			const abort = createRunAbort(
+				{
+					killActiveCommands: () => Promise.resolve(),
+					registerSignal: () => undefined,
+					releaseSignal: () => undefined,
+					exit: () => undefined,
+					reportError: () => undefined,
+					persistence,
+				},
+				{
+					artifactFile,
+					teardown: () => Promise.resolve(),
+				},
+			);
 			const pipeline = await loadDefaultPipeline();
 			const baseInputs = artifactBaseInputs(pipeline, "pipelines/default.json");
 			const rubric = RUBRIC_IDS.map(
@@ -5334,7 +5349,6 @@ describe(buildRunArtifact.name, () => {
 			});
 			let calls = 0;
 			const result = runFinalJudge({
-				artifactFile,
 				artifactInputs: {
 					...baseInputs,
 					rubric,
@@ -5344,6 +5358,7 @@ describe(buildRunArtifact.name, () => {
 						changedPaths: ["src/audit/example.ts"],
 					},
 				},
+				writeFailedArtifact: abort.writeFailedArtifact,
 				invoke: () => {
 					calls += 1;
 
@@ -5360,7 +5375,9 @@ describe(buildRunArtifact.name, () => {
 			expect(result).rejects.toBeInstanceOf(JudgeOutputValidationError);
 			await result.catch(() => undefined);
 
-			const artifact: unknown = JSON.parse(await Bun.file(artifactFile).text());
+			const artifact: unknown = JSON.parse(
+				persistence.files.get(artifactFile) ?? "",
+			);
 			expect(calls).toBe(2);
 			expect(artifact).toMatchObject({
 				status: "FAILED",
