@@ -342,6 +342,7 @@ async function runPipelineRep(
 	let currentStageIndex = 0;
 	let currentSession: StageSessionResult | undefined;
 	let stageClock = createStageClock(now);
+	let judgingStage = false;
 	let judgingFinal = false;
 
 	try {
@@ -400,6 +401,7 @@ async function runPipelineRep(
 			if (rubric === undefined) {
 				throw new Error(`No frozen rubric for ${definition.name}`);
 			}
+			judgingStage = true;
 			const scorecard = await dependencies.runStageJudge(
 				request.judgeModel,
 				request.judgeEffort,
@@ -407,6 +409,7 @@ async function runPipelineRep(
 				currentSession.input,
 				rubric,
 			);
+			judgingStage = false;
 			stageJudgeAttempts.push(...scorecard.attempts);
 			const stageFile = repPaths.stageFile(definition.name);
 			await Bun.write(stageFile, `${JSON.stringify(scorecard, null, 2)}\n`);
@@ -572,6 +575,9 @@ async function runPipelineRep(
 			(judgingFinal || currentSession !== undefined);
 		if (stageClock.read() !== undefined && currentSession === undefined) {
 			workerAttempts.push({});
+		}
+		if (judgingStage && judgeFailure === undefined) {
+			stageJudgeAttempts.push({});
 		}
 		let stages = [...stageOutcomes];
 		let finalOutcome: ConfirmationRepRecord["finalOutcome"];

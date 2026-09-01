@@ -255,6 +255,98 @@ describe(runPipelineConfirmation.name, () => {
 		expect(record.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
 	});
 
+	it("marks a later stage Judge invocation failure as a missing provider call", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run(
+			{
+				groupId: "stage-judge-metrics",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 45,
+					totalMaximumUsd: 90,
+				},
+			},
+			(dependencies) => {
+				const { stageSession, runStageJudge } = dependencies;
+				const { runWorkflowStage } = stageSession;
+
+				return {
+					...dependencies,
+					stageSession: {
+						...stageSession,
+						runWorkflowStage: async (request) => ({
+							...(await runWorkflowStage(request)),
+							sessionId: request.targetDir,
+						}),
+					},
+					runStageJudge: (model, effort, budget, input, source) => {
+						if (
+							input.stage === "build" &&
+							repOrdinal(input.transcript.sessionId) === 1
+						) {
+							return Promise.reject(new Error("stage Judge invocation failed"));
+						}
+
+						return runStageJudge(model, effort, budget, input, source);
+					},
+				};
+			},
+		);
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		const report = z
+			.object({
+				reliability: z.array(
+					z.object({
+						name: z.string(),
+						successful: z.number(),
+						gradeDistribution: z.record(z.string(), z.number()),
+					}),
+				),
+				resources: z.object({
+					completeReps: z.number(),
+					missingMetricReps: z.number(),
+					total: z.object({ costUsd: z.array(z.number()) }),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(outcome.reportFile).text()));
+		const [failed] = records;
+		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
+
+		expect(failed?.metrics).toEqual({
+			status: "MISSING",
+			calls: [
+				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "worker", metrics: CONFIRMATION_METRIC },
+				{ role: "stage-judge", metrics: CONFIRMATION_METRIC },
+			],
+			missing: ["stage-judge call metrics"],
+		});
+		expect(report.reliability).toEqual([
+			{
+				name: "discuss",
+				successful: 1,
+				gradeDistribution: Object.fromEntries([["A", 2]]),
+			},
+			{
+				name: "build",
+				successful: 1,
+				gradeDistribution: Object.fromEntries([["A", 1]]),
+			},
+			{ name: "final", successful: 1, gradeDistribution: { PASS: 1 } },
+		]);
+		expect(report.resources).toEqual({
+			completeReps: 1,
+			missingMetricReps: 1,
+			total: { costUsd: [1.25] },
+		});
+	});
+
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const failed = Promise.withResolvers<boolean>();
