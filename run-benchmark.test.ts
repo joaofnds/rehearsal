@@ -3458,6 +3458,53 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("retains completed calibration when completion is interrupted", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const calibration: CalibrationResult = {
+			humanReview: { verdict: "ACCEPT", summary: "accepted", findings: [] },
+			instructionsChanged: false,
+			rubricChanged: false,
+			stageRubricsChanged: [],
+		};
+		const completeArtifact = {
+			...artifact,
+			status: "COMPLETE" as const,
+			calibration,
+		};
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+		await abort.writePendingArtifact(artifact);
+		const blocked = persistence.blockNextWrite();
+
+		const completionWrite = abort.completeArtifact(completeArtifact);
+		await blocked.started;
+		const abortWrite = abort.markAborted("run interrupted");
+		blocked.release();
+		await Promise.all([completionWrite, abortWrite]);
+
+		expect(JSON.parse(persistence.files.get(artifactFile) ?? "")).toEqual({
+			...completeArtifact,
+			status: "FAILED",
+		});
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		temporaryDirectories.push(directory);
