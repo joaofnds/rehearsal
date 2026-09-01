@@ -1,5 +1,53 @@
+import { createHash } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
 import type { ClaudeCallMetrics } from "./contracts";
-import type { ConfirmationRepRecord } from "./confirmation-record";
+import type {
+	ConfirmationGroupRecord,
+	ConfirmationRepRecord,
+} from "./confirmation-record";
+
+export type FrozenFile = ConfirmationGroupRecord["inputs"]["files"][number];
+
+export async function writeFrozenFile(
+	groupDirectory: string,
+	path: string,
+	content: string,
+	kind: FrozenFile["kind"],
+): Promise<FrozenFile> {
+	await Bun.write(path, content);
+
+	return {
+		kind,
+		path: relative(groupDirectory, path),
+		sha256: createHash("sha256").update(content).digest("hex"),
+	};
+}
+
+export async function frozenDirectoryFiles(
+	groupDirectory: string,
+	directory: string,
+	kind: FrozenFile["kind"],
+): Promise<readonly FrozenFile[]> {
+	const files: FrozenFile[] = [];
+	const entries = await readdir(directory, { recursive: true });
+	for (const entry of entries.toSorted()) {
+		const path = join(directory, entry);
+		const file = Bun.file(path);
+		if (!(await file.exists()) || file.type === "directory") {
+			continue;
+		}
+
+		const bytes = await file.bytes();
+		files.push({
+			kind,
+			path: relative(groupDirectory, path),
+			sha256: createHash("sha256").update(bytes).digest("hex"),
+		});
+	}
+
+	return files;
+}
 
 type MetricRole = "worker" | "product-owner" | "stage-judge" | "final-judge";
 

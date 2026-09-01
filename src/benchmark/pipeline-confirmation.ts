@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { createTaskCommit } from "./backlog";
@@ -40,11 +39,16 @@ import {
 	confirmationGroupRecordSchema,
 	confirmationRepRecordSchema,
 } from "./confirmation-record";
-import type { ConfirmationMetricAttempt } from "./confirmation-evidence";
+import type {
+	ConfirmationMetricAttempt,
+	FrozenFile,
+} from "./confirmation-evidence";
 import {
 	collectConfirmationMetrics,
+	frozenDirectoryFiles,
 	metricAttempts,
 	requiredMetricAttempts,
+	writeFrozenFile,
 } from "./confirmation-evidence";
 import { detachedStageDependencies } from "./replay";
 import type {
@@ -68,19 +72,6 @@ interface LoadedStageRubric {
 	readonly rubricPath: string;
 	readonly content: string;
 	readonly rubric: StageRubric;
-}
-
-interface FrozenFile {
-	readonly kind:
-		| "checkpoint"
-		| "corpus"
-		| "rubric"
-		| "pipeline"
-		| "instructions"
-		| "task"
-		| "product-brief";
-	readonly path: string;
-	readonly sha256: string;
 }
 
 export interface PipelineFinalJudgeRequest {
@@ -157,50 +148,6 @@ interface FrozenPipelineInputs {
 	readonly corpusDirectories: Readonly<Record<string, string>>;
 	readonly corpusFiles: Readonly<Record<string, readonly HashedFile[]>>;
 	readonly files: readonly FrozenFile[];
-}
-
-function sha256(content: string): string {
-	return createHash("sha256").update(content).digest("hex");
-}
-
-async function writeFrozenFile(
-	groupDirectory: string,
-	path: string,
-	content: string,
-	kind: FrozenFile["kind"],
-): Promise<FrozenFile> {
-	await Bun.write(path, content);
-
-	return {
-		kind,
-		path: relative(groupDirectory, path),
-		sha256: sha256(content),
-	};
-}
-
-async function frozenDirectoryFiles(
-	groupDirectory: string,
-	directory: string,
-	kind: FrozenFile["kind"],
-): Promise<readonly FrozenFile[]> {
-	const entries = await readdir(directory, { recursive: true });
-	const files: FrozenFile[] = [];
-	for (const entry of entries.toSorted()) {
-		const path = join(directory, entry);
-		const file = Bun.file(path);
-		if (!(await file.exists()) || file.type === "directory") {
-			continue;
-		}
-
-		const bytes = await file.bytes();
-		files.push({
-			kind,
-			path: relative(groupDirectory, path),
-			sha256: createHash("sha256").update(bytes).digest("hex"),
-		});
-	}
-
-	return files;
 }
 
 async function freezePipelineInputs(
