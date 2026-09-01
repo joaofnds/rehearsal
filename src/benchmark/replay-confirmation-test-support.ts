@@ -214,6 +214,7 @@ export class ReplayConfirmationHarness {
 						stage,
 						sessionId: "session",
 						costUsd: 1.25,
+						providerCalls: [],
 						exchanges: [],
 					});
 				},

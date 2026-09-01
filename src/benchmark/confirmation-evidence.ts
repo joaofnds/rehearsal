@@ -3,7 +3,7 @@ import { readdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ConfirmationCostProjection } from "./confirmation";
 import type { Effort } from "./config";
-import type { ClaudeCallMetrics } from "./contracts";
+import type { ClaudeCallMetrics, ProviderCall } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
@@ -247,34 +247,16 @@ export async function finalizeConfirmationGroup(
 
 type MetricRole = "worker" | "product-owner" | "stage-judge" | "final-judge";
 
-export interface ConfirmationMetricAttempt {
-	readonly metrics?: ClaudeCallMetrics | undefined;
-}
-
 export interface ConfirmationMetricAttempts {
-	readonly worker: readonly ConfirmationMetricAttempt[];
-	readonly productOwner: readonly ConfirmationMetricAttempt[] | undefined;
-	readonly stageJudge: readonly ConfirmationMetricAttempt[];
-	readonly finalJudge: readonly ConfirmationMetricAttempt[] | undefined;
-}
-
-export function metricAttempts(
-	metrics: readonly ClaudeCallMetrics[] | undefined,
-): readonly ConfirmationMetricAttempt[] | undefined {
-	return metrics?.map((value) => ({ metrics: value }));
-}
-
-export function requiredMetricAttempts(
-	metrics: readonly ClaudeCallMetrics[] | undefined,
-): readonly ConfirmationMetricAttempt[] {
-	const attempts = metricAttempts(metrics);
-
-	return attempts === undefined || attempts.length === 0 ? [{}] : attempts;
+	readonly worker: readonly ProviderCall[];
+	readonly productOwner: readonly ProviderCall[] | undefined;
+	readonly stageJudge: readonly ProviderCall[];
+	readonly finalJudge: readonly ProviderCall[] | undefined;
 }
 
 interface RoleAttempts {
 	readonly role: MetricRole;
-	readonly attempts: readonly ConfirmationMetricAttempt[];
+	readonly attempts: readonly ProviderCall[];
 }
 
 export function collectConfirmationMetrics(

@@ -720,6 +720,7 @@ describe(runReplay.name, () => {
 							stage,
 							sessionId: "session",
 							costUsd: 0.9,
+							providerCalls: [],
 							exchanges: [],
 						};
 					},

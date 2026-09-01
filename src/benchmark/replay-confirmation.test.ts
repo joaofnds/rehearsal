@@ -211,7 +211,7 @@ describe(runReplayConfirmation.name, () => {
 							stage: workflowRequest.stage,
 							sessionId: `session-${ordinal}`,
 							costUsd: metric.costUsd,
-							callMetrics: [metric],
+							providerCalls: [{ metrics: metric }],
 							exchanges: [],
 						};
 					},
@@ -456,7 +456,7 @@ describe(runReplayConfirmation.name, () => {
 							stage: workflowRequest.stage,
 							sessionId: workflowRequest.targetDir,
 							costUsd: metric.costUsd,
-							callMetrics: [metric],
+							providerCalls: [{ metrics: metric }],
 							exchanges: [],
 						}),
 					assertPlanningStageCompleted: (_targetDir, baselineSha, stage) =>
@@ -703,7 +703,7 @@ describe(runReplayConfirmation.name, () => {
 							stage: workflowRequest.stage,
 							sessionId: workflowRequest.targetDir,
 							costUsd: metric.costUsd,
-							callMetrics: [metric],
+							providerCalls: [{ metrics: metric }],
 							exchanges: [],
 						});
 					},

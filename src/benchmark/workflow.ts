@@ -52,30 +52,8 @@ export interface WorkflowStageRequest {
 	readonly skill: string;
 }
 
-function appendCallMetrics(
-	callMetrics: readonly ClaudeCallMetrics[] | undefined,
-	metrics: ClaudeCallMetrics | undefined,
-): readonly ClaudeCallMetrics[] | undefined {
-	if (callMetrics === undefined || metrics === undefined) {
-		return undefined;
-	}
-
-	return [...callMetrics, metrics];
-}
-
 function providerCall(metrics: ClaudeCallMetrics | undefined): ProviderCall {
 	return metrics === undefined ? {} : { metrics };
-}
-
-function withCallMetrics<Value extends object>(
-	value: Value,
-	callMetrics: readonly ClaudeCallMetrics[] | undefined,
-): Value & { readonly callMetrics?: readonly ClaudeCallMetrics[] | undefined } {
-	if (callMetrics === undefined) {
-		return value;
-	}
-
-	return { ...value, callMetrics };
 }
 
 function remainingBudget(limitUsd: number, spentUsd: number): number {
@@ -168,7 +146,7 @@ export async function runWorkflowStage(
 	} = request;
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
-	let callMetrics: readonly ClaudeCallMetrics[] | undefined = [];
+	const providerCalls: ProviderCall[] = [];
 	let prompt = stagePrompt(skill, taskId);
 	const exchanges: StageTranscript["exchanges"][number][] = [];
 
@@ -195,18 +173,12 @@ export async function runWorkflowStage(
 
 		sessionId = envelope.session_id;
 		spentUsd += envelope.total_cost_usd ?? 0;
-		callMetrics = appendCallMetrics(
-			callMetrics,
-			readClaudeCallMetrics(envelope),
-		);
+		providerCalls.push(providerCall(readClaudeCallMetrics(envelope)));
 		console.log(agent.message);
 
 		if (agent.status === "COMPLETE") {
 			exchanges.push({ agent });
-			return withCallMetrics(
-				{ stage, sessionId, costUsd: spentUsd, exchanges },
-				callMetrics,
-			);
+			return { stage, sessionId, costUsd: spentUsd, providerCalls, exchanges };
 		}
 
 		const productOwnerAnswer = await productOwner.ask(stage, agent.message);

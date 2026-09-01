@@ -87,6 +87,7 @@ function stageScorecard(
 				stage: "discuss",
 				sessionId: "session",
 				costUsd: 1,
+				providerCalls: [],
 				exchanges: [],
 			},
 			priorArtifacts: [],
@@ -408,6 +409,7 @@ describe(runGradedStages.name, () => {
 						stage,
 						sessionId: "session",
 						costUsd: 0,
+						providerCalls: [],
 						exchanges: [],
 					});
 				},

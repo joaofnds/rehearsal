@@ -65,6 +65,7 @@ function stageJudgeInput(
 			stage,
 			sessionId: "session",
 			costUsd: 1,
+			providerCalls: [],
 			exchanges: [],
 		},
 		priorArtifacts: [],

@@ -170,7 +170,7 @@ export class PipelineConfirmationHarness {
 						stage: request.stage,
 						sessionId: request.stage,
 						costUsd: CONFIRMATION_METRIC.costUsd,
-						callMetrics: [CONFIRMATION_METRIC],
+						providerCalls: [{ metrics: CONFIRMATION_METRIC }],
 						exchanges: [],
 					};
 				},

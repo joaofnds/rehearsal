@@ -73,13 +73,6 @@ describe("workflow provider metrics", () => {
 			JSON.stringify({
 				session_id: "worker-session",
 				total_cost_usd: 0.4,
-				num_turns: 3,
-				usage: {
-					input_tokens: 70,
-					output_tokens: 14,
-					cache_read_input_tokens: 9,
-					cache_creation_input_tokens: 10,
-				},
 				structured_output: { status: "COMPLETE", message: "Shaped" },
 			}),
 		];
@@ -106,23 +99,18 @@ describe("workflow provider metrics", () => {
 			() => Promise.resolve(responses.shift() ?? ""),
 		);
 
-		expect(transcript.callMetrics).toEqual([
+		expect(transcript.providerCalls).toEqual([
 			{
-				costUsd: 0.3,
-				inputTokens: 60,
-				outputTokens: 12,
-				cacheReadTokens: 7,
-				cacheWriteTokens: 8,
-				turns: 2,
+				metrics: {
+					costUsd: 0.3,
+					inputTokens: 60,
+					outputTokens: 12,
+					cacheReadTokens: 7,
+					cacheWriteTokens: 8,
+					turns: 2,
+				},
 			},
-			{
-				costUsd: 0.4,
-				inputTokens: 70,
-				outputTokens: 14,
-				cacheReadTokens: 9,
-				cacheWriteTokens: 10,
-				turns: 3,
-			},
+			{},
 		]);
 	});
 });

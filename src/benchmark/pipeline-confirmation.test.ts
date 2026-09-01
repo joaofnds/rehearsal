@@ -230,9 +230,8 @@ describe(runPipelineConfirmation.name, () => {
 							if (request.stage === "discuss") {
 								return result;
 							}
-							const { callMetrics: _callMetrics, ...withoutMetrics } = result;
 
-							return withoutMetrics;
+							return { ...result, providerCalls: [{}] };
 						},
 					},
 				};

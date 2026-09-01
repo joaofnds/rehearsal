@@ -21,7 +21,12 @@ import type {
 	runChecks,
 } from "./checks";
 import type { Effort } from "./config";
-import type { ContextFile, StageRubric, StageScorecard } from "./contracts";
+import type {
+	ContextFile,
+	ProviderCall,
+	StageRubric,
+	StageScorecard,
+} from "./contracts";
 import type { JudgeResult } from "./judge";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition } from "./pipeline";
@@ -30,7 +35,6 @@ import { runConfirmation } from "./confirmation";
 import type { ConfirmationRepRecord } from "./confirmation-record";
 import { confirmationRepRecordSchema } from "./confirmation-record";
 import type {
-	ConfirmationMetricAttempt,
 	ConfirmationRepResult,
 	FrozenFile,
 } from "./confirmation-evidence";
@@ -38,7 +42,6 @@ import {
 	collectConfirmationMetrics,
 	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
-	requiredMetricAttempts,
 	settleCompletedConfirmationRep,
 	settleDiagnosticConfirmationRep,
 	writeFrozenFile,
@@ -327,8 +330,8 @@ async function runPipelineRep(
 	await mkdir(repPaths.stagesDirectory, { recursive: true });
 	const repStart = now();
 	const stageOutcomes: ConfirmationRepRecord["stages"] = [];
-	const workerAttempts: ConfirmationMetricAttempt[] = [];
-	const stageJudgeAttempts: ConfirmationMetricAttempt[] = [];
+	const workerAttempts: ProviderCall[] = [];
+	const stageJudgeAttempts: ProviderCall[] = [];
 	const priorArtifacts: ContextFile[] = [];
 	let upstream = frozen.initialCheckpoint.lineage;
 	let baselineSha = frozen.taskSha;
@@ -392,9 +395,7 @@ async function runPipelineRep(
 				definition,
 				priorArtifacts,
 			);
-			workerAttempts.push(
-				...requiredMetricAttempts(currentSession.transcript.callMetrics),
-			);
+			workerAttempts.push(...currentSession.transcript.providerCalls);
 			const rubric = request.stageRubrics[definition.name];
 			if (rubric === undefined) {
 				throw new Error(`No frozen rubric for ${definition.name}`);

@@ -8,17 +8,12 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 } from "./checkpoint";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
-import type {
-	ClaudeCallMetrics,
-	ProviderCall,
-	StageScorecard,
-} from "./contracts";
+import type { ProviderCall, StageScorecard } from "./contracts";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { ConfirmationRepRecord } from "./confirmation-record";
 import { confirmationRepRecordSchema } from "./confirmation-record";
 import type {
-	ConfirmationMetricAttempt,
 	ConfirmationRepResult,
 	FrozenFile,
 } from "./confirmation-evidence";
@@ -26,7 +21,6 @@ import {
 	collectConfirmationMetrics,
 	finalizeConfirmationGroup,
 	frozenDirectoryFiles,
-	requiredMetricAttempts,
 	settleCompletedConfirmationRep,
 	settleDiagnosticConfirmationRep,
 	writeFrozenFile,
@@ -189,7 +183,7 @@ async function freezeReplayInputs(
 interface JudgeRejection {
 	readonly message: string;
 	readonly prompt: string;
-	readonly attempts: readonly ConfirmationMetricAttempt[];
+	readonly attempts: readonly ProviderCall[];
 	readonly costUsd: number;
 }
 
@@ -202,13 +196,13 @@ function completeRepRecord(
 	resultSha: string,
 	scorecardFile: string,
 	scorecard: StageScorecard,
-	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	workerCalls: readonly ProviderCall[],
 	productOwnerCalls: readonly ProviderCall[],
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
 	const evidence = collectConfirmationMetrics({
-		worker: requiredMetricAttempts(workerMetrics),
+		worker: workerCalls,
 		productOwner: productOwnerCalls,
 		stageJudge: scorecard.attempts,
 		finalJudge: undefined,
@@ -257,13 +251,13 @@ function rejectedJudgeRepRecord(
 	resultSha: string,
 	recordFile: string,
 	error: JudgeRejection,
-	workerMetrics: readonly ClaudeCallMetrics[] | undefined,
+	workerCalls: readonly ProviderCall[],
 	productOwnerCalls: readonly ProviderCall[],
 	stageElapsedMs: number,
 	repElapsedMs: number,
 ): ConfirmationRepRecord {
 	const evidence = collectConfirmationMetrics({
-		worker: requiredMetricAttempts(workerMetrics),
+		worker: workerCalls,
 		productOwner: productOwnerCalls,
 		stageJudge: error.attempts,
 		finalJudge: undefined,
@@ -470,7 +464,7 @@ export async function runReplayConfirmation(
 					session.resultSha,
 					relative(repPaths.directory, scorecardFile),
 					scorecard,
-					session.transcript.callMetrics,
+					session.transcript.providerCalls,
 					productOwner.snapshot().providerCalls,
 					stageElapsedMs,
 					now() - repStart,
@@ -523,7 +517,7 @@ export async function runReplayConfirmation(
 						session.resultSha,
 						relative(repPaths.directory, scorecardFile),
 						failure,
-						session.transcript.callMetrics,
+						session.transcript.providerCalls,
 						productOwner.snapshot().providerCalls,
 						now() - stageStart,
 						now() - repStart,

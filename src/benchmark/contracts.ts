@@ -226,7 +226,7 @@ export interface StageTranscript {
 	readonly stage: WorkflowStage;
 	readonly sessionId: string;
 	readonly costUsd: number;
-	readonly callMetrics?: readonly ClaudeCallMetrics[] | undefined;
+	readonly providerCalls: readonly ProviderCall[];
 	readonly exchanges: readonly StageExchange[];
 }
 
