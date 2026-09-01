@@ -126,6 +126,47 @@ const CORPUS_DIGESTS = {
 	control: "3".repeat(64),
 } as const;
 
+function pipelineArm(
+	caseId: string,
+	role: ComparisonArm,
+	checkpointDigest: string,
+): ComparisonArmEvidence {
+	const group = groupRecord({
+		groupId: `${caseId}-${role}`,
+		corpusDigest: CORPUS_DIGESTS[role],
+		mode: "pipeline",
+	});
+	const files = group.inputs.files.map((file) =>
+		file.kind === "checkpoint"
+			? { kind: file.kind, path: file.path, sha256: checkpointDigest }
+			: file,
+	);
+
+	return arm(role, {
+		...group,
+		inputs: {
+			lineage: group.inputs.lineage,
+			files,
+			model: group.inputs.model,
+			effort: group.inputs.effort,
+			judgeModel: group.inputs.judgeModel,
+			judgeEffort: group.inputs.judgeEffort,
+			sessionBudgetUsd: group.inputs.sessionBudgetUsd,
+			pipelinePath: group.inputs.pipelinePath,
+		},
+	});
+}
+
+function pipelineBenchmarkCase(caseId: string): ComparisonCaseEvidence {
+	return {
+		caseId,
+		arms: {
+			baseline: pipelineArm(caseId, "baseline", "6".repeat(64)),
+			candidate: pipelineArm(caseId, "candidate", "7".repeat(64)),
+			control: pipelineArm(caseId, "control", "8".repeat(64)),
+		},
+	};
+}
 interface ChangedContract {
 	readonly mode?: "stage" | "pipeline" | undefined;
 	readonly stages?: string[] | undefined;
@@ -174,6 +215,15 @@ describe(assertComparableComparison.name, () => {
 			declaredStages: ["build"],
 			reps: 2,
 		});
+	});
+
+	it("accepts pipeline checkpoints derived from each corpus arm", () => {
+		const cases = [
+			pipelineBenchmarkCase("case-1"),
+			pipelineBenchmarkCase("case-2"),
+		];
+
+		expect(() => assertComparableComparison(cases)).not.toThrow();
 	});
 
 	it("rejects a changed non-corpus input with both arms named", () => {

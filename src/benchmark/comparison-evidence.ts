@@ -393,12 +393,23 @@ function sortedFiles(files: readonly FrozenFile[]): readonly FrozenFile[] {
 function controlledFileDifference(
 	left: readonly FrozenFile[],
 	right: readonly FrozenFile[],
+	mode: ComparisonContract["mode"],
 ): string | undefined {
 	const leftFiles = sortedFiles(
-		left.filter(({ kind }) => kind !== "corpus" && kind !== "instructions"),
+		left.filter(
+			({ kind }) =>
+				kind !== "corpus" &&
+				kind !== "instructions" &&
+				!(mode === "pipeline" && kind === "checkpoint"),
+		),
 	);
 	const rightFiles = sortedFiles(
-		right.filter(({ kind }) => kind !== "corpus" && kind !== "instructions"),
+		right.filter(
+			({ kind }) =>
+				kind !== "corpus" &&
+				kind !== "instructions" &&
+				!(mode === "pipeline" && kind === "checkpoint"),
+		),
 	);
 	const maximum = Math.max(leftFiles.length, rightFiles.length);
 	for (let index = 0; index < maximum; index += 1) {
@@ -433,7 +444,11 @@ function controlledInputDifference(
 		return "inputs.lineage";
 	}
 
-	const fileDifference = controlledFileDifference(reference.files, other.files);
+	const fileDifference = controlledFileDifference(
+		reference.files,
+		other.files,
+		comparison.reference.group.record.mode,
+	);
 	if (fileDifference !== undefined) {
 		return fileDifference;
 	}
@@ -540,6 +555,14 @@ export function assertComparableComparison(
 
 	const referenceArm = firstCase.arms.baseline;
 	for (const benchmarkCase of cases) {
+		for (const role of COMPARISON_ARMS) {
+			assertContract({
+				caseId: benchmarkCase.caseId,
+				arm: benchmarkCase.arms[role],
+				referenceCaseId: firstCase.caseId,
+				referenceArm,
+			});
+		}
 		assertControlledInputs({
 			caseId: benchmarkCase.caseId,
 			reference: benchmarkCase.arms.baseline,
@@ -550,14 +573,6 @@ export function assertComparableComparison(
 			reference: benchmarkCase.arms.baseline,
 			other: benchmarkCase.arms.control,
 		});
-		for (const role of COMPARISON_ARMS) {
-			assertContract({
-				caseId: benchmarkCase.caseId,
-				arm: benchmarkCase.arms[role],
-				referenceCaseId: firstCase.caseId,
-				referenceArm,
-			});
-		}
 	}
 
 	for (const role of COMPARISON_ARMS) {
