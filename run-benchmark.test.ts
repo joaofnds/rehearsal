@@ -3423,6 +3423,41 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("records an interrupted pending run artifact as failed after the active write settles", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const blocked = persistence.blockNextWrite();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		const pendingWrite = abort.writePendingArtifact(artifact);
+		await blocked.started;
+		const abortWrite = abort.markAborted("run interrupted");
+		blocked.release();
+		await Promise.all([pendingWrite, abortWrite]);
+
+		expect(JSON.parse(persistence.files.get(artifactFile) ?? "")).toEqual({
+			...artifact,
+			status: "FAILED",
+		});
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		temporaryDirectories.push(directory);

@@ -44,6 +44,7 @@ export interface RunAbort {
 	readonly updatePendingStage: (pending: PendingStage) => void;
 	readonly writeStageProgress: (record: StageJudgeRecord) => Promise<void>;
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
+	readonly writePendingArtifact: (artifact: RunArtifact) => Promise<void>;
 	readonly trackPendingArtifact: (artifact: RunArtifact | undefined) => void;
 	readonly markAborted: (reason: string) => Promise<void>;
 	readonly teardown: () => Promise<void>;
@@ -198,6 +199,21 @@ export function createRunAbort(
 			pendingStage = undefined;
 		});
 	};
+	const writePendingArtifact = (artifact: RunArtifact): Promise<void> => {
+		if (abortRequested) {
+			return Promise.resolve();
+		}
+
+		pendingArtifact = artifact;
+
+		return enqueueNormalTransition(() =>
+			writeRunArtifact(
+				request.artifactFile,
+				artifact,
+				dependencies.persistence,
+			),
+		);
+	};
 	const markAborted = (reason: string): Promise<void> => {
 		if (abortRecorded === undefined) {
 			abortRequested = true;
@@ -292,6 +308,7 @@ export function createRunAbort(
 		},
 		writeStageProgress,
 		completeStage,
+		writePendingArtifact,
 		trackPendingArtifact: (artifact) => {
 			pendingArtifact = artifact;
 		},
