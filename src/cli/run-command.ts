@@ -20,9 +20,9 @@ import {
 	captureTreatmentChecks,
 	runChecks,
 } from "#benchmark/checks";
-import type { BenchmarkCase, LoadedCase } from "#benchmark/case";
-import { requirePipelineCase, withPipeline } from "#benchmark/case";
-import type { BenchmarkConfig } from "#benchmark/config";
+import type { BenchmarkCase, LoadedCase, SessionCase } from "#benchmark/case";
+import { withPipeline } from "#benchmark/case";
+import type { BenchmarkConfig, SessionRunConfig } from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import {
 	CONTROL_DIR,
@@ -30,6 +30,7 @@ import {
 	judgeSelfPreferenceWarning,
 	parseArgs,
 	parseCaseId,
+	parseSessionArgs,
 } from "#benchmark/config";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
@@ -54,6 +55,11 @@ import { requireInteractiveStdin } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
+import {
+	defaultSessionRunRequest,
+	reportSessionChecks,
+	runSessionDebugAttempt,
+} from "#cli/session-run-command";
 
 const REVIEW_PAUSE_REASON =
 	"the review pause has no flag alternative until ACT-26.3, so a run needs a TTY";
@@ -76,6 +82,11 @@ export interface RunCommandDependencies {
 		output: CommandOutput,
 		benchmarkCase: BenchmarkCase,
 	) => Promise<RunOutcome>;
+	readonly executeSession: (
+		config: SessionRunConfig,
+		output: CommandOutput,
+		sessionCase: SessionCase,
+	) => Promise<RunOutcome>;
 }
 
 /**
@@ -89,9 +100,14 @@ export async function runRunCommand(
 	dependencies: RunCommandDependencies,
 ): Promise<void> {
 	const caseId = asUsageError(() => parseCaseId(request.args));
-	const benchmarkCase = requirePipelineCase(
-		await dependencies.requireCase(caseId),
-	);
+	const loaded = await dependencies.requireCase(caseId);
+	if (loaded.kind === "session") {
+		await runSessionCase(loaded, request, dependencies);
+
+		return;
+	}
+
+	const benchmarkCase = loaded;
 	const config = asUsageError(() =>
 		parseArgs(request.args, Bun.env, {
 			caseId: benchmarkCase.declaration.id,
@@ -109,6 +125,29 @@ export async function runRunCommand(
 		config,
 		dependencies.output,
 		await selectedCase(benchmarkCase, config),
+	);
+
+	await writeRecord(dependencies.output, outcome.recordFile, request.json);
+}
+
+/**
+ * A session case takes neither a target nor a pipeline, so it parses its own
+ * configuration and skips the review pause the stage graph needs a TTY for:
+ * a session attempt has no stage to pause between.
+ */
+async function runSessionCase(
+	sessionCase: SessionCase,
+	request: RunCommandRequest,
+	dependencies: RunCommandDependencies,
+): Promise<void> {
+	const config = asUsageError(() =>
+		parseSessionArgs(request.args, Bun.env, sessionCase.declaration.id),
+	);
+
+	const outcome = await dependencies.executeSession(
+		config,
+		dependencies.output,
+		sessionCase,
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);
@@ -288,4 +327,23 @@ async function confirmRun(
 			instructions,
 		}),
 	);
+}
+
+export async function executeSessionRun(
+	config: SessionRunConfig,
+	output: CommandOutput,
+	sessionCase: SessionCase,
+): Promise<RunOutcome> {
+	output.stderr("single-rep evidence, not a score\n");
+
+	const outcome = await runSessionDebugAttempt(
+		defaultSessionRunRequest(
+			sessionCase,
+			config,
+			benchmarkRunsDirectory(CONTROL_DIR),
+		),
+	);
+	reportSessionChecks(outcome.record, output);
+
+	return { kind: "debug", recordFile: outcome.recordFile };
 }

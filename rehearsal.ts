@@ -14,7 +14,11 @@ import {
 	resolveRunDirectory,
 	runReplayCommand,
 } from "./src/cli/replay-command";
-import { executeRun, runRunCommand } from "./src/cli/run-command";
+import {
+	executeRun,
+	executeSessionRun,
+	runRunCommand,
+} from "./src/cli/run-command";
 import type { CommandLine } from "./src/cli/commands";
 import {
 	commandHelp,
@@ -98,7 +102,12 @@ async function dispatch(
 					json: commandLine.json,
 					stdinIsTerminal: process.stdin.isTTY,
 				},
-				{ output: processOutput, requireCase, execute: executeRun },
+				{
+					output: processOutput,
+					requireCase,
+					execute: executeRun,
+					executeSession: executeSessionRun,
+				},
 			);
 
 			return EXIT_CODES.completed;

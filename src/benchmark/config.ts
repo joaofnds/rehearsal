@@ -262,6 +262,36 @@ export function parseArgs(
 	);
 }
 
+export interface SessionRunConfig extends SessionKnobs {
+	readonly caseId: string;
+	readonly confirmation?: ConfirmationConfig | undefined;
+}
+
+const PIPELINE_ONLY_FLAGS = ["--target", "--pipeline"] as const;
+
+/**
+ * A session case declares neither a target repository nor a pipeline, so it
+ * gets its own parser rather than a BenchmarkConfig with those fields defaulted
+ * to a lie. Naming one of them on a session case is a usage error, not a flag
+ * that quietly does nothing.
+ */
+export function parseSessionArgs(
+	args: readonly string[],
+	env: Readonly<Record<string, string | undefined>>,
+	caseId: string,
+): SessionRunConfig {
+	const flags = flagValues(args);
+	const refused = PIPELINE_ONLY_FLAGS.find((flag) => flags.values.has(flag));
+	if (refused !== undefined) {
+		throw new Error(`Case ${caseId} is a session case and takes no ${refused}`);
+	}
+
+	return withConfirmation(
+		{ caseId, ...parseSessionKnobs(flags.values, env) },
+		parseConfirmation(flags),
+	);
+}
+
 export interface ReplayCliConfig extends SessionKnobs {
 	readonly runName: string;
 	readonly stage: string;

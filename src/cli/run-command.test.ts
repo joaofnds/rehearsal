@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BenchmarkCase } from "#benchmark/case";
+import type { BenchmarkCase, SessionCase } from "#benchmark/case";
 import { parseArgs } from "#benchmark/config";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
+import type { RunCommandDependencies } from "#cli/run-command";
 import { buildConfirmationRequest, runRunCommand } from "#cli/run-command";
+import { UsageError } from "#cli/commands";
 
 const args = [
 	"--target",
@@ -19,6 +21,30 @@ const args = [
 	"--session-budget-usd",
 	"1",
 ];
+
+const neverASession: RunCommandDependencies["executeSession"] = () =>
+	Promise.reject(new Error("a session attempt must not start"));
+
+const smokeCase: SessionCase = {
+	kind: "session",
+	declaration: {
+		id: "smoke",
+		kind: "session",
+		title: "Smoke",
+		prompt: "Reply with the single word OK.",
+		tools: [],
+		corpusFiles: [],
+		checks: [{ kind: "word-band", max: 1 }],
+	},
+	fixturePath: undefined,
+	transcriptPath: undefined,
+	prompt: "Reply with the single word OK.",
+	tools: [],
+	settings: undefined,
+	agents: undefined,
+	corpusFiles: [],
+	checks: [{ kind: "word-band", max: 1 }],
+};
 
 const pipeline: PipelineDefinition = {
 	statuses: ["To Do", "Build", "Done"],
@@ -88,6 +114,7 @@ describe(runRunCommand.name, () => {
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
+					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
 			),
@@ -106,6 +133,7 @@ describe(runRunCommand.name, () => {
 		const dependencies = {
 			output,
 			requireCase: loader.requireCase,
+			executeSession: neverASession,
 			execute: () =>
 				Promise.resolve({
 					kind: "debug" as const,
@@ -143,6 +171,7 @@ describe(runRunCommand.name, () => {
 					output,
 					requireCase: (id) =>
 						Promise.reject(new RefusedPreconditionError(`Unknown case ${id}`)),
+					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
 			),
@@ -166,6 +195,7 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
 				execute: (config) => {
 					targets.push(config.sourceDir);
 
@@ -189,6 +219,7 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
 				execute: (_config, _commandOutput, benchmarkCase) => {
 					executed.push(benchmarkCase);
 
@@ -220,6 +251,7 @@ describe(runRunCommand.name, () => {
 						...auditLogCase,
 						pipelinePath: "cases/audit-log/pipelines/other.json",
 					}),
+				executeSession: neverASession,
 				execute: (config) => {
 					recorded.push(config.pipelinePath);
 
@@ -246,6 +278,7 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
 				execute: () =>
 					Promise.resolve({
 						kind: "confirmation" as const,
@@ -270,6 +303,7 @@ describe(runRunCommand.name, () => {
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
+					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
 			),
@@ -286,6 +320,7 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
 				execute: (_config, commandOutput) => {
 					commandOutput.stderr("Target: /nonexistent-target\n");
 
@@ -336,6 +371,7 @@ describe(runRunCommand.name, () => {
 						declaration: { ...auditLogCase.declaration, id },
 					});
 				},
+				executeSession: neverASession,
 				execute: () =>
 					Promise.resolve({
 						kind: "debug" as const,
@@ -364,6 +400,7 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
 				execute: () => Promise.resolve({ kind: "debug" as const, recordFile }),
 			},
 		);
@@ -410,5 +447,89 @@ describe(buildConfirmationRequest.name, () => {
 		});
 
 		expect(request.caseId).toBe("audit-log-follow-up");
+	});
+});
+
+describe("runRunCommand for a session case", () => {
+	const sessionArgs = ["--model", "haiku", "--session-budget-usd", "0.2"];
+
+	function loadsSmoke(): RunCommandDependencies["requireCase"] {
+		return () => Promise.resolve(smokeCase);
+	}
+
+	it("runs the session attempt and prints its record path", async () => {
+		const { output, stdout } = recordOutput();
+
+		await runRunCommand(
+			{
+				args: ["--case", "smoke", ...sessionArgs],
+				json: false,
+				stdinIsTerminal: false,
+			},
+			{
+				output,
+				requireCase: loadsSmoke(),
+				execute: () => Promise.reject(new Error("no pipeline here")),
+				executeSession: () =>
+					Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/attempt.json",
+					}),
+			},
+		);
+
+		expect(stdout.join("")).toBe("/runs/attempt.json\n");
+	});
+
+	it.each(["--target", "--pipeline"])(
+		"refuses %s as a flag a session case does not take",
+		async (flag) => {
+			const { output } = recordOutput();
+
+			const failure = await failureOf(
+				runRunCommand(
+					{
+						args: ["--case", "smoke", ...sessionArgs, flag, "/somewhere"],
+						json: false,
+						stdinIsTerminal: false,
+					},
+					{
+						output,
+						requireCase: loadsSmoke(),
+						execute: () => Promise.reject(new Error("no pipeline here")),
+						executeSession: neverASession,
+					},
+				),
+			);
+
+			expect(failure).toBeInstanceOf(UsageError);
+			expect(failure.message).toBe(
+				`Case smoke is a session case and takes no ${flag}`,
+			);
+		},
+	);
+
+	it("needs no terminal, because a session attempt has no review pause", async () => {
+		const { output, stdout } = recordOutput();
+
+		await runRunCommand(
+			{
+				args: ["--case", "smoke", ...sessionArgs],
+				json: false,
+				stdinIsTerminal: false,
+			},
+			{
+				output,
+				requireCase: loadsSmoke(),
+				execute: () => Promise.reject(new Error("no pipeline here")),
+				executeSession: () =>
+					Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/attempt.json",
+					}),
+			},
+		);
+
+		expect(stdout.join("")).toContain("attempt.json");
 	});
 });
