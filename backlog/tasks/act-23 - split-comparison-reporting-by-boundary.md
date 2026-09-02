@@ -1,11 +1,11 @@
 ---
 id: ACT-23
 title: split comparison reporting by boundary
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-01 11:11'
-updated_date: '2026-09-02 15:26'
+updated_date: '2026-09-02 15:30'
 labels: []
 dependencies:
   - ACT-6
@@ -98,6 +98,20 @@ Build handoff (2026-09-02):
 - Refactor pass: removed the duplicate contrast-name union; no larger structural opportunity remains.
 - Independent review: due because this refactors a CLI and report path other users run.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @opencode
+created: 2026-09-02 15:30
+---
+Review (2026-09-02): clean. Findings: blocking 0, should-fix 0, note 0.
+
+Examined the ACT-23 comparison reporting split: record serialization, loader, comparability, estimator, quality, resources, final assembly, command wiring, focused tests, and the byte-pinned snapshot. Axes completed: style, architecture, security, spec conformance, testing, and refactoring.
+
+Observed: bun test (441 pass); bun test src/benchmark/comparison-loader.test.ts (16 pass); bun run typecheck; bun run lint; bun run fmt:check. No axis was skipped.
+---
+<!-- COMMENTS:END -->
 
 ## Final Summary
 
