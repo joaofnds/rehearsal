@@ -1,14 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
+import type { Effort } from "./config";
 import {
 	judgeSelfPreferenceWarning,
 	parseArgs,
 	parseReplayArgs,
 } from "./config";
 
+interface SessionValues {
+	readonly model: string;
+	readonly effort: Effort | undefined;
+	readonly judgeModel: string;
+	readonly judgeEffort: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+}
+
 function sessionValues(
 	config: ReturnType<typeof parseArgs> | ReturnType<typeof parseReplayArgs>,
-) {
+): SessionValues {
 	return {
 		model: config.model,
 		effort: config.effort,
