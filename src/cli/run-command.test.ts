@@ -3,10 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BenchmarkCase } from "#benchmark/case";
+import { parseArgs } from "#benchmark/config";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
-import { runRunCommand } from "#cli/run-command";
+import { buildConfirmationRequest, runRunCommand } from "#cli/run-command";
 
 const args = [
 	"--target",
@@ -369,5 +370,44 @@ describe(runRunCommand.name, () => {
 		expect(stdout.join("")).toBe(recordText);
 		expect(stdout.join("")).toBe(await Bun.file(recordFile).text());
 		expect(stderr).toEqual([]);
+	});
+});
+
+describe(buildConfirmationRequest.name, () => {
+	it("names the case the loaded case declares", () => {
+		const followUp: BenchmarkCase = {
+			...auditLogCase,
+			declaration: { ...auditLogCase.declaration, id: "audit-log-follow-up" },
+		};
+
+		const request = buildConfirmationRequest({
+			benchmarkCase: followUp,
+			config: {
+				...parseArgs(
+					args,
+					{},
+					{
+						caseId: "audit-log-follow-up",
+						pipelinePath: auditLogCase.pipelinePath,
+						targetPath: auditLogCase.targetPath,
+					},
+				),
+				caseId: "audit-log-follow-up",
+			},
+			confirmation: {
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 1,
+					totalMaximumUsd: 2,
+				},
+				approvalMethod: "yes",
+			},
+			controlSha: "a".repeat(40),
+			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
+			instructions: "Frozen instructions\n",
+		});
+
+		expect(request.caseId).toBe("audit-log-follow-up");
 	});
 });

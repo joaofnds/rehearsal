@@ -64,7 +64,7 @@ describe(runPipelineConfirmation.name, () => {
 	it("names the case its group and rep records ran", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 
-		const outcome = await harness.run({});
+		const outcome = await harness.run({ caseId: "audit-log-follow-up" });
 		const group = parseConfirmationGroupRecord(
 			await Bun.file(outcome.groupRecordFile).text(),
 		);
@@ -74,9 +74,9 @@ describe(runPipelineConfirmation.name, () => {
 			),
 		);
 
-		expect(group.caseId).toBe("audit-log");
+		expect(group.caseId).toBe("audit-log-follow-up");
 		expect(reps.map(({ caseId }) => caseId)).toEqual(
-			reps.map(() => "audit-log"),
+			reps.map(() => "audit-log-follow-up"),
 		);
 	});
 

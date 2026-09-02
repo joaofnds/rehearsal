@@ -23,6 +23,7 @@ import {
 import type { BenchmarkCase } from "#benchmark/case";
 import { withPipeline } from "#benchmark/case";
 import type { BenchmarkConfig } from "#benchmark/config";
+import type { Immutable } from "#benchmark/contracts";
 import {
 	CONTROL_DIR,
 	readProjectInstructions,
@@ -31,6 +32,7 @@ import {
 	parseCaseId,
 } from "#benchmark/config";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
+import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
@@ -45,6 +47,7 @@ import {
 	recordRetentionRef,
 	removeWorktree,
 } from "#benchmark/target";
+import type { SourceBaseline } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
 import { requireInteractiveStdin } from "#cli/interactive-stdin";
@@ -168,16 +171,60 @@ export async function executeRun(
 	}
 }
 
+interface ConfirmationApproval {
+	readonly reps: number;
+	readonly projectedCost: PipelineConfirmationRequest["projectedCost"];
+	readonly approvalMethod: "interactive" | "yes";
+}
+
+export interface ConfirmationRequestInputs {
+	readonly benchmarkCase: BenchmarkCase;
+	readonly config: BenchmarkConfig;
+	readonly confirmation: ConfirmationApproval;
+	readonly controlSha: string;
+	readonly source: SourceBaseline;
+	readonly instructions: string;
+}
+
+/**
+ * The loaded case is the one owner of the case identity, so the group and rep
+ * records name what the run actually loaded rather than a second copy of the
+ * id that the configuration carries for the manifest.
+ */
+export function buildConfirmationRequest(
+	inputs: Immutable<ConfirmationRequestInputs>,
+): PipelineConfirmationRequest {
+	const { benchmarkCase, config, confirmation } = inputs;
+
+	return {
+		runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+		groupId: randomUUID(),
+		reps: confirmation.reps,
+		projectedCost: confirmation.projectedCost,
+		approvalMethod: confirmation.approvalMethod,
+		source: inputs.source,
+		controlSha: inputs.controlSha,
+		caseId: benchmarkCase.declaration.id,
+		pipelinePath: config.pipelinePath,
+		pipeline: benchmarkCase.pipeline,
+		task: benchmarkCase.task,
+		productBrief: benchmarkCase.productBrief,
+		instructions: inputs.instructions,
+		finalRubric: benchmarkCase.finalRubric,
+		stageRubrics: benchmarkCase.stageRubrics,
+		corpusRoots: skillSearchRoots(CONTROL_DIR),
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+	};
+}
+
 async function confirmRun(
 	config: BenchmarkConfig,
 	benchmarkCase: BenchmarkCase,
-	confirmation: {
-		readonly reps: number;
-		readonly projectedCost: Parameters<
-			typeof runPipelineConfirmation
-		>[1]["projectedCost"];
-		readonly approvalMethod: "interactive" | "yes";
-	},
+	confirmation: ConfirmationApproval,
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
 	const [controlSha, source, instructions] = await Promise.all([
@@ -230,28 +277,13 @@ async function confirmRun(
 				output.stderr(`${message}\n`);
 			},
 		},
-		{
-			runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
-			groupId: randomUUID(),
-			reps: confirmation.reps,
-			projectedCost: confirmation.projectedCost,
-			approvalMethod: confirmation.approvalMethod,
-			source,
+		buildConfirmationRequest({
+			benchmarkCase,
+			config,
+			confirmation,
 			controlSha,
-			caseId: config.caseId,
-			pipelinePath: config.pipelinePath,
-			pipeline: benchmarkCase.pipeline,
-			task: benchmarkCase.task,
-			productBrief: benchmarkCase.productBrief,
+			source,
 			instructions,
-			finalRubric: benchmarkCase.finalRubric,
-			stageRubrics: benchmarkCase.stageRubrics,
-			corpusRoots: skillSearchRoots(CONTROL_DIR),
-			model: config.model,
-			effort: config.effort,
-			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
-			sessionBudgetUsd: config.sessionBudgetUsd,
-		},
+		}),
 	);
 }
