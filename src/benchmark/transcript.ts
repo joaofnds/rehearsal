@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { Immutable } from "./contracts";
+import type { LineObserver } from "./file-lines";
+import { fileLines, IGNORE_CARRY } from "./file-lines";
 import type { JsonValue } from "./json-value";
 import { jsonValueSchema } from "./json-value";
 
@@ -54,6 +56,30 @@ export function parseTranscript(text: string): readonly TranscriptLine[] {
 		.split("\n")
 		.filter((line) => line.trim() !== "")
 		.map((line) => readLine(line));
+}
+
+/**
+ * Transcripts run to several megabytes, and ACT-25's resumed cases carry real
+ * ones, so a transcript on disk is read one line at a time rather than held as
+ * a string. A transcript the provider never wrote reads as no records, which is
+ * the same thing an empty one reads as.
+ */
+export async function parseTranscriptFile(
+	path: string,
+	observer: LineObserver = IGNORE_CARRY,
+): Promise<readonly TranscriptLine[]> {
+	if (!(await Bun.file(path).exists())) {
+		return [];
+	}
+
+	const lines: TranscriptLine[] = [];
+	for await (const line of fileLines(path, observer)) {
+		if (line.trim() !== "") {
+			lines.push(readLine(line));
+		}
+	}
+
+	return lines;
 }
 
 export function toolUses(

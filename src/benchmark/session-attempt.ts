@@ -6,10 +6,11 @@ import type { SessionCase } from "./case";
 import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
 import type { SessionSettings } from "./claude";
 import type { ClaudeCallMetrics } from "./contracts";
+import { terminatedFileLines } from "./file-lines";
 import { projectSlug } from "./session-capture";
 import type { CheckResult } from "./session-check";
 import { evaluateChecks } from "./session-check";
-import { parseTranscript, toolUses } from "./transcript";
+import { parseTranscriptFile, toolUses } from "./transcript";
 
 export type ClaudeRunner = (
 	command: readonly string[],
@@ -39,17 +40,27 @@ export interface SessionAttempt {
 	readonly checks: readonly CheckResult[];
 }
 
+/**
+ * A transcript prefix is a session file, which runs to several megabytes, and
+ * a session id never spans two records, so the rewrite goes line by line rather
+ * than over one string holding the whole file. Each line keeps the terminator
+ * it had, so the fork differs from its source in the session id and nothing
+ * else.
+ */
 export async function forkTranscript(
 	sourcePath: string,
 	destinationPath: string,
 	sourceSession: string,
 	freshSession: string,
 ): Promise<void> {
-	const source = await Bun.file(sourcePath).text();
-	await Bun.write(
-		destinationPath,
-		source.replaceAll(sourceSession, freshSession),
-	);
+	const writer = Bun.file(destinationPath).writer();
+
+	for await (const line of terminatedFileLines(sourcePath)) {
+		const rewritten = line.text.replaceAll(sourceSession, freshSession);
+		await writer.write(line.terminated ? `${rewritten}\n` : rewritten);
+	}
+
+	await writer.end();
 }
 
 export interface SessionNaming {
@@ -163,10 +174,7 @@ async function recordAttempt(
 	const transcriptFile = join(request.recordDirectory, "transcript.jsonl");
 
 	await mkdir(request.recordDirectory, { recursive: true });
-	await Bun.write(
-		transcriptFile,
-		(await written.exists()) ? await written.text() : "",
-	);
+	await Bun.write(transcriptFile, (await written.exists()) ? written : "");
 
 	const envelope = readClaudeEnvelope(attempt.output);
 	const metrics = readClaudeCallMetrics(envelope);
@@ -182,7 +190,7 @@ async function recordAttempt(
 		};
 	}
 
-	const transcript = parseTranscript(await Bun.file(transcriptFile).text());
+	const transcript = await parseTranscriptFile(transcriptFile);
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
 		toolUses: toolUses(transcript),

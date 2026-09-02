@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { JsonValue } from "#benchmark/json-value";
-import { filesRead, parseTranscript, toolUses } from "#benchmark/transcript";
+import {
+	filesRead,
+	parseTranscript,
+	parseTranscriptFile,
+	toolUses,
+} from "#benchmark/transcript";
 
 function line(record: JsonValue): string {
 	return JSON.stringify(record);
@@ -57,6 +65,67 @@ describe(parseTranscript.name, () => {
 
 	it("ignores blank lines, including a trailing newline", () => {
 		expect(parseTranscript(`${assistantWith(readBlock)}\n\n`)).toHaveLength(1);
+	});
+});
+
+describe(parseTranscriptFile.name, () => {
+	async function transcriptFile(lines: readonly string[]): Promise<string> {
+		const path = join(
+			await mkdtemp(join(tmpdir(), "rehearsal-transcript-")),
+			"transcript.jsonl",
+		);
+		await writeFile(path, `${lines.join("\n")}\n`);
+
+		return path;
+	}
+
+	function filler(ordinal: number): string {
+		return line({ type: "user", ordinal, filler: "x".repeat(4096) });
+	}
+
+	it("reads the tool calls of a transcript on disk", async () => {
+		const path = await transcriptFile([
+			assistantWith({ type: "text", text: "thinking" }, readBlock),
+			assistantWith(bashBlock),
+		]);
+
+		const transcript = await parseTranscriptFile(path);
+
+		expect(toolUses(transcript).map(({ name }) => name)).toEqual([
+			"Read",
+			"Bash",
+		]);
+	});
+
+	it("reads an absent transcript as one with no records", async () => {
+		expect(await parseTranscriptFile("/no/such/transcript.jsonl")).toEqual([]);
+	});
+
+	/**
+	 * ACT-25's resumed cases carry real multi-megabyte transcripts, so this
+	 * reads like the capture path rather than holding the file as one string.
+	 * An observer that is never called leaves the count at zero, which is what
+	 * a non-streaming subject would do.
+	 */
+	const ONE_CHUNK_AND_A_LINE = 768 * 1024;
+
+	it("never holds the whole transcript, only one read chunk and a partial line", async () => {
+		const path = await transcriptFile(
+			Array.from({ length: 400 }, (_value, index) => filler(index)),
+		);
+		let widest = 0;
+		let observations = 0;
+
+		await parseTranscriptFile(path, {
+			carry: (characters) => {
+				observations += 1;
+				widest = Math.max(widest, characters);
+			},
+		});
+
+		expect(Bun.file(path).size).toBeGreaterThan(1024 * 1024);
+		expect(observations).toBeGreaterThan(1);
+		expect(widest).toBeLessThan(ONE_CHUNK_AND_A_LINE);
 	});
 });
 

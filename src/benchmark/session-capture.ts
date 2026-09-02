@@ -1,6 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import type { LineObserver } from "./file-lines";
+import { fileLines, IGNORE_CARRY } from "./file-lines";
 
 const SESSION_FILE_SUFFIX = ".jsonl";
 
@@ -97,54 +99,20 @@ export interface CapturedPrefix {
 	readonly lines: number;
 }
 
-/**
- * Transcripts run to several megabytes, so the source is read as a stream of
- * chunks and split on the way through: holding it as one string would put the
- * whole session file in memory to keep a few of its lines.
- */
-async function* sourceLines(
-	path: string,
-	observeCarry: (bytes: number) => void = () => undefined,
-): AsyncGenerator<string> {
-	const decoder = new TextDecoder();
-	let carry = "";
-
-	for await (const chunk of Bun.file(path).stream()) {
-		carry += decoder.decode(chunk, { stream: true });
-		observeCarry(carry.length);
-		const parts = carry.split("\n");
-		carry = parts.pop() ?? "";
-		for (const part of parts) {
-			yield part;
-		}
-	}
-
-	carry += decoder.decode();
-	if (carry !== "") {
-		yield carry;
-	}
-}
-
 async function countLines(path: string): Promise<number> {
 	let lines = 0;
-	for await (const line of sourceLines(path)) {
+	for await (const line of fileLines(path)) {
 		lines += line === "" ? 0 : 1;
 	}
 
 	return lines;
 }
 
-export interface CaptureObserver {
-	readonly carry: (characters: number) => void;
-}
-
-const IGNORE_CARRY: CaptureObserver = { carry: () => undefined };
-
 export async function captureTranscriptPrefix(
 	sourcePath: string,
 	destinationPath: string,
 	cut: number,
-	observer: CaptureObserver = IGNORE_CARRY,
+	observer: LineObserver = IGNORE_CARRY,
 ): Promise<CapturedPrefix> {
 	const total = await countLines(sourcePath);
 	if (!Number.isInteger(cut) || cut < 1 || cut > total) {
@@ -157,7 +125,7 @@ export async function captureTranscriptPrefix(
 	const writer = Bun.file(destinationPath).writer();
 	let written = 0;
 
-	for await (const line of sourceLines(sourcePath, observer.carry)) {
+	for await (const line of fileLines(sourcePath, observer)) {
 		if (written === cut) {
 			break;
 		}

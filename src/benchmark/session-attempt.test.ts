@@ -254,6 +254,23 @@ describe(forkTranscript.name, () => {
 			`${bytes.replaceAll(SOURCE_SESSION, "fresh-uuid")}\n`,
 		);
 	});
+
+	it("keeps a source that ends without a newline ending without one", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-fork-"));
+		const source = join(directory, "source.jsonl");
+		const forked = join(directory, "forked.jsonl");
+		const bytes = [
+			transcriptLine(SOURCE_SESSION, "first"),
+			transcriptLine(SOURCE_SESSION, "second"),
+		].join("\n");
+		await writeFile(source, bytes);
+
+		await forkTranscript(source, forked, SOURCE_SESSION, "fresh-uuid");
+
+		expect(await Bun.file(forked).text()).toBe(
+			bytes.replaceAll(SOURCE_SESSION, "fresh-uuid"),
+		);
+	});
 });
 
 function resumingCase(transcriptPath: string): SessionCase {
