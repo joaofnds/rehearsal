@@ -7,5 +7,5 @@
 	"finalRubric": "rubric.md",
 	"pipeline": "pipelines/default.json",
 	"rubrics": "rubrics",
-	"target": { "path": "../../../nestjs-template" }
+	"target": { "path": "../../../nest/template" }
 }

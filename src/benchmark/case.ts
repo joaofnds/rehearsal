@@ -165,6 +165,21 @@ async function loadPipelineWithRubrics(
 	return { pipeline, stageRubrics };
 }
 
+/**
+ * The target is the one declared path that may name a repository outside the
+ * case directory, so it is resolved against that directory rather than confined
+ * to it by `caseRelative`. The base is the case directory all the same: one
+ * base for every path in a declaration.
+ */
+function declaredTarget(declaration: CaseDeclaration): string {
+	const { path } = declaration.target;
+	if (isAbsolute(path)) {
+		return path;
+	}
+
+	return resolve(caseDirectory(declaration.id), path);
+}
+
 export async function loadCase(id: string): Promise<BenchmarkCase> {
 	const declaration = await readCaseDeclaration(id);
 	const pipelinePath = relative(
@@ -189,9 +204,7 @@ export async function loadCase(id: string): Promise<BenchmarkCase> {
 		pipelinePath,
 		pipeline,
 		stageRubrics,
-		targetPath: isAbsolute(declaration.target.path)
-			? declaration.target.path
-			: resolve(CONTROL_DIR, declaration.target.path),
+		targetPath: declaredTarget(declaration),
 	};
 }
 

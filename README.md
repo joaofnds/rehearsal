@@ -306,7 +306,7 @@ Unit and filesystem integration tests for configuration parsing, stage and final
 - clean target repository on `main`
 - enough budget for one engineering session per pipeline stage, the shared PO, up to two calls for each stage or final Judge when output validation requires correction, and any calibration rejudges
 
-Set the target to `/Users/joaofnds/code/nest/template` through `--target` or `BENCHMARK_TARGET_DIR`.
+The `audit-log` case declares `/Users/joaofnds/code/nest/template` as its target, so a run needs no `--target`. Point a run at another checkout with `--target` or `BENCHMARK_TARGET_DIR`.
 
 ## Running
 
@@ -325,7 +325,6 @@ bun run rehearsal case show audit-log --json
 
 bun run rehearsal run \
   --case audit-log \
-  --target /Users/joaofnds/code/nest/template \
   --model sonnet \
   --effort high \
   --session-budget-usd 10

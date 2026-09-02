@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { caseRelative, loadCase, parseCaseDeclaration } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
-import { join } from "node:path";
+import { stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
 import { PROJECT_ROOT } from "#benchmark/test-support";
@@ -31,7 +32,7 @@ describe(parseCaseDeclaration.name, () => {
 			finalRubric: "rubric.md",
 			pipeline: "pipelines/default.json",
 			rubrics: "rubrics",
-			target: { path: "../../../nestjs-template" },
+			target: { path: "../../../nest/template" },
 		});
 	}
 
@@ -91,6 +92,25 @@ describe("loadCase", () => {
 
 	it("refuses a case with no declaration on disk, naming it", () => {
 		expect(loadCase("missing")).rejects.toThrow("Unknown case missing");
+	});
+
+	it("resolves the declared target to a directory that exists", async () => {
+		const benchmarkCase = await loadCase("audit-log");
+
+		const target = await stat(benchmarkCase.targetPath);
+		expect(target.isDirectory()).toBe(true);
+	});
+
+	it("resolves a relative declared target against the case directory", async () => {
+		const benchmarkCase = await loadCase("audit-log");
+
+		expect(benchmarkCase.targetPath).toBe(
+			resolve(
+				CONTROL_DIR,
+				"cases/audit-log",
+				benchmarkCase.declaration.target.path,
+			),
+		);
 	});
 
 	it("returns the audit-log task, brief, and final rubric byte for byte", async () => {
