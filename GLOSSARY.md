@@ -2,19 +2,33 @@
 
 - **Artifact** — durable output of a stage: a spec or plan document, a backlog
   card update, or commits.
-- **Attempt** — one execution of a stage at a checkpoint: the original run's
-  stage result or any replay; the unit a comparison presents.
+- **Attempt** — one execution of a case's unit of work: a stage at a checkpoint
+  (the original run's stage result or any replay) or one session of a session
+  case. The unit a comparison presents.
+- **Attempt directory** — the fresh temporary directory the harness creates and
+  owns for one session attempt, seeded from the case's fixture tree when it
+  declares one. A session attempt never runs in a live repository, and the
+  directory's real path is what names the attempt's project slug.
 - **Calibration** — the human-review step that validates a Judge result and
   turns findings into rubric or instruction changes.
 - **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
   state, artifacts, and lineage.
 - **Check-integrity file** — a target-relative file declared by the pipeline
   whose presence and bytes are frozen at baseline and compared after delivery.
+- **Check kind** — one deterministic assertion a session case may declare, the
+  discriminator of a check: `word-band` and `forbidden-text` read the reply,
+  `tool-calls` and `files-read` read the transcript. A kind states what it
+  needs and what it reports; the case supplies the values it compares against,
+  so no literal a case could differ on lives in the check.
+- **Check list** — the ordered deterministic checks a session case declares as
+  its judge. It is evaluated over the reply and the transcript, needs no
+  provider call, and its rep outcome is successful when and only when every
+  check passes.
 - **Confirmation run** — an explicitly requested group of at least two reps over
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
-  `compare`, `case list`, `case show`), declaring its own flags with their
+  `compare`, `case list`, `case show`, `case capture`), declaring its own flags with their
   defaults, environment fallbacks, and help lines as data. A name is one or two
   tokens; the longer declared name wins over a prefix of it. The declaration is the single source of
   the flag's name in help, parsing, and documentation.
@@ -44,8 +58,14 @@
   case cannot carry another kind's inputs.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
-- **Corpus (instruction corpus)** — the instruction files under evaluation:
-  the installed `CLAUDE.md`, the stage skills, and related agent configuration.
+- **Corpus (instruction corpus)** — the instruction files under evaluation: the
+  installed `CLAUDE.md`, the stage skills, the output styles, and the agent
+  definitions. A case names the ones it reads in corpus layout paths
+  (`CLAUDE.md`, `skills/<name>/...`, `output-styles/<name>.md`,
+  `agents/<name>.md`), which one resolver maps onto the install, so an edit to
+  any of them can make a prior attempt stale.
+- **Cut** — the 0-based line index of the first session-file record a transcript
+  prefix drops. A cut of N keeps lines [0, N).
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
@@ -94,8 +114,9 @@
 - **Rep** — one repetition of a run; scores are distributions over reps, never
   a single rep.
 - **Rep outcome** — one binary reliability observation. A declared stage
-  succeeds with Judge grade A or B; the final outcome succeeds with Judge PASS.
-  A stop or execution failure is unsuccessful.
+  succeeds with Judge grade A or B; the final outcome succeeds with Judge PASS;
+  a session case's rep succeeds when every check in its check list passes. A
+  stop or execution failure is unsuccessful.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
 - **Rubric** — the frozen grading contract a Judge applies; per-stage under the
@@ -112,6 +133,12 @@
   and cannot be overwritten by a later normal transition.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
+- **Session case** — a benchmark case whose unit of work is one Claude session
+  rather than a stage graph. It declares an optional fixture tree, the prompt,
+  an optional transcript prefix to resume, the tool and settings overlays, any
+  agent definitions, the corpus files it reads, and its check list. It runs in
+  an attempt directory, once as a debug attempt or under `--confirm` as reps,
+  with the same records, reports, and cost ceiling as a stage replay.
 - **Session knobs** — the CLI and environment settings shared by run and replay
   that select the workflow and Judge models and efforts and set the per-session
   spend limit.
@@ -136,6 +163,10 @@
 - **Trajectory step** — one workflow-agent turn reported by the provider. PO and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
+- **Transcript prefix** — a real session file truncated at a cut, kept as the
+  frozen starting state of a session case. Its bytes are git-ignored under
+  `.benchmark-runs/cases/<case>/` and hashed into lineage; only its digest, its
+  source session, and its cut are committed, in the case declaration.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
 - **Workflow state** — the untracked `backlog/` and `.boris/` trees that carry
   workflow artifacts between stages and must be copied independently of Git.
