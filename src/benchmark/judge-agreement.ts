@@ -1,3 +1,11 @@
+import { createHash } from "node:crypto";
+import type {
+	HumanReview,
+	JudgeGrade,
+	StageGrade,
+	StageRubric,
+} from "./contracts";
+
 export type AgreementDecision = "PASS" | "FAIL";
 
 export interface JudgeAgreementObservation {
@@ -32,6 +40,24 @@ export interface JudgeAgreementReport {
 	readonly baselines: readonly JudgeAgreementBaseline[];
 }
 
+interface CalibratedStage {
+	readonly stage: string;
+	readonly rubric: StageRubric;
+	readonly grade: StageGrade;
+}
+
+interface CalibratedFinal {
+	readonly rubric: string;
+	readonly grade: JudgeGrade;
+}
+
+interface CalibrationObservationInput {
+	readonly judgeModel: string;
+	readonly humanReview: HumanReview;
+	readonly stages: readonly CalibratedStage[];
+	readonly final?: CalibratedFinal | undefined;
+}
+
 interface MutableCriterionCounts {
 	judgePassHumanPass: number;
 	judgeFailHumanFail: number;
@@ -55,6 +81,121 @@ function compareText(left: string, right: string): number {
 	}
 
 	return 0;
+}
+
+function sha256(value: string): string {
+	return createHash("sha256").update(value).digest("hex");
+}
+
+export function stageRubricSha256(rubric: StageRubric): string {
+	return sha256(JSON.stringify(rubric));
+}
+
+export function finalRubricSha256(rubric: string): string {
+	return sha256(rubric);
+}
+
+function humanDecision(
+	review: HumanReview,
+	stage: string,
+	rubricId: string,
+	judgeDecision: AgreementDecision,
+): AgreementDecision {
+	const finding = review.findings.find(
+		(candidate) =>
+			candidate.stage === stage &&
+			candidate.rubricId === rubricId &&
+			candidate.judgeAssessment !== "NOT_PROMOTED",
+	);
+	if (finding === undefined) {
+		return judgeDecision;
+	}
+	if (finding.judgeAssessment === "FALSE_POSITIVE") {
+		return "PASS";
+	}
+
+	return "FAIL";
+}
+
+function stageDecision(grade: StageGrade, rubricId: string): AgreementDecision {
+	const blocker = grade.hardBlockers.find(({ id }) => id === rubricId);
+	if (blocker !== undefined) {
+		return blocker.status;
+	}
+	const requirement = grade.requirements.find(({ id }) => id === rubricId);
+	if (requirement !== undefined) {
+		return requirement.status;
+	}
+	const dimension = grade.dimensions.find(({ id }) => id === rubricId);
+	if (dimension !== undefined) {
+		return dimension.grade === "A" || dimension.grade === "B" ? "PASS" : "FAIL";
+	}
+
+	throw new Error(`Stage grade is missing rubric criterion ${rubricId}`);
+}
+
+function stageObservations(
+	judgeModel: string,
+	review: HumanReview,
+	stage: Readonly<CalibratedStage>,
+): readonly JudgeAgreementObservation[] {
+	const rubricSha256 = stageRubricSha256(stage.rubric);
+	const rubricIds = [
+		...stage.rubric.hardBlockers,
+		...stage.rubric.requirements,
+		...stage.rubric.dimensions,
+	].map(({ id }) => id);
+
+	return rubricIds.map((rubricId) => {
+		const judgeDecision = stageDecision(stage.grade, rubricId);
+
+		return {
+			judgeModel,
+			stage: stage.stage,
+			rubricSha256,
+			rubricId,
+			judgeDecision,
+			humanDecision: humanDecision(
+				review,
+				stage.stage,
+				rubricId,
+				judgeDecision,
+			),
+		};
+	});
+}
+
+function finalObservations(
+	judgeModel: string,
+	review: HumanReview,
+	final: Readonly<CalibratedFinal>,
+): readonly JudgeAgreementObservation[] {
+	const rubricSha256 = finalRubricSha256(final.rubric);
+
+	return final.grade.requirements.map(({ id: rubricId, status }) => ({
+		judgeModel,
+		stage: "final",
+		rubricSha256,
+		rubricId,
+		judgeDecision: status,
+		humanDecision: humanDecision(review, "final", rubricId, status),
+	}));
+}
+
+export function calibrationObservations(
+	input: Readonly<CalibrationObservationInput>,
+): readonly JudgeAgreementObservation[] {
+	const stages = input.stages.flatMap((stage) =>
+		stageObservations(input.judgeModel, input.humanReview, stage),
+	);
+	if (input.final === undefined) {
+		return stages;
+	}
+
+	return [
+		...stages,
+		...finalObservations(input.judgeModel, input.humanReview, input.final),
+	];
 }
 
 function summarizeCriterion(

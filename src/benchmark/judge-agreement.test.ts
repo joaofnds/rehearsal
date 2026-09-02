@@ -1,8 +1,24 @@
 import { describe, expect, it } from "bun:test";
 import {
 	buildJudgeAgreementReport,
+	calibrationObservations,
+	finalRubricSha256,
 	type JudgeAgreementObservation,
+	stageRubricSha256,
 } from "./judge-agreement";
+import type {
+	HumanReview,
+	JudgeGrade,
+	StageGrade,
+	StageRubric,
+} from "./contracts";
+
+const stageEvidence = [
+	{ source: "task" as const, path: "task.md", claim: "fixture evidence" },
+];
+const finalEvidence = [
+	{ source: "diff" as const, path: "change.diff", claim: "fixture evidence" },
+];
 
 describe(buildJudgeAgreementReport.name, () => {
 	it("reports raw agreement counts and Cohen's kappa", () => {
@@ -45,5 +61,263 @@ describe(buildJudgeAgreementReport.name, () => {
 				},
 			],
 		});
+	});
+
+	it("reports null kappa when expected agreement is one", () => {
+		const observations: readonly JudgeAgreementObservation[] = [
+			{
+				judgeModel: "opus",
+				stage: "final",
+				rubricSha256: "a".repeat(64),
+				rubricId: "correctness",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+		];
+
+		const report = buildJudgeAgreementReport(observations, 0);
+
+		expect(report.baselines[0]?.criteria[0]).toMatchObject({
+			sampleSize: 1,
+			observedAgreement: 1,
+			cohensKappa: null,
+		});
+	});
+
+	it("keeps model, rubric, stage, and criterion identities separate", () => {
+		const observations: readonly JudgeAgreementObservation[] = [
+			{
+				judgeModel: "sonnet",
+				stage: "build",
+				rubricSha256: "b".repeat(64),
+				rubricId: "second",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "shape",
+				rubricSha256: "a".repeat(64),
+				rubricId: "second",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: "b".repeat(64),
+				rubricId: "second",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: "a".repeat(64),
+				rubricId: "second",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: "a".repeat(64),
+				rubricId: "first",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+		];
+
+		const report = buildJudgeAgreementReport(observations, 0);
+
+		expect(
+			report.baselines.map((baseline) => ({
+				judgeModel: baseline.judgeModel,
+				stage: baseline.stage,
+				rubricSha256: baseline.rubricSha256,
+				rubricIds: baseline.criteria.map(({ rubricId }) => rubricId),
+			})),
+		).toEqual([
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: "a".repeat(64),
+				rubricIds: ["first", "second"],
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: "b".repeat(64),
+				rubricIds: ["second"],
+			},
+			{
+				judgeModel: "opus",
+				stage: "shape",
+				rubricSha256: "a".repeat(64),
+				rubricIds: ["second"],
+			},
+			{
+				judgeModel: "sonnet",
+				stage: "build",
+				rubricSha256: "b".repeat(64),
+				rubricIds: ["second"],
+			},
+		]);
+	});
+});
+
+describe(calibrationObservations.name, () => {
+	it("labels every original stage and final rubric decision", () => {
+		const rubric = {
+			hardBlockers: [{ id: "caught", description: "caught blocker" }],
+			requirements: [
+				{ id: "missed", description: "missed requirement" },
+				{ id: "agreed-fail", description: "agreed failure" },
+			],
+			dimensions: [
+				{
+					id: "false-positive",
+					description: "false positive dimension",
+					good: "good",
+					excellent: "excellent",
+				},
+				{
+					id: "agreed-pass",
+					description: "agreed passing dimension",
+					good: "good",
+					excellent: "excellent",
+				},
+			],
+		} satisfies StageRubric;
+		const grade = {
+			hardBlockers: [{ id: "caught", status: "FAIL", evidence: stageEvidence }],
+			requirements: [
+				{ id: "missed", status: "PASS", evidence: stageEvidence },
+				{ id: "agreed-fail", status: "FAIL", evidence: stageEvidence },
+			],
+			dimensions: [
+				{ id: "false-positive", grade: "C", evidence: stageEvidence },
+				{ id: "agreed-pass", grade: "A", evidence: stageEvidence },
+			],
+			summary: "stage grade",
+			grade: "F",
+			verdict: "STOP",
+		} satisfies StageGrade;
+		const finalRubric = "# Final rubric\n\n- final-missed\n- final-pass\n";
+		const finalGrade = {
+			requirements: [
+				{ id: "final-missed", status: "PASS", evidence: finalEvidence },
+				{ id: "final-pass", status: "PASS", evidence: finalEvidence },
+			],
+			verdict: "PASS",
+			summary: "final grade",
+		} satisfies JudgeGrade;
+		const humanReview = {
+			verdict: "REJECT",
+			summary: "calibrated all decisions",
+			findings: [
+				{
+					description: "caught",
+					paths: ["caught.ts"],
+					stage: "build",
+					judgeAssessment: "CAUGHT",
+					rubricId: "caught",
+				},
+				{
+					description: "missed",
+					paths: ["missed.ts"],
+					stage: "build",
+					judgeAssessment: "MISSED",
+					rubricId: "missed",
+				},
+				{
+					description: "false positive",
+					paths: ["false-positive.ts"],
+					stage: "build",
+					judgeAssessment: "FALSE_POSITIVE",
+					rubricId: "false-positive",
+				},
+				{
+					description: "not promoted",
+					paths: ["note.ts"],
+					stage: "build",
+					judgeAssessment: "NOT_PROMOTED",
+					rubricId: null,
+				},
+				{
+					description: "final missed",
+					paths: ["final.ts"],
+					stage: "final",
+					judgeAssessment: "MISSED",
+					rubricId: "final-missed",
+				},
+			],
+		} satisfies HumanReview;
+
+		const observations = calibrationObservations({
+			judgeModel: "opus",
+			humanReview,
+			stages: [{ stage: "build", rubric, grade }],
+			final: { rubric: finalRubric, grade: finalGrade },
+		});
+
+		expect(observations).toEqual([
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: stageRubricSha256(rubric),
+				rubricId: "caught",
+				judgeDecision: "FAIL",
+				humanDecision: "FAIL",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: stageRubricSha256(rubric),
+				rubricId: "missed",
+				judgeDecision: "PASS",
+				humanDecision: "FAIL",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: stageRubricSha256(rubric),
+				rubricId: "agreed-fail",
+				judgeDecision: "FAIL",
+				humanDecision: "FAIL",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: stageRubricSha256(rubric),
+				rubricId: "false-positive",
+				judgeDecision: "FAIL",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "build",
+				rubricSha256: stageRubricSha256(rubric),
+				rubricId: "agreed-pass",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+			{
+				judgeModel: "opus",
+				stage: "final",
+				rubricSha256: finalRubricSha256(finalRubric),
+				rubricId: "final-missed",
+				judgeDecision: "PASS",
+				humanDecision: "FAIL",
+			},
+			{
+				judgeModel: "opus",
+				stage: "final",
+				rubricSha256: finalRubricSha256(finalRubric),
+				rubricId: "final-pass",
+				judgeDecision: "PASS",
+				humanDecision: "PASS",
+			},
+		]);
 	});
 });
