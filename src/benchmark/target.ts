@@ -5,6 +5,7 @@ import { captureBoundedContent } from "./checks";
 import { CommandError, runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
 import { StageValidationError } from "./contracts";
+import type { WorkflowPath } from "./workflow-state";
 import { copyWorkflowState, replaceWorkflowState } from "./workflow-state";
 
 export interface SourceBaseline {
@@ -15,6 +16,7 @@ export interface SourceBaseline {
 
 export interface WorkflowBackup {
 	readonly directory: string;
+	readonly presentPaths: readonly WorkflowPath[];
 }
 
 export async function git(
@@ -97,9 +99,9 @@ export async function captureWorkflowBackup(
 	targetDir: string,
 ): Promise<WorkflowBackup> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
-	await copyWorkflowState(targetDir, directory);
+	const presentPaths = await copyWorkflowState(targetDir, directory);
 
-	return { directory };
+	return { directory, presentPaths };
 }
 
 async function runMarkerPath(root: string): Promise<string> {
@@ -139,7 +141,11 @@ export async function restoreTarget(
 	await git(source.root, "clean", "-fd");
 
 	if (backup) {
-		await replaceWorkflowState(backup.directory, source.root);
+		await replaceWorkflowState(
+			backup.directory,
+			source.root,
+			backup.presentPaths,
+		);
 	}
 
 	const restored = await assertSourceReady(source.root);

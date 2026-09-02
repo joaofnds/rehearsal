@@ -1,10 +1,12 @@
 import { cp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const WORKFLOW_PATHS = ["backlog", ".boris"] as const;
+export type WorkflowPath = "backlog" | ".boris";
+
+const WORKFLOW_PATHS: readonly WorkflowPath[] = ["backlog", ".boris"];
 
 export interface WorkflowTree {
-	readonly path: string;
+	readonly path: WorkflowPath;
 	readonly directory: string;
 }
 
@@ -38,8 +40,18 @@ export async function existingWorkflowTrees(
 export async function copyWorkflowState(
 	from: string,
 	to: string,
+): Promise<readonly WorkflowPath[]> {
+	const trees = await existingWorkflowTrees(from);
+	await copyWorkflowTrees(trees, to);
+
+	return trees.map((tree) => tree.path);
+}
+
+async function copyWorkflowTrees(
+	trees: readonly WorkflowTree[],
+	to: string,
 ): Promise<void> {
-	for (const tree of await existingWorkflowTrees(from)) {
+	for (const tree of trees) {
 		await cp(tree.directory, join(to, tree.path), { recursive: true });
 	}
 }
@@ -47,10 +59,14 @@ export async function copyWorkflowState(
 export async function replaceWorkflowState(
 	from: string,
 	to: string,
+	paths: readonly WorkflowPath[],
 ): Promise<void> {
 	for (const path of WORKFLOW_PATHS) {
 		await rm(join(to, path), { force: true, recursive: true });
 	}
 
-	await copyWorkflowState(from, to);
+	await copyWorkflowTrees(
+		paths.map((path) => ({ path, directory: join(from, path) })),
+		to,
+	);
 }

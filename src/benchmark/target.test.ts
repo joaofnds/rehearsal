@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { chmod, mkdir, mkdtemp, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "./command";
@@ -320,9 +320,7 @@ describe(restoreTarget.name, () => {
 		expect(
 			await Bun.file(join(backlogDirectory, "generated.md")).exists(),
 		).toBe(false);
-		expect(await Bun.file(join(source.directory, ".boris")).exists()).toBe(
-			false,
-		);
+		expect(stat(join(source.directory, ".boris"))).rejects.toThrow();
 	});
 });
 
@@ -339,6 +337,38 @@ describe(captureWorkflowBackup.name, () => {
 		} finally {
 			await chmod(source.directory, 0o755);
 		}
+	});
+
+	it("rejects a captured workflow tree missing from the backup", async () => {
+		const source = await testResources.createRepository();
+		await Bun.write(
+			join(source.directory, "backlog", "original.md"),
+			"original\n",
+		);
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await rm(join(backup.directory, "backlog"), {
+			force: true,
+			recursive: true,
+		});
+
+		expect(restoreTarget(baseline, backup)).rejects.toThrow();
+	});
+
+	it("ignores a workflow tree planted in the backup after capture", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await Bun.write(
+			join(backup.directory, ".boris", "planted.md"),
+			"planted\n",
+		);
+
+		await restoreTarget(baseline, backup);
+
+		expect(stat(join(source.directory, ".boris"))).rejects.toThrow();
 	});
 });
 
