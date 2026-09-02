@@ -441,4 +441,140 @@ made, and none was needed; total spend on provider calls: $0.00.
 Due. The change touches the record schemas every recorded run and comparison is
 read through, moves five committed files, and adds a comparability rule that can
 refuse evidence.
+
+## Review fixes
+
+Seven findings from the ACT-26.4 review, each fixed in its own commit, test
+first where a test could pin it. The card's status was not moved.
+
+1. **The shipped case declared a target that resolved nowhere** (`79ab2e7`).
+   `loadCase("audit-log").targetPath` was `/Users/nestjs-template`, which does
+   not exist, so a run with neither `--target` nor `BENCHMARK_TARGET_DIR`, the
+   invocation criterion 15 and the README describe, died at `assertSourceReady`.
+   Two tests pin it: the resolved target is a directory that exists, and a
+   relative target resolves against the case directory. Observed:
+   `loadCase("audit-log")` now returns `/Users/joaofnds/code/nest/template` and
+   `stat` reports it a directory.
+2. **The comparability rule refused legacy confirmation records** (`c34cebd`).
+   The loader now records what the group file actually declared, separate from
+   the record every other reader sees, and `assertArmRanTheCase` refuses only a
+   declared id that disagrees. Pinned both ways: a legacy group with no `caseId`
+   loads in a manifest named `case-1`, and a group carrying a different id is
+   still refused naming the case, the arm, and both ids. The legacy default is
+   unchanged for every other reader.
+3. **The `caseId` write path was unpinned** (`831aa18`). The criterion-10 test
+   now drives `audit-log-follow-up`, a case id that is not the schema fallback,
+   so the reviewer's deletions fail. Verified by repeating all three mutations:
+   deleting the four `caseId` lines in `pipeline-confirmation.ts` fails the
+   criterion-10 test and the group site fails to compile
+   (`ConfirmationGroupFinalization` already requires the field); deleting
+   `confirmation-evidence.ts:227` fails the same test; replacing the CLI's
+   `caseId` with `"WRONG"` fails the new `buildConfirmationRequest` test.
+4. **One unreadable directory hid every valid case** (`f3c567c`). `listCases`
+   returns readable declarations and unreadable directories separately.
+   Observed: with `cases/zz-stray-probe` present, `rehearsal case list` exits 0,
+   prints `audit-log` on stdout and the unreadable directory on stderr, checked
+   by redirecting each stream separately.
+5. **`case list` crashed with a raw ENOENT when `cases/` was absent**
+   (`3a31207`). It now raises the module's own `CaseDeclarationError`, which
+   `asRefusedPrecondition` translates. Observed: with `cases/` moved aside,
+   `rehearsal case list` prints `No case directory at cases` and exits 3.
+6. **`bun test` recreated an untracked `pipelines/` at the control root**
+   (`8e67abb`). Both sites write into a temporary directory under the control
+   root, tracked by `TestResources` before it holds anything. Observed: removed
+   `pipelines/`, ran the full suite, and it did not return; no stray
+   `rehearsal-test-*` directory was left and `cases/audit-log/pipelines/` still
+   holds only `default.json`.
+7. **The empty-target guard was unreachable in tests** (`591a2c6`). Kept, with a
+   test naming the one live branch. Verified the test fails when the guard is
+   deleted.
+
+## Decided autonomously, at the review fixes
+
+Nobody answers questions in this run. Each decision follows the dispatch's
+decision policy and can be reversed by João.
+
+1. **A relative `target.path` resolves against the case directory, and the
+   audit-log case declares `../../../nest/template`.** Reason: every other path
+   in a declaration already resolves against the case directory through
+   `caseRelative`, and the reviewer named the two-base split as the
+   inconsistency. One base for the whole declaration. `target.path` is still not
+   run through `caseRelative`, because a case may legitimately name a repository
+   outside its own directory; a comment on `declaredTarget` records that. The
+   README no longer both passes `--target` and claims the case supplies it.
+2. **An unreadable case directory is reported on stderr while the valid lines
+   print on stdout and the exit stays 0.** Reason: a silent skip hides a
+   half-written case from the person who half-wrote it, and the glossary's exit
+   codes reserve a nonzero exit for a refused command. The listing is still the
+   record on stdout, so `--json` is unaffected.
+3. **The `sourceDir === ""` guard stays, rather than being deleted as dead.**
+   Reason: `resolve("")` is the process's working directory, so without the
+   guard `BENCHMARK_TARGET_DIR=""` silently points a run at the control
+   repository instead of refusing. That branch is live and now has a test.
+4. **Finding 3's compiler guard stops at the record-input types that already
+   exist; no branded case-id type was introduced.** Reason: policy rule 2,
+   smallest coherent scope. A branded string would be new machinery with no
+   precedent in this repository, and the dispatch's bar is "fail to compile or
+   fail a test". Every mutation the reviewer performed now does one or the
+   other. Reshaping `PipelineConfirmationRequest` to carry the loaded
+   `BenchmarkCase` instead of copying seven of its fields is the real structural
+   opportunity here, and it is a task, not a review fix.
+
+## Recorded, no code change
+
+- **Note 9.** `caseId` is validated three ways for one concept: `case.ts`'s
+  strict lowercase regex, `confirmation-record.ts`'s looser identity regex, and
+  `manifest.ts`'s bare `min(1)`, with the loosest on the record read back from
+  disk. No reachable bad path was found. Left as is: tightening the disk-side
+  schemas would refuse records that are already valid, which is a records change
+  with no defect behind it.
+- **Note 11.** `case list` without `--json` prints a tab-separated id and title,
+  while the glossary says a command never prints a second summary-only shape and
+  `case show` prints a path. Criterion 3 demanded the listing, so the criterion
+  and the glossary conflict. Recorded as a decision rather than fixed: the
+  criterion is the settled constraint for this card, and changing the glossary is
+  João's to make.
+- **Note 12.** Loading the case precedes the TTY refusal, forced by criterion 15,
+  so a refused run reads the case files first. All reads are read-only inside the
+  control repository and no target is claimed; criterion 6 still holds.
+- **Note 14.** The criterion-13 loader test passes with the comparability rule
+  deleted, so its title claims more than it checks. The rule itself is pinned by
+  `comparison-comparability.test.ts`, including the two new directions above.
+- **Note 8.** The review patch included a `.gitignore` hunk not in the
+  repository, because `chore: unignore backlog` landed mid-run. The reviewer read
+  the repository at HEAD, which is correct. No action.
+
+## Observed at the review fixes, and how
+
+Every claim is a tool result from this dispatch. No paid provider call was made;
+total spend on provider calls: $0.00.
+
+- `loadCase("audit-log")` printed `/Users/joaofnds/code/nest/template` and
+  `stat(...).isDirectory()` was `true`.
+- `bun rehearsal.ts case list` with a stray `cases/zz-stray-probe`: exit 0,
+  `audit-log` and its title on stdout, the stray's reason on stderr, each stream
+  checked separately by redirecting the other to `/dev/null`.
+- `bun rehearsal.ts case list` with `cases/` moved aside: `No case directory at
+  cases`, exit 3.
+- Removed `pipelines/`, ran `bun test`, and `ls -d pipelines` still reported no
+  such file.
+- Each of the reviewer's three mutations reproduced and confirmed to now fail:
+  the four `caseId` deletions in `pipeline-confirmation.ts` (one a compile
+  error, the rest a test failure), the `confirmation-evidence.ts` deletion, and
+  `caseId: "WRONG"` in the CLI wiring. Deleting the `sourceDir === ""` guard now
+  fails its new test, and reverting the comparability change fails the new
+  legacy-record test.
+- `bun run typecheck`, `bun run lint`, `bun run fmt:check`, and `bun test` each
+  exited 0 at the final commit, with 560 tests passing. `git status` is clean.
+
+## Not verified at the review fixes
+
+- No run, replay, confirmation, or comparison was executed against a live
+  provider. The `caseId` on records written by a real session is still proven by
+  fake-backed tests, not by a recorded run on disk.
+- The declared target now resolves to a real directory, verified by `stat`. No
+  run was executed against it, so nothing here shows the harness completing a run
+  from the case's declared target.
+- The legacy `caseId` path is still proven by synthesized legacy records; no
+  pre-change record exists on disk to read.
 <!-- SECTION:NOTES:END -->
