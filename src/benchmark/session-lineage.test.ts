@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
@@ -45,6 +45,12 @@ function corpus(sha256: string): readonly ResolvedCorpusFile[] {
 const ORIGINAL = "a".repeat(64);
 const EDITED = "b".repeat(64);
 
+async function digestOf(path: string): Promise<string> {
+	return new Bun.CryptoHasher("sha256")
+		.update(await Bun.file(path).bytes())
+		.digest("hex");
+}
+
 describe(sessionLineage.name, () => {
 	it("changes when a declared corpus file's bytes change", async () => {
 		const [before, after] = await Promise.all([
@@ -55,8 +61,39 @@ describe(sessionLineage.name, () => {
 		expect(after).not.toBe(before);
 	});
 
-	it("is unchanged when a file beside a declared one changes", async () => {
-		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+	/**
+	 * AC 21's second half: an undeclared file beside a declared corpus file must
+	 * not reach the key. The corpus arm resolves and hashes the declared file
+	 * for real, so writing a neighbour into the same directory would change the
+	 * key if the lineage read the directory rather than the declaration.
+	 */
+	it("is unchanged when an undeclared file beside a declared corpus file changes", async () => {
+		const installed = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const declared = join(installed, "declared.md");
+		await writeFile(declared, "declared\n");
+		const declaredCorpus = [
+			{
+				path: "output-styles/declared.md",
+				resolvedPath: declared,
+				sha256: await digestOf(declared),
+			},
+		];
+
+		const before = await sessionLineage(
+			sessionCase(),
+			declaredCorpus,
+			settings,
+		);
+		await writeFile(join(installed, "undeclared.md"), "undeclared\n");
+		const after = await sessionLineage(sessionCase(), declaredCorpus, settings);
+
+		expect(after).toBe(before);
+	});
+
+	it("is unchanged when a file beside the fixture tree changes", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+		const fixture = join(root, "fixture");
+		await mkdir(fixture, { recursive: true });
 		await writeFile(join(fixture, "declared.md"), "declared\n");
 
 		const before = await sessionLineage(
@@ -64,7 +101,7 @@ describe(sessionLineage.name, () => {
 			corpus(ORIGINAL),
 			settings,
 		);
-		await writeFile(join(fixture, "..", "beside.md"), "beside\n");
+		await writeFile(join(root, "beside.md"), "beside\n");
 		const after = await sessionLineage(
 			sessionCase(fixture),
 			corpus(ORIGINAL),
