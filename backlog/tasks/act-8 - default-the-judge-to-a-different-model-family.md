@@ -1,9 +1,10 @@
 ---
 id: ACT-8
 title: default the judge to a different model family
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-08-30 12:43'
+updated_date: '2026-09-02 00:08'
 labels: []
 dependencies: []
 references:
