@@ -127,19 +127,30 @@ describe(captureTranscriptPrefix.name, () => {
 		expect(written).toBe(`${original.split("\n").slice(0, 399).join("\n")}\n`);
 	});
 
+	/**
+	 * A bound relative to the source passes for a subject that never streams at
+	 * all, because an observer that is never called leaves the widest carry at
+	 * zero. The bound is absolute and the call count is asserted, so reading the
+	 * source as one string fails on both counts.
+	 */
+	const ONE_CHUNK_AND_A_LINE = 768 * 1024;
+
 	it("never holds the whole source, only one read chunk and a partial line", async () => {
 		const path = await source(400);
 		const sourceBytes = Bun.file(path).size;
 		let widest = 0;
+		let observations = 0;
 
 		await captureTranscriptPrefix(path, await destination(), 399, {
 			carry: (characters) => {
+				observations += 1;
 				widest = Math.max(widest, characters);
 			},
 		});
 
 		expect(sourceBytes).toBeGreaterThan(1024 * 1024);
-		expect(widest).toBeLessThan(sourceBytes);
+		expect(observations).toBeGreaterThan(1);
+		expect(widest).toBeLessThan(ONE_CHUNK_AND_A_LINE);
 	});
 
 	it("returns the digest of the bytes it wrote", async () => {
