@@ -80,14 +80,19 @@ export async function captureTreatmentChecks(
 
 export async function captureFileHashes(
 	directory: string,
+	integrityFiles?: readonly string[] | undefined,
 ): Promise<Map<string, string>> {
 	const hashes = new Map<string, string>();
+	const paths = integrityFiles ?? CHECK_PATHS;
 
-	for (const path of CHECK_PATHS) {
+	for (const path of paths) {
 		const file = Bun.file(join(directory, path));
-		const content = (await file.exists())
-			? await file.bytes()
-			: new Uint8Array();
+		const exists = await file.exists();
+		if (!exists && integrityFiles !== undefined) {
+			throw new Error(`Declared check-integrity file is missing: ${path}`);
+		}
+
+		const content = exists ? await file.bytes() : new Uint8Array();
 		hashes.set(path, createHash("sha256").update(content).digest("hex"));
 	}
 
@@ -98,21 +103,30 @@ export async function captureCheckIntegrity(
 	directory: string,
 	baselineHashes: ReadonlyMap<string, string>,
 ): Promise<LocalCheckResult> {
-	const treatmentHashes = await captureFileHashes(directory);
 	const changedPaths: string[] = [];
 
 	for (const [path, baselineHash] of baselineHashes) {
-		if (treatmentHashes.get(path) !== baselineHash) {
+		const file = Bun.file(join(directory, path));
+		if (!(await file.exists())) {
+			changedPaths.push(path);
+			continue;
+		}
+
+		const treatmentHash = createHash("sha256")
+			.update(await file.bytes())
+			.digest("hex");
+		if (treatmentHash !== baselineHash) {
 			changedPaths.push(path);
 		}
 	}
+	const integrityFiles = [...baselineHashes.keys()];
 
 	return {
 		status: changedPaths.length === 0 ? "PASS" : "FAIL",
 		evidence: [
 			{
 				source: "local-checks",
-				path: CHECK_PATHS.join(", "),
+				path: integrityFiles.join(", "),
 				claim:
 					changedPaths.length === 0
 						? "Check scripts and configurations match the baseline"
