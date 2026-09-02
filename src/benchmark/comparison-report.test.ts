@@ -12,11 +12,9 @@ import type {
 	ComparisonEvidence,
 } from "./comparison-evidence";
 import { buildPairedEstimate } from "./comparison-estimator";
-import {
-	buildComparisonReport,
-	buildComparisonQuality,
-	buildComparisonResources,
-} from "./comparison-report";
+import { buildComparisonQuality } from "./comparison-quality";
+import { buildComparisonReport } from "./comparison-report";
+import { buildComparisonResources } from "./comparison-resources";
 import type { ComparisonArm } from "./comparison-record";
 import {
 	parseComparisonReport,

@@ -43,6 +43,18 @@ export interface ComparisonContract {
 	readonly reps: number;
 }
 
+export interface ComparisonRepCaseInput {
+	readonly caseId: string;
+	readonly arms: Readonly<
+		Record<ComparisonArm, readonly Immutable<ConfirmationRepRecord>[]>
+	>;
+}
+
+export interface ComparisonProjectionInput {
+	readonly contract: ComparisonContract;
+	readonly cases: readonly ComparisonRepCaseInput[];
+}
+
 export interface ComparisonEvidence {
 	readonly manifest: {
 		readonly path: string;
