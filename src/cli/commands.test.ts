@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { CommandDefinition } from "#cli/commands";
 import {
+	asUsageError,
 	COMMANDS,
 	commandHelp,
 	parseCommandLine,
 	topLevelHelp,
+	UsageError,
 } from "#cli/commands";
 
 const exampleCommand: CommandDefinition = {
@@ -154,5 +156,19 @@ describe(parseCommandLine.name, () => {
 			json: false,
 			flags: ["--model", "opus", "--yes"],
 		});
+	});
+});
+
+describe(asUsageError.name, () => {
+	it("re-raises a configuration rejection as a usage error", () => {
+		expect(() =>
+			asUsageError(() => {
+				throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
+			}),
+		).toThrow(new UsageError("Provide --target or BENCHMARK_TARGET_DIR"));
+	});
+
+	it("returns the parsed configuration when parsing succeeds", () => {
+		expect(asUsageError(() => "parsed")).toBe("parsed");
 	});
 });

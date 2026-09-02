@@ -52,6 +52,7 @@ import {
 	removeWorktree,
 } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
+import { asUsageError } from "#cli/commands";
 import {
 	RefusedPreconditionError,
 	requireInteractiveStdin,
@@ -89,7 +90,7 @@ export async function runReplayCommand(
 	request: ReplayCommandRequest,
 	dependencies: ReplayCommandDependencies,
 ): Promise<void> {
-	const config = parseReplayArgs(request.args);
+	const config = asUsageError(() => parseReplayArgs(request.args));
 	if (config.confirmation !== undefined && !config.confirmation.approved) {
 		requireInteractiveStdin(
 			request.stdinIsTerminal,

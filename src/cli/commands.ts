@@ -270,3 +270,18 @@ export function parseCommandLine(
 
 	return { helpRequested: false, argument, json, flags };
 }
+
+/**
+ * Configuration parsing rejects a missing or unparseable flag value with a
+ * plain error; at this boundary that is a usage error, and the exit code has
+ * to say so.
+ */
+export function asUsageError<Parsed>(parse: () => Parsed): Parsed {
+	try {
+		return parse();
+	} catch (error) {
+		throw new UsageError(
+			error instanceof Error ? error.message : String(error),
+		);
+	}
+}

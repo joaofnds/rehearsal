@@ -209,4 +209,41 @@ describe("rehearsal", () => {
 		expect(result.stderr).toContain("ACT-26.3");
 		expect(result.stderr).not.toContain("Target:");
 	});
+
+	it.each([
+		{
+			condition: "a required flag is missing",
+			args: ["run", "--model", "sonnet", "--session-budget-usd", "1"],
+			message: "Provide --target or BENCHMARK_TARGET_DIR",
+		},
+		{
+			condition: "a flag value is unparseable",
+			args: [
+				"run",
+				"--target",
+				"/nonexistent",
+				"--model",
+				"sonnet",
+				"--effort",
+				"extreme",
+				"--session-budget-usd",
+				"1",
+			],
+			message: "Unsupported effort for workflow: extreme",
+		},
+		{
+			condition: "a flag is given no value",
+			args: ["run", "--model"],
+			message: "Flag --model needs a value",
+		},
+	])(
+		"exits 2 with the reason on stderr when $condition",
+		async ({ args, message }) => {
+			const result = await runCli(args);
+
+			expect(result.exitCode).toBe(2);
+			expect(result.stdout).toBe("");
+			expect(result.stderr).toContain(message);
+		},
+	);
 });
