@@ -44,9 +44,48 @@ import {
 const testResources = TestResources.forEachTest();
 
 describe(runReplayConfirmation.name, () => {
-	it("records the resolved Judge model in stage confirmation evidence", async () => {
+	it("reports agreement for the resolved Judge model", async () => {
 		const harness = new ReplayConfirmationHarness(testResources);
 		const run = await harness.recordedRun();
+		const calibrationArtifact = {
+			status: "COMPLETE",
+			rubric: "1. `agreement`: calibrated\n",
+			grade: {
+				requirements: [
+					{
+						id: "agreement",
+						status: "PASS",
+						evidence: [
+							{
+								source: "diff",
+								path: "change.diff",
+								claim: "calibrated evidence",
+							},
+						],
+					},
+				],
+				verdict: "PASS",
+				summary: "calibrated grade",
+			},
+			stageScorecards: [],
+			calibration: {
+				humanReview: {
+					verdict: "ACCEPT",
+					summary: "The human agrees.",
+					findings: [],
+				},
+			},
+		};
+		await Promise.all([
+			Bun.write(
+				join(run.paths.runsDirectory, "opus-agreement.json"),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "opus" }),
+			),
+			Bun.write(
+				join(run.paths.runsDirectory, "sonnet-agreement.json"),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "sonnet" }),
+			),
+		]);
 		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "doctrine"]) {
@@ -74,11 +113,31 @@ describe(runReplayConfirmation.name, () => {
 		const group = parseConfirmationGroupRecord(
 			await Bun.file(outcome.groupRecordFile).text(),
 		);
+		const report = z
+			.object({
+				judgeAgreement: z.object({
+					baselines: z.array(
+						z.object({
+							judgeModel: z.string(),
+							criteria: z.array(
+								z.object({ rubricId: z.string(), sampleSize: z.number() }),
+							),
+						}),
+					),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(outcome.reportFile).text()));
 
 		expect({
 			model: group.inputs.model,
 			judgeModel: group.inputs.judgeModel,
 		}).toEqual({ model: "sonnet", judgeModel: "opus" });
+		expect(report.judgeAgreement.baselines).toEqual([
+			{
+				judgeModel: "opus",
+				criteria: [{ rubricId: "agreement", sampleSize: 1 }],
+			},
+		]);
 	});
 
 	it("uses the recorded target for delivery replay confirmations", async () => {

@@ -324,6 +324,104 @@ describe(calibrationObservations.name, () => {
 			},
 		]);
 	});
+
+	it("keeps real defects when a criterion also has a false positive", () => {
+		const findings = [
+			{
+				description: "caught defect",
+				paths: ["caught.ts"],
+				stage: "final" as const,
+				judgeAssessment: "CAUGHT" as const,
+				rubricId: "criterion",
+			},
+			{
+				description: "separate false positive",
+				paths: ["false-positive.ts"],
+				stage: "final" as const,
+				judgeAssessment: "FALSE_POSITIVE" as const,
+				rubricId: "criterion",
+			},
+		];
+		const humanDecisions = [findings, findings.toReversed()].map(
+			(orderedFindings) =>
+				calibrationObservations({
+					judgeModel: "opus",
+					humanReview: {
+						verdict: "REJECT",
+						summary: "reviewed both findings",
+						findings: orderedFindings,
+					},
+					stages: [],
+					final: {
+						rubric: "1. `criterion`: contract\n",
+						grade: {
+							requirements: [
+								{ id: "criterion", status: "FAIL", evidence: finalEvidence },
+							],
+							verdict: "FAIL",
+							summary: "failed criterion",
+						},
+					},
+				})[0]?.humanDecision,
+		);
+
+		expect(humanDecisions).toEqual(["FAIL", "FAIL"]);
+	});
+
+	it.each([
+		{ grade: "A" as const, decision: "PASS" },
+		{ grade: "B" as const, decision: "PASS" },
+		{ grade: "C" as const, decision: "FAIL" },
+		{ grade: "D" as const, decision: "FAIL" },
+		{ grade: "F" as const, decision: "FAIL" },
+	])("maps dimension grade $grade to $decision", ({ grade, decision }) => {
+		const [observation] = calibrationObservations({
+			judgeModel: "opus",
+			humanReview: {
+				verdict: "REJECT",
+				summary: "note does not alter the decision",
+				findings: [
+					{
+						description: "non-rubric note",
+						paths: ["note.ts"],
+						stage: "build",
+						judgeAssessment: "NOT_PROMOTED",
+						rubricId: "dimension",
+					},
+				],
+			},
+			stages: [
+				{
+					stage: "build",
+					rubric: {
+						hardBlockers: [],
+						requirements: [],
+						dimensions: [
+							{
+								id: "dimension",
+								description: "dimension contract",
+								good: "good",
+								excellent: "excellent",
+							},
+						],
+					},
+					grade: {
+						hardBlockers: [],
+						requirements: [],
+						dimensions: [{ id: "dimension", grade, evidence: stageEvidence }],
+						summary: "dimension grade",
+						grade,
+						verdict: "STOP",
+					},
+				},
+			],
+		});
+
+		expect(observation).toMatchObject({
+			judgeDecision: decision,
+			humanDecision: decision,
+		});
+	});
 });
 
 describe(loadJudgeAgreementReport.name, () => {
@@ -430,5 +528,43 @@ describe(loadJudgeAgreementReport.name, () => {
 				},
 			],
 		});
+	});
+
+	it("includes an unwritten current calibration exactly once", async () => {
+		const report = await loadJudgeAgreementReport(runsDirectory, [
+			{
+				judgeModel: "opus",
+				humanReview: {
+					verdict: "ACCEPT",
+					summary: "agrees with the decision",
+					findings: [],
+				},
+				stages: [],
+				final: {
+					rubric: "1. `criterion`: contract\n",
+					grade: {
+						requirements: [
+							{ id: "criterion", status: "PASS", evidence: finalEvidence },
+						],
+						verdict: "PASS",
+						summary: "passed criterion",
+					},
+				},
+			},
+		]);
+
+		expect(report.baselines).toMatchObject([
+			{
+				judgeModel: "opus",
+				stage: "final",
+				criteria: [
+					{
+						rubricId: "criterion",
+						sampleSize: 1,
+						judgePassHumanPass: 1,
+					},
+				],
+			},
+		]);
 	});
 });

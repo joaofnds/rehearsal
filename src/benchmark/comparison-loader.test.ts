@@ -125,6 +125,29 @@ class ComparisonEvidenceFixture {
 		}
 	}
 
+	public async useJudgeModel(
+		caseId: string,
+		judgeModel: string,
+	): Promise<void> {
+		for (const role of ["baseline", "candidate", "control"] as const) {
+			const groupFile = this.groupFile(caseId, role);
+			const group = confirmationGroupRecordSchema.parse(
+				JSON.parse(await Bun.file(groupFile).text()),
+			);
+			await Bun.write(
+				groupFile,
+				`${JSON.stringify(
+					{
+						...group,
+						inputs: { ...group.inputs, judgeModel },
+					},
+					null,
+					2,
+				)}\n`,
+			);
+		}
+	}
+
 	public async changePipelineTarget(
 		caseId: string,
 		role: ComparisonArm,
@@ -671,6 +694,7 @@ describe(loadComparisonEvidence.name, () => {
 	it("reports agreement for every represented Judge model and no others", async () => {
 		const runsDirectory = join(temporaryDirectory, "agreement-output");
 		await mkdir(runsDirectory);
+		await fixture.useJudgeModel("case-2", "sonnet");
 		const calibrationArtifact = {
 			status: "COMPLETE",
 			rubric: "1. `agreement`: calibrated\n",
@@ -734,6 +758,10 @@ describe(loadComparisonEvidence.name, () => {
 		expect(report.judgeAgreement.baselines).toEqual([
 			{
 				judgeModel: "opus",
+				criteria: [{ rubricId: "agreement", sampleSize: 1 }],
+			},
+			{
+				judgeModel: "sonnet",
 				criteria: [{ rubricId: "agreement", sampleSize: 1 }],
 			},
 		]);

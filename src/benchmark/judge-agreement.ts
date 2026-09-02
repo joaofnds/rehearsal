@@ -177,20 +177,24 @@ function humanDecision(
 	rubricId: string,
 	judgeDecision: AgreementDecision,
 ): AgreementDecision {
-	const finding = review.findings.find(
-		(candidate) =>
-			candidate.stage === stage &&
-			candidate.rubricId === rubricId &&
-			candidate.judgeAssessment !== "NOT_PROMOTED",
-	);
-	if (finding === undefined) {
-		return judgeDecision;
+	const assessments = review.findings
+		.filter(
+			(candidate) =>
+				candidate.stage === stage && candidate.rubricId === rubricId,
+		)
+		.map(({ judgeAssessment }) => judgeAssessment);
+	if (
+		assessments.some(
+			(assessment) => assessment === "CAUGHT" || assessment === "MISSED",
+		)
+	) {
+		return "FAIL";
 	}
-	if (finding.judgeAssessment === "FALSE_POSITIVE") {
+	if (assessments.includes("FALSE_POSITIVE")) {
 		return "PASS";
 	}
 
-	return "FAIL";
+	return judgeDecision;
 }
 
 function stageDecision(grade: StageGrade, rubricId: string): AgreementDecision {
