@@ -1,9 +1,13 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	buildJudgeAgreementReport,
 	calibrationObservations,
 	finalRubricSha256,
 	type JudgeAgreementObservation,
+	loadJudgeAgreementReport,
 	stageRubricSha256,
 } from "./judge-agreement";
 import type {
@@ -319,5 +323,91 @@ describe(calibrationObservations.name, () => {
 				humanDecision: "PASS",
 			},
 		]);
+	});
+});
+
+describe(loadJudgeAgreementReport.name, () => {
+	let runsDirectory: string;
+
+	beforeEach(async () => {
+		runsDirectory = await mkdtemp(join(tmpdir(), "judge-agreement-"));
+	});
+
+	afterEach(async () => {
+		await rm(runsDirectory, { force: true, recursive: true });
+	});
+
+	it("joins historical stages to manifests and skips unknown Judge models", async () => {
+		const stageArtifact = {
+			stage: "shape",
+			rubric: {
+				hardBlockers: [],
+				requirements: [{ id: "goal", description: "state the goal" }],
+				dimensions: [
+					{
+						id: "clarity",
+						description: "write clearly",
+						good: "clear",
+						excellent: "precise",
+					},
+				],
+			},
+			grade: {
+				hardBlockers: [],
+				requirements: [{ id: "goal", status: "PASS", evidence: stageEvidence }],
+				dimensions: [{ id: "clarity", grade: "A", evidence: stageEvidence }],
+				summary: "clear goal",
+				grade: "A",
+				verdict: "CONTINUE",
+			},
+			calibration: {
+				humanReview: {
+					verdict: "ACCEPT",
+					summary: "agrees with both decisions",
+					findings: [],
+				},
+			},
+		};
+		await Bun.write(
+			join(runsDirectory, "future.shape.json"),
+			JSON.stringify({ ...stageArtifact, judgeModel: "opus" }),
+		);
+		await mkdir(join(runsDirectory, "historical.checkpoints"));
+		await Bun.write(
+			join(runsDirectory, "historical.checkpoints", "manifest.json"),
+			JSON.stringify({ judgeModel: "opus" }),
+		);
+		await Bun.write(
+			join(runsDirectory, "historical.shape.json"),
+			JSON.stringify(stageArtifact),
+		);
+		await Bun.write(
+			join(runsDirectory, "pre-manifest.shape.json"),
+			JSON.stringify(stageArtifact),
+		);
+
+		const report = await loadJudgeAgreementReport(runsDirectory);
+
+		expect(report).toMatchObject({
+			skippedCalibrations: 1,
+			baselines: [
+				{
+					judgeModel: "opus",
+					stage: "shape",
+					criteria: [
+						{
+							rubricId: "clarity",
+							sampleSize: 2,
+							judgePassHumanPass: 2,
+						},
+						{
+							rubricId: "goal",
+							sampleSize: 2,
+							judgePassHumanPass: 2,
+						},
+					],
+				},
+			],
+		});
 	});
 });

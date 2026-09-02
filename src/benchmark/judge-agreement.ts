@@ -1,9 +1,19 @@
 import { createHash } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
 import type {
 	HumanReview,
 	JudgeGrade,
 	StageGrade,
 	StageRubric,
+} from "./contracts";
+import {
+	humanReviewSchema,
+	judgeGradeSchema,
+	stageJudgeOutputSchema,
+	stageLetterGradeSchema,
+	stageRubricSchema,
 } from "./contracts";
 
 export type AgreementDecision = "PASS" | "FAIL";
@@ -40,23 +50,53 @@ export interface JudgeAgreementReport {
 	readonly baselines: readonly JudgeAgreementBaseline[];
 }
 
-interface CalibratedStage {
+export interface CalibratedStage {
 	readonly stage: string;
 	readonly rubric: StageRubric;
 	readonly grade: StageGrade;
 }
 
-interface CalibratedFinal {
+export interface CalibratedFinal {
 	readonly rubric: string;
 	readonly grade: JudgeGrade;
 }
 
-interface CalibrationObservationInput {
+export interface JudgeAgreementCalibration {
 	readonly judgeModel: string;
 	readonly humanReview: HumanReview;
 	readonly stages: readonly CalibratedStage[];
 	readonly final?: CalibratedFinal | undefined;
 }
+
+const stageGradeSchema = stageJudgeOutputSchema.extend({
+	grade: stageLetterGradeSchema,
+	verdict: z.enum(["CONTINUE", "STOP"]),
+});
+const calibrationSchema = z.object({ humanReview: humanReviewSchema }).loose();
+const calibratedStageArtifactSchema = z
+	.object({
+		stage: z.string().min(1),
+		judgeModel: z.string().min(1).optional(),
+		rubric: stageRubricSchema,
+		grade: stageGradeSchema,
+		calibration: calibrationSchema,
+	})
+	.loose();
+const stageScorecardSchema = calibratedStageArtifactSchema.omit({
+	judgeModel: true,
+	calibration: true,
+});
+const calibratedFinalArtifactSchema = z
+	.object({
+		status: z.literal("COMPLETE"),
+		judgeModel: z.string().min(1),
+		rubric: z.string().min(1),
+		grade: judgeGradeSchema,
+		stageScorecards: z.array(stageScorecardSchema),
+		calibration: calibrationSchema,
+	})
+	.loose();
+const judgeManifestSchema = z.object({ judgeModel: z.string().min(1) }).loose();
 
 interface MutableCriterionCounts {
 	judgePassHumanPass: number;
@@ -183,7 +223,7 @@ function finalObservations(
 }
 
 export function calibrationObservations(
-	input: Readonly<CalibrationObservationInput>,
+	input: Readonly<JudgeAgreementCalibration>,
 ): readonly JudgeAgreementObservation[] {
 	const stages = input.stages.flatMap((stage) =>
 		stageObservations(input.judgeModel, input.humanReview, stage),
@@ -196,6 +236,88 @@ export function calibrationObservations(
 		...stages,
 		...finalObservations(input.judgeModel, input.humanReview, input.final),
 	];
+}
+
+async function readJson(path: string): Promise<unknown | undefined> {
+	try {
+		return JSON.parse(await Bun.file(path).text());
+	} catch {
+		return undefined;
+	}
+}
+
+async function historicalStageJudgeModel(
+	runsDirectory: string,
+	fileName: string,
+	stage: string,
+): Promise<string | undefined> {
+	const suffix = `.${stage}.json`;
+	if (!fileName.endsWith(suffix)) {
+		return undefined;
+	}
+
+	const runName = fileName.slice(0, -suffix.length);
+	const document = await readJson(
+		join(runsDirectory, `${runName}.checkpoints`, "manifest.json"),
+	);
+	const manifest = judgeManifestSchema.safeParse(document);
+
+	return manifest.success ? manifest.data.judgeModel : undefined;
+}
+
+export async function loadJudgeAgreementReport(
+	runsDirectory: string,
+	currentCalibrations: readonly Readonly<JudgeAgreementCalibration>[] = [],
+): Promise<JudgeAgreementReport> {
+	const observations = currentCalibrations.flatMap((calibration) =>
+		calibrationObservations(calibration),
+	);
+	let skippedCalibrations = 0;
+	const entries = await readdir(runsDirectory, { withFileTypes: true });
+	for (const entry of entries) {
+		if (!entry.isFile() || !entry.name.endsWith(".json")) {
+			continue;
+		}
+
+		const document = await readJson(join(runsDirectory, entry.name));
+		const stage = calibratedStageArtifactSchema.safeParse(document);
+		if (stage.success) {
+			const judgeModel =
+				stage.data.judgeModel ??
+				(await historicalStageJudgeModel(
+					runsDirectory,
+					entry.name,
+					stage.data.stage,
+				));
+			if (judgeModel === undefined) {
+				skippedCalibrations += 1;
+				continue;
+			}
+
+			observations.push(
+				...calibrationObservations({
+					judgeModel,
+					humanReview: stage.data.calibration.humanReview,
+					stages: [stage.data],
+				}),
+			);
+			continue;
+		}
+
+		const final = calibratedFinalArtifactSchema.safeParse(document);
+		if (final.success) {
+			observations.push(
+				...calibrationObservations({
+					judgeModel: final.data.judgeModel,
+					humanReview: final.data.calibration.humanReview,
+					stages: final.data.stageScorecards,
+					final: { rubric: final.data.rubric, grade: final.data.grade },
+				}),
+			);
+		}
+	}
+
+	return buildJudgeAgreementReport(observations, skippedCalibrations);
 }
 
 function summarizeCriterion(
