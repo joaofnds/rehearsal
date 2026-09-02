@@ -291,17 +291,28 @@ async function readCalibrationArtifact(
 	}
 }
 
-async function historicalStageJudgeModel(
-	runsDirectory: string,
-	fileName: string,
-	stage: string,
-): Promise<string | undefined> {
-	const suffix = `.${stage}.json`;
-	if (!fileName.endsWith(suffix)) {
+async function readStageScorecard(
+	path: string,
+): Promise<z.infer<typeof stageScorecardSchema> | undefined> {
+	try {
+		return stageScorecardSchema.parse(JSON.parse(await Bun.file(path).text()));
+	} catch {
 		return undefined;
 	}
+}
 
-	const runName = fileName.slice(0, -suffix.length);
+function stageRunName(fileName: string, stage: string): string | undefined {
+	const suffix = `.${stage}.json`;
+
+	return fileName.endsWith(suffix)
+		? fileName.slice(0, -suffix.length)
+		: undefined;
+}
+
+async function historicalStageJudgeModel(
+	runsDirectory: string,
+	runName: string,
+): Promise<string | undefined> {
 	try {
 		const manifest = judgeManifestSchema.parse(
 			JSON.parse(
@@ -315,6 +326,30 @@ async function historicalStageJudgeModel(
 	} catch {
 		return undefined;
 	}
+}
+
+async function completedStageScorecards(
+	runsDirectory: string,
+	runName: string,
+	entries: readonly { readonly name: string; readonly isFile: () => boolean }[],
+): Promise<readonly CalibratedStage[]> {
+	const scorecards: CalibratedStage[] = [];
+	for (const entry of entries) {
+		if (
+			!entry.isFile() ||
+			!entry.name.startsWith(`${runName}.`) ||
+			!entry.name.endsWith(".json")
+		) {
+			continue;
+		}
+
+		const scorecard = await readStageScorecard(join(runsDirectory, entry.name));
+		if (scorecard !== undefined) {
+			scorecards.push(scorecard);
+		}
+	}
+
+	return scorecards;
 }
 
 export async function loadJudgeAgreementReport(
@@ -339,13 +374,14 @@ export async function loadJudgeAgreementReport(
 		}
 		if (artifact.kind === "stage") {
 			const stage = artifact.record;
+			const runName = stageRunName(entry.name, stage.stage);
+			if (runName === undefined) {
+				skippedCalibrations += 1;
+				continue;
+			}
 			const judgeModel =
 				stage.judgeModel ??
-				(await historicalStageJudgeModel(
-					runsDirectory,
-					entry.name,
-					stage.stage,
-				));
+				(await historicalStageJudgeModel(runsDirectory, runName));
 			if (judgeModel === undefined) {
 				skippedCalibrations += 1;
 				continue;
@@ -355,7 +391,11 @@ export async function loadJudgeAgreementReport(
 				...calibrationObservations({
 					judgeModel,
 					humanReview: stage.calibration.humanReview,
-					stages: [stage],
+					stages: await completedStageScorecards(
+						runsDirectory,
+						runName,
+						entries,
+					),
 				}),
 			);
 			continue;

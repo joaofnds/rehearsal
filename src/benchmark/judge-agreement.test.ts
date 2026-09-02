@@ -381,6 +381,11 @@ describe(loadJudgeAgreementReport.name, () => {
 			join(runsDirectory, "historical.shape.json"),
 			JSON.stringify(stageArtifact),
 		);
+		const { calibration: _calibration, ...priorStageArtifact } = stageArtifact;
+		await Bun.write(
+			join(runsDirectory, "historical.discuss.json"),
+			JSON.stringify({ ...priorStageArtifact, stage: "discuss" }),
+		);
 		await Bun.write(
 			join(runsDirectory, "pre-manifest.shape.json"),
 			JSON.stringify(stageArtifact),
@@ -391,6 +396,22 @@ describe(loadJudgeAgreementReport.name, () => {
 		expect(report).toMatchObject({
 			skippedCalibrations: 1,
 			baselines: [
+				{
+					judgeModel: "opus",
+					stage: "discuss",
+					criteria: [
+						{
+							rubricId: "clarity",
+							sampleSize: 1,
+							judgePassHumanPass: 1,
+						},
+						{
+							rubricId: "goal",
+							sampleSize: 1,
+							judgePassHumanPass: 1,
+						},
+					],
+				},
 				{
 					judgeModel: "opus",
 					stage: "shape",
