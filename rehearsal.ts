@@ -106,12 +106,18 @@ async function dispatch(
 	}
 }
 
+/**
+ * `process.exit` drops whatever `process.stdout.write` has still buffered, and
+ * on a pipe that write is asynchronous, so a record larger than the pipe
+ * buffer arrives cut in half. Setting the code lets the process end once the
+ * write has drained.
+ */
 if (import.meta.main) {
 	try {
-		process.exit(await main());
+		process.exitCode = await main();
 	} catch (error) {
 		const failure = error instanceof Error ? error : new Error(String(error));
 		processOutput.stderr(`${failure.message}\n`);
-		process.exit(exitCodeFor(failure));
+		process.exitCode = exitCodeFor(failure);
 	}
 }

@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-support";
-import { parseComparisonReport } from "#benchmark/comparison-record";
+import {
+	parseComparisonManifest,
+	parseComparisonReport,
+} from "#benchmark/comparison-record";
 import { CONTROL_DIR } from "#benchmark/config";
 import {
 	benchmarkRunsDirectory,
@@ -12,6 +15,8 @@ import {
 } from "#benchmark/run-layout";
 import { COMMANDS } from "#cli/commands";
 import { PROJECT_ROOT } from "#benchmark/test-support";
+
+const PIPE_BUFFER_BYTES = 131_072;
 
 interface CliResult {
 	readonly exitCode: number;
@@ -36,6 +41,66 @@ async function runCli(
 	]);
 
 	return { exitCode, stdout, stderr };
+}
+
+/**
+ * A pipe whose reader is not already draining is what exposes an unflushed
+ * stdout: the writer blocks once the buffer fills, and an exit that does not
+ * wait for the drain loses the rest. `Bun.spawn` alone reads eagerly enough to
+ * hide it, so the record travels through a real shell pipe.
+ */
+async function runCliThroughPipe(args: readonly string[]): Promise<string> {
+	const quoted = args.map((argument) => `'${argument}'`).join(" ");
+	const child = Bun.spawn(
+		["sh", "-c", `'${process.execPath}' rehearsal.ts ${quoted} | cat`],
+		{
+			cwd: PROJECT_ROOT,
+			stdin: new Blob([""]),
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	);
+	const [stdout] = await Promise.all([
+		new Response(child.stdout).text(),
+		child.exited,
+	]);
+
+	return stdout;
+}
+
+/**
+ * One fixture writes two cases, whose report is smaller than the 131072-byte
+ * pipe buffer. Composing several fixture roots into one manifest crosses that
+ * buffer, which is what a truncated write is observable against.
+ */
+async function writeOversizedManifest(
+	roots: readonly string[],
+): Promise<string> {
+	const cases = [];
+	for (const root of roots) {
+		const fixture = new ComparisonEvidenceFixture(root);
+		await fixture.write();
+		const manifest = parseComparisonManifest(
+			await Bun.file(fixture.manifestFile).text(),
+		);
+		for (const benchmarkCase of manifest.cases) {
+			cases.push({
+				caseId: `${benchmarkCase.caseId}-${basename(root)}`,
+				arms: {
+					baseline: join(root, benchmarkCase.arms.baseline),
+					candidate: join(root, benchmarkCase.arms.candidate),
+					control: join(root, benchmarkCase.arms.control),
+				},
+			});
+		}
+	}
+	const manifestFile = join(roots[0] ?? "", "oversized-comparison.json");
+	await Bun.write(
+		manifestFile,
+		`${JSON.stringify({ schemaVersion: 1, cases }, null, 2)}\n`,
+	);
+
+	return manifestFile;
 }
 
 describe("rehearsal", () => {
@@ -140,6 +205,32 @@ describe("rehearsal", () => {
 		expect(JSON.parse(result.stdout)).toEqual(
 			JSON.parse(await Bun.file(reportFile).text()),
 		);
+	});
+
+	it("delivers a record larger than the pipe buffer whole on stdout", async () => {
+		const roots = await Promise.all(
+			[1, 2, 3, 4, 5, 6].map((ordinal) =>
+				mkdtemp(join(tmpdir(), `rehearsal-cli-oversized-${ordinal}-`)),
+			),
+		);
+		temporaryDirectories.push(...roots);
+		const manifestFile = await writeOversizedManifest(roots);
+		const manifestSha = createHash("sha256")
+			.update(await Bun.file(manifestFile).text())
+			.digest("hex");
+		const { directory: reportDirectory, reportFile } = comparisonReportPaths(
+			benchmarkRunsDirectory(CONTROL_DIR),
+			manifestSha,
+		);
+		writtenReportDirectory = reportDirectory;
+
+		const piped = await runCliThroughPipe(["compare", manifestFile, "--json"]);
+
+		const written = await Bun.file(reportFile).text();
+		expect(written.length).toBeGreaterThan(PIPE_BUFFER_BYTES);
+		expect(piped.length).toBe(written.length);
+		expect(piped).toBe(written);
+		expect(parseComparisonReport(piped).cases).toHaveLength(12);
 	});
 
 	it("refuses an unknown flag by name, with a usage exit code and no stdout", async () => {
