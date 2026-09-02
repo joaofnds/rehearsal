@@ -293,6 +293,7 @@ describe(runPipelineConfirmation.name, () => {
 		]);
 		expect(records[2]?.finalOutcome).toMatchObject({
 			status: "EXECUTION_FAILED",
+			error: "Final Judge rejected both attempts",
 			evidence: { recordFile: "final.json" },
 		});
 		expect(
@@ -452,6 +453,10 @@ describe(runPipelineConfirmation.name, () => {
 		const [failed] = records;
 		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
 
+		expect(failed?.stages[0]).toMatchObject({
+			status: "EXECUTION_FAILED",
+			error: "Worker execution failed",
+		});
 		expect(failed?.metrics).toEqual({
 			status: "MISSING",
 			calls: [{ role: "worker", metrics: CONFIRMATION_METRIC }],
@@ -571,6 +576,10 @@ describe(runPipelineConfirmation.name, () => {
 		const [failed] = records;
 		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
 
+		expect(failed?.stages[1]).toMatchObject({
+			status: "EXECUTION_FAILED",
+			error: "stage Judge invocation failed",
+		});
 		expect(failed?.metrics).toEqual({
 			status: "MISSING",
 			calls: [
@@ -862,6 +871,12 @@ describe(runPipelineConfirmation.name, () => {
 			["EXECUTION_FAILED", "NOT_REACHED"],
 			["JUDGED", "EXECUTION_FAILED"],
 		]);
+		expect(records[1]?.stages[0]).toMatchObject({
+			error: "worker failed before evidence",
+		});
+		expect(records[2]?.stages[1]).toMatchObject({
+			error: "Judge rejected both attempts",
+		});
 		expect(
 			records.every(({ outcome: result }) => result === "UNSUCCESSFUL"),
 		).toBe(true);
