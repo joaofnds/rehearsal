@@ -4,7 +4,7 @@ title: give rehearsal one CLI that agents and humans drive alike
 status: To Do
 assignee: []
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 15:25'
+updated_date: '2026-09-02 23:23'
 labels: []
 dependencies: []
 references:
@@ -31,4 +31,6 @@ Open for João, with recommendations, in doc-1: (1) whether a case run sees a co
 
 <!-- SECTION:NOTES:BEGIN -->
 João decided 2026-09-02: a case run sees a copy of the live config with only the files under test replaced; session-case transcript bytes stay git-ignored and hashed into lineage, only the case declaration is committed. Both recorded in doc-1.
+
+Spend: 0.086929 USD after ACT-26.5
 <!-- SECTION:NOTES:END -->

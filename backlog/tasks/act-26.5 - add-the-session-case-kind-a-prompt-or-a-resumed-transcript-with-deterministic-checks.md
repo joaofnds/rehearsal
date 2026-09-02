@@ -3,11 +3,11 @@ id: ACT-26.5
 title: >-
   add the session case kind: a prompt or a resumed transcript with deterministic
   checks
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 22:49'
+updated_date: '2026-09-02 23:24'
 labels: []
 dependencies:
   - ACT-26.4
@@ -29,31 +29,31 @@ Cost observed for one resumed turn: about 2 USD cold, 0.15 USD with a warm cache
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 cases/smoke/case.json declares kind session with prompt "Reply with the single word OK.", tools [], no transcript, and two checks (word-band max 1 over the reply, tool-calls max 0 over the transcript); rehearsal case show smoke --json exits 0 and prints it back through the same schema that loaded it
-- [ ] #2 A session declaration that names a fixture path outside its case directory (leading slash or .. segment) is refused at load with an error naming that path, and a session declaration carrying a pipeline field is refused naming the unrecognized key
-- [ ] #3 loadCase("smoke") returns a value whose kind is session carrying prompt, tools, and checks, and loadCase("audit-log") returns a value whose kind is pipeline carrying its task, brief, rubrics, and pipeline: one test asserts both, and the audit-log assertions are the ones ACT-26.4 already recorded, unchanged
-- [ ] #4 The word-band check reports PASS when the reply's word count is inside [min, max] and FAIL naming the count and the band when it is outside; a table-driven test covers a reply below min, at min, at max, above max, and a band that declares only max
-- [ ] #5 The forbidden-text check reports FAIL naming each declared string the reply contains and PASS when it contains none; the declared strings come from the case (an em dash and a backtick are case data, not constants in the check)
-- [ ] #6 The tool-calls check counts tool_use records in the transcript and reports FAIL when the count is outside [min, max] or when a call names a tool outside the declared names, naming the offending tool; a transcript with zero tool_use records passes max 0
-- [ ] #7 The files-read check reports PASS when every declared path appears as the file_path of a Read tool_use in the transcript and FAIL naming each declared path that does not
-- [ ] #8 A check list result is successful when and only when every check passes: a test asserts one failing check among four passing ones makes the attempt unsuccessful and the record names which check failed
-- [ ] #9 rehearsal case capture smoke --session <id-or-prefix> --cut 3 writes .benchmark-runs/cases/smoke/<file>.jsonl holding exactly lines [0,3) of the source session file, records file, sha256, sourceSession, and cut in cases/smoke/case.json, exits 0, and prints the updated declaration with --json
-- [ ] #10 case capture streams the source file line by line: a test over a source larger than the capture buffer asserts the written prefix is byte-identical to its first cut lines and that the whole source is never held as one string
-- [ ] #11 case capture --session <prefix> resolves a unique prefix to one session file and exits 3 naming both candidates when the prefix matches more than one, and exits 3 naming the prefix when it matches none
-- [ ] #12 case capture --cut with an index of 0, a negative index, or an index past the source's line count exits 2 naming the index and the source's line count
-- [ ] #13 An attempt runs in a fresh temporary directory the harness creates, seeded from the case's fixture/ tree when one is declared: a test with a fake runner asserts the working directory the runner received is not the control repository and not the case directory, and that it holds a copy of the fixture's files
-- [ ] #14 A session case with a transcript forks it into ~/.claude/projects/<slug of the attempt directory's real path>/<fresh uuid>.jsonl with every occurrence of the source session id replaced by that uuid, and a test over a two-record fixture asserts the forked bytes differ from the source only in the session id
-- [ ] #15 The slug of an attempt directory is its real path with every / replaced by -: a test asserts /private/tmp/x maps to -private-tmp-x and that a path given as /tmp/x on macOS resolves through its real path first
-- [ ] #16 After an attempt the projects slug directory holds no file the attempt created: cleanup diffs the directory listing taken before the run against the listing after and removes only entries absent from the first, and a test with a file planted mid-run asserts that file survives
-- [ ] #17 claudeArgs for a session case produces --tools "" for an empty declared tools list, --tools with the joined names otherwise, --settings with the declared settings JSON, --agents only when agents are declared, --output-format json, --max-budget-usd from the session budget, --model and --effort from the session knobs, --resume <uuid> when a transcript is declared and no --resume when none is, and never --no-session-persistence and never --json-schema
-- [ ] #18 A session debug attempt writes one record carrying the case id, the reply, the path of the transcript copy under the attempt record, the provider call metrics, and one result per declared check; rehearsal run --case smoke --json prints exactly that record and it parses with the schema that wrote it
-- [ ] #19 confirmationRepRecordSchema and confirmationGroupRecordSchema accept mode session at schemaVersion 1, with the check list as one stage entry and finalOutcome NOT_APPLICABLE, and a v1 record written before this card (mode stage or pipeline) still parses unchanged: a test asserts both
-- [ ] #20 projectConfirmationCost for mode session is reps x one session at the session budget: a test asserts 3 reps at 0.2 USD projects 0.60 USD total, and rehearsal run --case smoke --confirm --reps 2 --yes prints that projection before any provider call
-- [ ] #21 The lineage of a session attempt hashes the transcript digest, the fixture tree, the prompt, the tool and settings overlays, and the declared corpus files' bytes: a test asserts the key changes when a declared corpus file's bytes change and is unchanged when an undeclared file beside it changes
-- [ ] #22 Corpus files declared in corpus layout paths resolve through one function to the live install (output-styles/<name>.md to ~/.claude/output-styles/, agents/<name>.md to ~/.claude/agents/, skills/<name>/... to ~/.claude/skills/, CLAUDE.md to the control root), and a declared corpus file that does not exist is refused before any provider call, naming the resolved path
-- [ ] #23 rehearsal run --help lists the flags a session case uses and rehearsal --help lists case capture with its summary; running rehearsal run --case smoke --pipeline <path> exits 2 naming --pipeline as a flag a session case does not take
-- [ ] #24 rehearsal run --case smoke --model haiku --effort low --session-budget-usd 0.2 exits 0, writes the attempt record with the reply, the transcript copy, the metrics, and a passing check list, and prints that record with --json (the paid observation, capped at USD 2)
-- [ ] #25 A two-turn session captured at the cut after its first answer, run with the prompt "What was the codeword? Reply with only the codeword." and a forbidden-text check over the wrong word, passes: the resumed attempt names the codeword from the transcript prefix, and the projects directory holds no file the attempt created
+- [x] #1 cases/smoke/case.json declares kind session with prompt "Reply with the single word OK.", tools [], no transcript, and two checks (word-band max 1 over the reply, tool-calls max 0 over the transcript); rehearsal case show smoke --json exits 0 and prints it back through the same schema that loaded it
+- [x] #2 A session declaration that names a fixture path outside its case directory (leading slash or .. segment) is refused at load with an error naming that path, and a session declaration carrying a pipeline field is refused naming the unrecognized key
+- [x] #3 loadCase("smoke") returns a value whose kind is session carrying prompt, tools, and checks, and loadCase("audit-log") returns a value whose kind is pipeline carrying its task, brief, rubrics, and pipeline: one test asserts both, and the audit-log assertions are the ones ACT-26.4 already recorded, unchanged
+- [x] #4 The word-band check reports PASS when the reply's word count is inside [min, max] and FAIL naming the count and the band when it is outside; a table-driven test covers a reply below min, at min, at max, above max, and a band that declares only max
+- [x] #5 The forbidden-text check reports FAIL naming each declared string the reply contains and PASS when it contains none; the declared strings come from the case (an em dash and a backtick are case data, not constants in the check)
+- [x] #6 The tool-calls check counts tool_use records in the transcript and reports FAIL when the count is outside [min, max] or when a call names a tool outside the declared names, naming the offending tool; a transcript with zero tool_use records passes max 0
+- [x] #7 The files-read check reports PASS when every declared path appears as the file_path of a Read tool_use in the transcript and FAIL naming each declared path that does not
+- [x] #8 A check list result is successful when and only when every check passes: a test asserts one failing check among four passing ones makes the attempt unsuccessful and the record names which check failed
+- [x] #9 rehearsal case capture smoke --session <id-or-prefix> --cut 3 writes .benchmark-runs/cases/smoke/<file>.jsonl holding exactly lines [0,3) of the source session file, records file, sha256, sourceSession, and cut in cases/smoke/case.json, exits 0, and prints the updated declaration with --json
+- [x] #10 case capture streams the source file line by line: a test over a source larger than the capture buffer asserts the written prefix is byte-identical to its first cut lines and that the whole source is never held as one string
+- [x] #11 case capture --session <prefix> resolves a unique prefix to one session file and exits 3 naming both candidates when the prefix matches more than one, and exits 3 naming the prefix when it matches none
+- [x] #12 case capture --cut with an index of 0, a negative index, or an index past the source's line count exits 2 naming the index and the source's line count
+- [x] #13 An attempt runs in a fresh temporary directory the harness creates, seeded from the case's fixture/ tree when one is declared: a test with a fake runner asserts the working directory the runner received is not the control repository and not the case directory, and that it holds a copy of the fixture's files
+- [x] #14 A session case with a transcript forks it into ~/.claude/projects/<slug of the attempt directory's real path>/<fresh uuid>.jsonl with every occurrence of the source session id replaced by that uuid, and a test over a two-record fixture asserts the forked bytes differ from the source only in the session id
+- [x] #15 The slug of an attempt directory is its real path with every / replaced by -: a test asserts /private/tmp/x maps to -private-tmp-x and that a path given as /tmp/x on macOS resolves through its real path first
+- [x] #16 After an attempt the projects slug directory holds no file the attempt created: cleanup diffs the directory listing taken before the run against the listing after and removes only entries absent from the first, and a test with a file planted mid-run asserts that file survives
+- [x] #17 claudeArgs for a session case produces --tools "" for an empty declared tools list, --tools with the joined names otherwise, --settings with the declared settings JSON, --agents only when agents are declared, --output-format json, --max-budget-usd from the session budget, --model and --effort from the session knobs, --resume <uuid> when a transcript is declared and no --resume when none is, and never --no-session-persistence and never --json-schema
+- [x] #18 A session debug attempt writes one record carrying the case id, the reply, the path of the transcript copy under the attempt record, the provider call metrics, and one result per declared check; rehearsal run --case smoke --json prints exactly that record and it parses with the schema that wrote it
+- [x] #19 confirmationRepRecordSchema and confirmationGroupRecordSchema accept mode session at schemaVersion 1, with the check list as one stage entry and finalOutcome NOT_APPLICABLE, and a v1 record written before this card (mode stage or pipeline) still parses unchanged: a test asserts both
+- [x] #20 projectConfirmationCost for mode session is reps x one session at the session budget: a test asserts 3 reps at 0.2 USD projects 0.60 USD total, and rehearsal run --case smoke --confirm --reps 2 --yes prints that projection before any provider call
+- [x] #21 The lineage of a session attempt hashes the transcript digest, the fixture tree, the prompt, the tool and settings overlays, and the declared corpus files' bytes: a test asserts the key changes when a declared corpus file's bytes change and is unchanged when an undeclared file beside it changes
+- [x] #22 Corpus files declared in corpus layout paths resolve through one function to the live install (output-styles/<name>.md to ~/.claude/output-styles/, agents/<name>.md to ~/.claude/agents/, skills/<name>/... to ~/.claude/skills/, CLAUDE.md to the control root), and a declared corpus file that does not exist is refused before any provider call, naming the resolved path
+- [x] #23 rehearsal run --help lists the flags a session case uses and rehearsal --help lists case capture with its summary; running rehearsal run --case smoke --pipeline <path> exits 2 naming --pipeline as a flag a session case does not take
+- [x] #24 rehearsal run --case smoke --model haiku --effort low --session-budget-usd 0.2 exits 0, writes the attempt record with the reply, the transcript copy, the metrics, and a passing check list, and prints that record with --json (the paid observation, capped at USD 2)
+- [x] #25 A two-turn session captured at the cut after its first answer, run with the prompt "What was the codeword? Reply with only the codeword." and a forbidden-text check over the wrong word, passes: the resumed attempt names the codeword from the transcript prefix, and the projects directory holds no file the attempt created
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -353,4 +353,219 @@ The second test is the check list's own walking skeleton — "a check list of on
 word-band check reports the attempt successful when the reply is one word" —
 which forces the check union, the evaluator, and the reply-versus-transcript
 split before any invocation code exists.
+
+## Build handoff
+
+### What changed
+
+`rehearsal` has a second case kind. `loadCase` returns `LoadedCase =
+BenchmarkCase | SessionCase`; `BenchmarkCase` keeps its name, its fields, and
+every current consumer, and gained only a `kind: "pipeline"` discriminant.
+`requirePipelineCase` and `requireSessionCase` narrow at each boundary.
+
+New modules: `session-check.ts` and its four kind modules with
+`session-check-result.ts`; `transcript.ts`; `session-capture.ts`;
+`session-attempt.ts`; `session-lineage.ts`; `session-record.ts`;
+`corpus-file.ts`; `json-value.ts`; `src/cli/session-run-command.ts`.
+`cases/smoke/` is committed. `parseSessionArgs` sits beside `parseArgs`;
+`sessionCaseArgs` sits beside `claudeArgs`; `hashDirectory` is now exported
+from `checkpoint.ts` and serves both lineages.
+
+### What became possible but is not wired up
+
+- **A session confirmation group.** `mode: "session"` parses in both records
+  and `projectConfirmationCost` projects it, and `--confirm` prints the
+  projection, but the group itself refuses with exit 3 and a message saying so.
+  Nothing pays for a group that does not exist. Building it is a card.
+- **A `fixture/` tree.** The seeding path is built and unit-tested over a
+  temporary tree; no committed case declares one.
+- **`files-read` against a corpus file.** Built and unit-tested; no declared
+  case uses it, because the smoke case has no tools.
+- Callers still on the old path: none. `run` dispatches on the loaded kind;
+  `replay` and `compare` are pipeline-only and untouched.
+
+### What was observed directly, and how
+
+Six paid haiku calls, 0.086929 USD total, all recorded below.
+
+- `bun run rehearsal run --case smoke --model haiku --effort low
+  --session-budget-usd 0.2 --json` exits 0, reply `OK`, both checks PASS,
+  cost 0.016883 USD (AC 24).
+- A two-turn haiku session in `/tmp/rehearsal-codeword` established the
+  codeword PLUMBAGO (0.016881 USD) and answered a second question
+  (0.001077 USD). `case capture` at cut 10 wrote a prefix `cmp`-identical to
+  the source's first ten lines. Running that case with the prompt "What was
+  the codeword? Reply with only the codeword." replied `PLUMBAGO`, which
+  appears nowhere in the prompt (0.017128 USD, twice: once before and once
+  after the transcript fix below). The attempt's transcript copy holds 19
+  lines, the forked 10 plus the 9 the resumed turn appended (AC 25).
+- The projects directory listing was snapshotted before the first paid call
+  and `diff`s clean against it now. No `*.jsonl` remains under any
+  `rehearsal-attempt-` slug.
+- `run --case smoke --confirm --reps 2 --yes` printed
+  `Projected maximum cost: $0.40 (2 reps x $0.20)` and exited 3 with no
+  provider call (AC 20).
+- `run --case smoke --pipeline <path>` exits 2 naming `--pipeline` (AC 23).
+- A temporary case declaring `output-styles/brief.md`, `agents/reviewer.md`,
+  `CLAUDE.md`, and `skills/build/SKILL.md` resolved all four onto the live
+  install and hashed them (0.017832 USD); the same case declaring a style that
+  does not exist exited 3 naming the resolved path, with no provider call
+  (AC 22). The case was deleted, never committed.
+- `case capture` refusals: an ambiguous prefix and an absent one exit 3; cuts
+  of 0, -1, and 999999 exit 2 naming the index and the source's 520 lines, and
+  the declaration is unchanged after each (AC 11, 12).
+- Full gate on the final tree: `bun run typecheck` 0, `bun run lint` 0,
+  `bun run fmt:check` 0, `bun test` 659 pass 0 fail. `git status` clean.
+
+### Three harness facts the observations settled
+
+1. **`--tools ""` removes every tool.** Confirmed indirectly: the smoke case
+   declares `tools: []`, ran, and its `tool-calls max 0` check passed with
+   zero `tool_use` records in the transcript.
+2. **A resumed headless session does NOT get a further session id.** The card's
+   trap said it does. Observed on claude 2.1.258: it keeps the id it resumed
+   and appends to that file. The design adapted rather than retuning: the
+   transcript to read back is the new entry when the listing diff finds one and
+   the forked file otherwise, which covers both behaviors.
+3. **`--settings` with `outputStyle` on `--resume` in `-p` mode: NOT observed.**
+   No declared case needed a settings overlay, so paying for a call to check it
+   would have been spend without a consumer. `sessionCaseArgs` emits the flag
+   and its shape is unit-tested; whether the provider honors it on a resume is
+   unverified. The first case that declares `settings` must observe it.
+
+### Defects found and fixed on the way
+
+Each stopped the feature work and took its own commit.
+
+- `e462089` The envelope schema was loose but the `usage` object nested in it
+  was strict, so the seven fields claude 2.1.258 now reports made
+  `readClaudeEnvelope` throw and every run fail after paying. Pre-existing,
+  affected the stage path too, no test pinned it.
+- `a5e0652` Cleanup deleted the provider's transcript from inside the recording
+  path, so an attempt that threw left the file in the projects directory.
+  Observed: the first smoke run did exactly that.
+- `7870caf` The attempt recorded an empty transcript for a resumed case,
+  because it looked only for a new slug entry. See fact 2 above.
+- `df5c2af` An ambiguous session prefix printed all 88 matching ids. Now the
+  count leads, five ids follow, and the message says what to do.
+
+### What was not verified
+
+- `--settings` and `--agents` on a real call. Both flags' spellings are
+  unit-tested; neither has been sent to the provider.
+- The `files-read` check against a real transcript. Its projection is tested
+  against transcript records read from a real session file's shape, but no
+  paid call has exercised it end to end.
+- A confirmation group of session reps, since it is not built.
+- Parallel session reps. Serial keeps the slug diff unambiguous; nothing
+  measures wall clock yet.
+
+### A wording note on AC 16
+
+The AC says cleanup "removes only entries absent from the first" listing and
+also that a file planted mid-run survives. Those conflict, because a file
+another session writes mid-run is also absent from the first listing. The
+implementation takes the stricter reading that satisfies both: it removes only
+the two files the attempt is known to have created (the one it forked and the
+one the diff attributes to its own run), never every new entry. The test that
+plants a file mid-run fails against a blanket delete, verified by mutation.
+
+### Refactor pass
+
+`session-lineage.ts` had grown its own copy of the directory walk that
+`checkpoint.ts` already had: same recursive read, sort, file filter, and
+digest, differing only in a path prefix. Two copies of how a tree becomes
+lineage inputs can disagree, and a lineage key that differs by walk is a stale
+checkpoint nobody can explain. Unified in `e4cede6`, behavior preserving, the
+same 41 tests green either side.
+
+### Review is due
+
+The `review` skill's triggers apply: this is a new case kind across eleven
+commits, it touches the confirmation record schema every comparison reader
+indexes, and it deletes files under `~/.claude/projects`. The cleanup path and
+the schema's success rule are where a reviewer's attention pays.
+
+## Decided autonomously during Build
+
+The shape record's eleven decisions stood. These are the ones Build had to make,
+each by the dispatch's policy in its stated order.
+
+1. **The check modules are flat files named `session-check-*.ts`, not a
+   `session-check/` directory.** Reason: the project's `import/no-relative-parent-imports`
+   lint rule forbids a subdirectory module importing `../transcript`, and an
+   exception is a design decision the style skill says to avoid. Flattening
+   needed no exception and cost only a file-name prefix.
+2. **`--tools ""` on a session case's overlay JSON is typed as `JsonValue`, a
+   new module, rather than `Record<string, unknown>`.** Reason: the
+   `anti-slop/no-unsafe-dictionary-type` guard refuses the dictionary of
+   unknowns, and the honest type for a value re-serialized verbatim and never
+   reached into is JSON.
+3. **The exhaustive `default` branch is one shared helper, `unhandled(value,
+   subject)` in `contracts.ts`.** Reason: two lint rules disagree (one requires
+   a `default`, one requires exhaustiveness), and a `default` that returns the
+   last case silently swallows a new union member. A `never`-typed parameter
+   satisfies both honestly. It lives in `contracts.ts` rather than its own file
+   because `import/prefer-default-export` would demand a default export, and
+   this project has none.
+4. **`ConfirmationMode` has one home in `confirmation-record.ts`; the
+   comparison report imports it.** Reason: adding `session` revealed that the
+   comparison report carried a second copy of the same three-value enum that
+   could drift. The dependency runs from the comparison toward the records it
+   reads, which is the right direction.
+5. **A session case skips the review-pause TTY gate.** Reason: the gate exists
+   for the stage graph's pause between stages, and a session attempt has no
+   stage to pause between. Requiring a TTY would have made the harness
+   unusable from an agent, which is the point of ACT-26.
+6. **`--confirm` on a session case prints the projection and then refuses with
+   exit 3.** Reason: the group is not built (below), and the alternative
+   orderings are worse: refusing before the projection hides the number the
+   vision asks to be shown first, and building the group to satisfy the flag is
+   scope the card did not ask for.
+7. **The transcript to read back is the new slug entry when the diff finds one
+   and the forked file otherwise.** Reason: observation, not preference. The
+   card's trap said a resumed session gets a further id; claude 2.1.258 keeps
+   the id and appends. Handling both costs one conditional and is correct
+   whichever the provider does next.
+8. **Cleanup removes the two files the attempt is known to have created, not
+   every entry the diff shows as new.** Reason: AC 16 asks for both "only
+   entries absent from the first" and "a file planted mid-run survives", and
+   only the stricter reading satisfies both. The hard line about João's files
+   settles which way to err.
+9. **The four defects found mid-build were fixed in their own commits rather
+   than filed.** Reason: the build skill's rule that a defect stops the feature
+   work, and each was small, reversible, and blocking the observation the card
+   required.
+
+## Not built, and why (Build additions)
+
+- **A session confirmation group.** The records, the projection, and the
+  approval gate accept `mode: "session"`, but no group executes reps. Building
+  it needs a rep record writer, a group writer, and a report path, which is a
+  card's worth of work the acceptance criteria did not ask for: AC 19 asks the
+  schemas to accept the mode and AC 20 asks the projection to print. Trigger:
+  the first session case whose single rep is not enough evidence, which is
+  ACT-25.
+- **Observing `--settings` with `outputStyle` on a resume.** The dispatch named
+  it as one of three facts to check, and it is the one no declared case needs:
+  the smoke case and the codeword case both declare no settings overlay, so a
+  paid call to check it would buy a fact with no consumer today. Trigger: the
+  first case that declares `settings`, which is ACT-25's style variants.
+
+## Paid calls on this card
+
+Six haiku calls, 0.086929 USD total, against a ceiling of 2.00 USD.
+
+| call | cost USD |
+|---|---|
+| `run --case smoke` (failed on the usage-schema defect, then fixed) | 0.016883 |
+| codeword turn 1, establishing PLUMBAGO | 0.016881 |
+| codeword turn 2, resumed | 0.001077 |
+| `run --case zz-codeword-probe`, before the transcript fix | 0.017128 |
+| `run --case zz-codeword-probe`, after the transcript fix | 0.017128 |
+| `run --case zz-corpus-probe`, resolving four corpus files | 0.017832 |
+
+Unpaid observations: the `--confirm` projection, the `--pipeline` refusal, the
+corpus refusal, and every `case capture` refusal all completed without a
+provider call.
 <!-- SECTION:NOTES:END -->
