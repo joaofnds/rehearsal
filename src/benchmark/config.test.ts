@@ -77,6 +77,86 @@ describe("run and replay session knobs", () => {
 		expect(sessionValues(runConfig)).toEqual(expected);
 		expect(sessionValues(replayConfig)).toEqual(expected);
 	});
+
+	it.each([
+		{
+			condition: "the workflow model is missing",
+			sessionArgs: ["--session-budget-usd", "5"],
+			error: "Provide --model or BENCHMARK_MODEL",
+		},
+		{
+			condition: "the session budget is missing",
+			sessionArgs: ["--model", "sonnet"],
+			error:
+				"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
+		},
+		{
+			condition: "the session budget is non-numeric",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"invalid",
+			],
+			error: "Session budget must be a positive number",
+		},
+		{
+			condition: "the session budget is zero",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"0",
+			],
+			error: "Session budget must be a positive number",
+		},
+		{
+			condition: "the session budget is negative",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"-1",
+			],
+			error: "Session budget must be a positive number",
+		},
+		{
+			condition: "the workflow effort is unsupported",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--effort",
+				"extreme",
+				"--session-budget-usd",
+				"5",
+			],
+			error:
+				"Unsupported effort for workflow: extreme. Use low, medium, high, xhigh, or max",
+		},
+		{
+			condition: "the Judge effort is unsupported",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--judge-effort",
+				"extreme",
+				"--session-budget-usd",
+				"5",
+			],
+			error:
+				"Unsupported effort for Judge: extreme. Use low, medium, high, xhigh, or max",
+		},
+	])("rejects identical errors when $condition", ({ sessionArgs, error }) => {
+		expect(() =>
+			parseArgs(["--target", "./target", ...sessionArgs], {}),
+		).toThrow(error);
+		expect(() =>
+			parseReplayArgs(
+				["--run", "run-1", "--stage", "build", ...sessionArgs],
+				{},
+			),
+		).toThrow(error);
+	});
 });
 
 describe(parseArgs.name, () => {
