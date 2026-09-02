@@ -52,7 +52,10 @@ import {
 	removeWorktree,
 } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
-import { requireInteractiveStdin } from "#cli/interactive-stdin";
+import {
+	RefusedPreconditionError,
+	requireInteractiveStdin,
+} from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
@@ -258,7 +261,7 @@ export async function resolveRunDirectory(runName: string): Promise<string> {
 		.map((entry) => runNameFromCheckpointsEntry(entry))
 		.filter((entry) => entry !== undefined);
 
-	throw new Error(
+	throw new RefusedPreconditionError(
 		`No replayable run named ${paths.name}; recorded runs: ${
 			recorded.join(", ") || "none"
 		}`,

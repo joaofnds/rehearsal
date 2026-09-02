@@ -263,15 +263,19 @@ IDs are parsed at runtime, so adding a newly discovered requirement does not req
 
 The independent process-quality contracts the pipeline's stages adopt. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
 
-### `run-benchmark.ts`
+### `rehearsal.ts`
 
-The CLI entry point. It validates the Bun version, parses arguments, creates the terminal question interface, and delegates the run.
+The CLI entry point. It validates the Bun version, dispatches on the command name, generates help from the command's flag declaration, and maps each failure to the exit code its error type carries.
+
+### `src/cli/`
+
+One module per command, holding the wiring that turns parsed flags into a harness call: the flag and exit-code declarations, the terminal-stdin gate, and the writers that keep records on stdout and diagnostics on stderr. It depends on the harness; the harness does not depend on it.
 
 ### `src/benchmark/`
 
 The harness implementation, separated by responsibility: Backlog state, calibration, checks, Claude session invocation, command execution, configuration, validated contracts, final judging, orchestration, stage grading, target Git lifecycle, and workflow sessions. Every Claude session builds its command line and parses its response envelope through `claude.ts`; expensive Claude calls live in `workflow.ts`, `stage-grading.ts`, and `judge.ts`; local stage-artifact verification lives in `backlog.ts` and can be tested without invoking them.
 
-### `run-benchmark.test.ts`
+### `src/benchmark/*.test.ts`
 
 Unit and filesystem integration tests for configuration parsing, stage and final rubric validation, non-compensating grade derivation, native-skill invocation, stage order, artifact resolution, direct-target restoration, preserved workflow state, commit rules, check integrity, and Judge evidence.
 
@@ -300,7 +304,7 @@ bun run fmt:check
 bun run lint
 bun test
 
-bun run benchmark \
+bun run rehearsal run \
   --target /Users/joaofnds/code/nest/template \
   --model sonnet \
   --effort high \
@@ -316,8 +320,35 @@ export BENCHMARK_MODEL=sonnet
 export BENCHMARK_EFFORT=high
 export BENCHMARK_SESSION_BUDGET_USD=10
 export BENCHMARK_PIPELINE=pipelines/default.json
-bun run benchmark
+bun run rehearsal run
 ```
+
+`rehearsal` is one executable with three commands: `run`, `replay`, and
+`compare`. `rehearsal --help` lists them; `rehearsal <command> --help` prints
+that command's flags with each default and environment variable, generated
+from the command's own flag declaration. Every command accepts `--json`,
+which prints on stdout the exact record the command wrote, parsed by the
+schema that wrote it; without `--json` it prints that record's path. stdout
+carries data only and stderr everything else, so a caller can pipe one into
+a parser and read the other as diagnostics.
+
+Exit codes have one meaning each:
+
+```text
+0  the command completed and wrote its record, whatever the grade
+1  execution failure
+2  usage error: an unknown flag, a missing required flag, an unparseable value
+3  refused precondition: an approval whose flag is absent while stdin is not a
+   TTY, or a run that cannot be replayed
+```
+
+A failing grade is evidence, not an error, so it exits 0.
+
+No prompt exists without a flag that answers it, and a command refuses before
+any paid work rather than blocking on a prompt it cannot receive. `run`
+refuses when stdin is not a terminal, because the calibration pause has no
+flag alternative yet; `replay --confirm` refuses without `--yes` when stdin
+is not a terminal, before it resolves the run directory or projects a cost.
 
 `--pipeline` selects the pipeline definition and defaults to `pipelines/default.json`. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
 
@@ -394,7 +425,7 @@ Comparison reporting reads completed confirmation evidence and never starts a pr
 ```
 
 ```sh
-bun run compare path/to/comparison.json
+bun run rehearsal compare path/to/comparison.json
 ```
 
 The command validates and hashes the manifest, source groups, reps, and frozen inputs before creating anything. It recomputes quality and resource statistics from rep records rather than trusting confirmation `report.json` files, then prints the deterministic report path:
@@ -402,6 +433,11 @@ The command validates and hashes the manifest, source groups, reps, and frozen i
 ```text
 .benchmark-runs/comparisons/<manifest-sha256>/report.json
 ```
+
+`bun run rehearsal compare path/to/comparison.json --json` prints the report's
+own bytes on stdout instead of its path, so a caller can pipe it straight into
+a parser. It starts no provider session either way, and exits 0 once the report
+is written.
 
 ## Tuning Loop
 

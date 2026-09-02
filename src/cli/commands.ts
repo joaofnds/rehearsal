@@ -166,7 +166,7 @@ export function topLevelHelp(): string {
 		"",
 		"Commands:",
 		...COMMANDS.map(
-			(command) => `  ${command.name.padEnd(8)}${command.summary}`,
+			(command) => `  ${command.name.padEnd(9)}${command.summary}`,
 		),
 		"",
 		"Exit codes:",

@@ -187,7 +187,7 @@ describe("rehearsal", () => {
 			"--yes",
 		]);
 
-		expect(result.exitCode).toBe(1);
+		expect(result.exitCode).toBe(3);
 		expect(result.stdout).toBe("");
 		expect(result.stderr).not.toContain("stdin is not a terminal");
 		expect(result.stderr).toContain("No replayable run named any-name");
