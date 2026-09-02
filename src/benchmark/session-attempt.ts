@@ -83,10 +83,12 @@ async function listSlug(slug: string): Promise<ReadonlySet<string>> {
 }
 
 /**
- * A resumed headless session is given a further session id and writes its own
- * file, so the transcript to read back is the entry the second listing has and
- * the first does not. Never a delete by pattern and never by the id the fork
- * wrote: a live session of João's has appeared in a project directory mid-run.
+ * Observed on claude 2.1.258: a resumed headless session keeps its session id
+ * and appends to the file it resumed, so the listing gains no entry and the
+ * transcript to read back is the forked file. A run that does write a new file
+ * is covered by the same diff. Never a delete by pattern and never by the id
+ * the fork wrote: a live session of João's has appeared in a project directory
+ * mid-run, and it is not the attempt's to remove.
  */
 function addedEntries(
 	before: ReadonlySet<string>,
@@ -158,7 +160,7 @@ export async function runSessionAttempt(
 		return await recordAttempt(request, attemptDirectory, {
 			output,
 			writtenTranscript:
-				written === undefined ? undefined : join(slug, written),
+				written === undefined ? forkedFile : join(slug, written),
 		});
 	} finally {
 		await removeAttemptFiles(attemptDirectory, created);

@@ -233,6 +233,46 @@ describe(forkTranscript.name, () => {
 	});
 });
 
+function resumingCase(transcriptPath: string): SessionCase {
+	const base = sessionCase({ transcriptPath });
+
+	return {
+		...base,
+		declaration: {
+			...base.declaration,
+			transcript: {
+				file: "prefix.jsonl",
+				sha256: "0".repeat(64),
+				sourceSession: SOURCE_SESSION,
+				cut: 1,
+			},
+		},
+	};
+}
+
+/**
+ * A resumed headless session keeps its session id and appends to the file it
+ * resumed, so the slug listing gains no entry and the transcript to read back
+ * is the forked file itself. Observed on claude 2.1.258.
+ */
+function appendingClaude(
+	projects: string,
+	reply: string,
+): SessionAttemptRequest["runClaude"] {
+	return async (command, cwd) => {
+		const resumed = command[command.indexOf("--resume") + 1] ?? "";
+
+		const slug = join(projects, projectSlug(await realpath(cwd)));
+		const file = join(slug, `${resumed}.jsonl`);
+		await writeFile(
+			file,
+			`${await Bun.file(file).text()}${transcriptLine(resumed, reply)}\n`,
+		);
+
+		return envelope(reply);
+	};
+}
+
 describe(runSessionAttempt.name, () => {
 	it("runs in a fresh directory that is neither the control repository nor the case directory", async () => {
 		const projects = await projectsRoot();
@@ -300,6 +340,27 @@ describe(runSessionAttempt.name, () => {
 
 		const slug = join(projects, projectSlug(attempt.attemptDirectory));
 		expect(await readdir(slug).catch(() => [])).toEqual([]);
+	});
+
+	it("copies the forked transcript when the resumed session appends to it rather than writing a new file", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-prefix-"));
+		const prefix = join(directory, "prefix.jsonl");
+		await writeFile(
+			prefix,
+			`${transcriptLine(SOURCE_SESSION, "the codeword is PLUMBAGO")}\n`,
+		);
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: resumingCase(prefix),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: appendingClaude(projects, "PLUMBAGO"),
+			}),
+		);
+
+		expect(await Bun.file(attempt.transcriptFile).text()).toContain("PLUMBAGO");
 	});
 
 	it("removes the transcript the provider wrote even when reading the envelope fails", async () => {
