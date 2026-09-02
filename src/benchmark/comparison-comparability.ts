@@ -226,6 +226,26 @@ function assertContract(comparison: Immutable<ContractComparison>): void {
 	);
 }
 
+/**
+ * The manifest names which declared case each triple of arms ran. A group that
+ * recorded a different case answers a different question, so pairing it as an
+ * arm of this case would contrast two tasks and call the difference a corpus
+ * effect.
+ */
+function assertArmRanTheCase(
+	caseId: string,
+	arm: Immutable<ComparisonArmEvidence>,
+): void {
+	const recorded = arm.group.record.caseId;
+	if (recorded === caseId) {
+		return;
+	}
+
+	throw new ComparisonEvidenceError(
+		`case ${caseId} arm ${arm.role} field caseId recorded ${recorded}; expected ${caseId}`,
+	);
+}
+
 function assertExpectedRepCount(
 	caseId: string,
 	arm: Immutable<ComparisonArmEvidence>,
@@ -279,6 +299,7 @@ export function assertComparableComparison(
 				referenceCaseId: firstCase.caseId,
 				referenceArm,
 			});
+			assertArmRanTheCase(benchmarkCase.caseId, arm);
 			assertExpectedRepCount(benchmarkCase.caseId, arm);
 		}
 		assertControlledInputs({

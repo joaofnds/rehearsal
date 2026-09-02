@@ -33,6 +33,8 @@ interface CalibrationContext {
 	readonly targetDir: string;
 	readonly originalInstructions: string;
 	readonly originalRubric: string;
+	readonly finalRubricPath: string;
+	readonly rubricsDirectory: string;
 	readonly finalCandidate?: FinalCandidate | undefined;
 	readonly stageScorecards: readonly StageScorecard[];
 	readonly judgeModel: string;
@@ -257,8 +259,8 @@ export async function collectCalibration(
 ): Promise<CalibrationResult> {
 	await writeHumanReviewTemplate(context.reviewFile);
 	const editTargets = context.finalCandidate
-		? `${join(CONTROL_DIR, "CLAUDE.md")}, ${join(CONTROL_DIR, "rubric.md")}, and/or the relevant file under ${join(CONTROL_DIR, "rubrics")}`
-		: `${join(CONTROL_DIR, "CLAUDE.md")} and/or the relevant file under ${join(CONTROL_DIR, "rubrics")}`;
+		? `${join(CONTROL_DIR, "CLAUDE.md")}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
+		: `${join(CONTROL_DIR, "CLAUDE.md")} and/or the relevant file under ${context.rubricsDirectory}`;
 
 	while (true) {
 		await context.rl.question(
@@ -273,7 +275,7 @@ export async function collectCalibration(
 				() =>
 					Promise.all([
 						Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-						Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
+						Bun.file(context.finalRubricPath).text(),
 					]),
 			);
 			const instructionsChanged =

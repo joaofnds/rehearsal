@@ -290,6 +290,7 @@ export interface CalibrationResult {
 }
 
 export interface RunArtifactEvidence {
+	readonly caseId: string;
 	readonly timestamp: string;
 	readonly controlSha: string;
 	readonly sourceRoot: string;

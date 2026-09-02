@@ -11,7 +11,11 @@ import {
 	runStageJudge,
 	validateStageJudgeEvidence,
 } from "./stage-grading";
-import { PROJECT_ROOT, harnessResult } from "./test-support";
+import {
+	AUDIT_LOG_RUBRICS_PATH,
+	harnessResult,
+	PROJECT_ROOT,
+} from "./test-support";
 
 function stageJudgeOutput(
 	blocker: "PASS" | "FAIL",
@@ -259,7 +263,9 @@ describe(deriveStageGrade.name, () => {
 describe(applyAuthoritativeStageResults.name, () => {
 	it("forces a delivery stage under any name to F when local checks fail", async () => {
 		const rubric = parseStageRubric(
-			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+			await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH, "build.json"),
+			).text(),
 			"delivery",
 		);
 		const input = {
@@ -284,7 +290,9 @@ describe(applyAuthoritativeStageResults.name, () => {
 
 	it("forces Build to F when local checks fail", async () => {
 		const rubric = parseStageRubric(
-			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+			await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH, "build.json"),
+			).text(),
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("build", {
@@ -305,7 +313,9 @@ describe(applyAuthoritativeStageResults.name, () => {
 
 	it("forces Build to F when check definitions change", async () => {
 		const rubric = parseStageRubric(
-			await Bun.file(join(PROJECT_ROOT, "rubrics", "build.json")).text(),
+			await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH, "build.json"),
+			).text(),
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("build", {
@@ -326,7 +336,9 @@ describe(applyAuthoritativeStageResults.name, () => {
 
 	it("forces a malformed stage delivery to F", async () => {
 		const rubric = parseStageRubric(
-			await Bun.file(join(PROJECT_ROOT, "rubrics", "shape.json")).text(),
+			await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH, "shape.json"),
+			).text(),
 		);
 		const output = passingStageOutput(rubric);
 		const input = stageJudgeInput("discuss", {

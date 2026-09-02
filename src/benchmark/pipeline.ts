@@ -231,6 +231,7 @@ function assertOneDeliveryStageLast(stages: readonly StageDefinition[]): void {
 
 export async function loadPipeline(
 	pipelinePath: string,
+	rubricsPath: string,
 ): Promise<PipelineDefinition> {
 	const absolutePath = resolve(CONTROL_DIR, pipelinePath);
 	if (!absolutePath.startsWith(`${CONTROL_DIR}/`)) {
@@ -247,7 +248,7 @@ export async function loadPipeline(
 		);
 	}
 
-	const rubricsDirectory = join(CONTROL_DIR, "rubrics");
+	const rubricsDirectory = resolve(CONTROL_DIR, rubricsPath);
 	const rubricEntries = await readdir(rubricsDirectory);
 	const availableRubrics = rubricEntries.map((entry) =>
 		relative(CONTROL_DIR, join(rubricsDirectory, entry)),

@@ -36,6 +36,7 @@ import {
 	TestResources,
 	commitAll,
 	harnessResult,
+	AUDIT_LOG_RUBRICS_PATH,
 } from "./test-support";
 import {
 	ReplayConfirmationHarness,
@@ -80,6 +81,7 @@ describe(loadRunCheckpoints.name, () => {
 describe(resolveReplay.name, () => {
 	function manifest(): RunManifest {
 		return {
+			caseId: "audit-log",
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "control-sha",
 			sourceRoot: "/tmp/target",
@@ -297,6 +299,7 @@ describe(runReplay.name, () => {
 			},
 		);
 		const manifest: RunManifest = {
+			caseId: "audit-log",
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot: join(directory, "primary"),
@@ -701,6 +704,7 @@ describe(runReplay.name, () => {
 			),
 		);
 		const manifest: RunManifest = {
+			caseId: "audit-log",
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot: primary,
@@ -722,14 +726,14 @@ describe(runReplay.name, () => {
 						kind: "planning",
 						skill: "discuss",
 						artifact: "spec",
-						rubric: "rubrics/shape.json",
+						rubric: `${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
 						requiresAcceptanceCriteria: false,
 					},
 					{
 						name: "build",
 						kind: "delivery",
 						skill: "build",
-						rubric: "rubrics/build.json",
+						rubric: `${AUDIT_LOG_RUBRICS_PATH}/build.json`,
 					},
 				],
 			},

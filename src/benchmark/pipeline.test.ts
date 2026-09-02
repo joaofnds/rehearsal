@@ -7,8 +7,13 @@ import { loadPipeline, parsePipeline } from "./pipeline";
 import { PROJECT_ROOT } from "./test-support";
 import { parseStageRubric } from "./stage-grading";
 
+const AUDIT_LOG_CASE = "cases/audit-log";
+
 function loadDefaultPipeline(): Promise<PipelineDefinition> {
-	return loadPipeline("pipelines/default.json");
+	return loadPipeline(
+		`${AUDIT_LOG_CASE}/pipelines/default.json`,
+		`${AUDIT_LOG_CASE}/rubrics`,
+	);
 }
 
 describe("the default pipeline", () => {
@@ -47,11 +52,17 @@ describe("the default pipeline", () => {
 
 describe(loadPipeline.name, () => {
 	it("refuses a definition outside the control repository", () => {
-		expect(loadPipeline("../../../../etc/hosts")).rejects.toThrow(/outside/u);
+		expect(
+			loadPipeline("../../../../etc/hosts", `${AUDIT_LOG_CASE}/rubrics`),
+		).rejects.toThrow(/outside/u);
 	});
 
 	it("rejects a delivery stage whose rubric lacks the harness blockers", async () => {
-		const path = join("pipelines", `invalid-${randomUUID()}.json`);
+		const path = join(
+			AUDIT_LOG_CASE,
+			"pipelines",
+			`invalid-${randomUUID()}.json`,
+		);
 		const absolute = join(PROJECT_ROOT, path);
 		await Bun.write(
 			absolute,
@@ -66,14 +77,16 @@ describe(loadPipeline.name, () => {
 						name: "ship",
 						kind: "delivery",
 						skill: "build",
-						rubric: "rubrics/shape.json",
+						rubric: `${AUDIT_LOG_CASE}/rubrics/shape.json`,
 					},
 				],
 			}),
 		);
 
 		try {
-			expect(loadPipeline(path)).rejects.toThrow(/ship/u);
+			expect(loadPipeline(path, `${AUDIT_LOG_CASE}/rubrics`)).rejects.toThrow(
+				/ship/u,
+			);
 		} finally {
 			await rm(absolute, { force: true });
 		}

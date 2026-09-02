@@ -17,7 +17,16 @@ export function digest(content: string): string {
 }
 
 export class ComparisonEvidenceFixture {
-	public constructor(private readonly root: string) {}
+	/**
+	 * Comparability requires every arm's group to record the case its manifest
+	 * entry names, so the ids are declared once here and read by both sides.
+	 * Composing several fixture roots into one manifest needs them unique across
+	 * roots, which is what naming them at construction is for.
+	 */
+	public constructor(
+		private readonly root: string,
+		public readonly caseIds: readonly string[] = ["case-1", "case-2"],
+	) {}
 
 	public get manifestFile(): string {
 		return join(this.root, "comparison.json");
@@ -48,7 +57,7 @@ export class ComparisonEvidenceFixture {
 
 	public async write(): Promise<void> {
 		const cases = [];
-		for (const caseId of ["case-1", "case-2"]) {
+		for (const caseId of this.caseIds) {
 			const arms = {
 				baseline: await this.writeGroup(caseId, "baseline"),
 				candidate: await this.writeGroup(caseId, "candidate"),
@@ -68,7 +77,7 @@ export class ComparisonEvidenceFixture {
 		path: string,
 	): Promise<void> {
 		const sha256 = digest(await Bun.file(path).text());
-		for (const caseId of ["case-1", "case-2"]) {
+		for (const caseId of this.caseIds) {
 			for (const role of ["baseline", "candidate", "control"] as const) {
 				const groupFile = this.groupFile(caseId, role);
 				const group = confirmationGroupRecordSchema.parse(
@@ -151,7 +160,7 @@ export class ComparisonEvidenceFixture {
 	public async usePipelineCheckpoints(
 		changedWorkflowRole?: ComparisonArm,
 	): Promise<void> {
-		for (const caseId of ["case-1", "case-2"]) {
+		for (const caseId of this.caseIds) {
 			for (const role of ["baseline", "candidate", "control"] as const) {
 				const groupFile = this.groupFile(caseId, role);
 				const group = confirmationGroupRecordSchema.parse(
@@ -335,6 +344,7 @@ export class ComparisonEvidenceFixture {
 
 		return confirmationRepRecordSchema.parse({
 			schemaVersion: 1,
+			caseId,
 			groupId,
 			repId,
 			ordinal,
@@ -397,6 +407,7 @@ export class ComparisonEvidenceFixture {
 
 		const group = confirmationGroupRecordSchema.parse({
 			schemaVersion: 1,
+			caseId,
 			groupId,
 			mode: "stage",
 			reps: 2,

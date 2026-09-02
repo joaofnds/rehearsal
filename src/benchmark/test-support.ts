@@ -7,6 +7,9 @@ import type { LocalCheckResult } from "./contracts";
 import type { TargetDefinition } from "./pipeline";
 
 export const PROJECT_ROOT = join(import.meta.dir, "../..");
+export const AUDIT_LOG_CASE_DIR = "cases/audit-log";
+export const AUDIT_LOG_PIPELINE_PATH = `${AUDIT_LOG_CASE_DIR}/pipelines/default.json`;
+export const AUDIT_LOG_RUBRICS_PATH = `${AUDIT_LOG_CASE_DIR}/rubrics`;
 export const TEST_TARGET: TargetDefinition = {
 	checks: [{ command: ["bun", "--version"] }],
 	integrityFiles: ["base.txt"],

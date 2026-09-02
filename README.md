@@ -13,17 +13,25 @@ The benchmark tests whether the current instruction corpus and workflow can turn
 One run uses:
 
 ```text
-rehearsal/CLAUDE.md       project instructions under evaluation
-rehearsal/backlog-seed.md known feature request
-rehearsal/product-brief.md stable product facts available to the PO
-rehearsal/pipelines/*.json the workflow: board columns, stages, skills, rubrics
-rehearsal/rubrics/*.json  process-quality rubrics a stage adopts
-rehearsal/rubric.md       external binary acceptance rubric
-target repository            real application and real main branch
-installed Claude skills      whichever skills the pipeline names
+rehearsal/CLAUDE.md                          project instructions under evaluation
+rehearsal/cases/<id>/case.json               the case declaration: id, kind, title, inputs, target
+rehearsal/cases/<id>/backlog-seed.md         known feature request
+rehearsal/cases/<id>/product-brief.md        stable product facts available to the PO
+rehearsal/cases/<id>/pipelines/*.json        the workflow: board columns, stages, skills, rubrics
+rehearsal/cases/<id>/rubrics/*.json          process-quality rubrics a stage adopts
+rehearsal/cases/<id>/rubric.md               external binary acceptance rubric
+target repository                            real application and real main branch
+installed Claude skills                      whichever skills the pipeline names
 ```
 
-The executing sessions never receive `rubric.md` and are not told that their work is being graded. Only normal project instructions, backlog artifacts, and Product Owner decisions enter the target workflow.
+Everything but `CLAUDE.md` and the installed skills belongs to one benchmark case
+under `cases/<id>/`. `CLAUDE.md` and the skills are the corpus under evaluation, so
+they stay at the control root; the case is the frozen task, not the corpus. Cases
+live in this repository, never beside the corpus they grade. `rehearsal run` uses
+`audit-log` when `--case` is absent; `rehearsal case list` and
+`rehearsal case show <id>` read the declarations.
+
+The executing sessions never receive the case's `rubric.md` and are not told that their work is being graded. Only normal project instructions, backlog artifacts, and Product Owner decisions enter the target workflow.
 
 ## Workflow
 
@@ -57,10 +65,10 @@ independent final Judge applies the external product rubric
 write preliminary artifact and human-review template
         |
         v
-human review updates CLAUDE.md and/or rubric.md
+human review updates CLAUDE.md and/or the case's rubric.md
         |
         v
-rejudge the same candidate when rubric.md changed
+rejudge the same candidate when the case's rubric.md changed
         |
         v
 validate and record calibration
@@ -69,7 +77,7 @@ validate and record calibration
 reset main to the original SHA and restore workflow artifacts
 ```
 
-The pipeline is configuration, not harness code: every user brings their own workflow. A definition, selected with `--pipeline` and defaulting to `pipelines/default.json`, declares the target checks and check-integrity files, the board columns the target's Backlog.md uses, each stage's name, kind, and skill, the rubric its Judge applies, and optionally the durable document a planning stage must attach. A stage that records its output only on the task card declares no artifact. Stages can be added, removed, renamed, or reordered without changing the harness; a pipeline must declare exactly one delivery stage and place it last.
+The pipeline is configuration, not harness code: every user brings their own workflow. A definition, selected with `--pipeline` and defaulting to the one the selected case declares, declares the target checks and check-integrity files, the board columns the target's Backlog.md uses, each stage's name, kind, and skill, the rubric its Judge applies, and optionally the durable document a planning stage must attach. A stage that records its output only on the task card declares no artifact. Stages can be added, removed, renamed, or reordered without changing the harness; a pipeline must declare exactly one delivery stage and place it last.
 
 The default pipeline follows the currently installed workflow: a `shape` stage that turns the request into acceptance observations on the card, then a `build` stage that delivers the implementation.
 
@@ -81,7 +89,7 @@ There is no predetermined answer file.
 
 When an engineering stage needs a decision, it returns one question and recommendation. A separate Product Owner agent answers the actual question. The same PO session handles every question in the run, so later answers retain earlier decisions and remain coherent across every stage.
 
-The PO receives the feature request, `product-brief.md`, and the questions. It does not receive the rubric or candidate diff. The brief supplies stable product facts without predicting which questions will be asked or scripting their answers. The PO's standing policy is to preserve those facts, choose the smallest coherent product scope where the brief is silent, and leave implementation mechanics to engineering.
+The PO receives the feature request, the case's `product-brief.md`, and the questions. It does not receive the rubric or candidate diff. The brief supplies stable product facts without predicting which questions will be asked or scripting their answers. The PO's standing policy is to preserve those facts, choose the smallest coherent product scope where the brief is silent, and leave implementation mechanics to engineering.
 
 Every question and answer is recorded in the run artifact.
 
@@ -102,7 +110,7 @@ This is intentionally less isolated than a disposable benchmark. Run it only aga
 
 ## Target Setup
 
-The harness initializes a Backlog.md board when the target does not have one. It creates a feature card from `backlog-seed.md` in the pipeline's first declared column and configures the board with the pipeline's `statuses`. The default pipeline declares:
+The harness initializes a Backlog.md board when the target does not have one. It creates a feature card from the case's `backlog-seed.md` in the pipeline's first declared column and configures the board with the pipeline's `statuses`. The default pipeline declares:
 
 ```text
 To Do, Shape, Build, Review, Ship, Done
@@ -116,7 +124,7 @@ Build must create at least one conventional commit directly on `main`, leave a c
 
 ## Stage Grading
 
-Every stage names a rubric under `rubrics/`. Executing agents never receive these rubrics. Each rubric defines:
+Every stage names a rubric under its case's `rubrics/`. Executing agents never receive these rubrics. Each rubric defines:
 
 - hard blockers whose presence makes the stage grade `F`
 - binary requirements that cap the grade at `C` when any are missing
@@ -183,7 +191,7 @@ Each finding has one Judge assessment:
 
 `stage` names the pipeline stage the finding belongs to, or `final` for the final Judge; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
 
-If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under `rubrics/`; for a final finding, edit `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading. Press Enter when the review and control-file edits are ready.
+If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under the case's `rubrics/`; for a final finding, edit the case's `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading. Press Enter when the review and control-file edits are ready.
 
 When a stage rubric changes, the harness regrades the exact same transcript and frozen stage artifacts. When `rubric.md` changes, it runs the final Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
 
@@ -241,15 +249,23 @@ SIGINT, SIGTERM, and SIGHUP kill the harness's child process groups and run this
 
 The instruction corpus being tuned. Change it only in response to observed behavior. Keep the task, product brief, rubric, models, and target baseline stable when comparing instruction revisions.
 
-### `backlog-seed.md`
+### `cases/<id>/case.json`
+
+The case declaration: the case's id (which must equal its directory name), its
+kind (`pipeline` today), its title, the case-relative paths of its task, product
+brief, final rubric, pipeline, and stage rubrics, and the target repository it
+was written against. It is parsed once at load, and a path that leaves the case
+directory is refused there rather than followed.
+
+### `cases/<id>/backlog-seed.md`
 
 The rough product request. It must start with one level-one heading followed by a non-empty description. The first planning stage turns it into acceptance criteria through dynamic PO questions.
 
-### `product-brief.md`
+### `cases/<id>/product-brief.md`
 
 Stable product facts known by the simulated PO. This is not a question-and-answer script: the PO still receives and answers the actual questions generated during each run. Keep this file fixed while comparing instruction revisions.
 
-### `rubric.md`
+### `cases/<id>/rubric.md`
 
 The independent acceptance criteria. Requirements use this format:
 
@@ -259,7 +275,7 @@ The independent acceptance criteria. Requirements use this format:
 
 IDs are parsed at runtime, so adding a newly discovered requirement does not require a TypeScript change. IDs must be unique. The rubric must retain `check-integrity` and `local-checks` because those are owned by measured harness results.
 
-### `rubrics/*.json`
+### `cases/<id>/rubrics/*.json`
 
 The independent process-quality contracts the pipeline's stages adopt. IDs must be unique within each file. Add a hard blocker only when its presence invalidates the stage output, add a requirement when every acceptable output must satisfy it, and use a quality dimension when the result can be valid at different levels of quality. Human calibration regrades the same frozen stage input after one of these files changes.
 
@@ -304,22 +320,32 @@ bun run fmt:check
 bun run lint
 bun test
 
+bun run rehearsal case list
+bun run rehearsal case show audit-log --json
+
 bun run rehearsal run \
+  --case audit-log \
   --target /Users/joaofnds/code/nest/template \
   --model sonnet \
   --effort high \
-  --session-budget-usd 10 \
-  --pipeline pipelines/default.json
+  --session-budget-usd 10
 ```
+
+`--case` names a declared case under `cases/` and defaults to `audit-log`. The
+case supplies the task, product brief, final rubric, stage rubrics, pipeline,
+and the target repository it was written against; `--target` and
+`BENCHMARK_TARGET_DIR` override that declared target, and `--pipeline` overrides
+the declared pipeline. An unknown case is refused with exit 3 before the target
+is claimed.
 
 Equivalent environment variables are available:
 
 ```sh
+export BENCHMARK_CASE=audit-log
 export BENCHMARK_TARGET_DIR=/Users/joaofnds/code/nest/template
 export BENCHMARK_MODEL=sonnet
 export BENCHMARK_EFFORT=high
 export BENCHMARK_SESSION_BUDGET_USD=10
-export BENCHMARK_PIPELINE=pipelines/default.json
 bun run rehearsal run
 ```
 
@@ -368,7 +394,7 @@ refuses when stdin is not a terminal, because the calibration pause has no
 flag alternative yet; `replay --confirm` refuses without `--yes` when stdin
 is not a terminal, before it resolves the run directory or projects a cost.
 
-`--pipeline` selects the pipeline definition and defaults to `pipelines/default.json`. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
+`--pipeline` selects the pipeline definition and defaults to the one the case declares. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
 
 `--model` and `--effort` apply to every engineering stage and the shared PO. Judge defaults to `opus`, except that an Opus workflow defaults Judge to `sonnet`; this recognizes both native aliases and full Claude model IDs. An unrecognized workflow model also defaults Judge to `opus`.
 
@@ -464,7 +490,7 @@ is written.
 3. Inspect the actual target implementation during the review pause.
 4. Record the human verdict and classify every finding against the original Judge result.
 5. Update `CLAUDE.md` for behavior failures.
-6. Update the responsible stage rubric, or `rubric.md` for final-product findings, when the Judge missed a defect or produced a false positive.
+6. Update the responsible stage rubric, or the case's `rubric.md` for final-product findings, when the Judge missed a defect or produced a false positive.
 7. Press Enter to rejudge the same candidate and validate the revised rubric.
 8. Correct ineffective rubric changes until calibration passes.
 9. Let the harness record calibration and restore the target.

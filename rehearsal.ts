@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { CONTROL_DIR, REQUIRED_BUN_VERSION } from "./src/benchmark/config";
-import { loadPipeline } from "./src/benchmark/pipeline";
+import { requireCase, runCaseList, runCaseShow } from "./src/cli/case-command";
 import { benchmarkRunsDirectory } from "./src/benchmark/run-layout";
 import { runCompare } from "./src/cli/compare-command";
 import {
@@ -9,25 +9,15 @@ import {
 	runReplayCommand,
 } from "./src/cli/replay-command";
 import { executeRun, runRunCommand } from "./src/cli/run-command";
-import type { CommandDefinition, CommandLine } from "./src/cli/commands";
+import type { CommandLine } from "./src/cli/commands";
 import {
-	COMMANDS,
 	commandHelp,
+	findCommand,
 	parseCommandLine,
 	topLevelHelp,
-	UsageError,
 } from "./src/cli/commands";
 import { EXIT_CODES, exitCodeFor } from "./src/cli/exit-codes";
 import { processOutput } from "./src/cli/output";
-
-function findCommand(name: string): CommandDefinition {
-	const command = COMMANDS.find((candidate) => candidate.name === name);
-	if (command === undefined) {
-		throw new UsageError(`Unknown command ${name}`);
-	}
-
-	return command;
-}
 
 function main(): Promise<number> {
 	if (Bun.version !== REQUIRED_BUN_VERSION) {
@@ -36,7 +26,8 @@ function main(): Promise<number> {
 		);
 	}
 
-	const [name, ...args] = Bun.argv.slice(2);
+	const argv = Bun.argv.slice(2);
+	const [name] = argv;
 	if (name === "--help") {
 		processOutput.stdout(topLevelHelp());
 
@@ -48,7 +39,7 @@ function main(): Promise<number> {
 		return Promise.resolve(EXIT_CODES.usageError);
 	}
 
-	const command = findCommand(name);
+	const { command, args } = findCommand(argv);
 	const commandLine = parseCommandLine(command, args);
 	if (commandLine.helpRequested) {
 		processOutput.stdout(commandHelp(command));
@@ -95,7 +86,20 @@ async function dispatch(
 					json: commandLine.json,
 					stdinIsTerminal: process.stdin.isTTY,
 				},
-				{ output: processOutput, loadPipeline, execute: executeRun },
+				{ output: processOutput, requireCase, execute: executeRun },
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "case list": {
+			await runCaseList({ json: commandLine.json }, processOutput);
+
+			return EXIT_CODES.completed;
+		}
+		case "case show": {
+			await runCaseShow(
+				{ caseId: commandLine.argument, json: commandLine.json },
+				processOutput,
 			);
 
 			return EXIT_CODES.completed;

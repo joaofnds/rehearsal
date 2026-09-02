@@ -147,6 +147,7 @@ export class ReplayConfirmationHarness {
 			},
 		);
 		const manifest: RunManifest = {
+			caseId: "audit-log",
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot,

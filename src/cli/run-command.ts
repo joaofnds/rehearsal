@@ -21,18 +21,20 @@ import {
 	captureTreatmentChecks,
 	runChecks,
 } from "#benchmark/checks";
+import type { BenchmarkCase } from "#benchmark/case";
+import { withPipeline } from "#benchmark/case";
 import type { BenchmarkConfig } from "#benchmark/config";
 import {
 	CONTROL_DIR,
 	judgeSelfPreferenceWarning,
 	parseArgs,
+	parseCaseId,
 } from "#benchmark/config";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
-import type { PipelineDefinition } from "#benchmark/pipeline";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
-import { loadStageRubric, runStageJudge } from "#benchmark/stage-grading";
+import { runStageJudge } from "#benchmark/stage-grading";
 import {
 	addWorktree,
 	assertBuildCommitted,
@@ -65,54 +67,87 @@ export type RunOutcome =
 
 export interface RunCommandDependencies {
 	readonly output: CommandOutput;
-	readonly loadPipeline: (path: string) => Promise<PipelineDefinition>;
+	readonly requireCase: (caseId: string) => Promise<BenchmarkCase>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
-		pipeline: PipelineDefinition,
+		benchmarkCase: BenchmarkCase,
 	) => Promise<RunOutcome>;
 }
 
+/**
+ * The case is loaded before the configuration is resolved because it declares
+ * both the pipeline the run executes and the target it falls back to, and
+ * before the target is claimed because an unknown case must not leave one
+ * dirty.
+ */
 export async function runRunCommand(
 	request: RunCommandRequest,
 	dependencies: RunCommandDependencies,
 ): Promise<void> {
-	const config = asUsageError(() => parseArgs(request.args));
+	const caseId = asUsageError(() => parseCaseId(request.args));
+	const benchmarkCase = await dependencies.requireCase(caseId);
+	const config = asUsageError(() =>
+		parseArgs(request.args, Bun.env, {
+			caseId: benchmarkCase.declaration.id,
+			pipelinePath: benchmarkCase.pipelinePath,
+			targetPath: benchmarkCase.targetPath,
+		}),
+	);
 	if (config.confirmation === undefined || !config.confirmation.approved) {
 		requireInteractiveStdin(request.stdinIsTerminal, REVIEW_PAUSE_REASON);
 	}
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
-	const pipeline = await dependencies.loadPipeline(config.pipelinePath);
 	const outcome = await dependencies.execute(
 		config,
 		dependencies.output,
-		pipeline,
+		await selectedCase(benchmarkCase, config),
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);
 }
 
+/**
+ * `--pipeline` overrides the case's declared pipeline, which changes the stage
+ * rubrics with it, so the override is resolved into the loaded case rather
+ * than carried alongside it.
+ */
+function selectedCase(
+	benchmarkCase: BenchmarkCase,
+	config: BenchmarkConfig,
+): Promise<BenchmarkCase> {
+	if (config.pipelinePath === benchmarkCase.pipelinePath) {
+		return Promise.resolve(benchmarkCase);
+	}
+
+	return withPipeline(benchmarkCase, config.pipelinePath);
+}
+
 export async function executeRun(
 	config: BenchmarkConfig,
 	output: CommandOutput,
-	pipeline: PipelineDefinition,
+	benchmarkCase: BenchmarkCase,
 ): Promise<RunOutcome> {
 	const questioner = terminalQuestioner();
 
 	try {
-		const outcome = await executeBenchmark(config, pipeline.stages.length, {
-			approval: {
-				output: (message) => {
-					output.stderr(`${message}\n`);
+		const outcome = await executeBenchmark(
+			config,
+			benchmarkCase.pipeline.stages.length,
+			{
+				approval: {
+					output: (message) => {
+						output.stderr(`${message}\n`);
+					},
+					prompt: (message) => questioner.question(message),
 				},
-				prompt: (message) => questioner.question(message),
+				runDebug: () => runBenchmark(config, benchmarkCase, questioner),
+				runConfirmed: (confirmation) =>
+					confirmRun(config, benchmarkCase, confirmation, output),
 			},
-			runDebug: () => runBenchmark(config, questioner),
-			runConfirmed: (confirmation) =>
-				confirmRun(config, pipeline, confirmation, output),
-		});
+		);
 		if (outcome.kind === "confirmation") {
 			output.stderr(
 				`Confirmation group: ${outcome.evidence.groupRecordFile}\n`,
@@ -135,7 +170,7 @@ export async function executeRun(
 
 async function confirmRun(
 	config: BenchmarkConfig,
-	pipeline: PipelineDefinition,
+	benchmarkCase: BenchmarkCase,
 	confirmation: {
 		readonly reps: number;
 		readonly projectedCost: Parameters<
@@ -145,23 +180,12 @@ async function confirmRun(
 	},
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
-	const [controlSha, source, task, productBrief, instructions, finalRubric] =
-		await Promise.all([
-			assertControlReady(),
-			assertSourceReady(config.sourceDir),
-			Bun.file(join(CONTROL_DIR, "backlog-seed.md")).text(),
-			Bun.file(join(CONTROL_DIR, "product-brief.md")).text(),
-			Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-			Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
-		]);
-	validateRubricDefinition(finalRubric);
-	const stageRubrics: Record<
-		string,
-		Awaited<ReturnType<typeof loadStageRubric>>
-	> = {};
-	for (const stage of pipeline.stages) {
-		stageRubrics[stage.name] = await loadStageRubric(stage);
-	}
+	const [controlSha, source, instructions] = await Promise.all([
+		assertControlReady(),
+		assertSourceReady(config.sourceDir),
+		Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+	]);
+	validateRubricDefinition(benchmarkCase.finalRubric);
 
 	return runPipelineConfirmation(
 		{
@@ -214,13 +238,14 @@ async function confirmRun(
 			approvalMethod: confirmation.approvalMethod,
 			source,
 			controlSha,
+			caseId: config.caseId,
 			pipelinePath: config.pipelinePath,
-			pipeline,
-			task,
-			productBrief,
+			pipeline: benchmarkCase.pipeline,
+			task: benchmarkCase.task,
+			productBrief: benchmarkCase.productBrief,
 			instructions,
-			finalRubric,
-			stageRubrics,
+			finalRubric: benchmarkCase.finalRubric,
+			stageRubrics: benchmarkCase.stageRubrics,
 			corpusRoots: skillSearchRoots(CONTROL_DIR),
 			model: config.model,
 			effort: config.effort,

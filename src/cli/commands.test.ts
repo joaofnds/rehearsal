@@ -4,6 +4,7 @@ import {
 	asUsageError,
 	COMMANDS,
 	commandHelp,
+	findCommand,
 	parseCommandLine,
 	topLevelHelp,
 	UsageError,
@@ -57,15 +58,17 @@ describe(topLevelHelp.name, () => {
 });
 
 describe("declared commands", () => {
-	it("declares run, replay, and compare", () => {
+	it("declares run, replay, compare, and the two case verbs", () => {
 		expect(COMMANDS.map((command) => command.name)).toEqual([
 			"run",
 			"replay",
 			"compare",
+			"case list",
+			"case show",
 		]);
 	});
 
-	it.each(["run", "replay", "compare"])(
+	it.each(["run", "replay", "compare", "case list", "case show"])(
 		"names every flag %s declares in its own help",
 		(name) => {
 			const command = COMMANDS.find((candidate) => candidate.name === name);
@@ -89,6 +92,7 @@ describe("declared commands", () => {
 		const run = COMMANDS.find((command) => command.name === "run");
 
 		expect(run?.flags.map((flag) => flag.name)).toEqual([
+			"--case",
 			"--target",
 			"--model",
 			"--effort",
@@ -101,6 +105,32 @@ describe("declared commands", () => {
 			"--yes",
 			"--json",
 		]);
+	});
+});
+
+describe(findCommand.name, () => {
+	it("matches a one-word command and leaves the rest as arguments", () => {
+		expect(findCommand(["run", "--json"])).toEqual({
+			command: COMMANDS[0] ?? exampleCommand,
+			args: ["--json"],
+		});
+	});
+
+	it("prefers the two-word name over a one-word prefix of it", () => {
+		const found = findCommand(["case", "show", "audit-log"]);
+
+		expect(found.command.name).toBe("case show");
+		expect(found.args).toEqual(["audit-log"]);
+	});
+
+	it("names the unknown command it refuses", () => {
+		expect(() => findCommand(["bogus"])).toThrow("Unknown command bogus");
+	});
+
+	it("names both tokens when the sub-verb is unknown", () => {
+		expect(() => findCommand(["case", "bogus"])).toThrow(
+			"Unknown command case bogus",
+		);
 	});
 });
 

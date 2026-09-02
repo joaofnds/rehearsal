@@ -157,6 +157,7 @@ function reportArmEvidence(
 	};
 	const record: ConfirmationGroupRecord = confirmationGroupRecordSchema.parse({
 		schemaVersion: 1,
+		caseId,
 		groupId,
 		mode: "pipeline",
 		reps: 4,

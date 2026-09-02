@@ -2,9 +2,11 @@
 
 - **What this is**: A benchmark harness that runs a workflow's stages against a
   target repository, checkpoints each stage, and replays one stage from a
-  checkpoint so corpus edits can be graded. The entry point is `rehearsal.ts`,
-  one executable with a `run`, `replay`, and `compare` command; its wiring is
-  in `src/cli/` and the harness in `src/benchmark/`. Domain terms are in
+  checkpoint so corpus edits can be graded. A benchmark case is declared data
+  under `cases/<id>/`: its task, product brief, final rubric, stage rubrics,
+  pipeline, and declared target repository. The entry point is `rehearsal.ts`,
+  one executable with a `run`, `replay`, `compare`, and `case` command; its
+  wiring is in `src/cli/` and the harness in `src/benchmark/`. Domain terms are in
   [GLOSSARY.md](GLOSSARY.md); the direction is in `docs/vision.md` and
   `docs/design.md`.
 - **Stack**: TypeScript on Bun. No framework, no database, no server. State is

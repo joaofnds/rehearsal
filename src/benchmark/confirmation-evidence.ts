@@ -124,6 +124,7 @@ export async function settleDiagnosticConfirmationRep(
 
 interface ConfirmationGroupFinalization {
 	readonly mode: "stage" | "pipeline";
+	readonly caseId: string;
 	readonly groupId: string;
 	readonly reps: number;
 	readonly declaredStages: readonly string[];
@@ -223,6 +224,7 @@ export async function finalizeConfirmationGroup(
 	);
 	const group = confirmationGroupRecordSchema.parse({
 		schemaVersion: 1,
+		caseId: finalization.caseId,
 		groupId: finalization.groupId,
 		mode: finalization.mode,
 		reps: finalization.reps,

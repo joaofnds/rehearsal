@@ -225,6 +225,29 @@ describe(loadComparisonEvidence.name, () => {
 		expect(report.cases).toHaveLength(2);
 	});
 
+	it("names in the report the case the source groups recorded", async () => {
+		const auditLogRoot = join(temporaryDirectory, "audit-log-cases");
+		await mkdir(auditLogRoot);
+		const auditLogFixture = new ComparisonEvidenceFixture(auditLogRoot, [
+			"audit-log",
+			"audit-log-follow-up",
+		]);
+		await auditLogFixture.write();
+		const runsDirectory = join(temporaryDirectory, "audit-log-output");
+		await mkdir(runsDirectory);
+
+		const reportFile = await writeComparisonReport({
+			manifestPath: auditLogFixture.manifestFile,
+			runsDirectory,
+		});
+
+		const report = parseComparisonReport(await Bun.file(reportFile).text());
+		expect(report.cases.map(({ caseId }) => caseId)).toEqual([
+			"audit-log",
+			"audit-log-follow-up",
+		]);
+	});
+
 	it("serializes a completed comparison fixture byte for byte", async () => {
 		const runsDirectory = join(temporaryDirectory, "characterization-output");
 		await mkdir(runsDirectory);

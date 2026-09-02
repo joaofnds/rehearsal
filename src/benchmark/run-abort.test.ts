@@ -21,7 +21,12 @@ import {
 	writeStageJudgeFailure,
 } from "./run-abort";
 import { deriveStageGrade, parseStageRubric } from "./stage-grading";
-import { TestResources, harnessResult } from "./test-support";
+import {
+	AUDIT_LOG_PIPELINE_PATH,
+	AUDIT_LOG_RUBRICS_PATH,
+	harnessResult,
+	TestResources,
+} from "./test-support";
 
 const testResources = TestResources.forEachTest();
 
@@ -183,7 +188,7 @@ function stageScorecard(
 }
 
 function loadDefaultPipeline(): Promise<PipelineDefinition> {
-	return loadPipeline("pipelines/default.json");
+	return loadPipeline(AUDIT_LOG_PIPELINE_PATH, AUDIT_LOG_RUBRICS_PATH);
 }
 
 function artifactInputs(
@@ -216,6 +221,7 @@ function artifactBaseInputs(
 		source: { root: "/tmp/target", origin: undefined, sha: "source-sha" },
 		taskSha: "task-sha",
 		config: {
+			caseId: "audit-log",
 			sourceDir: "/tmp/target",
 			model: "sonnet",
 			judgeModel: "sonnet",
@@ -488,7 +494,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = "/runs/run.json";
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const blocked = persistence.blockNextWrite();
 		const abort = createRunAbort(
@@ -523,7 +529,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = "/runs/run.json";
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const calibration: CalibrationResult = {
 			humanReview: { verdict: "ACCEPT", summary: "accepted", findings: [] },
@@ -570,7 +576,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = "/runs/run.json";
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const blocked = persistence.blockNextWrite();
 		const abort = createRunAbort(
@@ -605,7 +611,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = "/runs/run.json";
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const completeArtifact = { ...artifact, status: "COMPLETE" as const };
 		const abort = createRunAbort(
@@ -637,7 +643,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = "/runs/run.json";
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const completeArtifact = { ...artifact, status: "COMPLETE" as const };
 		const abort = createRunAbort(
@@ -677,7 +683,7 @@ describe(createRunAbort.name, () => {
 			costUsd: 0,
 		});
 		const artifact = buildFailedJudgeRunArtifact(
-			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 			judgeFailure,
 		);
 		const abort = createRunAbort(
@@ -717,7 +723,7 @@ describe(createRunAbort.name, () => {
 			costUsd: 0,
 		});
 		const artifact = buildFailedJudgeRunArtifact(
-			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 			judgeFailure,
 		);
 		const abort = createRunAbort(
@@ -748,7 +754,7 @@ describe(createRunAbort.name, () => {
 		const stageFile = join(directory, "shape.json");
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const abort = createRunAbort(
 			{
@@ -927,7 +933,7 @@ describe(createRunAbort.name, () => {
 		const artifactFile = join(directory, "run.json");
 		const pipeline = await loadDefaultPipeline();
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const abort = createRunAbort(
 			{

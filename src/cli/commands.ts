@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE_PATH } from "#benchmark/config";
+import { DEFAULT_CASE_ID } from "#benchmark/config";
 import type { CommandFailure } from "#cli/exit-codes";
 import { EXIT_CODES } from "#cli/exit-codes";
 
@@ -116,18 +116,25 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		summary: "Run the pipeline against the target repository and grade it",
 		flags: [
 			{
+				name: "--case",
+				kind: "value",
+				envVar: "BENCHMARK_CASE",
+				defaultValue: DEFAULT_CASE_ID,
+				help: "Declared benchmark case under cases/ the run executes",
+			},
+			{
 				name: "--target",
 				kind: "value",
 				envVar: "BENCHMARK_TARGET_DIR",
-				help: "Target repository the pipeline runs in",
+				help: "Target repository the pipeline runs in; defaults to the case's declared target",
 			},
 			...sessionFlags,
 			{
 				name: "--pipeline",
 				kind: "value",
 				envVar: "BENCHMARK_PIPELINE",
-				defaultValue: DEFAULT_PIPELINE_PATH,
-				help: "Pipeline definition the run executes",
+				defaultValue: "the case's declared pipeline",
+				help: "Pipeline definition the run executes, overriding the case's",
 			},
 			...confirmationFlags,
 			jsonFlag,
@@ -158,7 +165,21 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		argument: "comparison-manifest.json",
 		flags: [jsonFlag],
 	},
+	{
+		name: "case list",
+		summary: "List every declared benchmark case under cases/",
+		flags: [jsonFlag],
+	},
+	{
+		name: "case show",
+		summary: "Print one declared benchmark case's declaration",
+		argument: "case-id",
+		flags: [jsonFlag],
+	},
 ];
+
+const COMMAND_NAME_COLUMN =
+	Math.max(...COMMANDS.map((command) => command.name.length)) + 2;
 
 export function topLevelHelp(): string {
 	return [
@@ -166,7 +187,8 @@ export function topLevelHelp(): string {
 		"",
 		"Commands:",
 		...COMMANDS.map(
-			(command) => `  ${command.name.padEnd(9)}${command.summary}`,
+			(command) =>
+				`  ${command.name.padEnd(COMMAND_NAME_COLUMN)}${command.summary}`,
 		),
 		"",
 		"Exit codes:",
@@ -194,6 +216,36 @@ export class UsageError extends Error implements CommandFailure {
 		super(message);
 		this.name = "UsageError";
 	}
+}
+
+export interface FoundCommand {
+	readonly command: CommandDefinition;
+	readonly args: readonly string[];
+}
+
+/**
+ * A command name is one or two tokens, and `case` is both a prefix of
+ * `case list` and not a command itself, so the longer declared name is tried
+ * first.
+ */
+export function findCommand(argv: readonly string[]): FoundCommand {
+	const candidates = COMMANDS.toSorted(
+		(left, right) => right.name.length - left.name.length,
+	);
+	for (const command of candidates) {
+		const tokens = command.name.split(" ");
+		if (tokens.every((token, index) => argv[index] === token)) {
+			return { command, args: argv.slice(tokens.length) };
+		}
+	}
+
+	const longestName = Math.max(
+		...COMMANDS.map((command) => command.name.split(" ").length),
+	);
+
+	throw new UsageError(
+		`Unknown command ${argv.slice(0, longestName).join(" ")}`,
+	);
 }
 
 const HELP_FLAG = "--help";

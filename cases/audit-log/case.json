@@ -1,0 +1,11 @@
+{
+	"id": "audit-log",
+	"kind": "pipeline",
+	"title": "Asynchronous audit log module against the NestJS template",
+	"task": "backlog-seed.md",
+	"productBrief": "product-brief.md",
+	"finalRubric": "rubric.md",
+	"pipeline": "pipelines/default.json",
+	"rubrics": "rubrics",
+	"target": { "path": "../../../nestjs-template" }
+}

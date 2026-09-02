@@ -24,18 +24,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-1-baseline/group.json",
-              "sha256": "608f2ac8fefd3f14ea1c84167a576ab35c791868dd36f1c567af0557d24ab911"
+              "sha256": "7783234a73b4906201b9cba99cc91d4e5c0f8da71b60ec8a642b667bd3d659d5"
             },
             "reps": [
               {
                 "path": "groups/case-1-baseline/reps/case-1-baseline-rep-1/rep.json",
-                "sha256": "0de2d01b94cdc145bc69cff862c14a02d62546ed1940ae94b85729e99a6f6c48",
+                "sha256": "7e347fa59cd0bb0b8bf38deecddbb7d7fa4acc1d6aed377a05e29ceedbf06921",
                 "repId": "case-1-baseline-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-1-baseline/reps/case-1-baseline-rep-2/rep.json",
-                "sha256": "263e5898add65a0b2676a3743d30f41dfc7d28859ab42f3511835e5689dd4e0d",
+                "sha256": "038aca7c0a5c9bb40077bf2ab63f18dcceb02967a07f94ce30dc70d72379da45",
                 "repId": "case-1-baseline-rep-2",
                 "ordinal": 2
               }
@@ -268,18 +268,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-1-candidate/group.json",
-              "sha256": "a12edcb8fcd5c9457f08ebad22441114347175ca8446719cf3ecee06074804c2"
+              "sha256": "3ed99caa21d8371e58a2a66053aff342f92428d6d44113332167774e7c22f321"
             },
             "reps": [
               {
                 "path": "groups/case-1-candidate/reps/case-1-candidate-rep-1/rep.json",
-                "sha256": "360cfdd4e6db9e36f26103157d1982173b59b9fe4a33a015f2718e6b05573533",
+                "sha256": "94f7c7924fb03d2cae859474db2ace1d3a251c6f390d2f445c62e54f062167e4",
                 "repId": "case-1-candidate-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-1-candidate/reps/case-1-candidate-rep-2/rep.json",
-                "sha256": "36fd0227815433476b0836989c011156a7b8321cfdfc58ee11e48826690a9740",
+                "sha256": "f74dbe90d68972e0619ed2ba3796734b269210a66930ac21389b1f49b9655351",
                 "repId": "case-1-candidate-rep-2",
                 "ordinal": 2
               }
@@ -512,18 +512,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-1-control/group.json",
-              "sha256": "8571c853dcad3ddfad972f1f0d1c18bb7407d1e6ff52eeb412fc443d7b395d7a"
+              "sha256": "f6ee2ebc7f83f41b7a763aac8609b73ec3e2a58919d48aa9aaefac4693a5bd0b"
             },
             "reps": [
               {
                 "path": "groups/case-1-control/reps/case-1-control-rep-1/rep.json",
-                "sha256": "63bda45acb1331037cedf271e5ea1b866904f7bf67a90e6ebeb08916d46cba92",
+                "sha256": "3e542db17dbb4745a7d6d15b573d2b8c8a76ea8d74b2b1020de07dc903b07c87",
                 "repId": "case-1-control-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-1-control/reps/case-1-control-rep-2/rep.json",
-                "sha256": "7c3dc8deb6f0abce5769f5991c89a41c077ec1b0ad79b556cbde65a485da262c",
+                "sha256": "bb2b782396bfd85f523d88f8a7ab51e9890cdcea1b003712e8089c7edc769874",
                 "repId": "case-1-control-rep-2",
                 "ordinal": 2
               }
@@ -761,18 +761,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-2-baseline/group.json",
-              "sha256": "28adc686c3307e6d017f8d4dc54ae02288a7221bc430da149dbac9614adfbb99"
+              "sha256": "a9d662500d0ed7cb27011d00a761cf425d06049c8985775598a04e766338bb48"
             },
             "reps": [
               {
                 "path": "groups/case-2-baseline/reps/case-2-baseline-rep-1/rep.json",
-                "sha256": "134e9a979ff0a727433c311d88b48ee25a1b471198fab1d2deccc4fe57265088",
+                "sha256": "792e2ff12bb15b6abe05cdc453f0af86f5a1b8d525f88b33b1d810fccbc1b9cd",
                 "repId": "case-2-baseline-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-2-baseline/reps/case-2-baseline-rep-2/rep.json",
-                "sha256": "d3c7df64840e589e955c89bac070842b3874346b3d87f2ffe997ec2ca7ced276",
+                "sha256": "fb2d7af682af89c5d9e1220d153fc97803f359af0043e2793fa82abcdc440fa0",
                 "repId": "case-2-baseline-rep-2",
                 "ordinal": 2
               }
@@ -1005,18 +1005,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-2-candidate/group.json",
-              "sha256": "0b94968f15dedbb8dc785bb6e7621e0cf79b10c9239459c2e6c27e6a3f400ca0"
+              "sha256": "50fe92f825684a842236b1b410bfa61666ce82d387b48dd5c0c7c5ebab311d42"
             },
             "reps": [
               {
                 "path": "groups/case-2-candidate/reps/case-2-candidate-rep-1/rep.json",
-                "sha256": "7ac3d33775272211fcdc69620df2f4a2eed4999552635280245d80772cc8308c",
+                "sha256": "79234d75395c32bc631ac8333011e230cb982fbfc01ad041c0e7e445cbbf4867",
                 "repId": "case-2-candidate-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-2-candidate/reps/case-2-candidate-rep-2/rep.json",
-                "sha256": "4ce53bb076f55a85fd1cfeb67a6590464b9e4a97dbca017cd0407ba2f55b5b5f",
+                "sha256": "00b3b78771a6ddddec0d2fa46cb11d572daafd6f35fd5b9b29d152031acb89a3",
                 "repId": "case-2-candidate-rep-2",
                 "ordinal": 2
               }
@@ -1249,18 +1249,18 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
           "source": {
             "group": {
               "path": "groups/case-2-control/group.json",
-              "sha256": "ce641199a1322b8b1b277575037fa91c477a91158b5bef66aefd6240f7306af6"
+              "sha256": "73a5b1180345ac134623c02daa03204c615d8a29d22ee99db93475a661d5daca"
             },
             "reps": [
               {
                 "path": "groups/case-2-control/reps/case-2-control-rep-1/rep.json",
-                "sha256": "5a4823f0bf6efe7ff506c14aca4fb54140a629dd2e1333a7c3de38d36dd5c339",
+                "sha256": "0d8580066305de1188730c18120fc6e8bd635c546a1f0828875b7f66c2be7b14",
                 "repId": "case-2-control-rep-1",
                 "ordinal": 1
               },
               {
                 "path": "groups/case-2-control/reps/case-2-control-rep-2/rep.json",
-                "sha256": "e80083e588f5c739e2c24e95c266baa7b9f6f1410206a263882e2ee0a71119b2",
+                "sha256": "9aa6e6017934f1bad0408f1e38f1e63d891741f4f80a7278dd5e01b31efa7855",
                 "repId": "case-2-control-rep-2",
                 "ordinal": 2
               }

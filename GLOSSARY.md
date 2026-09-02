@@ -14,8 +14,9 @@
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
-  `compare`), declaring its own flags with their defaults, environment
-  fallbacks, and help lines as data. The declaration is the single source of
+  `compare`, `case list`, `case show`), declaring its own flags with their
+  defaults, environment fallbacks, and help lines as data. A name is one or two
+  tokens; the longer declared name wins over a prefix of it. The declaration is the single source of
   the flag's name in help, parsing, and documentation.
 - **Command record** — the strict, zod-validated artifact a command writes and
   the only thing `--json` prints: the run artifact for `run`, the replay record
@@ -97,8 +98,8 @@
   A stop or execution failure is unsuccessful.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
-- **Rubric** — the frozen grading contract a Judge applies; per-stage under
-  `rubrics/`, final in `rubric.md`.
+- **Rubric** — the frozen grading contract a Judge applies; per-stage under the
+  case's `rubrics/`, final in the case's `rubric.md`.
 - **Rubric criterion** — one identified hard blocker, requirement, or quality
   dimension within a rubric, reduced to a binary pass/fail decision for
   calibration.

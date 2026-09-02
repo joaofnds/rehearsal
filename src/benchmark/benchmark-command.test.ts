@@ -8,6 +8,7 @@ import { PROJECT_ROOT } from "./test-support";
 describe(executeBenchmark.name, () => {
 	it("keeps debug evidence single and gates three pipeline reps on approval", async () => {
 		const config = {
+			caseId: "audit-log",
 			sourceDir: "/target",
 			model: "sonnet",
 			judgeModel: "opus",

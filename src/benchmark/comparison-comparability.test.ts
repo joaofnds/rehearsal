@@ -9,6 +9,7 @@ import { assertComparableComparison } from "./comparison-comparability";
 import type { ComparisonArm } from "./comparison-record";
 
 interface GroupFixtureOptions {
+	readonly caseId: string;
 	readonly groupId: string;
 	readonly corpusDigest: string;
 	readonly model?: string | undefined;
@@ -35,6 +36,7 @@ function groupRecord(
 
 	return {
 		schemaVersion: 1,
+		caseId: options.caseId,
 		groupId: options.groupId,
 		mode: options.mode ?? "stage",
 		reps,
@@ -151,6 +153,7 @@ function benchmarkCase(
 			baseline: arm(
 				"baseline",
 				groupRecord({
+					caseId,
 					groupId: `${caseId}-baseline`,
 					corpusDigest: corpusDigests.baseline,
 				}),
@@ -158,6 +161,7 @@ function benchmarkCase(
 			candidate: arm(
 				"candidate",
 				groupRecord({
+					caseId,
 					groupId: `${caseId}-candidate`,
 					corpusDigest: corpusDigests.candidate,
 				}),
@@ -165,6 +169,7 @@ function benchmarkCase(
 			control: arm(
 				"control",
 				groupRecord({
+					caseId,
 					groupId: `${caseId}-control`,
 					corpusDigest: corpusDigests.control,
 				}),
@@ -185,6 +190,7 @@ function pipelineArm(
 	checkpointDigest: string,
 ): ComparisonArmEvidence {
 	const group = groupRecord({
+		caseId,
 		groupId: `${caseId}-${role}`,
 		corpusDigest: CORPUS_DIGESTS[role],
 		mode: "pipeline",
@@ -242,6 +248,7 @@ function casesWithChangedControl(
 	const changedControl = arm(
 		"control",
 		groupRecord({
+			caseId: "case-1",
 			groupId: "case-1-control",
 			corpusDigest: CORPUS_DIGESTS.control,
 			mode: change.mode,
@@ -327,6 +334,7 @@ describe(assertComparableComparison.name, () => {
 		const changedCandidate = arm(
 			"candidate",
 			groupRecord({
+				caseId: "case-1",
 				groupId: "case-1-candidate",
 				corpusDigest: CORPUS_DIGESTS.candidate,
 				model: "haiku",
@@ -476,6 +484,32 @@ describe(assertComparableComparison.name, () => {
 		expect(() => assertComparableComparison(cases)).toThrow(
 			"case case-1 arm control field reps differs from case case-1 arm baseline",
 		);
+	});
+
+	it("rejects an arm whose group recorded a different case", () => {
+		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
+		const candidate = arm("candidate", {
+			...first.arms.candidate.group.record,
+			caseId: "case-2",
+		});
+
+		expect(() =>
+			assertComparableComparison([
+				{ ...first, arms: { ...first.arms, candidate } },
+				benchmarkCase("case-2", CORPUS_DIGESTS),
+			]),
+		).toThrow(
+			"case case-1 arm candidate field caseId recorded case-2; expected case-1",
+		);
+	});
+
+	it("accepts arms whose groups all recorded the manifest's case", () => {
+		expect(() =>
+			assertComparableComparison([
+				benchmarkCase("case-1", CORPUS_DIGESTS),
+				benchmarkCase("case-2", CORPUS_DIGESTS),
+			]),
+		).not.toThrow();
 	});
 
 	it("rejects an arm without the expected rep records", () => {

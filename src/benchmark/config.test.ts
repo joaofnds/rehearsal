@@ -1,11 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import type { Effort } from "./config";
+import type { CaseDefaults, Effort } from "./config";
 import {
+	DEFAULT_CASE_ID,
 	judgeSelfPreferenceWarning,
 	parseArgs,
+	parseCaseId,
 	parseReplayArgs,
 } from "./config";
+
+const CASE_DEFAULTS: CaseDefaults = {
+	caseId: DEFAULT_CASE_ID,
+	pipelinePath: "cases/audit-log/pipelines/default.json",
+	targetPath: "/declared/target",
+};
 
 interface SessionValues {
 	readonly model: string;
@@ -77,7 +85,11 @@ describe("run and replay session knobs", () => {
 			},
 		},
 	])("resolves identical $source", ({ sessionArgs, env, expected }) => {
-		const runConfig = parseArgs(["--target", "./target", ...sessionArgs], env);
+		const runConfig = parseArgs(
+			["--target", "./target", ...sessionArgs],
+			env,
+			CASE_DEFAULTS,
+		);
 		const replayConfig = parseReplayArgs(
 			["--run", "run-1", "--stage", "build", ...sessionArgs],
 			env,
@@ -141,7 +153,7 @@ describe("run and replay session knobs", () => {
 		},
 	])("rejects identical errors when $condition", ({ sessionArgs, error }) => {
 		expect(() =>
-			parseArgs(["--target", "./target", ...sessionArgs], {}),
+			parseArgs(["--target", "./target", ...sessionArgs], {}, CASE_DEFAULTS),
 		).toThrow(error);
 		expect(() =>
 			parseReplayArgs(
@@ -166,6 +178,7 @@ describe(parseArgs.name, () => {
 			const config = parseArgs(
 				["--target", "./target", "--model", model, "--session-budget-usd", "5"],
 				{},
+				CASE_DEFAULTS,
 			);
 
 			expect(config.judgeModel).toBe(judgeModel);
@@ -189,16 +202,18 @@ describe(parseArgs.name, () => {
 				"5",
 			],
 			{},
+			CASE_DEFAULTS,
 		);
 
 		expect(config).toEqual({
+			caseId: DEFAULT_CASE_ID,
 			sourceDir: join(process.cwd(), "target"),
 			model: "sonnet",
 			effort: "high",
 			judgeModel: "sonnet",
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
-			pipelinePath: "pipelines/default.json",
+			pipelinePath: CASE_DEFAULTS.pipelinePath,
 		});
 	});
 
@@ -215,6 +230,7 @@ describe(parseArgs.name, () => {
 				"5",
 			],
 			{ BENCHMARK_JUDGE_MODEL: "opus" },
+			CASE_DEFAULTS,
 		);
 
 		expect(config.judgeModel).toBe("haiku");
@@ -224,6 +240,7 @@ describe(parseArgs.name, () => {
 		const config = parseArgs(
 			["--target", "./target", "--model", "opus", "--session-budget-usd", "5"],
 			{ BENCHMARK_JUDGE_MODEL: "haiku" },
+			CASE_DEFAULTS,
 		);
 
 		expect(config.judgeModel).toBe("haiku");
@@ -242,12 +259,13 @@ describe(parseArgs.name, () => {
 				"pipelines/three-stage.json",
 			],
 			{},
+			CASE_DEFAULTS,
 		);
 
 		expect(config.pipelinePath).toBe("pipelines/three-stage.json");
 	});
 
-	it("defaults the pipeline to the four-stage definition", () => {
+	it("defaults the pipeline to the one the case declares", () => {
 		const config = parseArgs(
 			[
 				"--target",
@@ -258,9 +276,44 @@ describe(parseArgs.name, () => {
 				"5",
 			],
 			{},
+			CASE_DEFAULTS,
 		);
 
-		expect(config.pipelinePath).toBe("pipelines/default.json");
+		expect(config.pipelinePath).toBe(CASE_DEFAULTS.pipelinePath);
+	});
+
+	it("falls back to the target the case declares, and lets --target override it", () => {
+		const sessionArgs = ["--model", "sonnet", "--session-budget-usd", "5"];
+
+		const declared = parseArgs(sessionArgs, {}, CASE_DEFAULTS);
+		const overridden = parseArgs(
+			["--target", "./target", ...sessionArgs],
+			{},
+			CASE_DEFAULTS,
+		);
+
+		expect(declared.sourceDir).toBe(CASE_DEFAULTS.targetPath);
+		expect(overridden.sourceDir).toBe(join(process.cwd(), "target"));
+	});
+
+	it("prefers the environment target over the one the case declares", () => {
+		const config = parseArgs(
+			["--model", "sonnet", "--session-budget-usd", "5"],
+			{ BENCHMARK_TARGET_DIR: "/environment/target" },
+			CASE_DEFAULTS,
+		);
+
+		expect(config.sourceDir).toBe("/environment/target");
+	});
+
+	it("records the case the run selected", () => {
+		const config = parseArgs(
+			["--model", "sonnet", "--session-budget-usd", "5"],
+			{},
+			CASE_DEFAULTS,
+		);
+
+		expect(config.caseId).toBe(DEFAULT_CASE_ID);
 	});
 
 	it("selects a five-rep confirmation explicitly", () => {
@@ -275,6 +328,7 @@ describe(parseArgs.name, () => {
 				"--confirm",
 			],
 			{},
+			CASE_DEFAULTS,
 		);
 
 		expect(config.confirmation).toEqual({ reps: 5, approved: false });
@@ -300,6 +354,7 @@ describe(parseArgs.name, () => {
 					...flags,
 				],
 				{},
+				CASE_DEFAULTS,
 			),
 		).toThrow(error);
 	});
@@ -317,17 +372,22 @@ describe(parseArgs.name, () => {
 				"5",
 			],
 			{},
+			CASE_DEFAULTS,
 		);
 
 		expect(config.judgeEffort).toBe("xhigh");
 	});
 
 	it("resolves configuration from environment variables", () => {
-		const config = parseArgs([], {
-			BENCHMARK_TARGET_DIR: "./target",
-			BENCHMARK_MODEL: "sonnet",
-			BENCHMARK_SESSION_BUDGET_USD: "5",
-		});
+		const config = parseArgs(
+			[],
+			{
+				BENCHMARK_TARGET_DIR: "./target",
+				BENCHMARK_MODEL: "sonnet",
+				BENCHMARK_SESSION_BUDGET_USD: "5",
+			},
+			CASE_DEFAULTS,
+		);
 
 		expect(config.sourceDir).toBe(join(process.cwd(), "target"));
 		expect(config.model).toBe("sonnet");
@@ -348,13 +408,18 @@ describe(parseArgs.name, () => {
 					"5",
 				],
 				{},
+				CASE_DEFAULTS,
 			),
 		).toThrow("Unsupported effort");
 	});
 
 	it("rejects missing spend limits", () => {
 		expect(() =>
-			parseArgs(["--target", "./target", "--model", "claude-opus-4-8"], {}),
+			parseArgs(
+				["--target", "./target", "--model", "claude-opus-4-8"],
+				{},
+				CASE_DEFAULTS,
+			),
 		).toThrow("Provide --session-budget-usd");
 	});
 });
@@ -483,6 +548,22 @@ describe(parseReplayArgs.name, () => {
 				{},
 			),
 		).toThrow("Provide --stage");
+	});
+});
+
+describe(parseCaseId.name, () => {
+	it("defaults to the audit-log case", () => {
+		expect(parseCaseId(["--model", "sonnet"], {})).toBe(DEFAULT_CASE_ID);
+	});
+
+	it("reads the case from the environment when the flag is absent", () => {
+		expect(parseCaseId([], { BENCHMARK_CASE: "other" })).toBe("other");
+	});
+
+	it("prefers the flag over the environment", () => {
+		expect(
+			parseCaseId(["--case", "flagged"], { BENCHMARK_CASE: "other" }),
+		).toBe("flagged");
 	});
 });
 

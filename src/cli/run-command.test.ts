@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { BenchmarkCase } from "#benchmark/case";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
@@ -24,6 +25,47 @@ const pipeline: PipelineDefinition = {
 	stages: [{ name: "build", kind: "delivery", skill: "build", rubric: "b" }],
 };
 
+const auditLogCase: BenchmarkCase = {
+	declaration: {
+		id: "audit-log",
+		kind: "pipeline",
+		title: "Audit log",
+		task: "backlog-seed.md",
+		productBrief: "product-brief.md",
+		finalRubric: "rubric.md",
+		pipeline: "pipelines/default.json",
+		rubrics: "rubrics",
+		target: { path: "/declared/target" },
+	},
+	task: "Task",
+	productBrief: "Brief",
+	finalRubric: "Rubric",
+	finalRubricPath: "/control/cases/audit-log/rubric.md",
+	rubricsDirectory: "/control/cases/audit-log/rubrics",
+	pipelinePath: "cases/audit-log/pipelines/default.json",
+	pipeline,
+	stageRubrics: {},
+	targetPath: "/declared/target",
+};
+
+interface CaseLoader {
+	readonly loaded: readonly string[];
+	readonly requireCase: (id: string) => Promise<BenchmarkCase>;
+}
+
+function loadsAuditLog(): CaseLoader {
+	const loaded: string[] = [];
+
+	return {
+		loaded,
+		requireCase: (id) => {
+			loaded.push(id);
+
+			return Promise.resolve(auditLogCase);
+		},
+	};
+}
+
 describe(runRunCommand.name, () => {
 	const temporaryDirectories: string[] = [];
 
@@ -35,8 +77,7 @@ describe(runRunCommand.name, () => {
 		);
 	});
 
-	it("refuses before loading the pipeline when stdin is not a terminal", async () => {
-		const loaded: string[] = [];
+	it("refuses before the run starts when stdin is not a terminal", async () => {
 		const { output, stdout, stderr } = recordOutput();
 
 		const failure = await failureOf(
@@ -44,11 +85,7 @@ describe(runRunCommand.name, () => {
 				{ args, json: false, stdinIsTerminal: false },
 				{
 					output,
-					loadPipeline: (path) => {
-						loaded.push(path);
-
-						return Promise.reject(new Error("pipeline must not load"));
-					},
+					requireCase: loadsAuditLog().requireCase,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
 			),
@@ -57,9 +94,142 @@ describe(runRunCommand.name, () => {
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toContain("review pause");
 		expect(failure.message).toContain("ACT-26.3");
-		expect(loaded).toEqual([]);
 		expect(stdout).toEqual([]);
 		expect(stderr).toEqual([]);
+	});
+
+	it("loads the case --case names, and audit-log when the flag is absent", async () => {
+		const loader = loadsAuditLog();
+		const { output } = recordOutput();
+		const dependencies = {
+			output,
+			requireCase: loader.requireCase,
+			execute: () =>
+				Promise.resolve({
+					kind: "debug" as const,
+					recordFile: "/runs/2026.json",
+				}),
+		};
+
+		await runRunCommand(
+			{ args, json: false, stdinIsTerminal: true },
+			dependencies,
+		);
+		await runRunCommand(
+			{
+				args: [...args, "--case", "other"],
+				json: false,
+				stdinIsTerminal: true,
+			},
+			dependencies,
+		);
+
+		expect(loader.loaded).toEqual(["audit-log", "other"]);
+	});
+
+	it("refuses an unknown case before the run starts", async () => {
+		const { output, stdout } = recordOutput();
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [...args, "--case", "missing"],
+					json: false,
+					stdinIsTerminal: true,
+				},
+				{
+					output,
+					requireCase: (id) =>
+						Promise.reject(new RefusedPreconditionError(`Unknown case ${id}`)),
+					execute: () => Promise.reject(new Error("run must not start")),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("missing");
+		expect(stdout).toEqual([]);
+	});
+
+	it("runs the target the case declares when no flag or environment names one", async () => {
+		const targets: string[] = [];
+		const { output } = recordOutput();
+
+		await runRunCommand(
+			{
+				args: ["--model", "sonnet", "--session-budget-usd", "1"],
+				json: false,
+				stdinIsTerminal: true,
+			},
+			{
+				output,
+				requireCase: loadsAuditLog().requireCase,
+				execute: (config) => {
+					targets.push(config.sourceDir);
+
+					return Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					});
+				},
+			},
+		);
+
+		expect(targets).toEqual(["/declared/target"]);
+	});
+
+	it("hands the run the case it loaded, with the case's own pipeline", async () => {
+		const executed: BenchmarkCase[] = [];
+		const { output } = recordOutput();
+
+		await runRunCommand(
+			{ args, json: false, stdinIsTerminal: true },
+			{
+				output,
+				requireCase: loadsAuditLog().requireCase,
+				execute: (_config, _commandOutput, benchmarkCase) => {
+					executed.push(benchmarkCase);
+
+					return Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					});
+				},
+			},
+		);
+
+		expect(executed).toEqual([auditLogCase]);
+	});
+
+	it("records the overriding pipeline path when --pipeline names another file", async () => {
+		const recorded: string[] = [];
+		const { output } = recordOutput();
+
+		await runRunCommand(
+			{
+				args: [...args, "--pipeline", "cases/audit-log/pipelines/other.json"],
+				json: false,
+				stdinIsTerminal: true,
+			},
+			{
+				output,
+				requireCase: () =>
+					Promise.resolve({
+						...auditLogCase,
+						pipelinePath: "cases/audit-log/pipelines/other.json",
+					}),
+				execute: (config) => {
+					recorded.push(config.pipelinePath);
+
+					return Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					});
+				},
+			},
+		);
+
+		expect(recorded).toEqual(["cases/audit-log/pipelines/other.json"]);
 	});
 
 	it("runs the confirmation group without a terminal when --yes answers the approval", async () => {
@@ -73,7 +243,7 @@ describe(runRunCommand.name, () => {
 			},
 			{
 				output,
-				loadPipeline: () => Promise.resolve(pipeline),
+				requireCase: loadsAuditLog().requireCase,
 				execute: () =>
 					Promise.resolve({
 						kind: "confirmation" as const,
@@ -97,8 +267,7 @@ describe(runRunCommand.name, () => {
 				},
 				{
 					output,
-					loadPipeline: () =>
-						Promise.reject(new Error("pipeline must not load")),
+					requireCase: loadsAuditLog().requireCase,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
 			),
@@ -114,7 +283,7 @@ describe(runRunCommand.name, () => {
 			{ args, json: false, stdinIsTerminal: true },
 			{
 				output,
-				loadPipeline: () => Promise.resolve(pipeline),
+				requireCase: loadsAuditLog().requireCase,
 				execute: (_config, commandOutput) => {
 					commandOutput.stderr("Target: /nonexistent-target\n");
 
@@ -130,7 +299,7 @@ describe(runRunCommand.name, () => {
 		expect(stderr.join("")).toBe("Target: /nonexistent-target\n");
 	});
 
-	it("warns once on stderr about a same-family Judge before loading the pipeline", async () => {
+	it("warns once on stderr about a same-family Judge before the run starts", async () => {
 		const events: string[] = [];
 		const { output, stdout } = recordOutput();
 
@@ -157,10 +326,13 @@ describe(runRunCommand.name, () => {
 						output.stderr(text);
 					},
 				},
-				loadPipeline: () => {
-					events.push("load-pipeline");
+				requireCase: (id) => {
+					events.push("load-case");
 
-					return Promise.resolve(pipeline);
+					return Promise.resolve({
+						...auditLogCase,
+						declaration: { ...auditLogCase.declaration, id },
+					});
 				},
 				execute: () =>
 					Promise.resolve({
@@ -173,7 +345,7 @@ describe(runRunCommand.name, () => {
 		expect(
 			events.filter((event) => event.includes("Self-preference warning")),
 		).toHaveLength(1);
-		expect(events.indexOf("load-pipeline")).toBe(1);
+		expect(events[0]).toBe("load-case");
 		expect(stdout.join("")).toBe("/runs/2026.json\n");
 	});
 
@@ -189,7 +361,7 @@ describe(runRunCommand.name, () => {
 			{ args, json: true, stdinIsTerminal: true },
 			{
 				output,
-				loadPipeline: () => Promise.resolve(pipeline),
+				requireCase: loadsAuditLog().requireCase,
 				execute: () => Promise.resolve({ kind: "debug" as const, recordFile }),
 			},
 		);

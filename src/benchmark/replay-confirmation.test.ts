@@ -204,6 +204,7 @@ describe(runReplayConfirmation.name, () => {
 			),
 		);
 		const manifest: RunManifest = {
+			caseId: "audit-log",
 			timestamp: "2026-08-31T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot: primary,
@@ -662,6 +663,7 @@ describe(runReplayConfirmation.name, () => {
 			),
 		);
 		await writeRunManifest(paths.manifestFile, {
+			caseId: "audit-log",
 			timestamp: "2026-08-31T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot: source.directory,
@@ -900,6 +902,7 @@ describe(runReplayConfirmation.name, () => {
 			),
 		);
 		await writeRunManifest(paths.manifestFile, {
+			caseId: "audit-log",
 			timestamp: "2026-08-31T00:00:00.000Z",
 			controlSha: "run-control-sha",
 			sourceRoot: source.directory,

@@ -10,7 +10,14 @@ export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
 export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
 export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 
-export const DEFAULT_PIPELINE_PATH = "pipelines/default.json";
+export const DEFAULT_CASE_ID = "audit-log";
+
+/**
+ * Every record written before cases were declared ran the case that now lives
+ * at cases/audit-log, so a record on disk without a caseId means exactly that
+ * case. Removing this default would make those records unreadable.
+ */
+export const LEGACY_CASE_ID = DEFAULT_CASE_ID;
 
 const MODEL_FAMILIES = ["opus", "sonnet", "haiku"] as const;
 type ModelFamily = (typeof MODEL_FAMILIES)[number];
@@ -34,9 +41,21 @@ export interface ConfirmationConfig {
 }
 
 export interface BenchmarkConfig extends SessionKnobs {
+	readonly caseId: string;
 	readonly sourceDir: string;
 	readonly pipelinePath: string;
 	readonly confirmation?: ConfirmationConfig | undefined;
+}
+
+/**
+ * What the selected case contributes to a run's configuration: its own id, the
+ * pipeline it declares, and the target repository it was written against.
+ * `--target` and BENCHMARK_TARGET_DIR still win over the declared target.
+ */
+export interface CaseDefaults {
+	readonly caseId: string;
+	readonly pipelinePath: string;
+	readonly targetPath: string;
 }
 
 interface ParsedFlags {
@@ -183,16 +202,34 @@ function parseSessionKnobs(
 	return { model, effort, judgeModel, judgeEffort, sessionBudgetUsd };
 }
 
-export function parseArgs(
+/**
+ * Which case a run selects, read before anything else: the case declares the
+ * pipeline and the fallback target, so it has to be loaded before the rest of
+ * the configuration can be resolved.
+ */
+export function parseCaseId(
 	args: readonly string[],
 	env: Readonly<Record<string, string | undefined>> = Bun.env,
+): string {
+	const { values } = flagValues(args);
+
+	return values.get("--case") ?? env["BENCHMARK_CASE"] ?? DEFAULT_CASE_ID;
+}
+
+export function parseArgs(
+	args: readonly string[],
+	env: Readonly<Record<string, string | undefined>>,
+	caseDefaults: CaseDefaults,
 ): BenchmarkConfig {
 	const flags = flagValues(args);
 	const { values } = flags;
 
-	const sourceDir = values.get("--target") ?? env["BENCHMARK_TARGET_DIR"];
+	const sourceDir =
+		values.get("--target") ??
+		env["BENCHMARK_TARGET_DIR"] ??
+		caseDefaults.targetPath;
 
-	if (sourceDir === undefined || sourceDir === "") {
+	if (sourceDir === "") {
 		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
 	}
 
@@ -201,12 +238,13 @@ export function parseArgs(
 
 	return withConfirmation(
 		{
+			caseId: caseDefaults.caseId,
 			sourceDir: resolve(sourceDir),
 			...sessionKnobs,
 			pipelinePath: controlRelativePath(
 				values.get("--pipeline") ??
 					env["BENCHMARK_PIPELINE"] ??
-					DEFAULT_PIPELINE_PATH,
+					caseDefaults.pipelinePath,
 			),
 		},
 		confirmation,

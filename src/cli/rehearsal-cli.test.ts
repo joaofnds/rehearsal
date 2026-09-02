@@ -78,14 +78,17 @@ async function writeOversizedManifest(
 ): Promise<string> {
 	const cases = [];
 	for (const root of roots) {
-		const fixture = new ComparisonEvidenceFixture(root);
+		const fixture = new ComparisonEvidenceFixture(root, [
+			`case-1-${basename(root)}`,
+			`case-2-${basename(root)}`,
+		]);
 		await fixture.write();
 		const manifest = parseComparisonManifest(
 			await Bun.file(fixture.manifestFile).text(),
 		);
 		for (const benchmarkCase of manifest.cases) {
 			cases.push({
-				caseId: `${benchmarkCase.caseId}-${basename(root)}`,
+				caseId: benchmarkCase.caseId,
 				arms: {
 					baseline: join(root, benchmarkCase.arms.baseline),
 					candidate: join(root, benchmarkCase.arms.candidate),
@@ -136,7 +139,7 @@ describe("rehearsal", () => {
 		"prints the flag table for rehearsal %s --help",
 		async (name) => {
 			const command = COMMANDS.find((candidate) => candidate.name === name);
-			const result = await runCli([name, "--help"]);
+			const result = await runCli([...name.split(" "), "--help"]);
 
 			expect(result.exitCode).toBe(0);
 			expect(result.stderr).toBe("");
@@ -304,8 +307,8 @@ describe("rehearsal", () => {
 	it.each([
 		{
 			condition: "a required flag is missing",
-			args: ["run", "--model", "sonnet", "--session-budget-usd", "1"],
-			message: "Provide --target or BENCHMARK_TARGET_DIR",
+			args: ["run", "--target", "/nonexistent", "--session-budget-usd", "1"],
+			message: "Provide --model or BENCHMARK_MODEL",
 		},
 		{
 			condition: "a flag value is unparseable",

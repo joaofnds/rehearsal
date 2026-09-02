@@ -30,6 +30,7 @@ import {
 	runChecks,
 } from "./checks";
 import { killActiveCommands, runCommand } from "./command";
+import type { BenchmarkCase } from "./case";
 import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
 import { CONTROL_DIR } from "./config";
 import type {
@@ -60,7 +61,6 @@ import type {
 	StageDefinition,
 	TargetDefinition,
 } from "./pipeline";
-import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
 import type { BenchmarkRunPaths } from "./run-layout";
@@ -155,6 +155,7 @@ export function buildRunManifest(inputs: RunManifestInputs): RunManifest {
 	const { config, source } = inputs;
 
 	return {
+		caseId: config.caseId,
 		timestamp: inputs.timestamp,
 		controlSha: inputs.controlSha,
 		sourceRoot: source.root,
@@ -180,6 +181,7 @@ function runArtifactEvidence(
 	const { source, config, evidence, productOwner } = inputs;
 
 	return {
+		caseId: config.caseId,
 		timestamp: inputs.timestamp,
 		controlSha: inputs.controlSha,
 		sourceRoot: source.root,
@@ -680,9 +682,10 @@ export async function captureRunBaseline(
 
 export async function runBenchmark(
 	config: BenchmarkConfig,
+	benchmarkCase: BenchmarkCase,
 	rl: Questioner,
 ): Promise<BenchmarkRunPaths> {
-	const pipeline = await loadPipeline(config.pipelinePath);
+	const { pipeline } = benchmarkCase;
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
 	const workflowBackup = await captureWorkflowBackup(source.root);
@@ -730,14 +733,11 @@ export async function runBenchmark(
 			source,
 			pipeline.target,
 		);
-		const [task, productBrief, instructions, rubric, claudeVersion] =
-			await Promise.all([
-				Bun.file(join(CONTROL_DIR, "backlog-seed.md")).text(),
-				Bun.file(join(CONTROL_DIR, "product-brief.md")).text(),
-				Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
-				Bun.file(join(CONTROL_DIR, "rubric.md")).text(),
-				runCommand(["claude", "--version"], CONTROL_DIR),
-			]);
+		const { task, productBrief, finalRubric: rubric } = benchmarkCase;
+		const [instructions, claudeVersion] = await Promise.all([
+			Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+			runCommand(["claude", "--version"], CONTROL_DIR),
+		]);
 		const rubricIds = validateRubricDefinition(rubric);
 		const { taskId, taskSha } = await createTaskCommit(
 			source.root,
@@ -830,6 +830,8 @@ export async function runBenchmark(
 							targetDir: source.root,
 							originalInstructions: instructions,
 							originalRubric: rubric,
+							finalRubricPath: benchmarkCase.finalRubricPath,
+							rubricsDirectory: benchmarkCase.rubricsDirectory,
 							stageScorecards: scorecards,
 							judgeModel: config.judgeModel,
 							judgeEffort: config.judgeEffort,
@@ -903,6 +905,8 @@ export async function runBenchmark(
 			targetDir: source.root,
 			originalInstructions: instructions,
 			originalRubric: rubric,
+			finalRubricPath: benchmarkCase.finalRubricPath,
+			rubricsDirectory: benchmarkCase.rubricsDirectory,
 			finalCandidate: {
 				originalGrade: grade,
 				baselineContext,

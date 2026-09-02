@@ -22,7 +22,7 @@ import {
 	pipelineStageScorecard,
 } from "./pipeline-confirmation-test-support";
 import { removeWorktree } from "./target";
-import { TestResources } from "./test-support";
+import { AUDIT_LOG_PIPELINE_PATH, TestResources } from "./test-support";
 import { WorkflowExecutionError } from "./workflow";
 
 const testResources = TestResources.forEachTest();
@@ -40,6 +40,11 @@ describe(runPipelineConfirmation.name, () => {
 				"5",
 			],
 			{},
+			{
+				caseId: "audit-log",
+				pipelinePath: AUDIT_LOG_PIPELINE_PATH,
+				targetPath: harness.sourceRoot,
+			},
 		);
 
 		const outcome = await harness.run({
@@ -54,6 +59,25 @@ describe(runPipelineConfirmation.name, () => {
 			model: group.inputs.model,
 			judgeModel: group.inputs.judgeModel,
 		}).toEqual({ model: "sonnet", judgeModel: "opus" });
+	});
+
+	it("names the case its group and rep records ran", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run({});
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+		const reps = await Promise.all(
+			outcome.repRecordFiles.map(async (file) =>
+				parseConfirmationRepRecord(await Bun.file(file).text()),
+			),
+		);
+
+		expect(group.caseId).toBe("audit-log");
+		expect(reps.map(({ caseId }) => caseId)).toEqual(
+			reps.map(() => "audit-log"),
+		);
 	});
 
 	it("reports agreement only for its exact Judge model", async () => {

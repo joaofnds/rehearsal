@@ -197,12 +197,22 @@ interface FailedStageEvidence {
 	readonly elapsedMs: number;
 }
 
+/**
+ * What every rep record of one replay group shares. The case is the one the
+ * replayed run recorded, read from its manifest rather than taken from the
+ * replay's own flags, because a replay reruns that run's case by definition.
+ */
+interface ReplayRepIdentity {
+	readonly request: ReplayConfirmationRequest;
+	readonly caseId: string;
+	readonly consumed: Pick<CheckpointRecord, "lineage" | "targetSha">;
+	readonly repId: string;
+	readonly ordinal: number;
+	readonly worktreePath: string;
+}
+
 function completeRepRecord(
-	request: ReplayConfirmationRequest,
-	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
-	repId: string,
-	ordinal: number,
-	worktreePath: string,
+	rep: ReplayRepIdentity,
 	resultSha: string,
 	scorecardFile: string,
 	scorecard: StageScorecard,
@@ -224,20 +234,21 @@ function completeRepRecord(
 
 	return confirmationRepRecordSchema.parse({
 		schemaVersion: 1,
-		groupId: request.groupId,
-		repId,
-		ordinal,
+		caseId: rep.caseId,
+		groupId: rep.request.groupId,
+		repId: rep.repId,
+		ordinal: rep.ordinal,
 		mode: "stage",
-		worktreePath,
+		worktreePath: rep.worktreePath,
 		lineage: {
 			kind: "CHECKPOINT",
-			lineage: consumed.lineage,
-			targetSha: consumed.targetSha,
+			lineage: rep.consumed.lineage,
+			targetSha: rep.consumed.targetSha,
 		},
 		outcome: successful ? "SUCCESSFUL" : "UNSUCCESSFUL",
 		stages: [
 			{
-				stage: request.stage,
+				stage: rep.request.stage,
 				status: "JUDGED",
 				grade: scorecard.grade.grade,
 				verdict: scorecard.grade.verdict,
@@ -253,11 +264,7 @@ function completeRepRecord(
 }
 
 function rejectedJudgeRepRecord(
-	request: ReplayConfirmationRequest,
-	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
-	repId: string,
-	ordinal: number,
-	worktreePath: string,
+	rep: ReplayRepIdentity,
 	resultSha: string,
 	recordFile: string,
 	error: JudgeRejection,
@@ -275,20 +282,21 @@ function rejectedJudgeRepRecord(
 
 	return confirmationRepRecordSchema.parse({
 		schemaVersion: 1,
-		groupId: request.groupId,
-		repId,
-		ordinal,
+		caseId: rep.caseId,
+		groupId: rep.request.groupId,
+		repId: rep.repId,
+		ordinal: rep.ordinal,
 		mode: "stage",
-		worktreePath,
+		worktreePath: rep.worktreePath,
 		lineage: {
 			kind: "CHECKPOINT",
-			lineage: consumed.lineage,
-			targetSha: consumed.targetSha,
+			lineage: rep.consumed.lineage,
+			targetSha: rep.consumed.targetSha,
 		},
 		outcome: "UNSUCCESSFUL",
 		stages: [
 			{
-				stage: request.stage,
+				stage: rep.request.stage,
 				status: "EXECUTION_FAILED",
 				elapsedMs: stageElapsedMs,
 				error: error.message,
@@ -303,11 +311,7 @@ function rejectedJudgeRepRecord(
 }
 
 function failedRepRecord(
-	request: ReplayConfirmationRequest,
-	consumed: Pick<CheckpointRecord, "lineage" | "targetSha">,
-	repId: string,
-	ordinal: number,
-	worktreePath: string,
+	rep: ReplayRepIdentity,
 	error: string,
 	elapsedMs: number,
 	stageEvidence?: FailedStageEvidence,
@@ -331,24 +335,25 @@ function failedRepRecord(
 
 	return confirmationRepRecordSchema.parse({
 		schemaVersion: 1,
-		groupId: request.groupId,
-		repId,
-		ordinal,
+		caseId: rep.caseId,
+		groupId: rep.request.groupId,
+		repId: rep.repId,
+		ordinal: rep.ordinal,
 		mode: "stage",
-		worktreePath,
+		worktreePath: rep.worktreePath,
 		lineage: {
 			kind: "CHECKPOINT",
-			lineage: consumed.lineage,
-			targetSha: consumed.targetSha,
+			lineage: rep.consumed.lineage,
+			targetSha: rep.consumed.targetSha,
 		},
 		outcome: "UNSUCCESSFUL",
 		stages: [
 			{
-				stage: request.stage,
+				stage: rep.request.stage,
 				status: "EXECUTION_FAILED",
 				elapsedMs: stageEvidence?.elapsedMs ?? elapsedMs,
 				error,
-				worktreePath,
+				worktreePath: rep.worktreePath,
 			},
 		],
 		finalOutcome: { status: "NOT_APPLICABLE" },
@@ -482,11 +487,14 @@ export async function runReplayConfirmation(
 					`${JSON.stringify(scorecard, null, 2)}\n`,
 				);
 				const record = completeRepRecord(
-					request,
-					frozen.plan.consumed,
-					plan.repId,
-					plan.ordinal,
-					plan.worktreePath,
+					{
+						request,
+						caseId: frozen.manifest.caseId,
+						consumed: frozen.plan.consumed,
+						repId: plan.repId,
+						ordinal: plan.ordinal,
+						worktreePath: plan.worktreePath,
+					},
 					session.resultSha,
 					relative(repPaths.directory, scorecardFile),
 					scorecard,
@@ -535,11 +543,14 @@ export async function runReplayConfirmation(
 						)}\n`,
 					);
 					const record = rejectedJudgeRepRecord(
-						request,
-						frozen.plan.consumed,
-						plan.repId,
-						plan.ordinal,
-						plan.worktreePath,
+						{
+							request,
+							caseId: frozen.manifest.caseId,
+							consumed: frozen.plan.consumed,
+							repId: plan.repId,
+							ordinal: plan.ordinal,
+							worktreePath: plan.worktreePath,
+						},
 						session.resultSha,
 						relative(repPaths.directory, scorecardFile),
 						failure,
@@ -583,11 +594,14 @@ export async function runReplayConfirmation(
 					};
 				}
 				const record = failedRepRecord(
-					request,
-					frozen.plan.consumed,
-					plan.repId,
-					plan.ordinal,
-					plan.worktreePath,
+					{
+						request,
+						caseId: frozen.manifest.caseId,
+						consumed: frozen.plan.consumed,
+						repId: plan.repId,
+						ordinal: plan.ordinal,
+						worktreePath: plan.worktreePath,
+					},
 					diagnosticError,
 					now() - repStart,
 					stageEvidence,
@@ -615,6 +629,7 @@ export async function runReplayConfirmation(
 
 	return finalizeConfirmationGroup({
 		mode: "stage",
+		caseId: frozen.manifest.caseId,
 		groupId: request.groupId,
 		reps: request.reps,
 		declaredStages: [request.stage],

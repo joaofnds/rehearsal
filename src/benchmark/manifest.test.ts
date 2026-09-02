@@ -12,6 +12,7 @@ const testResources = TestResources.forEachTest();
 describe(loadRunManifest.name, () => {
 	function manifestFixture(): RunManifest {
 		return {
+			caseId: "audit-log",
 			timestamp: "2026-08-30T00:00:00.000Z",
 			controlSha: "control-sha",
 			sourceRoot: "/tmp/target",
@@ -60,6 +61,19 @@ describe(loadRunManifest.name, () => {
 
 		expect(await loadRunManifest(paths.manifestFile)).toEqual(manifest);
 		expect(manifestStats.isFile()).toBe(true);
+	});
+
+	it("reads a manifest without a caseId as the audit-log case", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		testResources.track(directory);
+		const paths = benchmarkRunPaths(directory, "run");
+		const { caseId: _caseId, ...legacy } = manifestFixture();
+
+		await Bun.write(paths.manifestFile, JSON.stringify(legacy));
+
+		const loaded = await loadRunManifest(paths.manifestFile);
+
+		expect(loaded.caseId).toBe("audit-log");
 	});
 
 	it("loads a pre-target manifest with the former target configuration", async () => {

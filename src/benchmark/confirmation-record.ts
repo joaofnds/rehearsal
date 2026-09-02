@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { effortSchema } from "./config";
+import { effortSchema, LEGACY_CASE_ID } from "./config";
 import { claudeCallMetricsSchema, stageLetterGradeSchema } from "./contracts";
 
 const identitySchema = z
@@ -110,9 +110,17 @@ const lineageSchema = z.discriminatedUnion("kind", [
 		.strict(),
 ]);
 
+/**
+ * Optional with a legacy default rather than a version bump: every rep and
+ * group record written before cases were declared ran the audit-log case, so
+ * the field's absence has one true meaning and v1 stays readable.
+ */
+const legacyCaseIdSchema = identitySchema.optional().default(LEGACY_CASE_ID);
+
 export const confirmationRepRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
+		caseId: legacyCaseIdSchema,
 		groupId: identitySchema,
 		repId: identitySchema,
 		ordinal: z.number().int().positive(),
@@ -238,6 +246,7 @@ const repRecordReferenceSchema = z
 export const confirmationGroupRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
+		caseId: legacyCaseIdSchema,
 		groupId: identitySchema,
 		mode: z.enum(["stage", "pipeline"]),
 		reps: z.number().int().min(2),

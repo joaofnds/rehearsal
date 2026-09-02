@@ -22,6 +22,7 @@ describe(parseConfirmationRepRecord.name, () => {
 
 		return {
 			schemaVersion: 1,
+			caseId: "audit-log",
 			groupId: "group-1",
 			repId: "group-1-rep-1",
 			ordinal: 1,
@@ -68,6 +69,18 @@ describe(parseConfirmationRepRecord.name, () => {
 		const record = completeRepRecord();
 
 		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
+	});
+
+	it("reads a rep record without a caseId as the audit-log case", () => {
+		const { caseId: _caseId, ...legacy } = completeRepRecord();
+
+		expect(parseConfirmationRepRecord(JSON.stringify(legacy)).caseId).toBe(
+			"audit-log",
+		);
+	});
+
+	it("keeps schema version 1 while carrying the case", () => {
+		expect(completeRepRecord().schemaVersion).toBe(1);
 	});
 
 	it("rejects unknown fields", () => {
@@ -124,6 +137,7 @@ describe(parseConfirmationGroupRecord.name, () => {
 	function groupRecord(): ConfirmationGroupRecord {
 		return {
 			schemaVersion: 1,
+			caseId: "audit-log",
 			groupId: "group-1",
 			mode: "stage",
 			reps: 2,
@@ -182,6 +196,18 @@ describe(parseConfirmationGroupRecord.name, () => {
 		expect(parseConfirmationGroupRecord(JSON.stringify(record))).toEqual(
 			record,
 		);
+	});
+
+	it("reads a group record without a caseId as the audit-log case", () => {
+		const { caseId: _caseId, ...legacy } = groupRecord();
+
+		expect(parseConfirmationGroupRecord(JSON.stringify(legacy)).caseId).toBe(
+			"audit-log",
+		);
+	});
+
+	it("keeps schema version 1 while carrying the case", () => {
+		expect(groupRecord().schemaVersion).toBe(1);
 	});
 
 	it("rejects a group missing a requested rep record", () => {

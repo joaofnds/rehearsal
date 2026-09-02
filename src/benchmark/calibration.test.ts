@@ -8,7 +8,12 @@ import {
 	parseHumanReview,
 	validateCalibration,
 } from "./calibration";
-import { PROJECT_ROOT, TestResources } from "./test-support";
+import {
+	AUDIT_LOG_CASE_DIR,
+	AUDIT_LOG_RUBRICS_PATH,
+	PROJECT_ROOT,
+	TestResources,
+} from "./test-support";
 import { CommandError } from "./command";
 import type {
 	HumanReview,
@@ -274,7 +279,11 @@ describe(collectCalibration.name, () => {
 			originalInstructions: await Bun.file(
 				join(PROJECT_ROOT, "CLAUDE.md"),
 			).text(),
-			originalRubric: await Bun.file(join(PROJECT_ROOT, "rubric.md")).text(),
+			originalRubric: await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			).text(),
+			finalRubricPath: join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			rubricsDirectory: join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH),
 			stageScorecards: [],
 			judgeModel: "sonnet",
 			sessionBudgetUsd: 5,
@@ -363,6 +372,8 @@ describe(collectCalibration.name, () => {
 				join(PROJECT_ROOT, "CLAUDE.md"),
 			).text(),
 			originalRubric: "1. `old`: Old requirement.\n",
+			finalRubricPath: join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			rubricsDirectory: join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH),
 			stageScorecards: [scorecard],
 			judgeModel: "sonnet",
 			sessionBudgetUsd: 5,
@@ -430,7 +441,11 @@ describe(collectCalibration.name, () => {
 			originalInstructions: await Bun.file(
 				join(PROJECT_ROOT, "CLAUDE.md"),
 			).text(),
-			originalRubric: await Bun.file(join(PROJECT_ROOT, "rubric.md")).text(),
+			originalRubric: await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			).text(),
+			finalRubricPath: join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			rubricsDirectory: join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH),
 			stageScorecards: [{ ...original, rubricPath }],
 			judgeModel: "sonnet",
 			sessionBudgetUsd: 5,

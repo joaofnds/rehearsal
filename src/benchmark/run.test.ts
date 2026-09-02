@@ -37,7 +37,6 @@ import {
 	captureRunBaseline,
 	completeRunArtifact,
 	retainedCheckpointRecorder,
-	runBenchmark,
 	runFinalJudge,
 	runGradedStages,
 } from "./run";
@@ -46,6 +45,8 @@ import {
 	TEST_TARGET,
 	TestResources,
 	harnessResult,
+	AUDIT_LOG_PIPELINE_PATH,
+	AUDIT_LOG_RUBRICS_PATH,
 } from "./test-support";
 import type { PendingStage, RunArtifactPersistence } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
@@ -160,7 +161,7 @@ function stageJudgeOutput(
 }
 
 function loadDefaultPipeline(): Promise<PipelineDefinition> {
-	return loadPipeline("pipelines/default.json");
+	return loadPipeline(AUDIT_LOG_PIPELINE_PATH, AUDIT_LOG_RUBRICS_PATH);
 }
 
 class ControlledRunArtifactPersistence implements RunArtifactPersistence {
@@ -240,6 +241,7 @@ function artifactBaseInputs(
 		source: { root: "/tmp/target", origin: undefined, sha: "source-sha" },
 		taskSha: "task-sha",
 		config: {
+			caseId: "audit-log",
 			sourceDir: "/tmp/target",
 			model: "sonnet",
 			judgeModel: "sonnet",
@@ -755,7 +757,7 @@ describe(runGradedStages.name, () => {
 		name: "build",
 		kind: "delivery" as const,
 		skill: "build",
-		rubric: "rubrics/build.json",
+		rubric: `${AUDIT_LOG_RUBRICS_PATH}/build.json`,
 	};
 
 	it("runs the pipeline target checks after delivery validation", async () => {
@@ -810,8 +812,16 @@ describe(runGradedStages.name, () => {
 				statuses: ["To Do", "Done"],
 				target: TEST_TARGET,
 				stages: [
-					planningStage("discuss", "spec", "rubrics/shape.json"),
-					planningStage("grill", "grilled", "rubrics/shape.json"),
+					planningStage(
+						"discuss",
+						"spec",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
+					planningStage(
+						"grill",
+						"grilled",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
 					deliveryStage,
 				],
 			},
@@ -834,9 +844,17 @@ describe(runGradedStages.name, () => {
 				statuses: ["To Do", "Done"],
 				target: TEST_TARGET,
 				stages: [
-					planningStage("discuss", "spec", "rubrics/shape.json"),
-					planningStage("plan", "plan", "rubrics/shape.json"),
-					planningStage("grill", "grilled", "rubrics/shape.json"),
+					planningStage(
+						"discuss",
+						"spec",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
+					planningStage("plan", "plan", `${AUDIT_LOG_RUBRICS_PATH}/shape.json`),
+					planningStage(
+						"grill",
+						"grilled",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
 					deliveryStage,
 				],
 			},
@@ -860,7 +878,7 @@ describe(runGradedStages.name, () => {
 						kind: "planning" as const,
 						skill: "discuss",
 						artifact: "findings",
-						rubric: "rubrics/shape.json",
+						rubric: `${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
 						requiresAcceptanceCriteria: false,
 					},
 					deliveryStage,
@@ -890,9 +908,17 @@ describe(runGradedStages.name, () => {
 				statuses: ["To Do", "Done"],
 				target: TEST_TARGET,
 				stages: [
-					planningStage("discuss", "spec", "rubrics/shape.json"),
-					planningStage("research", "findings", "rubrics/shape.json"),
-					planningStage("plan", "plan", "rubrics/shape.json"),
+					planningStage(
+						"discuss",
+						"spec",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
+					planningStage(
+						"research",
+						"findings",
+						`${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
+					),
+					planningStage("plan", "plan", `${AUDIT_LOG_RUBRICS_PATH}/shape.json`),
 					deliveryStage,
 				],
 			},
@@ -902,7 +928,9 @@ describe(runGradedStages.name, () => {
 
 		expect(executed).toEqual(["discuss", "research", "plan", "build"]);
 		expect(judged[1]?.stage).toBe("research");
-		expect(rubricsUsed[1]?.endsWith("rubrics/shape.json")).toBe(true);
+		expect(
+			rubricsUsed[1]?.endsWith(`${AUDIT_LOG_RUBRICS_PATH}/shape.json`),
+		).toBe(true);
 	});
 
 	it("carries a planning stage's commits into evidence and the baseline", async () => {
@@ -1409,45 +1437,6 @@ describe(captureRunBaseline.name, () => {
 	});
 });
 
-describe(runBenchmark.name, () => {
-	it("rejects a malformed pipeline before claiming the target", async () => {
-		const source = await testResources.createRepository();
-		const badPipeline = join("pipelines", `invalid-${randomUUID()}.json`);
-		const absolutePipeline = join(PROJECT_ROOT, badPipeline);
-		await Bun.write(
-			absolutePipeline,
-			JSON.stringify({
-				statuses: ["To Do", "Done"],
-				target: TEST_TARGET,
-				stages: [{ name: "discuss", kind: "planning" }],
-			}),
-		);
-
-		try {
-			expect(
-				runBenchmark(
-					{
-						sourceDir: source.directory,
-						model: "sonnet",
-						judgeModel: "sonnet",
-						sessionBudgetUsd: 5,
-						pipelinePath: badPipeline,
-					},
-					{ question: () => Promise.resolve("") },
-				),
-			).rejects.toThrow(/discuss/u);
-
-			const marker = join(source.directory, ".git", "benchmark-run.json");
-			expect(await Bun.file(marker).exists()).toBe(false);
-			expect(
-				await runCommand(["git", "status", "--porcelain"], source.directory),
-			).toBe("");
-		} finally {
-			await rm(absolutePipeline, { force: true });
-		}
-	});
-});
-
 describe(buildRunManifest.name, () => {
 	it("records the resolved Judge model in run evidence", async () => {
 		const config = parseArgs(
@@ -1460,6 +1449,11 @@ describe(buildRunManifest.name, () => {
 				"5",
 			],
 			{},
+			{
+				caseId: "audit-log",
+				pipelinePath: AUDIT_LOG_PIPELINE_PATH,
+				targetPath: "/tmp/target",
+			},
 		);
 		const pipeline = await loadDefaultPipeline();
 
@@ -1480,11 +1474,19 @@ describe(buildRunManifest.name, () => {
 		});
 
 		expect({
-			manifest: { model: manifest.model, judgeModel: manifest.judgeModel },
-			artifact: { model: artifact.model, judgeModel: artifact.judgeModel },
+			manifest: {
+				caseId: manifest.caseId,
+				model: manifest.model,
+				judgeModel: manifest.judgeModel,
+			},
+			artifact: {
+				caseId: artifact.caseId,
+				model: artifact.model,
+				judgeModel: artifact.judgeModel,
+			},
 		}).toEqual({
-			manifest: { model: "sonnet", judgeModel: "opus" },
-			artifact: { model: "sonnet", judgeModel: "opus" },
+			manifest: { caseId: "audit-log", model: "sonnet", judgeModel: "opus" },
+			artifact: { caseId: "audit-log", model: "sonnet", judgeModel: "opus" },
 		});
 	});
 });
@@ -1511,7 +1513,7 @@ describe(buildRunArtifact.name, () => {
 				},
 			);
 			const pipeline = await loadDefaultPipeline();
-			const baseInputs = artifactBaseInputs(pipeline, "pipelines/default.json");
+			const baseInputs = artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH);
 			const rubric = RUBRIC_IDS.map(
 				(id, index) => `${index + 1}. \`${id}\`: ${id} requirement.`,
 			).join("\n");
@@ -1597,7 +1599,7 @@ describe(buildRunArtifact.name, () => {
 		});
 
 		const artifact = buildFailedJudgeRunArtifact(
-			artifactBaseInputs(pipeline, "pipelines/default.json"),
+			artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 			failure,
 		);
 
@@ -1633,7 +1635,7 @@ describe(buildRunArtifact.name, () => {
 				outcome: "ACCEPTED",
 			},
 		];
-		const inputs = artifactInputs(pipeline, "pipelines/default.json");
+		const inputs = artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH);
 
 		const artifact = buildRunArtifact({
 			...inputs,
@@ -1647,7 +1649,7 @@ describe(buildRunArtifact.name, () => {
 	it("completes the final artifact with calibration and Judge agreement", async () => {
 		const pipeline = await loadDefaultPipeline();
 		const awaiting = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 		const calibration: CalibrationResult = {
 			humanReview: {
@@ -1691,20 +1693,20 @@ describe(buildRunArtifact.name, () => {
 						kind: "planning",
 						skill: "discuss",
 						artifact: "backlog/docs/sketch.md",
-						rubric: "rubrics/shape.json",
+						rubric: `${AUDIT_LOG_RUBRICS_PATH}/shape.json`,
 					},
 					{
 						name: "build",
 						kind: "delivery",
 						skill: "build",
-						rubric: "rubrics/build.json",
+						rubric: `${AUDIT_LOG_RUBRICS_PATH}/build.json`,
 					},
 				],
 			}),
 		);
 
 		try {
-			const pipeline = await loadPipeline(pipelinePath);
+			const pipeline = await loadPipeline(pipelinePath, AUDIT_LOG_RUBRICS_PATH);
 
 			const artifact = buildRunArtifact(artifactInputs(pipeline, pipelinePath));
 
@@ -1722,10 +1724,10 @@ describe(buildRunArtifact.name, () => {
 		const pipeline = await loadDefaultPipeline();
 
 		const artifact = buildRunArtifact(
-			artifactInputs(pipeline, "pipelines/default.json"),
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
 		);
 
-		expect(artifact.pipelinePath).toBe("pipelines/default.json");
+		expect(artifact.pipelinePath).toBe(AUDIT_LOG_PIPELINE_PATH);
 		expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
 			"shape",
 			"build",
@@ -1746,13 +1748,18 @@ describe(buildRunArtifact.name, () => {
 					pipelineArgument,
 				],
 				{},
+				{
+					caseId: "audit-log",
+					pipelinePath: AUDIT_LOG_PIPELINE_PATH,
+					targetPath: "/tmp/target",
+				},
 			).pipelinePath;
 
 		const pipeline = await loadDefaultPipeline();
 		const recorded = [
-			"pipelines/default.json",
-			join(PROJECT_ROOT, "pipelines/default.json"),
-			"rubrics/../pipelines/default.json",
+			AUDIT_LOG_PIPELINE_PATH,
+			join(PROJECT_ROOT, AUDIT_LOG_PIPELINE_PATH),
+			`${AUDIT_LOG_RUBRICS_PATH}/../pipelines/default.json`,
 		].map(
 			(argument) =>
 				buildRunArtifact(artifactInputs(pipeline, asConfigured(argument)))
@@ -1760,9 +1767,9 @@ describe(buildRunArtifact.name, () => {
 		);
 
 		expect(recorded).toEqual([
-			"pipelines/default.json",
-			"pipelines/default.json",
-			"pipelines/default.json",
+			AUDIT_LOG_PIPELINE_PATH,
+			AUDIT_LOG_PIPELINE_PATH,
+			AUDIT_LOG_PIPELINE_PATH,
 		]);
 	});
 });

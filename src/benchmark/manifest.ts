@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { effortSchema } from "./config";
+import { effortSchema, LEGACY_CASE_ID } from "./config";
 import { pipelineDefinitionSchema } from "./pipeline";
 import type { TargetDefinition } from "./pipeline";
 import type { Immutable } from "./contracts";
@@ -29,6 +29,7 @@ const LEGACY_TARGET_DEFINITION = {
  */
 const runManifestSchema = z
 	.object({
+		caseId: z.string().min(1).optional().default(LEGACY_CASE_ID),
 		timestamp: z.string().min(1),
 		controlSha: z.string().min(1),
 		sourceRoot: z.string().min(1),

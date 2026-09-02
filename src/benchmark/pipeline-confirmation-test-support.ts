@@ -258,6 +258,7 @@ export class PipelineConfirmationHarness {
 
 	private defaultRequest(): PipelineConfirmationRequest {
 		return {
+			caseId: "audit-log",
 			runsDirectory: this.runsDirectory,
 			groupId: "pipeline-confirmation-1",
 			reps: 3,

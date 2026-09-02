@@ -111,6 +111,7 @@ export interface PipelineConfirmationDependencies {
 
 export interface PipelineConfirmationRequest {
 	readonly runsDirectory: string;
+	readonly caseId: string;
 	readonly groupId: string;
 	readonly reps: number;
 	readonly projectedCost: ConfirmationCostProjection;
@@ -459,6 +460,7 @@ async function runPipelineRep(
 				});
 				const record = confirmationRepRecordSchema.parse({
 					schemaVersion: 1,
+					caseId: request.caseId,
 					groupId: request.groupId,
 					repId: plan.repId,
 					ordinal: plan.ordinal,
@@ -552,6 +554,7 @@ async function runPipelineRep(
 			finalJudge.grade.verdict === "PASS";
 		const record = confirmationRepRecordSchema.parse({
 			schemaVersion: 1,
+			caseId: request.caseId,
 			groupId: request.groupId,
 			repId: plan.repId,
 			ordinal: plan.ordinal,
@@ -709,6 +712,7 @@ async function runPipelineRep(
 		});
 		const record = confirmationRepRecordSchema.parse({
 			schemaVersion: 1,
+			caseId: request.caseId,
 			groupId: request.groupId,
 			repId: plan.repId,
 			ordinal: plan.ordinal,
@@ -785,6 +789,7 @@ export async function runPipelineConfirmation(
 
 	return finalizeConfirmationGroup({
 		mode: "pipeline",
+		caseId: request.caseId,
 		groupId: request.groupId,
 		reps: request.reps,
 		declaredStages: request.pipeline.stages.map(({ name }) => name),
