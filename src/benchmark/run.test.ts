@@ -16,6 +16,10 @@ import type {
 	StageScorecard,
 } from "./contracts";
 import { StageValidationError } from "./contracts";
+import type {
+	JudgeAgreementCalibration,
+	JudgeAgreementReport,
+} from "./judge-agreement";
 import type { JudgeAttempt } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition, PlanningStageDefinition } from "./pipeline";
@@ -535,6 +539,8 @@ describe(runGradedStages.name, () => {
 			completeStage: transitions.completeStage,
 			calibrateStageFailure: (): Promise<CalibrationResult> =>
 				Promise.reject(new Error("calibration not expected")),
+			collectJudgeAgreement: () =>
+				Promise.resolve({ skippedCalibrations: 0, baselines: [] }),
 		};
 	}
 
@@ -1184,6 +1190,71 @@ describe(runGradedStages.name, () => {
 			})
 			.parse(JSON.parse(await Bun.file(calibrating.stageFile("shape")).text()));
 		expect(stageRecord.calibration.humanReview.verdict).toBe("REJECT");
+	});
+
+	it("records the stopped stage's Judge agreement including its calibration", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const context = await stageContext();
+		const calibration: CalibrationResult = {
+			humanReview: {
+				verdict: "REJECT",
+				summary: "The shape stage failed.",
+				findings: [],
+			},
+			instructionsChanged: false,
+			rubricChanged: false,
+			stageRubricsChanged: [],
+		};
+		const judgeAgreement: JudgeAgreementReport = {
+			skippedCalibrations: 0,
+			baselines: [],
+		};
+		let currentCalibrations: readonly JudgeAgreementCalibration[] = [];
+		const calibrating = {
+			...context,
+			judgeModel: "opus",
+			calibrateStageFailure: () => Promise.resolve(calibration),
+			collectJudgeAgreement: (
+				current: readonly JudgeAgreementCalibration[],
+			) => {
+				currentCalibrations = current;
+
+				return Promise.resolve(judgeAgreement);
+			},
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		const outcome = runGradedStages(failing, calibrating);
+
+		await expect(outcome).rejects.toThrow("minimum grade is B");
+		expect(currentCalibrations).toEqual([
+			{
+				judgeModel: "opus",
+				humanReview: calibration.humanReview,
+				stages: expect.any(Array),
+			},
+		]);
+		const stageRecord = z
+			.object({
+				judgeModel: z.literal("opus"),
+				judgeAgreement: z.object({
+					skippedCalibrations: z.number(),
+					baselines: z.array(z.unknown()),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(calibrating.stageFile("shape")).text()));
+		expect(stageRecord.judgeAgreement).toEqual({
+			skippedCalibrations: 0,
+			baselines: [],
+		});
 	});
 
 	it("preserves the stage session inputs when adding a stopped scorecard's calibration", async () => {

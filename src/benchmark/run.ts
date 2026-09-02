@@ -46,6 +46,11 @@ import type {
 } from "./contracts";
 import type { JudgeInvoker } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
+import type {
+	JudgeAgreementCalibration,
+	JudgeAgreementReport,
+} from "./judge-agreement";
+import { loadJudgeAgreementReport } from "./judge-agreement";
 import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
 import type { RunManifest } from "./manifest";
@@ -334,6 +339,9 @@ export interface StageContext {
 	readonly calibrateStageFailure: (
 		stageScorecards: readonly StageScorecard[],
 	) => Promise<CalibrationResult>;
+	readonly collectJudgeAgreement: (
+		currentCalibrations: readonly JudgeAgreementCalibration[],
+	) => Promise<JudgeAgreementReport>;
 }
 
 export interface StageOutcome {
@@ -580,6 +588,7 @@ export async function runGradedStages(
 			...scorecard,
 			corpusFiles,
 			model: context.model,
+			judgeModel: context.judgeModel,
 			effort: context.effort,
 		};
 		const writeStageRecord =
@@ -590,7 +599,18 @@ export async function runGradedStages(
 		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			const calibration = await context.calibrateStageFailure(stageScorecards);
-			await context.completeStage({ ...stageRecord, calibration });
+			const judgeAgreement = await context.collectJudgeAgreement([
+				{
+					judgeModel: context.judgeModel,
+					humanReview: calibration.humanReview,
+					stages: stageScorecards,
+				},
+			]);
+			await context.completeStage({
+				...stageRecord,
+				calibration,
+				judgeAgreement,
+			});
 		}
 		assertStageGradePassed(scorecard);
 
@@ -806,6 +826,11 @@ export async function runBenchmark(
 
 						return calibration;
 					},
+					collectJudgeAgreement: (currentCalibrations) =>
+						loadJudgeAgreementReport(
+							runFiles.runsDirectory,
+							currentCalibrations,
+						),
 				},
 			);
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import type { Effort, WorkflowStage } from "./config";
 import type { JudgeAttempt } from "./judge-attempt";
+import type { JudgeAgreementReport } from "./judge-agreement";
 import type { PipelineDefinition, StageKind } from "./pipeline";
 
 /**
@@ -268,8 +269,10 @@ export interface StageScorecard {
 export interface StageJudgeRecord extends StageScorecard {
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
+	readonly judgeModel: string;
 	readonly effort?: Effort | undefined;
 	readonly calibration?: CalibrationResult | undefined;
+	readonly judgeAgreement?: JudgeAgreementReport | undefined;
 }
 
 export interface CalibrationResult {

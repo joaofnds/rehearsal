@@ -431,6 +431,7 @@ describe(createRunAbort.name, () => {
 			...stageScorecard("PASS"),
 			corpusFiles: [],
 			model: "sonnet",
+			judgeModel: "opus",
 		});
 		await Promise.all([abortWrite, completionWrite]);
 
@@ -468,6 +469,7 @@ describe(createRunAbort.name, () => {
 			...stageScorecard("PASS"),
 			corpusFiles: [],
 			model: "sonnet",
+			judgeModel: "opus",
 		});
 		const abortWrite = abort.markAborted("run interrupted");
 		blocked.release();
