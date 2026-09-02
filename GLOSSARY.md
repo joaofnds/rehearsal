@@ -29,6 +29,18 @@
   every benchmark case.
 - **Benchmark case** — one frozen task with its source or checkpoint and all
   non-corpus inputs; the independent unit on which comparison arms are paired.
+- **Case declaration** — the committed `case.json` that states a benchmark case
+  as data: its id, kind, title, and the case-relative inputs the kind needs. It
+  is parsed once at the boundary into a value that cannot name a file outside
+  its case directory.
+- **Case directory** — `cases/<id>/`, the one place a case's declaration and its
+  input files live. The directory name is the case id, and every path inside the
+  declaration is resolved relative to it. Cases live in the control repository,
+  never beside the corpus they grade.
+- **Case kind** — which inputs a case declares and how an attempt at it is run:
+  `pipeline`, today's stage graph against a target repository, or `session`, one
+  Claude session. The kind is the discriminator of the case declaration, so a
+  case cannot carry another kind's inputs.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
 - **Corpus (instruction corpus)** — the instruction files under evaluation:
