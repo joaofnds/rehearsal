@@ -340,9 +340,15 @@ bun run rehearsal replay \
 that command's flags with each default and environment variable, generated
 from the command's own flag declaration. Every command accepts `--json`,
 which prints on stdout the exact record the command wrote, parsed by the
-schema that wrote it; without `--json` it prints that record's path. stdout
-carries data only and stderr everything else, so a caller can pipe one into
-a parser and read the other as diagnostics.
+schema that wrote it; without `--json` it prints that record's path.
+
+The rule stdout aims at is that stdout carries data only and stderr everything
+else, so a caller can pipe one into a parser and read the other as
+diagnostics. `compare` honors it today: its stdout is the report and nothing
+else. `run` and `replay` do not yet. Both still print harness progress on
+stdout, so `rehearsal run --json > artifact.json` writes a file that is not
+parseable JSON. ACT-26.7 moves that progress to stderr; until it lands, parse
+`run` and `replay` output from the record file whose path the command prints.
 
 Exit codes have one meaning each:
 
