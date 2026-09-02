@@ -6,6 +6,79 @@ import {
 	parseReplayArgs,
 } from "./config";
 
+function sessionValues(
+	config: ReturnType<typeof parseArgs> | ReturnType<typeof parseReplayArgs>,
+) {
+	return {
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+	};
+}
+
+describe("run and replay session knobs", () => {
+	it.each([
+		{
+			source: "explicit CLI values over the environment",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--effort",
+				"high",
+				"--judge-model",
+				"haiku",
+				"--judge-effort",
+				"xhigh",
+				"--session-budget-usd",
+				"5",
+			],
+			env: {
+				BENCHMARK_MODEL: "environment-model",
+				BENCHMARK_EFFORT: "low",
+				BENCHMARK_JUDGE_MODEL: "environment-judge",
+				BENCHMARK_JUDGE_EFFORT: "medium",
+				BENCHMARK_SESSION_BUDGET_USD: "9",
+			},
+			expected: {
+				model: "sonnet",
+				effort: "high",
+				judgeModel: "haiku",
+				judgeEffort: "xhigh",
+				sessionBudgetUsd: 5,
+			},
+		},
+		{
+			source: "environment values",
+			sessionArgs: [],
+			env: {
+				BENCHMARK_MODEL: "sonnet",
+				BENCHMARK_EFFORT: "high",
+				BENCHMARK_JUDGE_MODEL: "haiku",
+				BENCHMARK_JUDGE_EFFORT: "xhigh",
+				BENCHMARK_SESSION_BUDGET_USD: "5",
+			},
+			expected: {
+				model: "sonnet",
+				effort: "high",
+				judgeModel: "haiku",
+				judgeEffort: "xhigh",
+				sessionBudgetUsd: 5,
+			},
+		},
+	])("resolves identical $source", ({ sessionArgs, env, expected }) => {
+		const runConfig = parseArgs(["--target", "./target", ...sessionArgs], env);
+		const replayConfig = parseReplayArgs(
+			["--run", "run-1", "--stage", "build", ...sessionArgs],
+			env,
+		);
+
+		expect(sessionValues(runConfig)).toEqual(expected);
+		expect(sessionValues(replayConfig)).toEqual(expected);
+	});
+});
+
 describe(parseArgs.name, () => {
 	it.each([
 		{ model: "sonnet", judgeModel: "opus" },
