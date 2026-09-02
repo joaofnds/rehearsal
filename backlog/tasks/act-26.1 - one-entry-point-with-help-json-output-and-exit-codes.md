@@ -1,11 +1,11 @@
 ---
 id: ACT-26.1
 title: 'one entry point with help, json output, and exit codes'
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 21:18'
+updated_date: '2026-09-02 21:41'
 labels: []
 dependencies: []
 references:
@@ -431,3 +431,47 @@ moves it.
 `bun test` reported 507 pass, 0 fail across 43 files. No paid provider call was
 made in this dispatch; spend $0.00.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-02 21:40
+---
+Independent review (reviewer agent, one round). Full check at review time: typecheck, lint, fmt:check exit 0; bun test 507 pass, 0 fail across 43 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, all three reproduced by the orchestrator before dispatch, all three fixed and re-observed.
+
+1. --json truncated at 131072 bytes through a pipe. rehearsal.ts called process.exit, which does not flush an asynchronous stdout write to a pipe. A 400011-byte record delivered exactly 131072 bytes and jq reported an unfinished string. This broke acceptance criteria 7, 11, and 16 for the case the card exists to serve: an agent piping --json into a parser. Run artifacts carry diffs, transcripts, and scorecards and exceed the limit routinely; the compare fixture is already 70148 bytes. Fixed in 97a3788 by setting process.exitCode and letting the process end naturally. Verified: 400011 bytes through a real shell pipe, JSON.parse accepts the whole stdout, and exit codes still propagate (2 for an unknown flag, 3 for a refused run, 0 for help). Note on the test: Bun.spawn with a draining reader delivers the full bytes even unfixed, so the pinning test uses sh -c with a real pipe.
+
+2. The README claimed stdout carries data only, which two of three commands do not honor. 17 console.log sites in src/benchmark write diagnostics to fd 1, verified by grep, and Bun's console.log goes to stdout, verified. run.ts:720-722 prints before any provider call and workflow.ts:204 prints every agent turn on both the run and replay paths, so run --json > file would not be parseable JSON. The console.log sites predate this change and survive the revert test, so the harness-wide fix is not this card's. The false documentation claim was this card's: fixed in afe4fda, which states the rule as it actually holds. The real fix is tracked as ACT-26.7.
+
+3. The run TTY gate refused --confirm --yes, which never prompts. Reproduced: run --confirm --yes without a TTY exited 3. Verified by grep that pipeline-confirmation.ts and replay-confirmation.ts contain no Questioner and never call collectCalibration; the calibration pause exists only on the debug path. The card's rule is to refuse when the answering flag is absent, and here it was present, so the agent-facing confirmation workload was dead. Fixed in b82292a using the predicate replay-command.ts already used. Verified: --confirm --yes now reaches the cost projection, and a plain run still exits 3 with the ACT-26.3 message. Acceptance criterion 9's wording was corrected on the card to match.
+
+SHOULD-FIX, both fixed and verified.
+
+4. A declared flag standing where a value belongs was silently swallowed: run --target --json produced json false and a sourceDir of literal "--json". The value-swallowing half predates the change; --json being a declared flag that can vanish is new. Fixed in cdceec7. Verified: "Flag --target needs a value for rehearsal run", exit 2.
+
+6. compare -h exited 1 with a message about a manifest arm, while run and replay exited 2 on the same input. The glossary reserves 2 for a usage error. Fixed in 5f7f034. Verified: "Unknown flag -h for rehearsal compare", exit 2.
+
+NOTES, no action required beyond what is stated.
+
+5. Adding a command to COMMANDS without a dispatch case fails only at runtime; typecheck, lint, and the suite all pass. ACT-26.2 adds three commands to that table. Tracked as part of ACT-27's case rather than fixed here.
+7. Acceptance criterion 5 says one stderr line, but bun run echoes the command itself, so the documented invocation prints two while the test spawns the file directly. The criterion describes the direct invocation.
+8. The expect(help).toContain(flag.name) assertion in commands.test.ts is tautological, though its siblings on help text, default, and env var do carry protection. Recorded so criterion 4 is not over-read.
+9. rehearsal-cli.test.ts assigned its cleanup path after the call that writes it, leaking a report directory into the working repository on failure. Fixed in a2f351c. The same shape at comparison-loader.test.ts:255 predates the change.
+10. A real-process assertion on warning ordering was replaced by a fake-driven one, forced by finding 3's gate. replay-command.test.ts still pins the real-process ordering.
+11. src/cli files import same-directory siblings through #cli/* while src/benchmark files use relative paths. Three conventions in one repository.
+12. The bin entry in package.json was never installed or invoked; every observation went through bun run rehearsal.
+
+Security: nothing found. Inputs are argv at the process's own trust level; no shell interpolation, eval, or path traversal in the new code; compare runs no session.
+
+Not observed live, carried forward: no run or replay execution past its gate, since both need a paid provider session and this machine has no recorded run. run --json and replay --json printing a real artifact rest on unit tests against a written record file. The truncation fix was observed on compare only; run and replay inherit it from the same entry point.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+One executable, rehearsal, replaces the three scripts. Every command has --help generated from a declarative flag table, --json printing the same zod-validated record the command wrote, stdout for data and stderr for diagnostics in the CLI layer, and four exit codes with one meaning each: 0 completed, 1 execution failure, 2 usage error, 3 refused precondition. Every existing flag and BENCHMARK_* fallback keeps its name and meaning, pinned by config.test.ts unchanged. run refuses without a TTY only on the debug path, whose calibration pause has no flag until ACT-26.3; run --confirm --yes and replay --confirm --yes proceed. Review found three blocking defects, all fixed and re-observed: stdout truncation at 131072 bytes through a pipe, the over-broad TTY gate, and a README claim about stdout that two commands do not honor. Two should-fix parser defects fixed. Follow-on work: ACT-26.7 routes harness progress to stderr so run --json emits only the record; ACT-27 splits the command modules' wiring from their policy. Not observed live: any run or replay past its gate, both needing a paid session.
+<!-- SECTION:FINAL_SUMMARY:END -->
