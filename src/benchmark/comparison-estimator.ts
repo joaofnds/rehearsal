@@ -7,10 +7,7 @@ export interface PairedCaseObservations {
 }
 
 interface ComparisonContrastDefinition {
-	readonly name:
-		| "candidateMinusBaseline"
-		| "candidateMinusControl"
-		| "baselineMinusControl";
+	readonly name: string;
 	readonly minuend: ComparisonArm;
 	readonly subtrahend: ComparisonArm;
 }
