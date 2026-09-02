@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, realpath, rm, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "./case";
@@ -46,10 +46,22 @@ export async function forkTranscript(
 	);
 }
 
+export interface SessionNaming {
+	readonly sessionId: string;
+	readonly resumed: boolean;
+}
+
+/**
+ * The attempt names its own session so that the session file it will own is
+ * known before the call rather than inferred from the directory afterwards: a
+ * resumed session is named by the uuid the fork rewrote, a fresh one by
+ * `--session-id`. Without a name of its own, a failed call leaves a transcript
+ * the harness cannot identify and therefore must not delete.
+ */
 export function sessionCaseArgs(
 	sessionCase: SessionCase,
 	settings: SessionSettings,
-	resumeSessionId: string | undefined,
+	session: SessionNaming,
 ): string[] {
 	return [
 		"claude",
@@ -70,58 +82,35 @@ export function sessionCaseArgs(
 		...(sessionCase.agents === undefined
 			? []
 			: ["--agents", JSON.stringify(sessionCase.agents)]),
-		...(resumeSessionId === undefined ? [] : ["--resume", resumeSessionId]),
+		session.resumed ? "--resume" : "--session-id",
+		session.sessionId,
 	];
 }
 
-async function listSlug(slug: string): Promise<ReadonlySet<string>> {
-	try {
-		return new Set(await readdir(slug));
-	} catch {
-		return new Set();
-	}
-}
-
 /**
- * Observed on claude 2.1.258: a resumed headless session keeps its session id
- * and appends to the file it resumed, so the listing gains no entry and the
- * transcript to read back is the forked file. A run that does write a new file
- * is covered by the same diff. Never a delete by pattern and never by the id
- * the fork wrote: a live session of João's has appeared in a project directory
- * mid-run, and it is not the attempt's to remove.
+ * A resumed session is the fork the harness wrote under a fresh uuid; a session
+ * with no transcript is named by that uuid through `--session-id`. Either way
+ * the attempt owns exactly `<sessionId>.jsonl` under its slug.
  */
-function addedEntries(
-	before: ReadonlySet<string>,
-	after: ReadonlySet<string>,
-): readonly string[] {
-	return [...after].filter((entry) => !before.has(entry)).toSorted();
-}
-
-interface PreparedSession {
-	readonly forkedFile: string | undefined;
-	readonly resumeSessionId: string | undefined;
-}
-
-async function prepareResume(
+async function prepareSession(
 	sessionCase: SessionCase,
 	slug: string,
-): Promise<PreparedSession> {
+): Promise<SessionNaming> {
+	const sessionId = randomUUID();
 	const { transcriptPath, declaration } = sessionCase;
 	if (transcriptPath === undefined || declaration.transcript === undefined) {
-		return { forkedFile: undefined, resumeSessionId: undefined };
+		return { sessionId, resumed: false };
 	}
 
-	const freshSession = randomUUID();
-	const forkedFile = join(slug, `${freshSession}.jsonl`);
 	await mkdir(slug, { recursive: true });
 	await forkTranscript(
 		transcriptPath,
-		forkedFile,
+		join(slug, `${sessionId}.jsonl`),
 		declaration.transcript.sourceSession,
-		freshSession,
+		sessionId,
 	);
 
-	return { forkedFile, resumeSessionId: freshSession };
+	return { sessionId, resumed: true };
 }
 
 export async function runSessionAttempt(
@@ -136,40 +125,27 @@ export async function runSessionAttempt(
 	}
 
 	const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));
-	const { forkedFile, resumeSessionId } = await prepareResume(
-		sessionCase,
-		slug,
-	);
-	const before = await listSlug(slug);
-	const created: string[] = [];
-	if (forkedFile !== undefined) {
-		created.push(forkedFile);
-	}
+	const session = await prepareSession(sessionCase, slug);
+	const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
 
 	try {
 		const output = await request.runClaude(
-			sessionCaseArgs(sessionCase, settings, resumeSessionId),
+			sessionCaseArgs(sessionCase, settings, session),
 			attemptDirectory,
 		);
-		const after = await listSlug(slug);
-		const [written] = addedEntries(before, after);
-		if (written !== undefined) {
-			created.push(join(slug, written));
-		}
 
 		return await recordAttempt(request, attemptDirectory, {
 			output,
-			writtenTranscript:
-				written === undefined ? forkedFile : join(slug, written),
+			writtenTranscript: transcriptPath,
 		});
 	} finally {
-		await removeAttemptFiles(attemptDirectory, created);
+		await removeAttemptFiles(attemptDirectory, slug, transcriptPath);
 	}
 }
 
 interface AttemptOutput {
 	readonly output: string;
-	readonly writtenTranscript: string | undefined;
+	readonly writtenTranscript: string;
 }
 
 async function recordAttempt(
@@ -177,15 +153,13 @@ async function recordAttempt(
 	attemptDirectory: string,
 	attempt: AttemptOutput,
 ): Promise<SessionAttempt> {
-	const { writtenTranscript } = attempt;
+	const written = Bun.file(attempt.writtenTranscript);
 	const transcriptFile = join(request.recordDirectory, "transcript.jsonl");
 
 	await mkdir(request.recordDirectory, { recursive: true });
 	await Bun.write(
 		transcriptFile,
-		writtenTranscript === undefined
-			? ""
-			: await Bun.file(writtenTranscript).text(),
+		(await written.exists()) ? await written.text() : "",
 	);
 
 	const envelope = readClaudeEnvelope(attempt.output);
@@ -207,18 +181,20 @@ async function recordAttempt(
 }
 
 /**
- * Only the files this attempt is known to have created: the transcript it
- * forked in and the one the provider wrote, identified by the listing diff.
- * The list is built as they appear rather than read back at the end, so a
- * failure after the provider wrote its transcript still removes it.
+ * The projects directory holds live sessions of João's, and one has appeared in
+ * a slug directory mid-run, so the only entry removed is the one the attempt
+ * named itself. The slug goes with `rmdir`, which removes it only when it is
+ * empty: a file the attempt cannot account for keeps its directory rather than
+ * being deleted with it. Cleanup runs whether the call returned or threw, so a
+ * provider that wrote its transcript and then failed leaves nothing behind.
  */
 async function removeAttemptFiles(
 	attemptDirectory: string,
-	created: readonly string[],
+	slug: string,
+	transcriptPath: string,
 ): Promise<void> {
-	for (const path of created) {
-		await rm(path, { force: true });
-	}
+	await rm(transcriptPath, { force: true });
+	await rmdir(slug).catch(() => undefined);
 
 	await rm(attemptDirectory, { force: true, recursive: true });
 }

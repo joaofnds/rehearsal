@@ -47,12 +47,17 @@ function sessionCase(
 	};
 }
 
+/**
+ * The provider writes its session file under the id the command line named,
+ * which is what lets the harness account for the file it must remove.
+ */
 function fakeClaude(projects: string, reply: string): ClaudeRunner {
-	return async (_command, cwd) => {
+	return async (command, cwd) => {
+		const sessionId = command[command.indexOf("--session-id") + 1] ?? "";
 		const slug = join(projects, projectSlug(await realpath(cwd)));
 		await mkdir(slug, { recursive: true });
 		await writeFile(
-			join(slug, "aaaa-written.jsonl"),
+			join(slug, `${sessionId}.jsonl`),
 			`${JSON.stringify({
 				type: "assistant",
 				message: { content: [{ type: "text", text: reply }] },
@@ -60,7 +65,7 @@ function fakeClaude(projects: string, reply: string): ClaudeRunner {
 		);
 
 		return JSON.stringify({
-			session_id: "aaaa-written",
+			session_id: sessionId,
 			is_error: false,
 			result: reply,
 			total_cost_usd: 0.0011,

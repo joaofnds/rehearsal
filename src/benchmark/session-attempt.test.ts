@@ -76,11 +76,19 @@ interface FakeRun {
 	readonly seenFiles: readonly string[];
 }
 
+function namedSession(command: readonly string[]): string {
+	const named = command.indexOf("--session-id");
+
+	return (
+		command[(named === -1 ? command.indexOf("--resume") : named) + 1] ?? ""
+	);
+}
+
 /**
- * The provider writes the session file for the run it just performed, and the
- * harness reads it back from the slug directory, so the fake writes one too.
- * A resumed run is given a further session id, which is why the file it writes
- * is never the one the fork wrote.
+ * The provider writes the session file under the id the command line named it,
+ * and the harness reads it back from the slug directory, so the fake does the
+ * same. Nothing here depends on where that name sorts among the directory's
+ * other entries.
  */
 class FakeClaude {
 	private readonly calls: FakeRun[] = [];
@@ -103,11 +111,12 @@ class FakeClaude {
 			cwd,
 			seenFiles: await readdir(cwd, { recursive: true }),
 		});
+		const sessionId = namedSession(command);
 		const slug = join(this.projects, projectSlug(await realpath(cwd)));
 		await mkdir(slug, { recursive: true });
 		await writeFile(
-			join(slug, `${WRITTEN_SESSION}.jsonl`),
-			`${transcriptLine(WRITTEN_SESSION, this.reply)}\n`,
+			join(slug, `${sessionId}.jsonl`),
+			`${transcriptLine(sessionId, this.reply)}\n`,
 		);
 
 		return envelope(this.reply);
@@ -143,7 +152,13 @@ describe(sessionCaseArgs.name, () => {
 		overrides: Immutable<Partial<SessionCase>> = {},
 		resume?: string,
 	): readonly string[] {
-		return sessionCaseArgs(sessionCase(overrides), settings, resume);
+		return sessionCaseArgs(
+			sessionCase(overrides),
+			settings,
+			resume === undefined
+				? { sessionId: WRITTEN_SESSION, resumed: false }
+				: { sessionId: resume, resumed: true },
+		);
 	}
 
 	function valueAfter(
@@ -202,6 +217,14 @@ describe(sessionCaseArgs.name, () => {
 
 	it("omits --resume when no transcript is declared", () => {
 		expect(args()).not.toContain("--resume");
+	});
+
+	it("names the session it is about to create when no transcript is declared", () => {
+		expect(valueAfter(args(), "--session-id")).toBe(WRITTEN_SESSION);
+	});
+
+	it("omits --session-id when it resumes a forked session instead", () => {
+		expect(args({}, "fresh-uuid")).not.toContain("--session-id");
 	});
 
 	it.each(["--no-session-persistence", "--json-schema"])(
@@ -384,10 +407,35 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(failure).toBeInstanceOf(Error);
-		expect(await readdir(join(projects, projectSlug(attemptCwd)))).toEqual([]);
+		expect(
+			await readdir(join(projects, projectSlug(attemptCwd))).catch(() => []),
+		).toEqual([]);
 	});
 
-	it("keeps a file another session planted in the slug directory mid-run", async () => {
+	/**
+	 * The planted names bracket the provider's own file in codepoint order, so a
+	 * subject that picks the attempt's transcript by sorting the new entries
+	 * takes a planted one whichever direction it sorts. A test that plants only
+	 * one name passes or fails on where that name happens to sort.
+	 */
+	const PLANTED_BEFORE = "0000-unrelated-live.jsonl";
+	const PLANTED_AFTER = "zzzz-unrelated-live.jsonl";
+
+	function plantingClaude(
+		projects: string,
+		run: SessionAttemptRequest["runClaude"],
+	): SessionAttemptRequest["runClaude"] {
+		return async (command, cwd) => {
+			const slug = join(projects, projectSlug(await realpath(cwd)));
+			await mkdir(slug, { recursive: true });
+			await writeFile(join(slug, PLANTED_BEFORE), "{}\n");
+			await writeFile(join(slug, PLANTED_AFTER), "{}\n");
+
+			return run(command, cwd);
+		};
+	}
+
+	it("keeps every file another session planted in the slug directory mid-run", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "OK");
 
@@ -395,17 +443,72 @@ describe(runSessionAttempt.name, () => {
 			request({
 				projectsDirectory: projects,
 				recordDirectory: await recordDirectory(),
-				runClaude: async (command, cwd) => {
-					const slug = join(projects, projectSlug(await realpath(cwd)));
-					await mkdir(slug, { recursive: true });
-					await writeFile(join(slug, "joao-was-here.jsonl"), "{}\n");
-
-					return claude.run(command, cwd);
-				},
+				runClaude: plantingClaude(projects, claude.run),
 			}),
 		);
 
 		const slug = join(projects, projectSlug(attempt.attemptDirectory));
-		expect(await readdir(slug)).toEqual(["joao-was-here.jsonl"]);
+		const remaining = await readdir(slug);
+		expect(remaining.toSorted()).toEqual([PLANTED_BEFORE, PLANTED_AFTER]);
+	});
+
+	it("records the transcript the provider's own session wrote, not a file planted beside it", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: plantingClaude(projects, claude.run),
+			}),
+		);
+
+		const [only] = claude.runs;
+		expect(await Bun.file(attempt.transcriptFile).text()).toBe(
+			`${transcriptLine(namedSession(only?.command ?? []), "OK")}\n`,
+		);
+	});
+
+	it("leaves nothing behind when the provider writes its transcript and then throws", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+		let writtenTranscript = "";
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					runClaude: async (command, cwd) => {
+						await claude.run(command, cwd);
+						const slug = join(projects, projectSlug(await realpath(cwd)));
+						writtenTranscript = join(slug, `${namedSession(command)}.jsonl`);
+						expect(await Bun.file(writtenTranscript).exists()).toBe(true);
+
+						throw new Error("claude exited 1");
+					},
+				}),
+			),
+		);
+
+		expect(failure.message).toBe("claude exited 1");
+		expect(await Bun.file(writtenTranscript).exists()).toBe(false);
+	});
+
+	it("removes the slug directory itself once the attempt's files are gone", async () => {
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: new FakeClaude(projects, "OK").run,
+			}),
+		);
+
+		expect(await readdir(projects)).not.toContain(
+			projectSlug(attempt.attemptDirectory),
+		);
 	});
 });
