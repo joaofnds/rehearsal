@@ -12,6 +12,12 @@ import type { PipelineDefinition, StageKind } from "./pipeline";
  * every derived type is wrapped here instead of sprinkling readonly through
  * each schema.
  */
+export type Immutable<Value> = Value extends readonly (infer Element)[]
+	? readonly Immutable<Element>[]
+	: Value extends object
+		? { readonly [Key in keyof Value]: Immutable<Value[Key]> }
+		: Value;
+
 /**
  * The `default` branch the lint rules require, written so it cannot swallow a
  * new union member: the parameter's `never` type makes an unhandled case a
@@ -21,12 +27,6 @@ import type { PipelineDefinition, StageKind } from "./pipeline";
 export function unhandled(value: never, subject: string): never {
 	throw new Error(`Unhandled ${subject}: ${JSON.stringify(value)}`);
 }
-
-export type Immutable<Value> = Value extends readonly (infer Element)[]
-	? readonly Immutable<Element>[]
-	: Value extends object
-		? { readonly [Key in keyof Value]: Immutable<Value[Key]> }
-		: Value;
 
 export const evidenceSchema = z.object({
 	source: z.enum(["diff", "baseline-context", "local-checks"]),
