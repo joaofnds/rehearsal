@@ -1,0 +1,266 @@
+import { randomUUID } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import {
+	loadAttempts,
+	LineageMismatchError,
+	presentAttempts,
+} from "#benchmark/attempts";
+import {
+	assertPlanningStageCompleted,
+	installInstructions,
+	readTaskCard,
+	readTaskOutput,
+} from "#benchmark/backlog";
+import {
+	captureStageCorpus,
+	materializeCheckpoint,
+	skillSearchRoots,
+} from "#benchmark/checkpoint";
+import {
+	captureBaselineContext,
+	captureCheckIntegrity,
+	captureFileHashes,
+	captureTreatmentChecks,
+} from "#benchmark/checks";
+import { runCommand } from "#benchmark/command";
+import type { ReplayCliConfig } from "#benchmark/config";
+import {
+	CONTROL_DIR,
+	judgeSelfPreferenceWarning,
+	parseReplayArgs,
+} from "#benchmark/config";
+import { runReplay } from "#benchmark/replay";
+import type { ReplayDependencies, ReplayRequest } from "#benchmark/replay";
+import type { ReplayStageOutcome } from "#benchmark/replay-command";
+import { executeReplayStage } from "#benchmark/replay-command";
+import type { ReplayConfirmationOutcome } from "#benchmark/replay-confirmation";
+import { runReplayConfirmation } from "#benchmark/replay-confirmation";
+import type { BenchmarkRunPaths } from "#benchmark/run-layout";
+import {
+	benchmarkRunPaths,
+	benchmarkRunsDirectory,
+	runNameFromCheckpointsEntry,
+} from "#benchmark/run-layout";
+import { loadStageRubric, runStageJudge } from "#benchmark/stage-grading";
+import {
+	addWorktree,
+	assertBuildCommitted,
+	captureBuildCandidate,
+	changedPathsBetween,
+	git,
+	removeWorktree,
+} from "#benchmark/target";
+import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
+import { requireInteractiveStdin } from "#cli/interactive-stdin";
+import type { CommandOutput } from "#cli/output";
+import { terminalQuestioner } from "#cli/questioner";
+
+type ReplayOutcome = ReplayStageOutcome<
+	Awaited<ReturnType<typeof runReplay>>,
+	ReplayConfirmationOutcome
+>;
+
+export interface ReplayCommandRequest {
+	readonly args: readonly string[];
+	readonly json: boolean;
+	readonly stdinIsTerminal: boolean;
+}
+
+export interface ReplayCommandDependencies {
+	readonly output: CommandOutput;
+	readonly resolveRunDirectory: (runName: string) => Promise<string>;
+	readonly execute: (
+		config: ReplayCliConfig,
+		paths: BenchmarkRunPaths,
+		output: CommandOutput,
+	) => Promise<ReplayOutcome>;
+}
+
+export async function runReplayCommand(
+	request: ReplayCommandRequest,
+	dependencies: ReplayCommandDependencies,
+): Promise<void> {
+	const config = parseReplayArgs(request.args);
+	if (config.confirmation !== undefined && !config.confirmation.approved) {
+		requireInteractiveStdin(
+			request.stdinIsTerminal,
+			"approving the projected cost needs a TTY; pass --yes instead",
+		);
+	}
+
+	const warning = judgeSelfPreferenceWarning(config);
+	if (warning !== undefined) {
+		dependencies.output.stderr(`${warning}\n`);
+	}
+
+	await dependencies.resolveRunDirectory(config.runName);
+	const paths = benchmarkRunPaths(
+		benchmarkRunsDirectory(CONTROL_DIR),
+		config.runName,
+	);
+	const outcome = await dependencies.execute(
+		config,
+		paths,
+		dependencies.output,
+	);
+
+	await reportOutcome(request, config, paths, outcome, dependencies.output);
+}
+
+async function reportOutcome(
+	request: ReplayCommandRequest,
+	config: ReplayCliConfig,
+	paths: BenchmarkRunPaths,
+	outcome: ReplayOutcome,
+	output: CommandOutput,
+): Promise<void> {
+	if (outcome.kind === "confirmation") {
+		output.stderr(`Confirmation group: ${outcome.evidence.groupRecordFile}\n`);
+		for (const recordFile of outcome.evidence.repRecordFiles) {
+			output.stderr(`Confirmation rep: ${recordFile}\n`);
+		}
+		output.stdout(
+			request.json
+				? await Bun.file(outcome.evidence.reportFile).text()
+				: `${outcome.evidence.reportFile}\n`,
+		);
+
+		return;
+	}
+
+	output.stderr(await attemptComparison(config, paths, outcome.evidence));
+	output.stdout(
+		request.json
+			? await Bun.file(outcome.evidence.recordPath).text()
+			: `${outcome.evidence.recordPath}\n`,
+	);
+}
+
+/**
+ * The replay is already recorded and paid for, so a refusal to compare its
+ * attempts is reported rather than thrown away with the command.
+ */
+async function attemptComparison(
+	config: ReplayCliConfig,
+	paths: BenchmarkRunPaths,
+	evidence: Awaited<ReturnType<typeof runReplay>>,
+): Promise<string> {
+	try {
+		return `${await presentAttempts(
+			evidence.record.consumed.lineage,
+			await loadAttempts(paths, config.stage, evidence.record.consumed.lineage),
+		)}\n`;
+	} catch (error) {
+		if (!(error instanceof LineageMismatchError)) {
+			throw error;
+		}
+
+		return `${error.message}\n`;
+	}
+}
+
+/**
+ * Replay exists to iterate on an uncommitted corpus, so a dirty control
+ * repository is expected; the record marks it instead of refusing.
+ */
+async function currentControlSha(): Promise<string> {
+	const sha = await git(CONTROL_DIR, "rev-parse", "HEAD");
+	const status = await git(
+		CONTROL_DIR,
+		"status",
+		"--porcelain=v1",
+		"--untracked-files=all",
+	);
+
+	return status ? `${sha}-dirty` : sha;
+}
+
+export async function executeReplay(
+	config: ReplayCliConfig,
+	paths: BenchmarkRunPaths,
+	output: CommandOutput,
+): Promise<ReplayOutcome> {
+	const replayDependencies: ReplayDependencies = {
+		createProductOwner,
+		stageSession: {
+			runWorkflowStage,
+			readTaskOutput,
+			readTaskCard,
+			captureBuildCandidate,
+			assertPlanningStageCompleted,
+			assertBuildCommitted,
+			changedPathsBetween,
+			captureCheckIntegrity,
+			captureTreatmentChecks,
+			captureStageCorpus,
+		},
+		runStageJudge,
+		loadStageRubric,
+		addWorktree,
+		removeWorktree,
+		materializeCheckpoint,
+		captureBaselineContext,
+		captureFileHashes,
+		installInstructions,
+		installDependencies: async (worktreeDir) => {
+			await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
+		},
+		log: (message) => {
+			output.stderr(`${message}\n`);
+		},
+	};
+	const replayRequest: ReplayRequest = {
+		paths,
+		stage: config.stage,
+		instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+		controlSha: await currentControlSha(),
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+	};
+	const questioner = terminalQuestioner();
+
+	try {
+		return await executeReplayStage(config, replayRequest, {
+			approval: {
+				output: (message) => {
+					output.stderr(`${message}\n`);
+				},
+				prompt: (message) => questioner.question(message),
+			},
+			runDebug: (debugRequest) => runReplay(replayDependencies, debugRequest),
+			runConfirmed: (confirmationRequest) =>
+				runReplayConfirmation(replayDependencies, confirmationRequest),
+			groupId: randomUUID,
+			corpusRoots: skillSearchRoots(CONTROL_DIR),
+		});
+	} finally {
+		questioner.close();
+	}
+}
+
+export async function resolveRunDirectory(runName: string): Promise<string> {
+	const paths = benchmarkRunPaths(benchmarkRunsDirectory(CONTROL_DIR), runName);
+	if (await Bun.file(paths.manifestFile).exists()) {
+		return paths.checkpointsDirectory;
+	}
+
+	let runEntries: string[];
+	try {
+		runEntries = await readdir(paths.runsDirectory);
+	} catch {
+		runEntries = [];
+	}
+	const recorded = runEntries
+		.map((entry) => runNameFromCheckpointsEntry(entry))
+		.filter((entry) => entry !== undefined);
+
+	throw new Error(
+		`No replayable run named ${paths.name}; recorded runs: ${
+			recorded.join(", ") || "none"
+		}`,
+	);
+}

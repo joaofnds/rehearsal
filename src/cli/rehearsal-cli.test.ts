@@ -150,4 +150,63 @@ describe("rehearsal", () => {
 		expect(result.stderr).toContain("--bogus");
 		expect(result.stderr.trim().split("\n")).toHaveLength(1);
 	});
+
+	it("refuses a confirmation replay without --yes when stdin is not a terminal", async () => {
+		const result = await runCli([
+			"replay",
+			"--run",
+			"any-name",
+			"--stage",
+			"shape",
+			"--model",
+			"sonnet",
+			"--session-budget-usd",
+			"1",
+			"--confirm",
+		]);
+
+		expect(result.exitCode).toBe(3);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("stdin is not a terminal");
+		expect(result.stderr).not.toContain("Projected maximum cost");
+		expect(result.stderr).not.toContain("No replayable run named");
+	});
+
+	it("does not refuse for a terminal when --yes answers the approval", async () => {
+		const result = await runCli([
+			"replay",
+			"--run",
+			"any-name",
+			"--stage",
+			"shape",
+			"--model",
+			"sonnet",
+			"--session-budget-usd",
+			"1",
+			"--confirm",
+			"--yes",
+		]);
+
+		expect(result.exitCode).toBe(1);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).not.toContain("stdin is not a terminal");
+		expect(result.stderr).toContain("No replayable run named any-name");
+	});
+
+	it("refuses to run when stdin is not a terminal, before any provider call", async () => {
+		const result = await runCli([
+			"run",
+			"--target",
+			"/nonexistent-target",
+			"--model",
+			"sonnet",
+			"--session-budget-usd",
+			"1",
+		]);
+
+		expect(result.exitCode).toBe(3);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("ACT-26.3");
+		expect(result.stderr).not.toContain("Target:");
+	});
 });

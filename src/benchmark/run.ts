@@ -681,7 +681,7 @@ export async function captureRunBaseline(
 export async function runBenchmark(
 	config: BenchmarkConfig,
 	rl: Questioner,
-): Promise<void> {
+): Promise<BenchmarkRunPaths> {
 	const pipeline = await loadPipeline(config.pipelinePath);
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
@@ -931,6 +931,8 @@ export async function runBenchmark(
 			completeRunArtifact(artifact, calibration, judgeAgreement),
 		);
 		console.log("Calibration recorded; restoring the target.");
+
+		return runFiles;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		console.error(message);

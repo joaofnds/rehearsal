@@ -1,8 +1,15 @@
 #!/usr/bin/env bun
 import { CONTROL_DIR, REQUIRED_BUN_VERSION } from "./src/benchmark/config";
+import { loadPipeline } from "./src/benchmark/pipeline";
 import { benchmarkRunsDirectory } from "./src/benchmark/run-layout";
 import { runCompare } from "./src/cli/compare-command";
-import type { CommandDefinition } from "./src/cli/commands";
+import {
+	executeReplay,
+	resolveRunDirectory,
+	runReplayCommand,
+} from "./src/cli/replay-command";
+import { executeRun, runRunCommand } from "./src/cli/run-command";
+import type { CommandDefinition, CommandLine } from "./src/cli/commands";
 import {
 	COMMANDS,
 	commandHelp,
@@ -22,7 +29,7 @@ function findCommand(name: string): CommandDefinition {
 	return command;
 }
 
-async function main(): Promise<number> {
+function main(): Promise<number> {
 	if (Bun.version !== REQUIRED_BUN_VERSION) {
 		throw new Error(
 			`Use Bun ${REQUIRED_BUN_VERSION}; current version is ${Bun.version}`,
@@ -33,12 +40,12 @@ async function main(): Promise<number> {
 	if (name === "--help") {
 		processOutput.stdout(topLevelHelp());
 
-		return EXIT_CODES.completed;
+		return Promise.resolve(EXIT_CODES.completed);
 	}
 	if (name === undefined) {
 		processOutput.stderr(topLevelHelp());
 
-		return EXIT_CODES.usageError;
+		return Promise.resolve(EXIT_CODES.usageError);
 	}
 
 	const command = findCommand(name);
@@ -46,23 +53,57 @@ async function main(): Promise<number> {
 	if (commandLine.helpRequested) {
 		processOutput.stdout(commandHelp(command));
 
-		return EXIT_CODES.completed;
+		return Promise.resolve(EXIT_CODES.completed);
 	}
 
-	if (command.name === "compare") {
-		await runCompare(
-			{
-				manifestPath: commandLine.argument,
-				runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
-				json: commandLine.json,
-			},
-			processOutput,
-		);
+	return dispatch(command.name, commandLine);
+}
 
-		return EXIT_CODES.completed;
+async function dispatch(
+	name: string,
+	commandLine: CommandLine,
+): Promise<number> {
+	switch (name) {
+		case "compare": {
+			await runCompare(
+				{
+					manifestPath: commandLine.argument,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+					json: commandLine.json,
+				},
+				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "replay": {
+			await runReplayCommand(
+				{
+					args: commandLine.flags,
+					json: commandLine.json,
+					stdinIsTerminal: process.stdin.isTTY,
+				},
+				{ output: processOutput, resolveRunDirectory, execute: executeReplay },
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "run": {
+			await runRunCommand(
+				{
+					args: commandLine.flags,
+					json: commandLine.json,
+					stdinIsTerminal: process.stdin.isTTY,
+				},
+				{ output: processOutput, loadPipeline, execute: executeRun },
+			);
+
+			return EXIT_CODES.completed;
+		}
+		default: {
+			throw new Error(`Command ${name} is declared but not wired up`);
+		}
 	}
-
-	throw new Error(`Command ${command.name} is not wired up yet`);
 }
 
 if (import.meta.main) {
