@@ -2,6 +2,10 @@
 	"name": "rehearsal",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#benchmark/*": "./src/benchmark/*.ts",
+		"#cli/*": "./src/cli/*.ts"
+	},
 	"scripts": {
 		"benchmark": "bun run run-benchmark.ts",
 		"compare": "bun run compare-confirmations.ts",
@@ -23,9 +27,5 @@
 		"oxlint-tsgolint": "^7.0.2001",
 		"typescript": "^7.0.2"
 	},
-	"packageManager": "bun@1.4.0",
-	"imports": {
-		"#benchmark/*": "./src/benchmark/*.ts",
-		"#cli/*": "./src/cli/*.ts"
-	}
+	"packageManager": "bun@1.4.0"
 }
