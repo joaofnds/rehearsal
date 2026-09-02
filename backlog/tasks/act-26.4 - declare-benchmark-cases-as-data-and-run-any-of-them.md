@@ -1,11 +1,11 @@
 ---
 id: ACT-26.4
 title: declare benchmark cases as data and run any of them
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 22:13'
+updated_date: '2026-09-02 22:42'
 labels: []
 dependencies: []
 references:
@@ -578,3 +578,51 @@ total spend on provider calls: $0.00.
 - The legacy `caseId` path is still proven by synthesized legacy records; no
   pre-change record exists on disk to read.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-02 22:42
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 560 pass, 0 fail across 45 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, both fixed and re-observed by the orchestrator.
+
+1. The shipped case declared a target that resolved nowhere. cases/audit-log/case.json named ../../../nestjs-template, which resolved against CONTROL_DIR to /Users/nestjs-template; read as case-relative it would be /Users/joaofnds/code/nestjs-template. Neither exists. So a run with neither --target nor BENCHMARK_TARGET_DIR, the invocation acceptance criterion 15 and the README describe, died at assertSourceReady with ENOENT. The orchestrator found this independently before the review. Fixed in 79ab2e7: a relative target now resolves against the case directory, one base for the whole declaration, and the case declares ../../../nest/template. Verified: loadCase("audit-log").targetPath is /Users/joaofnds/code/nest/template and stat reports a directory. target.path still bypasses caseRelative, because a case may legitimately name a repository outside its own directory; a comment records why.
+
+2. The new comparability rule refused legacy confirmation records. A group record written before this change carries no caseId, so the reader fills audit-log, while a comparison manifest's caseId is user-authored and falls back to case-1. The reviewer stripped caseId from six group records in a fixture and got "case case-1 arm baseline field caseId recorded audit-log; expected case-1". Every pre-change confirmation group would have become unreadable evidence in any manifest not named audit-log, defeating the legacy default added in this same change to keep old records readable. Latent, not observed in production data: .benchmark-runs holds only an empty comparisons directory. Fixed in c34cebd: a record that declared no case stays comparable, while a record carrying a different caseId is still refused with the error naming case, arm, and both ids. Both directions pinned.
+
+SHOULD-FIX, all fixed and verified.
+
+3. The caseId write path was unpinned. The reviewer deleted the four caseId lines in pipeline-confirmation.ts, then the one in confirmation-evidence.ts, then replaced the CLI wiring's value with the literal "WRONG": each time typecheck exited 0 and all 551 tests passed. The cause was object literals passed into a schema whose parameter is unknown, with .optional().default("audit-log") silently filling the field, and audit-log being the only declared case. This was exactly the mutation the card exists to prevent. Fixed in 831aa18 with typed record inputs so the compiler is the guard, plus a criterion-10 test driving a non-default case id. Verified by the orchestrator repeating the mutation: falsifying the case id at src/cli/run-command.ts:207 now fails a test that previously passed.
+
+4. One unreadable directory under cases/ hid every valid case. Reproduced by the orchestrator: mkdir cases/zz-stray-probe then case list printed only the stray's error and exited 3, with audit-log absent. Fixed in f3c567c: the stray's reason goes to stderr, valid lines to stdout, exit 0. A silent skip was rejected because it hides a half-written case from its author. Verified: with a stray present, stdout carries only audit-log and the exit is 0.
+
+5. case list crashed with a raw ENOENT at exit 1 when cases/ was absent, though a missing case directory is a refused precondition. Fixed in 3a31207: "No case directory at cases", exit 3.
+
+6. bun test recreated an untracked pipelines/ directory at the control root, contradicting acceptance criterion 1. Worse at the paired site, an interrupted run would leave an untracked file inside the committed case directory, after which assertControlReady refuses every run. Fixed in 8e67abb using the existing TestResources helper. Verified: removed the directory, ran the full suite, it did not return.
+
+7. The sourceDir empty guard had become unreachable for every branch except an empty BENCHMARK_TARGET_DIR, and its only end-to-end test had been correctly rewritten. Kept rather than deleted, because resolve("") is the working directory, so removing it would make an empty environment variable silently target the control repository. Pinned in 591a2c6.
+
+NOTES, no action taken.
+
+9. caseId is validated three ways for one concept: a strict lowercase regex in case.ts, a looser identity regex in confirmation-record.ts, and a bare min(1) in manifest.ts, with the loosest sitting on the record read back from disk. No reachable bad path was found; caseId is only ever written through parseCaseId.
+11. case list without --json prints a tab-separated id and title, while the glossary says a command never prints a second summary-only shape and case show prints a path. Acceptance criterion 3 demanded the listing, so the criterion and the glossary conflict. Recorded as a decision to revisit, not an oversight.
+12. Loading the case now precedes the TTY refusal, forced by criterion 15, so a refused run reads the case files first. All reads are read-only inside the control repository and no target is claimed; criterion 6 was re-verified by the orchestrator.
+14. The criterion-13 loader test passes with the comparability rule deleted, so its title claims more than it checks. The rule itself is properly pinned by comparison-comparability.test.ts, so criterion 12 is honestly covered.
+8. The review patch carried a .gitignore hunk absent from the repository, because João committed "chore: unignore backlog" mid-run between the shape commit and HEAD. The reviewer read the repository at HEAD, which is correct. No action.
+
+Security: path traversal guards hold. The reviewer probed caseRelative with an absolute path, .. segments, empty strings, and a doubled-slash escape, and every one was refused; the --pipeline override is also refused outside the control repository. The one declared path that escapes the case directory is target.path, by design, since case declarations are committed rather than attacker-supplied.
+
+Structural opportunity recorded, not taken: PipelineConfirmationRequest restates seven fields of BenchmarkCase, which is what let caseId drift from its case. Reshaping it touches about twenty read sites, out of scope for a directed fix.
+
+Not observed live, carried forward: no run, replay, confirmation, or comparison ran against a live provider, so caseId on records from a real session rests on fake-backed tests. The declared target resolves to a real directory, but no run has executed against it.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Benchmark cases are data. cases/audit-log/case.json declares the task, product brief, final rubric, stage rubrics, pipeline, and target, parsed once by zod into a CaseDeclaration that refuses a mismatched id or a path outside its case directory. rehearsal case list and case show read declarations; --case selects one on run and replay, defaulting to audit-log. The run manifest, run artifact, and confirmation group and rep records carry caseId, with an absent field meaning audit-log so every record already on disk stays readable, and no schema version bumped. Comparability refuses an arm whose group ran a different case, while a group that declared no case stays comparable. Review found two blocking defects, both fixed: the declared target resolved to a nonexistent path, and the new comparability rule would have refused every legacy record in a manifest not named audit-log. Five should-fix defects fixed, including a caseId write path that three separate mutations could falsify with the whole suite green. Not observed live: no run against a provider, so caseId on real records rests on fake-backed tests.
+<!-- SECTION:FINAL_SUMMARY:END -->
