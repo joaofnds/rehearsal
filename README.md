@@ -323,6 +323,18 @@ export BENCHMARK_PIPELINE=pipelines/default.json
 bun run rehearsal run
 ```
 
+Replay re-runs one stage of a recorded run against the current corpus, in a
+fresh worktree, sharing the same session knobs and their environment
+fallbacks:
+
+```sh
+bun run rehearsal replay \
+  --run 2026-08-30T10-00-00.000Z \
+  --stage build \
+  --model sonnet \
+  --session-budget-usd 10
+```
+
 `rehearsal` is one executable with three commands: `run`, `replay`, and
 `compare`. `rehearsal --help` lists them; `rehearsal <command> --help` prints
 that command's flags with each default and environment variable, generated
