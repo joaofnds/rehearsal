@@ -296,6 +296,16 @@ describe(parseArgs.name, () => {
 		expect(overridden.sourceDir).toBe(join(process.cwd(), "target"));
 	});
 
+	it("refuses an empty BENCHMARK_TARGET_DIR rather than resolving it to the control repository", () => {
+		expect(() =>
+			parseArgs(
+				["--model", "sonnet", "--session-budget-usd", "5"],
+				{ BENCHMARK_TARGET_DIR: "" },
+				CASE_DEFAULTS,
+			),
+		).toThrow("Provide --target or BENCHMARK_TARGET_DIR");
+	});
+
 	it("prefers the environment target over the one the case declares", () => {
 		const config = parseArgs(
 			["--model", "sonnet", "--session-budget-usd", "5"],
