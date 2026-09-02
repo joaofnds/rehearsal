@@ -168,18 +168,15 @@ refused preconditions, and execution failures, with the reason on stderr.
   (flag verified present on chezmoi v2.72.0; rendering into a scratch destination
   is inferred and must be observed first).
 
-## Open for João
+## Decided by João, 2026-09-02
 
-1. Fidelity of the session's config when running against a corpus variant.
-   A scratch `CLAUDE_CONFIG_DIR` (clean-room style) isolates but drops hooks,
-   memory, and MCP, which the README says a measurement must keep. A copy of the
-   live config with only the files under test replaced keeps fidelity and touches
-   nothing live. Recommendation: the copy. To settle at Shape: whether a copied
-   config carries login state.
-2. Where transcript bytes for session cases live. They are private session
-   content and large. Recommendation: the case declaration in git, the transcript
-   bytes git-ignored under `.benchmark-runs/cases/` and hashed into lineage, the
-   same way checkpoints are kept.
+1. A session running against a corpus variant sees a copy of the live config
+   with only the files under test replaced, so hooks, memory, and MCP stay as
+   the README requires and nothing live is touched. To observe at Shape:
+   whether a copied config carries login state.
+2. Session-case transcript bytes are git-ignored under `.benchmark-runs/cases/`
+   and hashed into lineage, the same way checkpoints are kept; only the case
+   declaration is committed.
 
 ## Card map and recommended order
 

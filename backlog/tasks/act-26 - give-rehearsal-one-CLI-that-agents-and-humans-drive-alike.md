@@ -4,6 +4,7 @@ title: give rehearsal one CLI that agents and humans drive alike
 status: To Do
 assignee: []
 created_date: '2026-09-02 15:14'
+updated_date: '2026-09-02 15:25'
 labels: []
 dependencies: []
 references:
@@ -25,3 +26,9 @@ Children, in the recommended order: ACT-26.4 cases as data, ACT-26.5 the session
 
 Open for João, with recommendations, in doc-1: (1) whether a case run sees a copy of the live config with only the files under test replaced (recommended) or a scratch config; (2) whether transcript bytes for session cases stay git-ignored and hashed like checkpoints (recommended) or are committed.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+João decided 2026-09-02: a case run sees a copy of the live config with only the files under test replaced; session-case transcript bytes stay git-ignored and hashed into lineage, only the case declaration is committed. Both recorded in doc-1.
+<!-- SECTION:NOTES:END -->

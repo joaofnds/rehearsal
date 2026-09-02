@@ -4,6 +4,7 @@ title: run against a corpus variant from a source without installing it live
 status: To Do
 assignee: []
 created_date: '2026-09-02 15:14'
+updated_date: '2026-09-02 15:25'
 labels: []
 dependencies: []
 references:
@@ -20,3 +21,9 @@ Today the corpus under test is the live install: CLAUDE.md at the control root p
 
 Open for João in doc-1: whether the session's config is a copy of the live one with only the files under test replaced (recommended, keeps hooks, memory, and MCP as the README requires) or a scratch config. Gap 3 in doc-1.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decided 2026-09-02: the session's config is a copy of the live config with only the files under test replaced, never a scratch config. Shape observes whether a copied config carries login state.
+<!-- SECTION:NOTES:END -->

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 15:14'
+updated_date: '2026-09-02 15:25'
 labels: []
 dependencies:
   - ACT-26.4
@@ -24,3 +25,9 @@ Three of the four bespoke harnesses measured one Claude session, not a pipeline 
 
 Cost observed for one resumed turn: about 2 USD cold, 0.15 USD with a warm cache. Gap 2 in doc-1.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decided 2026-09-02: transcript bytes for a session case are git-ignored under .benchmark-runs/cases/ and hashed into lineage; the case declaration is committed.
+<!-- SECTION:NOTES:END -->
