@@ -9,16 +9,36 @@ import {
 } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 
+export interface TargetCheck {
+	readonly command: readonly string[];
+	readonly env?: Readonly<Record<string, string>> | undefined;
+}
+
+const DEFAULT_TARGET_CHECKS: readonly TargetCheck[] = [
+	{
+		command: ["bun", "run", "typecheck"],
+		env: { CONFIG_PATH: TEST_CONFIG_PATH },
+	},
+	{
+		command: ["bun", "run", "check"],
+		env: { CONFIG_PATH: TEST_CONFIG_PATH },
+	},
+	{
+		command: ["bun", "run", "test:unit"],
+		env: { CONFIG_PATH: TEST_CONFIG_PATH },
+	},
+];
+
 export async function runChecks(
 	targetDir: string,
 	label: string,
+	checks: readonly TargetCheck[] = DEFAULT_TARGET_CHECKS,
 ): Promise<void> {
 	console.log(`\n${label}`);
-	const options = { env: { CONFIG_PATH: TEST_CONFIG_PATH } };
 
-	await runCommand(["bun", "run", "typecheck"], targetDir, options);
-	await runCommand(["bun", "run", "check"], targetDir, options);
-	await runCommand(["bun", "run", "test:unit"], targetDir, options);
+	for (const check of checks) {
+		await runCommand(check.command, targetDir, { env: check.env });
+	}
 }
 
 export async function captureTreatmentChecks(

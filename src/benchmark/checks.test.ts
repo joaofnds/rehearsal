@@ -4,6 +4,7 @@ import {
 	captureBaselineContext,
 	captureCheckIntegrity,
 	captureFileHashes,
+	runChecks,
 } from "./checks";
 import { runCommand } from "./command";
 import { MAX_CONTEXT_FILE_BYTES } from "./config";
@@ -11,6 +12,26 @@ import { captureBuildCandidate } from "./target";
 import { TestResources, commitAll } from "./test-support";
 
 const testResources = TestResources.forEachTest();
+
+describe(runChecks.name, () => {
+	it("runs declared checks in order with overlaid environments", async () => {
+		const source = await testResources.createRepository();
+		const script = [
+			"const path = 'checks.log';",
+			"const previous = await Bun.file(path).exists() ? await Bun.file(path).text() : '';",
+			"await Bun.write(path, `${previous}${Bun.env.CHECK_VALUE}:${Bun.env.PATH === undefined ? 'missing' : 'host'}\\n`);",
+		].join(" ");
+
+		await runChecks(source.directory, "Custom checks", [
+			{ command: ["bun", "-e", script], env: { CHECK_VALUE: "first" } },
+			{ command: ["bun", "-e", script], env: { CHECK_VALUE: "second" } },
+		]);
+
+		expect(await Bun.file(join(source.directory, "checks.log")).text()).toBe(
+			"first:host\nsecond:host\n",
+		);
+	});
+});
 
 describe(captureCheckIntegrity.name, () => {
 	it("fails when a candidate weakens a check definition", async () => {
