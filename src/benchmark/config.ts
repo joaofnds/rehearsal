@@ -3,15 +3,9 @@ import { z } from "zod";
 
 export const CONTROL_DIR = resolve(import.meta.dir, "../..");
 export const REQUIRED_BUN_VERSION = "1.4.0";
-export const TEST_CONFIG_PATH = "src/config/test.yaml";
 export const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 export const CLAUDE_TIMEOUT_MS = 30 * 60 * 1000;
 export const MAX_STAGE_TURNS = 20;
-export const CHECK_PATHS = [
-	"package.json",
-	"tsconfig.json",
-	"biome.json",
-] as const;
 export const WORKFLOW_PATHS = ["backlog", ".boris"] as const;
 export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
 export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;

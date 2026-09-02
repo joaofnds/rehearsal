@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CHECK_PATHS, TEST_CONFIG_PATH, effortSchema } from "./config";
+import { effortSchema } from "./config";
 import { pipelineDefinitionSchema } from "./pipeline";
 import type { TargetDefinition } from "./pipeline";
 import type { Immutable } from "./contracts";
@@ -8,18 +8,18 @@ const LEGACY_TARGET_DEFINITION = {
 	checks: [
 		{
 			command: ["bun", "run", "typecheck"],
-			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+			env: { CONFIG_PATH: "src/config/test.yaml" },
 		},
 		{
 			command: ["bun", "run", "check"],
-			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+			env: { CONFIG_PATH: "src/config/test.yaml" },
 		},
 		{
 			command: ["bun", "run", "test:unit"],
-			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+			env: { CONFIG_PATH: "src/config/test.yaml" },
 		},
 	],
-	integrityFiles: CHECK_PATHS,
+	integrityFiles: ["package.json", "tsconfig.json", "biome.json"],
 } satisfies TargetDefinition;
 
 /**
