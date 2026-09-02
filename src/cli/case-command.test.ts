@@ -132,11 +132,18 @@ describe(runCaseShow.name, () => {
 });
 
 describe(runCaseCapture.name, () => {
-	const CAPTURE_CASE_ID = "zz-capture-probe";
+	const CAPTURE_CASE_ID = "capture-probe";
 	const SESSION_ID = "aaaaaaaa-1111-2222-3333-444444444444";
 
+	/**
+	 * The probe case lives in a temporary cases root, never in the control
+	 * repository's own: a failure between creating it and cleaning it up would
+	 * otherwise leave a case behind that every later `case list` reports, in
+	 * this suite and at the command line.
+	 */
 	async function probeCase(): Promise<string> {
-		const directory = join(CONTROL_DIR, CASES_DIRECTORY, CAPTURE_CASE_ID);
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-cases-"));
+		const directory = join(root, CAPTURE_CASE_ID);
 		await mkdir(directory, { recursive: true });
 		await Bun.write(
 			join(directory, "case.json"),
@@ -155,7 +162,7 @@ describe(runCaseCapture.name, () => {
 			)}\n`,
 		);
 
-		return directory;
+		return root;
 	}
 
 	async function probeProjects(
@@ -179,43 +186,36 @@ describe(runCaseCapture.name, () => {
 	async function capture(
 		request: Omit<CaseCaptureRequest, "caseId">,
 		projectsDirectory: string,
+		casesDirectory: string,
 	): Promise<OutputRecorder> {
 		const recorder = recordOutput();
 		await runCaseCapture(
 			{ caseId: CAPTURE_CASE_ID, ...request },
-			{ projectsDirectory, output: recorder.output },
+			{ projectsDirectory, casesDirectory, output: recorder.output },
 		);
 
 		return recorder;
 	}
 
 	afterEach(async () => {
-		await Promise.all([
-			rm(join(CONTROL_DIR, CASES_DIRECTORY, CAPTURE_CASE_ID), {
-				force: true,
-				recursive: true,
-			}),
-			rm(
-				join(
-					benchmarkRunsDirectory(CONTROL_DIR),
-					CASES_DIRECTORY,
-					CAPTURE_CASE_ID,
-				),
-				{
-					force: true,
-					recursive: true,
-				},
+		await rm(
+			join(
+				benchmarkRunsDirectory(CONTROL_DIR),
+				CASES_DIRECTORY,
+				CAPTURE_CASE_ID,
 			),
-		]);
+			{ force: true, recursive: true },
+		);
 	});
 
 	it("writes the source's first cut lines under the run directory and records the digest", async () => {
-		await probeCase();
+		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
 		const recorder = await capture(
 			{ session: SESSION_ID, cut: "3", json: true },
 			projects,
+			cases,
 		);
 
 		const printed = printedDeclaration(recorder.stdout.join(""));
@@ -233,24 +233,29 @@ describe(runCaseCapture.name, () => {
 	});
 
 	it("records the transcript in the committed declaration on disk", async () => {
-		const directory = await probeCase();
+		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
-		await capture({ session: SESSION_ID, cut: "2", json: false }, projects);
+		await capture(
+			{ session: SESSION_ID, cut: "2", json: false },
+			projects,
+			cases,
+		);
 
 		const declaration = printedDeclaration(
-			await Bun.file(join(directory, "case.json")).text(),
+			await Bun.file(join(cases, CAPTURE_CASE_ID, "case.json")).text(),
 		);
 		expect(declaration).toMatchObject({ transcript: { cut: 2 } });
 	});
 
 	it("resolves a unique session prefix", async () => {
-		await probeCase();
+		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
 		const recorder = await capture(
 			{ session: "aaaaaaaa", cut: "1", json: true },
 			projects,
+			cases,
 		);
 
 		expect(printedDeclaration(recorder.stdout.join(""))).toMatchObject({
@@ -259,14 +264,16 @@ describe(runCaseCapture.name, () => {
 	});
 
 	it("refuses a prefix that matches two sessions, naming both", async () => {
-		await probeCase();
+		const cases = await probeCase();
 		const other = "aaaaaaaa-9999-9999-9999-999999999999";
 		const projects = await probeProjects(SESSION_ID, other);
 
 		const failure = await failureOf(
-			capture({ session: "aaaaaaaa", cut: "1", json: true }, projects).then(
-				() => undefined,
-			),
+			capture(
+				{ session: "aaaaaaaa", cut: "1", json: true },
+				projects,
+				cases,
+			).then(() => undefined),
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
@@ -276,13 +283,15 @@ describe(runCaseCapture.name, () => {
 	});
 
 	it("refuses a prefix that matches no session, naming the prefix", async () => {
-		await probeCase();
+		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
 		const failure = await failureOf(
-			capture({ session: "deadbeef", cut: "1", json: true }, projects).then(
-				() => undefined,
-			),
+			capture(
+				{ session: "deadbeef", cut: "1", json: true },
+				projects,
+				cases,
+			).then(() => undefined),
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
@@ -294,11 +303,11 @@ describe(runCaseCapture.name, () => {
 	it.each(["0", "-1", "5"])(
 		"refuses a cut of %s as a usage error, naming the index and the line count",
 		async (cut) => {
-			await probeCase();
+			const cases = await probeCase();
 			const projects = await probeProjects(SESSION_ID);
 
 			const failure = await failureOf(
-				capture({ session: SESSION_ID, cut, json: true }, projects).then(
+				capture({ session: SESSION_ID, cut, json: true }, projects, cases).then(
 					() => undefined,
 				),
 			);

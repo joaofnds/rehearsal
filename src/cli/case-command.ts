@@ -1,19 +1,19 @@
 import { mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type {
 	CaseDeclaration,
 	LoadedCase,
 	SessionCaseDeclaration,
 } from "#benchmark/case";
 import {
+	caseDeclarationPath,
 	CaseDeclarationError,
-	CASES_DIRECTORY,
+	casesRoot,
 	listCases,
 	loadCase,
 	readCaseDeclaration,
 	transcriptPrefixPath,
 } from "#benchmark/case";
-import { CONTROL_DIR } from "#benchmark/config";
 import {
 	captureTranscriptPrefix,
 	CaptureError,
@@ -46,8 +46,8 @@ export function requireCase(caseId: string): Promise<LoadedCase> {
 	return asRefusedPrecondition(() => loadCase(caseId));
 }
 
-function declarationFile(caseId: string): string {
-	return join(CONTROL_DIR, CASES_DIRECTORY, caseId, "case.json");
+function declarationFile(caseId: string, root?: string): string {
+	return caseDeclarationPath(caseId, root ?? casesRoot());
 }
 
 function serialize(
@@ -112,6 +112,7 @@ export interface CaseCaptureRequest {
 export interface CaseCaptureDependencies {
 	readonly projectsDirectory: string;
 	readonly output: CommandOutput;
+	readonly casesDirectory?: string | undefined;
 }
 
 function requiredFlag(value: string | undefined, flag: string): string {
@@ -135,9 +136,10 @@ function parsedCut(value: string): number {
 
 async function requireSessionDeclaration(
 	caseId: string,
+	root: string,
 ): Promise<SessionCaseDeclaration> {
 	const declaration: CaseDeclaration = await asRefusedPrecondition(() =>
-		readCaseDeclaration(caseId),
+		readCaseDeclaration(caseId, root),
 	);
 	if (declaration.kind !== "session") {
 		throw new RefusedPreconditionError(
@@ -192,7 +194,8 @@ export async function runCaseCapture(
 	const caseId = requiredFlag(request.caseId, "the case id");
 	const session = requiredFlag(request.session, "--session");
 	const cut = parsedCut(requiredFlag(request.cut, "--cut"));
-	const declaration = await requireSessionDeclaration(caseId);
+	const root = dependencies.casesDirectory ?? casesRoot();
+	const declaration = await requireSessionDeclaration(caseId, root);
 
 	const source = await resolved(dependencies.projectsDirectory, session);
 	const file = `${source.sessionId}-cut-${String(cut)}.jsonl`;
@@ -209,9 +212,9 @@ export async function runCaseCapture(
 			cut,
 		},
 	};
-	await Bun.write(declarationFile(caseId), serialize(updated));
+	await Bun.write(declarationFile(caseId, root), serialize(updated));
 
 	dependencies.output.stdout(
-		request.json ? serialize(updated) : `${declarationFile(caseId)}\n`,
+		request.json ? serialize(updated) : `${declarationFile(caseId, root)}\n`,
 	);
 }

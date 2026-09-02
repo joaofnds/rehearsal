@@ -101,8 +101,18 @@ export interface BenchmarkCase {
 	readonly targetPath: string;
 }
 
-function caseDirectory(id: string): string {
-	return join(CONTROL_DIR, CASES_DIRECTORY, id);
+/**
+ * Cases live in the control repository, and the tests that write a case must
+ * not write into the one the suite is running from: a probe left behind by a
+ * failure would then be listed by every later `case list`. The root is a
+ * parameter so a test can own a directory of its own.
+ */
+export function casesRoot(): string {
+	return join(CONTROL_DIR, CASES_DIRECTORY);
+}
+
+function caseDirectory(id: string, root: string = casesRoot()): string {
+	return join(root, id);
 }
 
 export function caseRelative(
@@ -151,8 +161,16 @@ export function parseCaseDeclaration(
 	return parsed.data;
 }
 
+export function caseDeclarationPath(
+	id: string,
+	root: string = casesRoot(),
+): string {
+	return join(caseDirectory(id, root), "case.json");
+}
+
 export async function readCaseDeclaration(
 	id: string,
+	root: string = casesRoot(),
 ): Promise<CaseDeclaration> {
 	if (!caseIdSchema.safeParse(id).success) {
 		throw new CaseDeclarationError(
@@ -160,10 +178,11 @@ export async function readCaseDeclaration(
 		);
 	}
 
-	const file = Bun.file(join(caseDirectory(id), "case.json"));
+	const path = caseDeclarationPath(id, root);
+	const file = Bun.file(path);
 	if (!(await file.exists())) {
 		throw new CaseDeclarationError(
-			`Unknown case ${id}: no declaration at ${relative(CONTROL_DIR, join(caseDirectory(id), "case.json"))}`,
+			`Unknown case ${id}: no declaration at ${relative(CONTROL_DIR, path)}`,
 		);
 	}
 
