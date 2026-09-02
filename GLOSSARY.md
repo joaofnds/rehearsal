@@ -85,6 +85,9 @@
   and cannot be overwritten by a later normal transition.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
+- **Session knobs** — the CLI and environment settings shared by run and replay
+  that select the workflow and Judge models and efforts and set the per-session
+  spend limit.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own.
 - **Stage commit history** — oldest-first subjects of the commits a stage added
