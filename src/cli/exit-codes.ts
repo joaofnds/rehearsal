@@ -6,3 +6,15 @@ export const EXIT_CODES = {
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
+
+export interface CommandFailure extends Error {
+	readonly exitCode: ExitCode;
+}
+
+function isCommandFailure(error: Readonly<Error>): error is CommandFailure {
+	return "exitCode" in error;
+}
+
+export function exitCodeFor(error: Readonly<Error>): ExitCode {
+	return isCommandFailure(error) ? error.exitCode : EXIT_CODES.executionFailure;
+}

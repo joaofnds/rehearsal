@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { UsageError } from "#cli/commands";
-import { EXIT_CODES } from "#cli/exit-codes";
+import { EXIT_CODES, exitCodeFor } from "#cli/exit-codes";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 
 describe("command failures", () => {
@@ -26,5 +26,25 @@ describe("command failures", () => {
 
 		expect(error.exitCode).toBe(EXIT_CODES.refusedPrecondition);
 		expect(error.name).toBe("RefusedPreconditionError");
+	});
+
+	it.each([
+		{
+			kind: "a usage error",
+			error: new UsageError("Unknown flag --bogus"),
+			code: EXIT_CODES.usageError,
+		},
+		{
+			kind: "a refused precondition",
+			error: new RefusedPreconditionError("stdin is not a terminal"),
+			code: EXIT_CODES.refusedPrecondition,
+		},
+		{
+			kind: "any other failure",
+			error: new Error("the target is dirty"),
+			code: EXIT_CODES.executionFailure,
+		},
+	])("maps $kind to exit code $code", ({ error, code }) => {
+		expect(exitCodeFor(error)).toBe(code);
 	});
 });

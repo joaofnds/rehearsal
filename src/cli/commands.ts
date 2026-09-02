@@ -1,4 +1,5 @@
 import { DEFAULT_PIPELINE_PATH } from "#benchmark/config";
+import type { CommandFailure } from "#cli/exit-codes";
 import { EXIT_CODES } from "#cli/exit-codes";
 
 export interface FlagDefinition {
@@ -186,7 +187,7 @@ export interface CommandLine {
 	readonly flags: readonly string[];
 }
 
-export class UsageError extends Error {
+export class UsageError extends Error implements CommandFailure {
 	public readonly exitCode = EXIT_CODES.usageError;
 
 	public constructor(message: string) {
