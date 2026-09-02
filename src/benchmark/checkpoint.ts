@@ -5,8 +5,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
-import { effortSchema, WORKFLOW_PATHS } from "./config";
+import { effortSchema } from "./config";
 import type { Immutable } from "./contracts";
+import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
 
 export interface HashedFile {
 	readonly path: string;
@@ -443,31 +444,13 @@ export interface CheckpointInputs {
 const RECORD_FILE = "checkpoint.json";
 const SNAPSHOT_DIRECTORY = "workflow-state";
 
-async function existingWorkflowPaths(root: string): Promise<string[]> {
-	const present: string[] = [];
-
-	for (const path of WORKFLOW_PATHS) {
-		if (await statIfExists(join(root, path))) {
-			present.push(path);
-		}
-	}
-
-	return present;
-}
-
-async function copyWorkflowTrees(from: string, to: string): Promise<void> {
-	for (const path of await existingWorkflowPaths(from)) {
-		await cp(join(from, path), join(to, path), { recursive: true });
-	}
-}
-
 export async function hashWorkflowState(
 	targetDir: string,
 ): Promise<readonly HashedFile[]> {
 	const files: HashedFile[] = [];
 
-	for (const path of await existingWorkflowPaths(targetDir)) {
-		files.push(...(await hashDirectory(join(targetDir, path), path)));
+	for (const tree of await existingWorkflowTrees(targetDir)) {
+		files.push(...(await hashDirectory(tree.directory, tree.path)));
 	}
 
 	return files;
@@ -484,7 +467,7 @@ export async function recordCheckpoint(
 	inputs: CheckpointInputs,
 ): Promise<CheckpointRecord> {
 	const workflowState = await hashWorkflowState(targetDir);
-	await copyWorkflowTrees(targetDir, join(directory, SNAPSHOT_DIRECTORY));
+	await copyWorkflowState(targetDir, join(directory, SNAPSHOT_DIRECTORY));
 
 	const record: CheckpointRecord = {
 		stage: inputs.stage,
@@ -550,7 +533,7 @@ export async function materializeCheckpoint(
 	// Whole trees, not the recorded files one by one: the workflow tools
 	// expect their empty directories (backlog/docs, backlog/drafts, ...) to
 	// exist, and only a tree copy carries them.
-	await copyWorkflowTrees(snapshot, destination);
+	await copyWorkflowState(snapshot, destination);
 
 	return record;
 }

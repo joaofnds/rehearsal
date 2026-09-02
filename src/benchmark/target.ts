@@ -1,10 +1,11 @@
-import { cp, mkdtemp, realpath, rm, stat } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { captureBoundedContent } from "./checks";
 import { CommandError, runCommand } from "./command";
-import { CONTROL_DIR, WORKFLOW_PATHS } from "./config";
+import { CONTROL_DIR } from "./config";
 import { StageValidationError } from "./contracts";
+import { copyWorkflowState, replaceWorkflowState } from "./workflow-state";
 
 export interface SourceBaseline {
 	readonly root: string;
@@ -14,7 +15,6 @@ export interface SourceBaseline {
 
 export interface WorkflowBackup {
 	readonly directory: string;
-	readonly presentPaths: readonly string[];
 }
 
 export async function git(
@@ -97,43 +97,16 @@ export async function captureWorkflowBackup(
 	targetDir: string,
 ): Promise<WorkflowBackup> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
-	const presentPaths: string[] = [];
+	await copyWorkflowState(targetDir, directory);
 
-	for (const path of WORKFLOW_PATHS) {
-		try {
-			await stat(join(targetDir, path));
-		} catch (error) {
-			if (
-				error instanceof Error &&
-				"code" in error &&
-				error.code === "ENOENT"
-			) {
-				continue;
-			}
-
-			throw error;
-		}
-
-		await cp(join(targetDir, path), join(directory, path), { recursive: true });
-		presentPaths.push(path);
-	}
-
-	return { directory, presentPaths };
+	return { directory };
 }
 
 async function restoreWorkflowBackup(
 	targetDir: string,
 	backup: WorkflowBackup,
 ): Promise<void> {
-	for (const path of WORKFLOW_PATHS) {
-		await rm(join(targetDir, path), { force: true, recursive: true });
-	}
-
-	for (const path of backup.presentPaths) {
-		await cp(join(backup.directory, path), join(targetDir, path), {
-			recursive: true,
-		});
-	}
+	await replaceWorkflowState(backup.directory, targetDir);
 }
 
 async function runMarkerPath(root: string): Promise<string> {
