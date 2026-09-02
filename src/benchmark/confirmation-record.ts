@@ -117,6 +117,8 @@ const lineageSchema = z.discriminatedUnion("kind", [
  */
 const legacyCaseIdSchema = identitySchema.optional().default(LEGACY_CASE_ID);
 
+const declaredCaseIdSchema = z.object({ caseId: identitySchema });
+
 export const confirmationRepRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
@@ -296,4 +298,24 @@ export function parseConfirmationGroupRecord(
 	text: string,
 ): ConfirmationGroupRecord {
 	return confirmationGroupRecordSchema.parse(JSON.parse(text));
+}
+
+export interface DeclaredConfirmationGroup {
+	readonly record: ConfirmationGroupRecord;
+	readonly declaredCaseId: string | undefined;
+}
+
+/**
+ * `caseId` reads back as `LEGACY_CASE_ID` whether the record declared that case
+ * or declared none, and a reader that must not treat the second as a claim
+ * needs them apart. Every other reader wants the legacy default.
+ */
+export function parseDeclaredConfirmationGroup(
+	text: string,
+): DeclaredConfirmationGroup {
+	const document: unknown = JSON.parse(text);
+	const record = confirmationGroupRecordSchema.parse(document);
+	const declared = declaredCaseIdSchema.safeParse(document);
+
+	return { record, declaredCaseId: declared.data?.caseId };
 }

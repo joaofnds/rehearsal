@@ -129,6 +129,7 @@ function arm(
 ): ComparisonArmEvidence {
 	return {
 		role,
+		declaredCaseId: record.caseId,
 		group: {
 			path: `${record.groupId}/group.json`,
 			sha256: "d".repeat(64),
@@ -501,6 +502,21 @@ describe(assertComparableComparison.name, () => {
 		).toThrow(
 			"case case-1 arm candidate field caseId recorded case-2; expected case-1",
 		);
+	});
+
+	it("accepts an arm whose legacy group declared no case at all", () => {
+		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
+		const candidate: ComparisonArmEvidence = {
+			...first.arms.candidate,
+			declaredCaseId: undefined,
+		};
+
+		expect(() =>
+			assertComparableComparison([
+				{ ...first, arms: { ...first.arms, candidate } },
+				benchmarkCase("case-2", CORPUS_DIGESTS),
+			]),
+		).not.toThrow();
 	});
 
 	it("accepts arms whose groups all recorded the manifest's case", () => {

@@ -5,10 +5,11 @@ import { buildComparableComparison } from "./comparison-comparability";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
+	DeclaredConfirmationGroup,
 } from "./confirmation-record";
 import {
-	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
+	parseDeclaredConfirmationGroup,
 } from "./confirmation-record";
 import type { Immutable } from "./contracts";
 import type {
@@ -265,9 +266,9 @@ async function loadArm(
 		field: "group.path",
 		path: groupPath,
 	});
-	let group: ConfirmationGroupRecord;
+	let declared: DeclaredConfirmationGroup;
 	try {
-		group = parseConfirmationGroupRecord(source.text);
+		declared = parseDeclaredConfirmationGroup(source.text);
 	} catch {
 		throw evidenceError(
 			{ caseId: request.caseId, arm: request.role, field: "group.record" },
@@ -275,11 +276,14 @@ async function loadArm(
 		);
 	}
 
+	const group = declared.record;
+
 	const frozen = await assertFrozenFiles(request, groupPath, group);
 	const reps = await loadRepRecords(request, groupPath, group);
 
 	return {
 		role: request.role,
+		declaredCaseId: declared.declaredCaseId,
 		group: {
 			path: relative(request.manifestDirectory, groupPath),
 			sha256: source.sha256,

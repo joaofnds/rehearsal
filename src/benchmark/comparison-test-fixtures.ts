@@ -194,6 +194,7 @@ function reportArmEvidence(
 
 	return {
 		role,
+		declaredCaseId: record.caseId,
 		group: {
 			path: `groups/${groupId}/group.json`,
 			sha256: "6".repeat(64),

@@ -88,6 +88,7 @@ function projectArm(
 
 	return {
 		role: arm.role,
+		declaredCaseId: arm.declaredCaseId,
 		group: arm.group,
 		reps: arm.reps,
 		executedCorpus,
@@ -230,14 +231,15 @@ function assertContract(comparison: Immutable<ContractComparison>): void {
  * The manifest names which declared case each triple of arms ran. A group that
  * recorded a different case answers a different question, so pairing it as an
  * arm of this case would contrast two tasks and call the difference a corpus
- * effect.
+ * effect. A group written before cases were declared recorded no case at all,
+ * which claims nothing and so contradicts nothing.
  */
 function assertArmRanTheCase(
 	caseId: string,
 	arm: Immutable<ComparisonArmEvidence>,
 ): void {
-	const recorded = arm.group.record.caseId;
-	if (recorded === caseId) {
+	const recorded = arm.declaredCaseId;
+	if (recorded === undefined || recorded === caseId) {
 		return;
 	}
 

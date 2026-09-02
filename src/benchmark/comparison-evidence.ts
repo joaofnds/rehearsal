@@ -21,6 +21,7 @@ export interface LoadedFrozenFile {
 
 export interface LoadedComparisonArmEvidence {
 	readonly role: ComparisonArm;
+	readonly declaredCaseId: string | undefined;
 	readonly group: DigestedRecord<Immutable<ConfirmationGroupRecord>>;
 	readonly reps: readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[];
 	readonly frozenFiles: readonly LoadedFrozenFile[];
@@ -34,6 +35,7 @@ export interface LoadedComparisonCaseEvidence {
 
 export interface ComparisonArmEvidence {
 	readonly role: ComparisonArm;
+	readonly declaredCaseId: string | undefined;
 	readonly group: DigestedRecord<Immutable<ConfirmationGroupRecord>>;
 	readonly reps: readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[];
 	readonly executedCorpus: readonly FrozenFile[];

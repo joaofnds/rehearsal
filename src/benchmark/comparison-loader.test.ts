@@ -12,7 +12,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { parseConfirmationRepRecord } from "./confirmation-record";
+import {
+	parseConfirmationGroupRecord,
+	parseConfirmationRepRecord,
+} from "./confirmation-record";
 import { writeComparisonReport } from "./comparison-command";
 import {
 	ComparisonEvidenceFixture,
@@ -223,6 +226,22 @@ describe(loadComparisonEvidence.name, () => {
 		expect(await Bun.file(symlinkTarget).text()).toBe("outside bytes\n");
 		const report = parseComparisonReport(await Bun.file(reportFile).text());
 		expect(report.cases).toHaveLength(2);
+	});
+
+	it("accepts legacy groups that recorded no case at all", async () => {
+		for (const caseId of ["case-1", "case-2"]) {
+			for (const role of ["baseline", "candidate", "control"] as const) {
+				const groupFile = fixture.groupFile(caseId, role);
+				const { caseId: _declared, ...legacy } = parseConfirmationGroupRecord(
+					await Bun.file(groupFile).text(),
+				);
+				await Bun.write(groupFile, `${JSON.stringify(legacy, null, 2)}\n`);
+			}
+		}
+
+		const evidence = await loadComparisonEvidence(fixture.manifestFile);
+
+		expect(evidence.cases.at(0)?.arms.candidate.declaredCaseId).toBeUndefined();
 	});
 
 	it("names in the report the case the source groups recorded", async () => {
