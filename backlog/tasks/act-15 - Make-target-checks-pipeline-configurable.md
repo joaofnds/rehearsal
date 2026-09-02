@@ -2,9 +2,10 @@
 id: ACT-15
 title: Make target checks pipeline-configurable
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 23:00'
-updated_date: '2026-09-01 23:35'
+updated_date: '2026-09-02 00:05'
 labels: []
 dependencies: []
 references:
