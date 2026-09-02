@@ -91,6 +91,31 @@ describe("sessionAttemptRecordSchema", () => {
 		);
 	});
 
+	/**
+	 * A record on disk is data, so the kind arrives as an unchecked string; the
+	 * compiler refuses this literal in typed code, which is the same guarantee
+	 * one layer earlier.
+	 */
+	it("refuses a result naming a check kind that does not exist", () => {
+		const parsed = sessionAttemptRecordSchema.safeParse({
+			...record({ checks: [] }),
+			checks: [{ kind: "typo-band", status: "PASS", detail: "1 word" }],
+		});
+
+		expect(parsed.success).toBe(false);
+	});
+
+	it.each(["word-band", "forbidden-text", "tool-calls", "files-read"])(
+		"accepts a result of the %s kind",
+		(kind) => {
+			expect(
+				sessionAttemptRecordSchema.safeParse(
+					record({ checks: [{ kind, status: "PASS", detail: "ok" }] }),
+				).success,
+			).toBe(true);
+		},
+	);
+
 	it("refuses a successful attempt whose check failed", () => {
 		const parsed = sessionAttemptRecordSchema.safeParse(
 			record({
