@@ -298,7 +298,9 @@ bun run benchmark
 
 `--pipeline` selects the pipeline definition and defaults to `pipelines/default.json`. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
 
-`--model` and `--effort` apply to every engineering stage and the shared PO. Judge defaults to the same values. Override it with `--judge-model` and `--judge-effort`, or `BENCHMARK_JUDGE_MODEL` and `BENCHMARK_JUDGE_EFFORT`.
+`--model` and `--effort` apply to every engineering stage and the shared PO. Judge defaults to `opus`, except that an Opus workflow defaults Judge to `sonnet`; this recognizes both native aliases and full Claude model IDs. An unrecognized workflow model also defaults Judge to `opus`.
+
+Override the model default with `BENCHMARK_JUDGE_MODEL` or `--judge-model`; the CLI flag wins when both are present. An explicit Judge in the same recognized model family as the workflow, or with the same unrecognized identifier, is allowed but prints a self-preference warning to stderr. Judge effort defaults to workflow effort and can be overridden with `BENCHMARK_JUDGE_EFFORT` or `--judge-effort`.
 
 Native Claude model aliases such as `sonnet` and `opus` are accepted. Use a full model ID only when a comparison must remain pinned to one exact model release. Supported effort values are `low`, `medium`, `high`, `xhigh`, and `max`.
 
