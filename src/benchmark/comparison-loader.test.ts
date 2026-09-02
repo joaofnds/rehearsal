@@ -27,7 +27,7 @@ import { runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
 import { loadComparisonEvidence } from "./comparison-evidence";
 import type { ComparisonArm } from "./comparison-record";
-import { comparisonReportPaths } from "./run-layout";
+import { benchmarkRunsDirectory, comparisonReportPaths } from "./run-layout";
 
 function digest(content: string): string {
 	return createHash("sha256").update(content).digest("hex");
@@ -644,12 +644,44 @@ describe(loadComparisonEvidence.name, () => {
 		expect(report.cases).toHaveLength(2);
 	});
 
+	it("serializes a completed comparison fixture byte for byte", async () => {
+		const runsDirectory = join(temporaryDirectory, "characterization-output");
+		await mkdir(runsDirectory);
+		const manifestSha = digest(await Bun.file(fixture.manifestFile).text());
+		const expectedReportFile = comparisonReportPaths(
+			runsDirectory,
+			manifestSha,
+		).reportFile;
+		const sourceBefore = await directoryDigests(
+			join(temporaryDirectory, "groups"),
+		);
+
+		const reportFile = await writeComparisonReport({
+			manifestPath: fixture.manifestFile,
+			runsDirectory,
+		});
+		const reportText = await Bun.file(reportFile).text();
+		const sourceAfter = await directoryDigests(
+			join(temporaryDirectory, "groups"),
+		);
+
+		expect(reportFile).toBe(expectedReportFile);
+		expect(reportText).toMatchSnapshot();
+		expect(reportText.endsWith("\n")).toBe(true);
+		expect(sourceAfter).toEqual(sourceBefore);
+	});
+
 	it("writes one read-only comparison report without external execution", async () => {
 		const trapsDirectory = join(temporaryDirectory, "traps");
 		const externalCallMarker = join(
 			temporaryDirectory,
 			"unexpected-external-call",
 		);
+		const manifestSha = digest(await Bun.file(fixture.manifestFile).text());
+		const expectedReportFile = comparisonReportPaths(
+			benchmarkRunsDirectory(CONTROL_DIR),
+			manifestSha,
+		).reportFile;
 		await mkdir(trapsDirectory);
 		for (const command of ["claude", "git"]) {
 			const trap = join(trapsDirectory, command);
@@ -676,16 +708,13 @@ describe(loadComparisonEvidence.name, () => {
 				},
 			},
 		);
-		writtenReportFile = output.trim().replace("Comparison report: ", "");
+		writtenReportFile = expectedReportFile;
 		const after = await directoryDigests(temporaryDirectory);
-		const report = parseComparisonReport(
-			await Bun.file(writtenReportFile).text(),
-		);
+		const reportText = await Bun.file(writtenReportFile).text();
+		const report = parseComparisonReport(reportText);
 
-		expect(output).toBe(`Comparison report: ${writtenReportFile}\n`);
-		expect(writtenReportFile).toContain(
-			join(".benchmark-runs", "comparisons", report.manifest.sha256),
-		);
+		expect(output).toBe(`Comparison report: ${expectedReportFile}\n`);
+		expect(report.manifest.sha256).toBe(manifestSha);
 		expect(report.cases).toHaveLength(2);
 		expect(after).toEqual(before);
 		expect(await Bun.file(externalCallMarker).exists()).toBe(false);

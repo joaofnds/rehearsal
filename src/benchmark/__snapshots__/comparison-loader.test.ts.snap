@@ -1,0 +1,2746 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`loadComparisonEvidence serializes a completed comparison fixture byte for byte 1`] = `
+"{
+  "schemaVersion": 2,
+  "judgeAgreement": {
+    "skippedCalibrations": 0,
+    "baselines": []
+  },
+  "manifest": {
+    "sha256": "b4391357dab54ceb0636c4dca9274c3c1ef7b8df2e796ae2f53c708d4cce71ed"
+  },
+  "mode": "stage",
+  "declaredStages": [
+    "build"
+  ],
+  "reps": 2,
+  "cases": [
+    {
+      "caseId": "case-1",
+      "arms": {
+        "baseline": {
+          "role": "baseline",
+          "source": {
+            "group": {
+              "path": "groups/case-1-baseline/group.json",
+              "sha256": "608f2ac8fefd3f14ea1c84167a576ab35c791868dd36f1c567af0557d24ab911"
+            },
+            "reps": [
+              {
+                "path": "groups/case-1-baseline/reps/case-1-baseline-rep-1/rep.json",
+                "sha256": "0de2d01b94cdc145bc69cff862c14a02d62546ed1940ae94b85729e99a6f6c48",
+                "repId": "case-1-baseline-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-1-baseline/reps/case-1-baseline-rep-2/rep.json",
+                "sha256": "263e5898add65a0b2676a3743d30f41dfc7d28859ab42f3511835e5689dd4e0d",
+                "repId": "case-1-baseline-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "51e9d6b5a31f8afb019ac34ff2de1f41f6fdeeab091004a95b7d387210cda615"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        },
+        "candidate": {
+          "role": "candidate",
+          "source": {
+            "group": {
+              "path": "groups/case-1-candidate/group.json",
+              "sha256": "a12edcb8fcd5c9457f08ebad22441114347175ca8446719cf3ecee06074804c2"
+            },
+            "reps": [
+              {
+                "path": "groups/case-1-candidate/reps/case-1-candidate-rep-1/rep.json",
+                "sha256": "360cfdd4e6db9e36f26103157d1982173b59b9fe4a33a015f2718e6b05573533",
+                "repId": "case-1-candidate-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-1-candidate/reps/case-1-candidate-rep-2/rep.json",
+                "sha256": "36fd0227815433476b0836989c011156a7b8321cfdfc58ee11e48826690a9740",
+                "repId": "case-1-candidate-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "087bdd2a5870ba41819ef35d942bc261b825bf8a41dde1a058d8052597701a75"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        },
+        "control": {
+          "role": "control",
+          "source": {
+            "group": {
+              "path": "groups/case-1-control/group.json",
+              "sha256": "8571c853dcad3ddfad972f1f0d1c18bb7407d1e6ff52eeb412fc443d7b395d7a"
+            },
+            "reps": [
+              {
+                "path": "groups/case-1-control/reps/case-1-control-rep-1/rep.json",
+                "sha256": "63bda45acb1331037cedf271e5ea1b866904f7bf67a90e6ebeb08916d46cba92",
+                "repId": "case-1-control-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-1-control/reps/case-1-control-rep-2/rep.json",
+                "sha256": "7c3dc8deb6f0abce5769f5991c89a41c077ec1b0ad79b556cbde65a485da262c",
+                "repId": "case-1-control-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "5f697bfc2b1bf622a285b70aa8ddbe1ce71084b6e25b9c6d4a1dab95dc48229e"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        }
+      }
+    },
+    {
+      "caseId": "case-2",
+      "arms": {
+        "baseline": {
+          "role": "baseline",
+          "source": {
+            "group": {
+              "path": "groups/case-2-baseline/group.json",
+              "sha256": "28adc686c3307e6d017f8d4dc54ae02288a7221bc430da149dbac9614adfbb99"
+            },
+            "reps": [
+              {
+                "path": "groups/case-2-baseline/reps/case-2-baseline-rep-1/rep.json",
+                "sha256": "134e9a979ff0a727433c311d88b48ee25a1b471198fab1d2deccc4fe57265088",
+                "repId": "case-2-baseline-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-2-baseline/reps/case-2-baseline-rep-2/rep.json",
+                "sha256": "d3c7df64840e589e955c89bac070842b3874346b3d87f2ffe997ec2ca7ced276",
+                "repId": "case-2-baseline-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "51e9d6b5a31f8afb019ac34ff2de1f41f6fdeeab091004a95b7d387210cda615"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        },
+        "candidate": {
+          "role": "candidate",
+          "source": {
+            "group": {
+              "path": "groups/case-2-candidate/group.json",
+              "sha256": "0b94968f15dedbb8dc785bb6e7621e0cf79b10c9239459c2e6c27e6a3f400ca0"
+            },
+            "reps": [
+              {
+                "path": "groups/case-2-candidate/reps/case-2-candidate-rep-1/rep.json",
+                "sha256": "7ac3d33775272211fcdc69620df2f4a2eed4999552635280245d80772cc8308c",
+                "repId": "case-2-candidate-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-2-candidate/reps/case-2-candidate-rep-2/rep.json",
+                "sha256": "4ce53bb076f55a85fd1cfeb67a6590464b9e4a97dbca017cd0407ba2f55b5b5f",
+                "repId": "case-2-candidate-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "087bdd2a5870ba41819ef35d942bc261b825bf8a41dde1a058d8052597701a75"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        },
+        "control": {
+          "role": "control",
+          "source": {
+            "group": {
+              "path": "groups/case-2-control/group.json",
+              "sha256": "ce641199a1322b8b1b277575037fa91c477a91158b5bef66aefd6240f7306af6"
+            },
+            "reps": [
+              {
+                "path": "groups/case-2-control/reps/case-2-control-rep-1/rep.json",
+                "sha256": "5a4823f0bf6efe7ff506c14aca4fb54140a629dd2e1333a7c3de38d36dd5c339",
+                "repId": "case-2-control-rep-1",
+                "ordinal": 1
+              },
+              {
+                "path": "groups/case-2-control/reps/case-2-control-rep-2/rep.json",
+                "sha256": "e80083e588f5c739e2c24e95c266baa7b9f6f1410206a263882e2ee0a71119b2",
+                "repId": "case-2-control-rep-2",
+                "ordinal": 2
+              }
+            ]
+          },
+          "executedCorpus": [
+            {
+              "path": "inputs/corpus/build/SKILL.md",
+              "sha256": "5f697bfc2b1bf622a285b70aa8ddbe1ce71084b6e25b9c6d4a1dab95dc48229e"
+            }
+          ],
+          "quality": [
+            {
+              "name": "build",
+              "requested": 2,
+              "attempted": 2,
+              "notReached": 0,
+              "failed": 0,
+              "successful": 2,
+              "gradeDistribution": {
+                "A": 2
+              },
+              "successRate": 1,
+              "standardError": 0,
+              "passK": 1
+            }
+          ],
+          "resources": {
+            "status": "AVAILABLE",
+            "completeReps": 2,
+            "missingMetricReps": 0,
+            "perRole": {
+              "worker": {
+                "costUsd": {
+                  "values": [
+                    1,
+                    2
+                  ],
+                  "mean": 1.5
+                },
+                "inputTokens": {
+                  "values": [
+                    10,
+                    20
+                  ],
+                  "mean": 15
+                },
+                "outputTokens": {
+                  "values": [
+                    2,
+                    4
+                  ],
+                  "mean": 3
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    3,
+                    6
+                  ],
+                  "mean": 4.5
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    4,
+                    8
+                  ],
+                  "mean": 6
+                }
+              },
+              "product-owner": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "stage-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              },
+              "final-judge": {
+                "costUsd": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "inputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "outputTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheReadTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                },
+                "cacheWriteTokens": {
+                  "values": [
+                    0,
+                    0
+                  ],
+                  "mean": 0
+                }
+              }
+            },
+            "total": {
+              "costUsd": {
+                "values": [
+                  1,
+                  2
+                ],
+                "mean": 1.5
+              },
+              "inputTokens": {
+                "values": [
+                  10,
+                  20
+                ],
+                "mean": 15
+              },
+              "outputTokens": {
+                "values": [
+                  2,
+                  4
+                ],
+                "mean": 3
+              },
+              "cacheReadTokens": {
+                "values": [
+                  3,
+                  6
+                ],
+                "mean": 4.5
+              },
+              "cacheWriteTokens": {
+                "values": [
+                  4,
+                  8
+                ],
+                "mean": 6
+              }
+            },
+            "workerTurns": {
+              "values": [
+                1,
+                2
+              ],
+              "mean": 1.5
+            }
+          }
+        }
+      }
+    }
+  ],
+  "contrasts": {
+    "candidateMinusBaseline": {
+      "minuend": "candidate",
+      "subtrahend": "baseline",
+      "quality": [
+        {
+          "name": "build",
+          "successRate": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "passK": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        }
+      ],
+      "resources": {
+        "status": "AVAILABLE",
+        "perRole": {
+          "worker": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "product-owner": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "stage-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "final-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          }
+        },
+        "total": {
+          "costUsd": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "inputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "outputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheReadTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheWriteTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        },
+        "workerTurns": {
+          "caseDeltas": [
+            {
+              "caseId": "case-1",
+              "value": 0
+            },
+            {
+              "caseId": "case-2",
+              "value": 0
+            }
+          ],
+          "meanDelta": 0,
+          "standardError": 0
+        }
+      }
+    },
+    "candidateMinusControl": {
+      "minuend": "candidate",
+      "subtrahend": "control",
+      "quality": [
+        {
+          "name": "build",
+          "successRate": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "passK": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        }
+      ],
+      "resources": {
+        "status": "AVAILABLE",
+        "perRole": {
+          "worker": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "product-owner": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "stage-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "final-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          }
+        },
+        "total": {
+          "costUsd": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "inputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "outputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheReadTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheWriteTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        },
+        "workerTurns": {
+          "caseDeltas": [
+            {
+              "caseId": "case-1",
+              "value": 0
+            },
+            {
+              "caseId": "case-2",
+              "value": 0
+            }
+          ],
+          "meanDelta": 0,
+          "standardError": 0
+        }
+      }
+    },
+    "baselineMinusControl": {
+      "minuend": "baseline",
+      "subtrahend": "control",
+      "quality": [
+        {
+          "name": "build",
+          "successRate": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "passK": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        }
+      ],
+      "resources": {
+        "status": "AVAILABLE",
+        "perRole": {
+          "worker": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "product-owner": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "stage-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          },
+          "final-judge": {
+            "costUsd": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "inputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "outputTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheReadTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            },
+            "cacheWriteTokens": {
+              "caseDeltas": [
+                {
+                  "caseId": "case-1",
+                  "value": 0
+                },
+                {
+                  "caseId": "case-2",
+                  "value": 0
+                }
+              ],
+              "meanDelta": 0,
+              "standardError": 0
+            }
+          }
+        },
+        "total": {
+          "costUsd": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "inputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "outputTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheReadTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          },
+          "cacheWriteTokens": {
+            "caseDeltas": [
+              {
+                "caseId": "case-1",
+                "value": 0
+              },
+              {
+                "caseId": "case-2",
+                "value": 0
+              }
+            ],
+            "meanDelta": 0,
+            "standardError": 0
+          }
+        },
+        "workerTurns": {
+          "caseDeltas": [
+            {
+              "caseId": "case-1",
+              "value": 0
+            },
+            {
+              "caseId": "case-2",
+              "value": 0
+            }
+          ],
+          "meanDelta": 0,
+          "standardError": 0
+        }
+      }
+    }
+  }
+}
+"
+`;
