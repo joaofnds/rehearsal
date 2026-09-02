@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import {
 	assertPlanningStageCompleted,
 	createTaskCommit,
@@ -26,6 +25,7 @@ import { withPipeline } from "#benchmark/case";
 import type { BenchmarkConfig } from "#benchmark/config";
 import {
 	CONTROL_DIR,
+	readProjectInstructions,
 	judgeSelfPreferenceWarning,
 	parseArgs,
 	parseCaseId,
@@ -183,7 +183,7 @@ async function confirmRun(
 	const [controlSha, source, instructions] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
-		Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+		readProjectInstructions(),
 	]);
 	validateRubricDefinition(benchmarkCase.finalRubric);
 

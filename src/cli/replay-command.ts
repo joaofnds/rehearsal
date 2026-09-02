@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import {
 	loadAttempts,
 	LineageMismatchError,
@@ -27,6 +26,7 @@ import { runCommand } from "#benchmark/command";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {
 	CONTROL_DIR,
+	readProjectInstructions,
 	judgeSelfPreferenceWarning,
 	parseReplayArgs,
 } from "#benchmark/config";
@@ -212,7 +212,7 @@ export async function executeReplay(
 	const replayRequest: ReplayRequest = {
 		paths,
 		stage: config.stage,
-		instructions: await Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+		instructions: await readProjectInstructions(),
 		controlSha: await currentControlSha(),
 		model: config.model,
 		effort: config.effort,

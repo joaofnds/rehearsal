@@ -10,6 +10,17 @@ export const HARNESS_RUBRIC_IDS = ["check-integrity", "local-checks"] as const;
 export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
 export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 
+/**
+ * The project instructions under evaluation. They are corpus, not case, so
+ * they stay at the control root while a case's own inputs live under
+ * `cases/<id>/`; every reader goes through here so the corpus has one home.
+ */
+export const PROJECT_INSTRUCTIONS_PATH = resolve(CONTROL_DIR, "CLAUDE.md");
+
+export function readProjectInstructions(): Promise<string> {
+	return Bun.file(PROJECT_INSTRUCTIONS_PATH).text();
+}
+
 export const DEFAULT_CASE_ID = "audit-log";
 
 /**

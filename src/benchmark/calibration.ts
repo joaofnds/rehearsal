@@ -1,7 +1,6 @@
-import { join } from "node:path";
 import { CommandError } from "./command";
 import type { Effort, WorkflowStage } from "./config";
-import { CONTROL_DIR } from "./config";
+import { PROJECT_INSTRUCTIONS_PATH, readProjectInstructions } from "./config";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -259,8 +258,8 @@ export async function collectCalibration(
 ): Promise<CalibrationResult> {
 	await writeHumanReviewTemplate(context.reviewFile);
 	const editTargets = context.finalCandidate
-		? `${join(CONTROL_DIR, "CLAUDE.md")}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
-		: `${join(CONTROL_DIR, "CLAUDE.md")} and/or the relevant file under ${context.rubricsDirectory}`;
+		? `${PROJECT_INSTRUCTIONS_PATH}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
+		: `${PROJECT_INSTRUCTIONS_PATH} and/or the relevant file under ${context.rubricsDirectory}`;
 
 	while (true) {
 		await context.rl.question(
@@ -274,7 +273,7 @@ export async function collectCalibration(
 			const [updatedInstructions, updatedRubric] = await asCalibrationInput(
 				() =>
 					Promise.all([
-						Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+						readProjectInstructions(),
 						Bun.file(context.finalRubricPath).text(),
 					]),
 			);

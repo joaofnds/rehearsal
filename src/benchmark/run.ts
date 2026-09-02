@@ -32,7 +32,7 @@ import {
 import { killActiveCommands, runCommand } from "./command";
 import type { BenchmarkCase } from "./case";
 import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
-import { CONTROL_DIR } from "./config";
+import { CONTROL_DIR, readProjectInstructions } from "./config";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -735,7 +735,7 @@ export async function runBenchmark(
 		);
 		const { task, productBrief, finalRubric: rubric } = benchmarkCase;
 		const [instructions, claudeVersion] = await Promise.all([
-			Bun.file(join(CONTROL_DIR, "CLAUDE.md")).text(),
+			readProjectInstructions(),
 			runCommand(["claude", "--version"], CONTROL_DIR),
 		]);
 		const rubricIds = validateRubricDefinition(rubric);
