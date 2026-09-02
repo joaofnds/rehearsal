@@ -1,11 +1,11 @@
 ---
 id: ACT-15
 title: Make target checks pipeline-configurable
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 23:00'
-updated_date: '2026-09-02 00:05'
+updated_date: '2026-09-02 01:07'
 labels: []
 dependencies: []
 references:
@@ -34,14 +34,14 @@ Today the harness runs three fixed Bun commands with one fixed CONFIG_PATH and h
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Loading a newly authored pipeline accepts a required target block containing a non-empty ordered checks list, where every check has a non-empty argument-vector command and optional string environment values, plus a non-empty unique list of target-relative integrity files; absent, empty, unknown, duplicate, absolute, or traversing definitions are rejected before target mutation or provider calls.
-- [ ] #2 A normal run and pipeline confirmation using a custom target block execute only its declared checks, in declaration order and with each check environment overlaid on the host environment, at the existing baseline point before task setup or provider calls; a failed baseline check stops the run there.
-- [ ] #3 Normal delivery, delivery replay, pipeline confirmation, and replay confirmation execute the recorded pipeline target checks after delivery validation; all successful commands produce authoritative local-checks PASS, while a failed command produces authoritative FAIL evidence naming that command.
-- [ ] #4 Check integrity passes when every declared baseline file still exists with identical bytes, fails with each declared path that was changed or deleted, and ignores undeclared files; a declared file missing at baseline is rejected before workflow mutation or provider calls.
-- [ ] #5 The default pipeline executes the current bun run typecheck, bun run check, and bun run test:unit commands with CONFIG_PATH=src/config/test.yaml and protects package.json, tsconfig.json, and biome.json.
-- [ ] #6 Run manifests and frozen pipeline-confirmation inputs contain the resolved target configuration; replay uses the configuration recorded by its run, and comparison refuses arms whose frozen target configurations differ.
-- [ ] #7 A stored run manifest that predates the target block loads with the former three commands, environment, and integrity files, while a newly authored pipeline without the target block is rejected.
-- [ ] #8 README Final Grading and rubric.md describe pipeline-declared target checks and check-integrity files, retaining the local-checks and check-integrity rubric IDs and presenting the default target configuration only as an example.
+- [x] #1 Loading a newly authored pipeline accepts a required target block containing a non-empty ordered checks list, where every check has a non-empty argument-vector command and optional string environment values, plus a non-empty unique list of target-relative integrity files; absent, empty, unknown, duplicate, absolute, or traversing definitions are rejected before target mutation or provider calls.
+- [x] #2 A normal run and pipeline confirmation using a custom target block execute only its declared checks, in declaration order and with each check environment overlaid on the host environment, at the existing baseline point before task setup or provider calls; a failed baseline check stops the run there.
+- [x] #3 Normal delivery, delivery replay, pipeline confirmation, and replay confirmation execute the recorded pipeline target checks after delivery validation; all successful commands produce authoritative local-checks PASS, while a failed command produces authoritative FAIL evidence naming that command.
+- [x] #4 Check integrity passes when every declared baseline file still exists with identical bytes, fails with each declared path that was changed or deleted, and ignores undeclared files; a declared file missing at baseline is rejected before workflow mutation or provider calls.
+- [x] #5 The default pipeline executes the current bun run typecheck, bun run check, and bun run test:unit commands with CONFIG_PATH=src/config/test.yaml and protects package.json, tsconfig.json, and biome.json.
+- [x] #6 Run manifests and frozen pipeline-confirmation inputs contain the resolved target configuration; replay uses the configuration recorded by its run, and comparison refuses arms whose frozen target configurations differ.
+- [x] #7 A stored run manifest that predates the target block loads with the former three commands, environment, and integrity files, while a newly authored pipeline without the target block is rejected.
+- [x] #8 README Final Grading and rubric.md describe pipeline-declared target checks and check-integrity files, retaining the local-checks and check-integrity rubric IDs and presenting the default target configuration only as an example.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -66,4 +66,24 @@ Shaping decisions and resolved unknowns:
 - Open questions: none.
 
 First test to write: in src/benchmark/checks.test.ts, configure two harmless Bun commands that append their distinct environment values to one marker file, call runChecks with that configuration, and assert the marker records declaration order. Predict RED because runChecks currently accepts no target configuration and invokes the three fixed package scripts.
+
+## Build handoff
+
+Changed: Pipeline definitions now require a strict target block with ordered argument-vector checks, per-check environment overlays, and unique safe target-relative integrity files. Normal runs, pipeline confirmations, delivery replays, and replay confirmations use the recorded target configuration for baseline and delivery evidence. Manifests persist the resolved target; pre-target manifests resolve the former NestJS configuration only at load time. Frozen pipelines control comparison compatibility. The default pipeline, README, and rubric carry the declared contract.
+
+Available but unwired: none. Every production baseline, delivery, replay, and confirmation caller uses the recorded target; no caller remains on the former fixed check path.
+
+Observed: bun test passed 396 tests with 808 expectations. bun run typecheck, bun run lint, bun run fmt:check, and git diff --check da59b30..HEAD passed. A direct production-API run printed ORDER=first:configured:host, INTEGRITY=PASS->FAIL, ALIASED_DUPLICATE=rejected, and LAUNCH_FAILURE_PATH=act-15-command-does-not-exist. No paid provider call or full live benchmark was run.
+
+Defects encountered: the first focused batch exposed a test fixture declaring package.json in a repository that only contained base.txt; the strict missing-baseline guard rejected it, and the fixture now declares its real file. No separate backlog task was needed.
+
+Refactor pass: localized the former target defaults to the legacy manifest adapter; general harness configuration no longer owns target-specific defaults.
+
+Independent review: required and completed because pipeline input is an untrusted command-execution boundary. Two blocking findings were fixed: normalized path aliases now count as duplicate integrity files, and launch failures retain the declared command in FAIL evidence. Two should-fix test findings were fixed: environment precedence now proves configured values override a host key while retaining unrelated host values; normal-run baseline, delivery replay confirmation, and the complete default target are pinned. One should-fix scope finding was not a defect: ACT-8 changes came from concurrent commits 1abaed6 and 582e3ea and were not modified. Style, architecture, spec, security, testing, and refactoring axes were all reviewed; no axis was skipped. No review finding remains open.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Made target grading pipeline-configurable across normal runs, confirmations, and replays. Strict target parsing rejects unsafe or ambiguous declarations; authoritative delivery evidence names failed commands and compares exactly the declared files; manifests preserve new and legacy runs; comparison freezes the target contract; the default pipeline and documentation now describe the NestJS configuration as an example. Independent review findings were resolved. Final verification passed 396 tests, typecheck, lint, format, and diff checks; direct execution observed ordered environment overlays, PASS-to-FAIL integrity on deletion, duplicate-alias rejection, and launch-failure command evidence.
+<!-- SECTION:FINAL_SUMMARY:END -->
