@@ -34,7 +34,12 @@ import {
 	runFinalJudge,
 	runGradedStages,
 } from "./run";
-import { PROJECT_ROOT, TestResources, harnessResult } from "./test-support";
+import {
+	PROJECT_ROOT,
+	TEST_TARGET,
+	TestResources,
+	harnessResult,
+} from "./test-support";
 import type { PendingStage, RunArtifactPersistence } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
 import {
@@ -750,6 +755,7 @@ describe(runGradedStages.name, () => {
 			...(await stageContext()),
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					planningStage("discuss", "spec", "rubrics/shape.json"),
 					planningStage("grill", "grilled", "rubrics/shape.json"),
@@ -773,6 +779,7 @@ describe(runGradedStages.name, () => {
 			...(await stageContext()),
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					planningStage("discuss", "spec", "rubrics/shape.json"),
 					planningStage("plan", "plan", "rubrics/shape.json"),
@@ -793,6 +800,7 @@ describe(runGradedStages.name, () => {
 			...(await stageContext()),
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "research",
@@ -827,6 +835,7 @@ describe(runGradedStages.name, () => {
 			...(await stageContext()),
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					planningStage("discuss", "spec", "rubrics/shape.json"),
 					planningStage("research", "findings", "rubrics/shape.json"),
@@ -1191,6 +1200,7 @@ describe(runGradedStages.name, () => {
 			...(await stageContext()),
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [deliveryStage],
 			},
 			calibrateStageFailure: (): Promise<CalibrationResult> =>

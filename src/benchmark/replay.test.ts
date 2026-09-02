@@ -30,7 +30,12 @@ import {
 import { benchmarkRunPaths } from "./run-layout";
 import { loadStageRubric } from "./stage-grading";
 import { addWorktree, removeWorktree } from "./target";
-import { TestResources, commitAll, harnessResult } from "./test-support";
+import {
+	TEST_TARGET,
+	TestResources,
+	commitAll,
+	harnessResult,
+} from "./test-support";
 import {
 	ReplayConfirmationHarness,
 	replayScorecard,
@@ -88,6 +93,7 @@ describe(resolveReplay.name, () => {
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "discuss",
@@ -304,6 +310,7 @@ describe(runReplay.name, () => {
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "discuss",
@@ -682,6 +689,7 @@ describe(runReplay.name, () => {
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "discuss",

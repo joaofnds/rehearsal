@@ -21,7 +21,7 @@ describe(runChecks.name, () => {
 		const script = [
 			"const path = 'checks.log';",
 			"const previous = await Bun.file(path).exists() ? await Bun.file(path).text() : '';",
-			"await Bun.write(path, `${previous}${Bun.env.CHECK_VALUE}:${Bun.env.PATH === undefined ? 'missing' : 'host'}\\n`);",
+			String.raw`await Bun.write(path, previous + Bun.env.CHECK_VALUE + ':' + (Bun.env.PATH === undefined ? 'missing' : 'host') + '\n');`,
 		].join(" ");
 
 		await runChecks(source.directory, "Custom checks", [

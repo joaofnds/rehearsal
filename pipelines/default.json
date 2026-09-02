@@ -1,6 +1,23 @@
 {
 	"statuses": ["To Do", "Shape", "Build", "Review", "Ship", "Done"],
 	"commitSubjectPattern": "^[a-z]+(?:\\([^)]+\\))?!?: .+",
+	"target": {
+		"checks": [
+			{
+				"command": ["bun", "run", "typecheck"],
+				"env": { "CONFIG_PATH": "src/config/test.yaml" }
+			},
+			{
+				"command": ["bun", "run", "check"],
+				"env": { "CONFIG_PATH": "src/config/test.yaml" }
+			},
+			{
+				"command": ["bun", "run", "test:unit"],
+				"env": { "CONFIG_PATH": "src/config/test.yaml" }
+			}
+		],
+		"integrityFiles": ["package.json", "tsconfig.json", "biome.json"]
+	},
 	"stages": [
 		{
 			"name": "shape",

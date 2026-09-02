@@ -1,7 +1,26 @@
 import { z } from "zod";
-import { effortSchema } from "./config";
+import { CHECK_PATHS, TEST_CONFIG_PATH, effortSchema } from "./config";
 import { pipelineDefinitionSchema } from "./pipeline";
+import type { TargetDefinition } from "./pipeline";
 import type { Immutable } from "./contracts";
+
+const LEGACY_TARGET_DEFINITION = {
+	checks: [
+		{
+			command: ["bun", "run", "typecheck"],
+			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+		},
+		{
+			command: ["bun", "run", "check"],
+			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+		},
+		{
+			command: ["bun", "run", "test:unit"],
+			env: { CONFIG_PATH: TEST_CONFIG_PATH },
+		},
+	],
+	integrityFiles: CHECK_PATHS,
+} satisfies TargetDefinition;
 
 /**
  * Written when the run starts, not when it ends: a run that dies mid-pipeline
@@ -28,6 +47,10 @@ const runManifestSchema = z
 	})
 	.strict();
 
+const legacyRunManifestSchema = runManifestSchema.extend({
+	pipeline: pipelineDefinitionSchema.omit({ target: true }),
+});
+
 export type RunManifest = Immutable<z.infer<typeof runManifestSchema>>;
 
 export async function writeRunManifest(
@@ -46,5 +69,22 @@ export async function loadRunManifest(path: string): Promise<RunManifest> {
 		);
 	}
 
-	return runManifestSchema.parse(JSON.parse(await file.text()));
+	const document: unknown = JSON.parse(await file.text());
+	const current = runManifestSchema.safeParse(document);
+	if (current.success) {
+		return current.data;
+	}
+
+	const legacy = legacyRunManifestSchema.safeParse(document);
+	if (!legacy.success) {
+		return runManifestSchema.parse(document);
+	}
+
+	return runManifestSchema.parse({
+		...legacy.data,
+		pipeline: {
+			...legacy.data.pipeline,
+			target: LEGACY_TARGET_DEFINITION,
+		},
+	});
 }

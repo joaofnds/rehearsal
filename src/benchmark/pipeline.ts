@@ -40,27 +40,63 @@ const stageDefinitionSchema = z.discriminatedUnion("kind", [
 		.strict(),
 ]);
 
-export const pipelineDefinitionSchema = z.object({
-	statuses: z.array(z.string().min(1)).min(1),
-	commitSubjectPattern: z
-		.string()
-		.min(1)
-		.refine((pattern) => {
-			try {
-				return new RegExp(pattern, "u") instanceof RegExp;
-			} catch {
-				return false;
-			}
-		}, "must be a valid regular expression")
-		.optional(),
-	stages: z.array(stageDefinitionSchema).min(1),
-});
+const targetRelativePathSchema = z
+	.string()
+	.min(1)
+	.refine(
+		(path) =>
+			!/^(?:[\\/]|[a-z]:)/iu.test(path) && !path.split(/[\\/]/u).includes(".."),
+		"must be a target-relative path without traversal",
+	);
+
+const targetCheckSchema = z
+	.object({
+		command: z.array(z.string().min(1)).min(1),
+		env: z.record(z.string(), z.string()).optional(),
+	})
+	.strict();
+
+const targetDefinitionSchema = z
+	.object({
+		checks: z.array(targetCheckSchema).min(1),
+		integrityFiles: z
+			.array(targetRelativePathSchema)
+			.min(1)
+			.refine(
+				(paths) => new Set(paths).size === paths.length,
+				"must contain unique paths",
+			),
+	})
+	.strict();
+
+export const pipelineDefinitionSchema = z
+	.object({
+		statuses: z.array(z.string().min(1)).min(1),
+		commitSubjectPattern: z
+			.string()
+			.min(1)
+			.refine((pattern) => {
+				try {
+					return new RegExp(pattern, "u") instanceof RegExp;
+				} catch {
+					return false;
+				}
+			}, "must be a valid regular expression")
+			.optional(),
+		target: targetDefinitionSchema,
+		stages: z.array(stageDefinitionSchema).min(1),
+	})
+	.strict();
 
 export type StageDefinition = Immutable<z.infer<typeof stageDefinitionSchema>>;
 export type StageKind = StageDefinition["kind"];
 export type PlanningStageDefinition = Extract<
 	StageDefinition,
 	{ kind: "planning" }
+>;
+export type TargetCheck = Immutable<z.infer<typeof targetCheckSchema>>;
+export type TargetDefinition = Immutable<
+	z.infer<typeof targetDefinitionSchema>
 >;
 export type PipelineDefinition = Immutable<
 	z.infer<typeof pipelineDefinitionSchema>

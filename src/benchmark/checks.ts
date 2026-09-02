@@ -8,11 +8,7 @@ import {
 	TEST_CONFIG_PATH,
 } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
-
-export interface TargetCheck {
-	readonly command: readonly string[];
-	readonly env?: Readonly<Record<string, string>> | undefined;
-}
+import type { TargetCheck } from "./pipeline";
 
 const DEFAULT_TARGET_CHECKS: readonly TargetCheck[] = [
 	{
@@ -80,7 +76,7 @@ export async function captureTreatmentChecks(
 
 export async function captureFileHashes(
 	directory: string,
-	integrityFiles?: readonly string[] | undefined,
+	integrityFiles?: readonly string[],
 ): Promise<Map<string, string>> {
 	const hashes = new Map<string, string>();
 	const paths = integrityFiles ?? CHECK_PATHS;

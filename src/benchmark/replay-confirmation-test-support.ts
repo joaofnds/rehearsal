@@ -13,7 +13,7 @@ import type { ReplayConfirmationRequest } from "./replay-confirmation";
 import { runReplayConfirmation } from "./replay-confirmation";
 import type { BenchmarkRunPaths } from "./run-layout";
 import { benchmarkRunPaths } from "./run-layout";
-import { commitAll, harnessResult } from "./test-support";
+import { TEST_TARGET, commitAll, harnessResult } from "./test-support";
 import { createProductOwner } from "./workflow";
 
 interface DirectoryTracker {
@@ -158,6 +158,7 @@ export class ReplayConfirmationHarness {
 			pipelinePath: "pipelines/default.json",
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "discuss",

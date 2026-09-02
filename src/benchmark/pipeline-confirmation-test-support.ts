@@ -30,7 +30,7 @@ import {
 	removeWorktree,
 } from "./target";
 import { createProductOwner } from "./workflow";
-import { commitAll, harnessResult } from "./test-support";
+import { TEST_TARGET, commitAll, harnessResult } from "./test-support";
 
 interface ConfirmationResources {
 	readonly track: (directory: string) => void;
@@ -62,6 +62,7 @@ export const CONFIRMATION_METRIC: ClaudeCallMetrics = {
 
 export const CONFIRMATION_PIPELINE: PipelineDefinition = {
 	statuses: ["To Do", "Done"],
+	target: TEST_TARGET,
 	stages: [
 		{
 			name: "discuss",

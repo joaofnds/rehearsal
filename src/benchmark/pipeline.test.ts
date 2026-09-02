@@ -43,6 +43,10 @@ describe(loadPipeline.name, () => {
 			absolute,
 			JSON.stringify({
 				statuses: ["To Do", "Done"],
+				target: {
+					checks: [{ command: ["bun", "run", "check"] }],
+					integrityFiles: ["package.json"],
+				},
 				stages: [
 					{
 						name: "ship",
@@ -63,6 +67,16 @@ describe(loadPipeline.name, () => {
 });
 
 describe(parsePipeline.name, () => {
+	const target = {
+		checks: [
+			{
+				command: ["bun", "run", "check"],
+				env: { CONFIG_PATH: "config/test.yaml" },
+			},
+		],
+		integrityFiles: ["package.json", "config/check.json"],
+	};
+
 	interface RawStageEntry {
 		readonly name: string | undefined;
 		readonly kind: string | undefined;
@@ -83,7 +97,7 @@ describe(parsePipeline.name, () => {
 	}
 
 	function pipeline(stages: readonly unknown[]): string {
-		return JSON.stringify({ statuses: ["To Do", "Done"], stages });
+		return JSON.stringify({ statuses: ["To Do", "Done"], target, stages });
 	}
 
 	const availableRubrics = [
@@ -103,6 +117,105 @@ describe(parsePipeline.name, () => {
 		skill: "build",
 		artifact: undefined,
 		rubric: "rubrics/build.json",
+	});
+
+	it("parses the required target checks and integrity files", () => {
+		const parsed = parse([stageEntry(), deliveryStage]);
+
+		expect(parsed).toMatchObject({ target });
+	});
+
+	it("rejects a pipeline without a target definition", () => {
+		expect(() =>
+			parsePipeline(
+				JSON.stringify({
+					statuses: ["To Do", "Done"],
+					stages: [stageEntry(), deliveryStage],
+				}),
+				availableRubrics,
+			),
+		).toThrow(/target/u);
+	});
+
+	it.each([
+		{ name: "empty checks", definition: { ...target, checks: [] } },
+		{
+			name: "an empty command",
+			definition: { ...target, checks: [{ command: [] }] },
+		},
+		{
+			name: "an empty command argument",
+			definition: { ...target, checks: [{ command: ["bun", ""] }] },
+		},
+		{
+			name: "a non-string environment value",
+			definition: {
+				...target,
+				checks: [{ command: ["bun"], env: { RETRIES: 2 } }],
+			},
+		},
+		{
+			name: "an unknown check field",
+			definition: {
+				...target,
+				checks: [{ command: ["bun"], environment: {} }],
+			},
+		},
+		{
+			name: "empty integrity files",
+			definition: { ...target, integrityFiles: [] },
+		},
+		{
+			name: "duplicate integrity files",
+			definition: {
+				...target,
+				integrityFiles: ["package.json", "package.json"],
+			},
+		},
+		{
+			name: "an absolute integrity file",
+			definition: { ...target, integrityFiles: ["/etc/hosts"] },
+		},
+		{
+			name: "a Windows absolute integrity file",
+			definition: {
+				...target,
+				integrityFiles: [String.raw`C:\checks.json`],
+			},
+		},
+		{
+			name: "a traversing integrity file",
+			definition: { ...target, integrityFiles: ["config/../package.json"] },
+		},
+		{
+			name: "an unknown target field",
+			definition: { ...target, root: "target" },
+		},
+	])("rejects $name", ({ definition }) => {
+		expect(() =>
+			parsePipeline(
+				JSON.stringify({
+					statuses: ["To Do", "Done"],
+					target: definition,
+					stages: [stageEntry(), deliveryStage],
+				}),
+				availableRubrics,
+			),
+		).toThrow(/target/u);
+	});
+
+	it("rejects an unknown pipeline field", () => {
+		expect(() =>
+			parsePipeline(
+				JSON.stringify({
+					statuses: ["To Do", "Done"],
+					target,
+					stages: [stageEntry(), deliveryStage],
+					unknown: true,
+				}),
+				availableRubrics,
+			),
+		).toThrow(/definition/u);
 	});
 
 	it("parses the four-stage default into ordered stages", () => {

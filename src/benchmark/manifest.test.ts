@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { RunManifest } from "./manifest";
 import { loadRunManifest, writeRunManifest } from "./manifest";
 import { benchmarkRunPaths } from "./run-layout";
-import { TestResources } from "./test-support";
+import { TEST_TARGET, TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
 
@@ -27,6 +27,7 @@ describe(loadRunManifest.name, () => {
 			sessionBudgetUsd: 5,
 			pipeline: {
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "discuss",
@@ -59,6 +60,38 @@ describe(loadRunManifest.name, () => {
 
 		expect(await loadRunManifest(paths.manifestFile)).toEqual(manifest);
 		expect(manifestStats.isFile()).toBe(true);
+	});
+
+	it("loads a pre-target manifest with the former target configuration", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		testResources.track(directory);
+		const paths = benchmarkRunPaths(directory, "run");
+		const manifest = manifestFixture();
+		const { target: _target, ...legacyPipeline } = manifest.pipeline;
+		await Bun.write(
+			paths.manifestFile,
+			`${JSON.stringify({ ...manifest, pipeline: legacyPipeline }, null, 2)}\n`,
+		);
+
+		const loaded = await loadRunManifest(paths.manifestFile);
+
+		expect(loaded.pipeline.target).toEqual({
+			checks: [
+				{
+					command: ["bun", "run", "typecheck"],
+					env: { CONFIG_PATH: "src/config/test.yaml" },
+				},
+				{
+					command: ["bun", "run", "check"],
+					env: { CONFIG_PATH: "src/config/test.yaml" },
+				},
+				{
+					command: ["bun", "run", "test:unit"],
+					env: { CONFIG_PATH: "src/config/test.yaml" },
+				},
+			],
+			integrityFiles: ["package.json", "tsconfig.json", "biome.json"],
+		});
 	});
 
 	it("names the missing manifest when the run predates manifests", async () => {

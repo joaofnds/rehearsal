@@ -4,8 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "./command";
 import type { LocalCheckResult } from "./contracts";
+import type { TargetDefinition } from "./pipeline";
 
 export const PROJECT_ROOT = join(import.meta.dir, "../..");
+export const TEST_TARGET: TargetDefinition = {
+	checks: [{ command: ["bun", "--version"] }],
+	integrityFiles: ["package.json"],
+};
 
 export interface TestRepository {
 	readonly directory: string;
