@@ -1,9 +1,15 @@
 import type { ConfirmationConfig } from "./config";
+import { unhandled } from "./contracts";
 import { MAX_JUDGE_ATTEMPTS } from "./judge-attempt";
 
 export type ConfirmationCostRequest =
 	| {
 			readonly mode: "stage";
+			readonly reps: number;
+			readonly sessionBudgetUsd: number;
+	  }
+	| {
+			readonly mode: "session";
 			readonly reps: number;
 			readonly sessionBudgetUsd: number;
 	  }
@@ -20,13 +26,32 @@ export interface ConfirmationCostProjection {
 	readonly totalMaximumUsd: number;
 }
 
+/**
+ * A session case's rep is one provider call and a deterministic check list, so
+ * its projection is reps x one session at the budget: no Judge attempts, no
+ * Product Owner, nothing else to pay for.
+ */
+function sessionsPerRepFor(request: ConfirmationCostRequest): number {
+	switch (request.mode) {
+		case "session": {
+			return 1;
+		}
+		case "stage": {
+			return 2 + MAX_JUDGE_ATTEMPTS;
+		}
+		case "pipeline": {
+			return (1 + MAX_JUDGE_ATTEMPTS) * request.stages + 1 + MAX_JUDGE_ATTEMPTS;
+		}
+		default: {
+			return unhandled(request, "confirmation mode");
+		}
+	}
+}
+
 export function projectConfirmationCost(
 	request: ConfirmationCostRequest,
 ): ConfirmationCostProjection {
-	const sessionsPerRep =
-		request.mode === "stage"
-			? 2 + MAX_JUDGE_ATTEMPTS
-			: (1 + MAX_JUDGE_ATTEMPTS) * request.stages + 1 + MAX_JUDGE_ATTEMPTS;
+	const sessionsPerRep = sessionsPerRepFor(request);
 	const perRepMaximumUsd = sessionsPerRep * request.sessionBudgetUsd;
 
 	return {

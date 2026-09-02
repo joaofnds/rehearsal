@@ -2,6 +2,16 @@ import { z } from "zod";
 import { effortSchema, LEGACY_CASE_ID } from "./config";
 import { claudeCallMetricsSchema, stageLetterGradeSchema } from "./contracts";
 
+/**
+ * The three units a confirmation group repeats: one stage from a checkpoint,
+ * the whole pipeline, or one Claude session. Both the rep and group records
+ * and the comparison report read it from here, so there is one home for the
+ * vocabulary rather than three enums that can drift apart.
+ */
+export const confirmationModeSchema = z.enum(["stage", "pipeline", "session"]);
+
+export type ConfirmationMode = z.infer<typeof confirmationModeSchema>;
+
 const identitySchema = z
 	.string()
 	.regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u, "Invalid confirmation identity");
@@ -126,7 +136,7 @@ export const confirmationRepRecordSchema = z
 		groupId: identitySchema,
 		repId: identitySchema,
 		ordinal: z.number().int().positive(),
-		mode: z.enum(["stage", "pipeline"]),
+		mode: confirmationModeSchema,
 		worktreePath: z.string().min(1),
 		lineage: lineageSchema,
 		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL"]),
@@ -179,10 +189,10 @@ export const confirmationRepRecordSchema = z
 				(stage.grade === "A" || stage.grade === "B"),
 		);
 		const finalPassed =
-			record.mode === "stage"
-				? record.finalOutcome.status === "NOT_APPLICABLE"
-				: record.finalOutcome.status === "JUDGED" &&
-					record.finalOutcome.verdict === "PASS";
+			record.mode === "pipeline"
+				? record.finalOutcome.status === "JUDGED" &&
+					record.finalOutcome.verdict === "PASS"
+				: record.finalOutcome.status === "NOT_APPLICABLE";
 		if (!stagesPassed || !finalPassed) {
 			context.addIssue({
 				code: "custom",
@@ -250,7 +260,7 @@ export const confirmationGroupRecordSchema = z
 		schemaVersion: z.literal(1),
 		caseId: legacyCaseIdSchema,
 		groupId: identitySchema,
-		mode: z.enum(["stage", "pipeline"]),
+		mode: confirmationModeSchema,
 		reps: z.number().int().min(2),
 		declaredStages: z.array(z.string().min(1)).min(1),
 		inputs: frozenInputsSchema,

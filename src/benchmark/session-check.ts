@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Immutable } from "./contracts";
+import { unhandled } from "./contracts";
 import type { ToolUse } from "./transcript";
 import {
 	evaluateFilesRead,
@@ -36,15 +37,6 @@ export interface CheckEvidence {
 	readonly toolUses: readonly ToolUse[];
 }
 
-/**
- * A `default` the guard requires, written so it cannot swallow a new kind: the
- * parameter's `never` type makes an unhandled member a compile error, and the
- * throw is only reachable for a value the schema could not have produced.
- */
-function unhandledCheck(check: never): never {
-	throw new Error(`Unhandled check ${JSON.stringify(check)}`);
-}
-
 function evaluateCheck(
 	check: Immutable<Check>,
 	evidence: Immutable<CheckEvidence>,
@@ -63,7 +55,7 @@ function evaluateCheck(
 			return evaluateFilesRead(check, evidence.toolUses);
 		}
 		default: {
-			return unhandledCheck(check);
+			return unhandled(check, "check kind");
 		}
 	}
 }

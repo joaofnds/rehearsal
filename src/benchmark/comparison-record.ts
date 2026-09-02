@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { confirmationModeSchema } from "./confirmation-record";
 import type { Immutable } from "./contracts";
 import { judgeAgreementReportSchema } from "./judge-agreement";
 
@@ -304,7 +305,7 @@ const reportContrastSchema = z
 
 const comparisonReportFields = {
 	manifest: z.object({ sha256: sha256Schema }).strict(),
-	mode: z.enum(["stage", "pipeline"]),
+	mode: confirmationModeSchema,
 	declaredStages: z.array(z.string().min(1)).min(1),
 	reps: z.number().int().min(2),
 	cases: z.array(reportCaseSchema).min(2),

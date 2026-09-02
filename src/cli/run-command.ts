@@ -35,6 +35,10 @@ import {
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
+import {
+	projectConfirmationCost,
+	runRequestedExecution,
+} from "#benchmark/confirmation";
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { runStageJudge } from "#benchmark/stage-grading";
@@ -51,7 +55,10 @@ import {
 import type { SourceBaseline } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
-import { requireInteractiveStdin } from "#cli/interactive-stdin";
+import {
+	RefusedPreconditionError,
+	requireInteractiveStdin,
+} from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
@@ -329,21 +336,51 @@ async function confirmRun(
 	);
 }
 
-export async function executeSessionRun(
+/**
+ * A session confirmation group is not built yet, so the projection is shown
+ * and the group refused before any provider call rather than after: the
+ * ordering the vision asks for holds whether or not the group exists.
+ */
+export function executeSessionRun(
 	config: SessionRunConfig,
 	output: CommandOutput,
 	sessionCase: SessionCase,
 ): Promise<RunOutcome> {
-	output.stderr("single-rep evidence, not a score\n");
+	const questioner = terminalQuestioner();
 
-	const outcome = await runSessionDebugAttempt(
-		defaultSessionRunRequest(
-			sessionCase,
-			config,
-			benchmarkRunsDirectory(CONTROL_DIR),
-		),
-	);
-	reportSessionChecks(outcome.record, output);
+	return runRequestedExecution<RunOutcome>({
+		confirmation: config.confirmation,
+		projectCost: () =>
+			projectConfirmationCost({
+				mode: "session",
+				reps: config.confirmation?.reps ?? 1,
+				sessionBudgetUsd: config.sessionBudgetUsd,
+			}),
+		approval: {
+			output: (message) => {
+				output.stderr(`${message}\n`);
+			},
+			prompt: (message) => questioner.question(message),
+		},
+		runDebug: async () => {
+			const outcome = await runSessionDebugAttempt(
+				defaultSessionRunRequest(
+					sessionCase,
+					config,
+					benchmarkRunsDirectory(CONTROL_DIR),
+				),
+			);
+			reportSessionChecks(outcome.record, output);
 
-	return { kind: "debug", recordFile: outcome.recordFile };
+			return { kind: "debug", recordFile: outcome.recordFile };
+		},
+		runConfirmed: () =>
+			Promise.reject(
+				new RefusedPreconditionError(
+					"A session confirmation group is not built yet; run the case without --confirm",
+				),
+			),
+	}).finally(() => {
+		questioner.close();
+	});
 }

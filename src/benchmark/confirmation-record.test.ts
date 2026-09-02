@@ -121,6 +121,68 @@ describe(parseConfirmationRepRecord.name, () => {
 		);
 	});
 
+	it("accepts a session rep at schema version 1, with its checks as one stage", () => {
+		const base = completeRepRecord();
+		const record: ConfirmationRepRecord = {
+			...base,
+			caseId: "smoke",
+			mode: "session",
+			worktreePath: "/tmp/rehearsal-attempt-abc",
+			stages: [
+				{
+					stage: "checks",
+					status: "JUDGED",
+					grade: "A",
+					verdict: "CONTINUE",
+					elapsedMs: 1600,
+					evidence: {
+						resultSha: "a".repeat(40),
+						recordFile: "attempt.json",
+					},
+				},
+			],
+			finalOutcome: { status: "NOT_APPLICABLE" },
+		};
+
+		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
+	});
+
+	it("keeps a v1 stage rep parsing unchanged beside the session mode", () => {
+		const record: ConfirmationRepRecord = {
+			...completeRepRecord(),
+			mode: "stage",
+			finalOutcome: { status: "NOT_APPLICABLE" },
+		};
+
+		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
+	});
+
+	it("refuses a session rep called successful when its checks failed", () => {
+		const base = completeRepRecord();
+		const record = {
+			...base,
+			mode: "session",
+			finalOutcome: { status: "NOT_APPLICABLE" },
+			stages: [
+				{
+					stage: "checks",
+					status: "JUDGED",
+					grade: "F",
+					verdict: "STOP",
+					elapsedMs: 1600,
+					evidence: {
+						resultSha: "a".repeat(40),
+						recordFile: "attempt.json",
+					},
+				},
+			],
+		};
+
+		expect(() => parseConfirmationRepRecord(JSON.stringify(record))).toThrow(
+			"Successful reps require passing stage and final outcomes",
+		);
+	});
+
 	it("rejects a trajectory count that differs from worker turns", () => {
 		const record = {
 			...completeRepRecord(),
@@ -208,6 +270,28 @@ describe(parseConfirmationGroupRecord.name, () => {
 
 	it("keeps schema version 1 while carrying the case", () => {
 		expect(groupRecord().schemaVersion).toBe(1);
+	});
+
+	it("accepts a session group at schema version 1, with checks as its one stage", () => {
+		const record: ConfirmationGroupRecord = {
+			...groupRecord(),
+			caseId: "smoke",
+			mode: "session",
+			declaredStages: ["checks"],
+			projectedCost: { reps: 2, perRepMaximumUsd: 0.2, totalMaximumUsd: 0.4 },
+		};
+
+		expect(parseConfirmationGroupRecord(JSON.stringify(record))).toEqual(
+			record,
+		);
+	});
+
+	it("keeps a v1 stage group parsing unchanged beside the session mode", () => {
+		const record = groupRecord();
+
+		expect(parseConfirmationGroupRecord(JSON.stringify(record))).toEqual(
+			record,
+		);
 	});
 
 	it("rejects a group missing a requested rep record", () => {

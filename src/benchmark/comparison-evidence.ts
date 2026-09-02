@@ -1,5 +1,6 @@
 import type {
 	ConfirmationGroupRecord,
+	ConfirmationMode,
 	ConfirmationRepRecord,
 } from "./confirmation-record";
 import type { Immutable } from "./contracts";
@@ -49,7 +50,7 @@ export interface ComparisonCaseEvidence {
 }
 
 export interface ComparisonContract {
-	readonly mode: "stage" | "pipeline";
+	readonly mode: ConfirmationMode;
 	readonly declaredStages: readonly string[];
 	readonly reps: number;
 }

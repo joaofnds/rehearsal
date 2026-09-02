@@ -12,6 +12,16 @@ import type { PipelineDefinition, StageKind } from "./pipeline";
  * every derived type is wrapped here instead of sprinkling readonly through
  * each schema.
  */
+/**
+ * The `default` branch the lint rules require, written so it cannot swallow a
+ * new union member: the parameter's `never` type makes an unhandled case a
+ * compile error, and the throw is reachable only for a value the type says
+ * cannot exist.
+ */
+export function unhandled(value: never, subject: string): never {
+	throw new Error(`Unhandled ${subject}: ${JSON.stringify(value)}`);
+}
+
 export type Immutable<Value> = Value extends readonly (infer Element)[]
 	? readonly Immutable<Element>[]
 	: Value extends object
