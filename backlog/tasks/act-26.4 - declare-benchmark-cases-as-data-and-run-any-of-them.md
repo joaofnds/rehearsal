@@ -1,11 +1,11 @@
 ---
 id: ACT-26.4
 title: declare benchmark cases as data and run any of them
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 21:46'
+updated_date: '2026-09-02 22:13'
 labels: []
 dependencies: []
 references:
@@ -25,23 +25,23 @@ This is the prerequisite for ACT-26.5 and the first thing the scripts needed. Ga
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 cases/audit-log/case.json exists and declares kind pipeline; the task, product brief, final rubric, stage rubrics, and pipeline it names are files under cases/audit-log/, and backlog-seed.md, product-brief.md, rubric.md, rubrics/, and pipelines/ no longer exist at the control root
-- [ ] #2 A characterization test asserts the bytes loadCase("audit-log") returns for task, productBrief, finalRubric, each stage rubric, and the pipeline definition equal the bytes the control-root files held at the commit before the move
-- [ ] #3 bun run rehearsal case list exits 0 and prints one line per case directory, including audit-log with its declared title
-- [ ] #4 bun run rehearsal case show audit-log --json exits 0 and prints exactly the parsed case declaration as JSON, which the same zod schema that loaded it accepts, and stdout parses with JSON.parse
-- [ ] #5 bun run rehearsal case show missing exits 3 and names the unknown case on stderr, printing nothing on stdout
-- [ ] #6 bun run rehearsal run --case missing --target <dir> --model sonnet --session-budget-usd 1 exits 3 naming the unknown case, before the target is claimed: the target repository's git status is unchanged and no run directory is created under .benchmark-runs
-- [ ] #7 bun run rehearsal run --help lists --case with its default audit-log and its BENCHMARK_CASE environment variable
-- [ ] #8 A case declaration whose id does not equal its directory name is refused at load with an error naming both, and a case declaration naming a path outside its case directory (a leading slash or a .. segment) is refused with an error naming that path
-- [ ] #9 A run with --case absent and a run with --case audit-log produce the same loaded case: a test asserts the two resolved CaseDeclaration values are equal
-- [ ] #10 The run manifest, run artifact, confirmation group record, and confirmation rep record each carry caseId, and a test asserts a record written by a run of the audit-log case has caseId audit-log
-- [ ] #11 loadRunManifest, parseConfirmationGroupRecord, and parseConfirmationRepRecord each accept a record with no caseId and return caseId audit-log, and the confirmation records keep schemaVersion 1 while the comparison report keeps schemaVersion 2
-- [ ] #12 assertComparableComparison refuses a comparison whose manifest case names caseId X while one of its arm groups recorded a different caseId, with an error naming the case, the arm, and both ids
-- [ ] #13 The comparison report names the case each of its cases ran: a report built from groups that recorded caseId audit-log carries that id, and parseComparisonReport accepts it
-- [ ] #14 bun run rehearsal run --case audit-log --pipeline <other path> records the overriding pipeline path in the artifact, showing --pipeline still overrides the case's declared pipeline
-- [ ] #15 bun run rehearsal run --case audit-log with neither --target nor BENCHMARK_TARGET_DIR uses the target the case declares, and --target overrides it: a config parse test asserts both sourceDir values
-- [ ] #16 echo | bun run rehearsal run --case audit-log --confirm --reps 2 --yes --model sonnet --session-budget-usd 1 --target <nonexistent dir> loads the whole case (pipeline, both stage rubrics, task, brief, final rubric) and then fails on the target, with no provider call made
-- [ ] #17 The README describes cases/<id>/ as the case layout in every section that described the root files, and its Running section shows rehearsal run --case
+- [x] #1 cases/audit-log/case.json exists and declares kind pipeline; the task, product brief, final rubric, stage rubrics, and pipeline it names are files under cases/audit-log/, and backlog-seed.md, product-brief.md, rubric.md, rubrics/, and pipelines/ no longer exist at the control root
+- [x] #2 A characterization test asserts the bytes loadCase("audit-log") returns for task, productBrief, finalRubric, each stage rubric, and the pipeline definition equal the bytes the control-root files held at the commit before the move
+- [x] #3 bun run rehearsal case list exits 0 and prints one line per case directory, including audit-log with its declared title
+- [x] #4 bun run rehearsal case show audit-log --json exits 0 and prints exactly the parsed case declaration as JSON, which the same zod schema that loaded it accepts, and stdout parses with JSON.parse
+- [x] #5 bun run rehearsal case show missing exits 3 and names the unknown case on stderr, printing nothing on stdout
+- [x] #6 bun run rehearsal run --case missing --target <dir> --model sonnet --session-budget-usd 1 exits 3 naming the unknown case, before the target is claimed: the target repository's git status is unchanged and no run directory is created under .benchmark-runs
+- [x] #7 bun run rehearsal run --help lists --case with its default audit-log and its BENCHMARK_CASE environment variable
+- [x] #8 A case declaration whose id does not equal its directory name is refused at load with an error naming both, and a case declaration naming a path outside its case directory (a leading slash or a .. segment) is refused with an error naming that path
+- [x] #9 A run with --case absent and a run with --case audit-log produce the same loaded case: a test asserts the two resolved CaseDeclaration values are equal
+- [x] #10 The run manifest, run artifact, confirmation group record, and confirmation rep record each carry caseId, and a test asserts a record written by a run of the audit-log case has caseId audit-log
+- [x] #11 loadRunManifest, parseConfirmationGroupRecord, and parseConfirmationRepRecord each accept a record with no caseId and return caseId audit-log, and the confirmation records keep schemaVersion 1 while the comparison report keeps schemaVersion 2
+- [x] #12 assertComparableComparison refuses a comparison whose manifest case names caseId X while one of its arm groups recorded a different caseId, with an error naming the case, the arm, and both ids
+- [x] #13 The comparison report names the case each of its cases ran: a report built from groups that recorded caseId audit-log carries that id, and parseComparisonReport accepts it
+- [x] #14 bun run rehearsal run --case audit-log --pipeline <other path> records the overriding pipeline path in the artifact, showing --pipeline still overrides the case's declared pipeline
+- [x] #15 bun run rehearsal run --case audit-log with neither --target nor BENCHMARK_TARGET_DIR uses the target the case declares, and --target overrides it: a config parse test asserts both sourceDir values
+- [x] #16 echo | bun run rehearsal run --case audit-log --confirm --reps 2 --yes --model sonnet --session-budget-usd 1 --target <nonexistent dir> loads the whole case (pipeline, both stage rubrics, task, brief, final rubric) and then fails on the target, with no provider call made
+- [x] #17 The README describes cases/<id>/ as the case layout in every section that described the root files, and its Running section shows rehearsal run --case
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -283,4 +283,162 @@ The second test is `rehearsal case show missing` exits 3 with the case named on
 stderr and nothing on stdout, which forces the refused-precondition error type,
 the two-word command name in the table, and `findCommand`'s longest-match into
 existence together.
+
+## Decided autonomously at Build
+
+Each follows the dispatch's decision policy. The nine decisions the Shape record
+already carries stand; these are the ones Build had to add.
+
+1. **The loader and the move landed in one commit, not two.** The plan's step 2
+   declared the case with paths pointing at the control root for one commit.
+   That is impossible: the traversal refusal the same step introduces rejects
+   `../../backlog-seed.md`, and it fired the first time it ran. The
+   characterization instead reads the pre-move bytes from Git at
+   `ccfdeb017667a0a1db9027a5e014b7e5650b7935`, which is what criterion 2 asks
+   for and what makes the move provable without the intermediate commit.
+2. **`CaseDeclarationError` is a plain `Error`; the CLI turns it into the exit-3
+   refusal.** Reason: policy rule 2 and the existing precedent. No module under
+   `src/benchmark/` imports `#cli/`, and `src/cli/replay-command.ts:267` already
+   raises `RefusedPreconditionError` for the same shape of failure (a named but
+   absent run). `src/cli/case-command.ts`'s `asRefusedPrecondition` does the
+   translation in one place.
+3. **`--pipeline` resolves into the loaded case (`withPipeline`), not alongside
+   it.** Reason: a pipeline names its stages' rubrics, so overriding the pipeline
+   without reloading the stage rubrics would hand the run a pipeline its rubric
+   map no longer matches. The override produces a whole case.
+4. **The replay group's `caseId` comes from the run manifest it replays, not from
+   a flag.** Reason: a replay reruns that run's case by definition, and
+   `frozen.manifest` is already loaded where the records are built. It is not on
+   `ReplayConfirmationRequest`, so a caller cannot claim a different case.
+5. **`LEGACY_CASE_ID` and `DEFAULT_CASE_ID` live in `config.ts`, not `case.ts`.**
+   Reason: `manifest.ts` and `confirmation-record.ts` need the legacy default and
+   must not import `case.ts`, which pulls in `pipeline.ts` and
+   `stage-grading.ts`. `config.ts` already owns `CONTROL_DIR`.
+6. **The case loads before the stdin gate in `runRunCommand`.** Reason: the case
+   declares the target, so it must load before the configuration resolves. Both
+   refusals exit 3, and loading a case touches nothing, so the reordering costs
+   nothing observable. The test that asserted "refuses before loading the
+   pipeline" now asserts "refuses before the run starts".
+7. **The obsolete `runBenchmark` test "rejects a malformed pipeline before
+   claiming the target" was removed, not rewritten in place.** Reason:
+   `runBenchmark` no longer loads a pipeline. The behavior it protected still
+   holds and is now proven where it lives: `runRunCommand` loads the case (and
+   any `--pipeline` override) before `execute`, covered by "refuses an unknown
+   case before the run starts" in `src/cli/run-command.test.ts` and observed
+   directly against a real target repository (criterion 6).
+8. **`ComparisonEvidenceFixture` takes its case ids at construction.** Reason:
+   the new comparability rule requires each arm's group to record the case its
+   manifest entry names, and the oversized-manifest CLI test composes six fixture
+   roots into one manifest, which needs ids unique across them. Both sides now
+   read the ids from the fixture.
+9. **The `--target`-missing CLI test became a `--model`-missing test.** Reason:
+   with the case declaring a target, "Provide --target or BENCHMARK_TARGET_DIR"
+   is no longer reachable from a declared case. The exit-2 usage-error behavior
+   it protected is unchanged and is still covered, through the next required
+   flag.
+
+## Defect found and fixed
+
+Commit `b398a96` staged the rename of `pipelines/default.json` but not its
+content change, so at that commit the pipeline still named `rubrics/shape.json`
+and `rubrics/build.json` at the control root, where nothing exists any more, and
+`loadCase("audit-log")` failed on both stages. Caught by stashing the
+working-tree change and re-running `bun test src/benchmark/case.test.ts`, which
+went to 4 fail. Fixed forward in `fb71c6a`; history was not rewritten. The cause
+is `git add` on a path git had staged as a rename: the rename covers the path,
+not the later edit.
+
+## What changed
+
+- `src/benchmark/case.ts` is new: `caseDeclarationSchema` (a zod discriminated
+  union on `kind` with one member, `pipeline`), `parseCaseDeclaration`,
+  `readCaseDeclaration`, `listCases`, `loadCase`, `withPipeline`, and
+  `caseRelative`, which refuses any path resolving outside the case directory.
+- `cases/audit-log/` holds the moved `backlog-seed.md`, `product-brief.md`,
+  `rubric.md`, `rubrics/`, and `pipelines/`, plus `case.json`. Nothing of the
+  five remains at the control root.
+- `loadPipeline` takes its rubrics directory as a parameter. Stage `rubric`
+  strings stay control-relative (`cases/audit-log/rubrics/shape.json`), so
+  `inputs.pipelinePath` and the frozen-file paths comparability compares keep
+  one spelling.
+- `src/cli/case-command.ts` is new: `runCaseList`, `runCaseShow`, and
+  `requireCase`, the last of which is the run command's case loader.
+- `COMMANDS` gains `--case` on `run` and two two-word entries, `case list` and
+  `case show`. `findCommand` moved into `commands.ts` and matches the longest
+  declared name against the leading argv tokens.
+- `parseCaseId` is new; `parseArgs` takes a required `CaseDefaults` and resolves
+  the target from `--target`, then `BENCHMARK_TARGET_DIR`, then the case.
+- `caseId` is on the run manifest, the run artifact, and the confirmation group
+  and rep records. Optional with `LEGACY_CASE_ID` on the read side, required on
+  the write side through the record input types; no version bump.
+- `assertComparableComparison` gains `assertArmRanTheCase`.
+- `runBenchmark` and `confirmRun` take the loaded case instead of reading the
+  four root files themselves, which removed the duplication at `run.ts:735` and
+  `run-command.ts:152`. `collectCalibration` takes `finalRubricPath` and
+  `rubricsDirectory` rather than assuming the control root.
+- README, CLAUDE.md, and GLOSSARY.md describe the case layout, the two new
+  commands, and `--case`.
+
+## Refactor pass
+
+The task exposed the same duplication on the corpus half that the case loader
+removed on the case half: four modules built `join(CONTROL_DIR, "CLAUDE.md")`
+for themselves and a fifth interpolated it into calibration's edit-target
+message. `PROJECT_INSTRUCTIONS_PATH` and `readProjectInstructions` in
+`config.ts` are now the one home (`116f8f7`); `calibration.ts` and both CLI
+command modules no longer import `node:path` or `CONTROL_DIR` at all.
+
+## Observed directly, and how
+
+Every claim below is a tool result from this dispatch. No paid provider call was
+made, and none was needed; total spend on provider calls: $0.00.
+
+- `bun rehearsal.ts case list` printed `audit-log` with its title, exit 0.
+- `bun rehearsal.ts case show audit-log --json` printed the parsed declaration,
+  exit 0, stdout parsed with `JSON.parse`.
+- `bun rehearsal.ts case show missing` exited 3, stderr named the case, stdout
+  was 0 bytes.
+- `bun rehearsal.ts run --case missing --target <real git repo> ...` exited 3
+  naming the case; `git -C <target> status --porcelain` was empty afterwards and
+  `.benchmark-runs` gained no directory.
+- `bun rehearsal.ts run --help` listed `--case` with `default audit-log, env
+  BENCHMARK_CASE`.
+- Criterion 16 was observed twice over. `echo | ... run --case audit-log
+  --confirm --reps 2 --yes --target /nonexistent-target-dir` reached the cost
+  projection and then died on the target with no run directory created. That the
+  *whole* case loads first was proven by hiding each of the six inputs in turn
+  and re-running: each produced its own distinct failure (three ENOENTs naming
+  the moved files, two "names a missing rubric", one "Pipeline definition not
+  found"), every one of them before the cost-projection line.
+- `bun run typecheck`, `bun run lint`, `bun run fmt:check`, and `bun test` each
+  exited 0 at `116f8f7`, with 551 tests passing. `git status` is clean.
+
+## Not verified
+
+- No run, replay, confirmation, or comparison was executed against a live
+  provider, so the `caseId` on records written by a *real* session is proven by
+  `runPipelineConfirmation`'s fake-backed test, not by a recorded run on disk.
+  There is still no run artifact under `.benchmark-runs`.
+- The declared target `../../../nestjs-template` was never resolved to a real
+  repository; criterion 15's fallback is proven by the config parse test the
+  criterion names, not by a run against that path.
+- The legacy `caseId` path is proven by parsing synthesized legacy records; no
+  pre-change record exists on disk to read.
+
+## What became possible but is not wired up
+
+- A second declared case now has somewhere to go, but only `audit-log` exists.
+  `case list` iterating `cases/` will pick up a second directory with no code
+  change.
+- `case.json`'s `kind` is a discriminated union with one member, so ACT-26.5 adds
+  `session` as a second member rather than reshaping the type. Nothing else
+  branches on `kind` yet.
+- The empty `pipelines/` directory `git mv` left at the control root was removed
+  from the working tree; it was untracked and empty, so no commit records it.
+
+## Review
+
+Due. The change touches the record schemas every recorded run and comparison is
+read through, moves five committed files, and adds a comparability rule that can
+refuse evidence.
 <!-- SECTION:NOTES:END -->
