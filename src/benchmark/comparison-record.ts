@@ -344,3 +344,9 @@ export function parseComparisonReport(
 		])
 		.parse(JSON.parse(text));
 }
+
+export function serializeComparisonReport(
+	report: Immutable<ComparisonReport>,
+): string {
+	return `${JSON.stringify(comparisonReportSchema.parse(report), null, 2)}\n`;
+}

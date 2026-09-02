@@ -7,7 +7,10 @@ import {
 	filterJudgeAgreementReport,
 	loadJudgeAgreementReport,
 } from "./judge-agreement";
-import { COMPARISON_ARMS } from "./comparison-record";
+import {
+	COMPARISON_ARMS,
+	serializeComparisonReport,
+} from "./comparison-record";
 import { comparisonReportPaths } from "./run-layout";
 
 export interface WriteComparisonReportRequest {
@@ -80,7 +83,7 @@ export async function writeComparisonReport(
 	await mkdir(paths.directory, { recursive: true });
 	await writeReportAtomically(
 		paths.reportFile,
-		`${JSON.stringify(report, null, 2)}\n`,
+		serializeComparisonReport(report),
 	);
 
 	return paths.reportFile;

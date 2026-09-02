@@ -18,7 +18,10 @@ import {
 	buildComparisonResources,
 } from "./comparison-report";
 import type { ComparisonArm } from "./comparison-record";
-import { parseComparisonReport } from "./comparison-record";
+import {
+	parseComparisonReport,
+	serializeComparisonReport,
+} from "./comparison-record";
 import type { Immutable } from "./contracts";
 
 type StageFixtureOutcome = "pass" | "fail" | "error" | "not-reached";
@@ -679,6 +682,9 @@ describe(buildComparisonReport.name, () => {
 		const candidate = report.cases.at(0)?.arms.candidate;
 
 		expect(parseComparisonReport(JSON.stringify(report))).toEqual(report);
+		expect(serializeComparisonReport(report)).toBe(
+			`${JSON.stringify(report, null, 2)}\n`,
+		);
 		expect(report.schemaVersion).toBe(2);
 		expect(report.judgeAgreement).toEqual(judgeAgreement);
 		expect(report.manifest).toEqual({ sha256: "8".repeat(64) });
