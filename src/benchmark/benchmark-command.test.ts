@@ -79,12 +79,13 @@ describe(executeBenchmark.name, () => {
 		]);
 	});
 
-	it("routes the production CLI through approval before target access", async () => {
+	it("refuses the production CLI before target access when stdin is not a terminal", async () => {
 		const missingTarget = join(tmpdir(), `missing-target-${randomUUID()}`);
 		const child = Bun.spawn(
 			[
 				process.execPath,
-				"run-benchmark.ts",
+				"rehearsal.ts",
+				"run",
 				"--target",
 				missingTarget,
 				"--model",
@@ -95,7 +96,7 @@ describe(executeBenchmark.name, () => {
 			],
 			{
 				cwd: PROJECT_ROOT,
-				stdin: new Blob(["no\n"]),
+				stdin: new Blob([""]),
 				stdout: "pipe",
 				stderr: "pipe",
 			},
@@ -106,46 +107,11 @@ describe(executeBenchmark.name, () => {
 			new Response(child.stderr).text(),
 		]);
 
-		expect(exitCode).not.toBe(0);
-		expect(stdout).toContain("Projected maximum cost: $45.00");
-		expect(stderr).toContain("Confirmation declined");
+		expect(exitCode).toBe(3);
+		expect(stdout).toBe("");
+		expect(stderr).toContain("stdin is not a terminal");
+		expect(stderr).not.toContain("Projected maximum cost");
 		expect(stderr).not.toContain(missingTarget);
 		expect(stderr).not.toContain("Self-preference warning");
-	});
-
-	it("warns once before continuing with an explicit same-family Judge", async () => {
-		const child = Bun.spawn(
-			[
-				process.execPath,
-				"run-benchmark.ts",
-				"--target",
-				"missing-target",
-				"--model",
-				"sonnet",
-				"--judge-model",
-				"claude-sonnet-4-6",
-				"--session-budget-usd",
-				"1",
-				"--confirm",
-			],
-			{
-				cwd: PROJECT_ROOT,
-				stdin: new Blob(["no\n"]),
-				stdout: "pipe",
-				stderr: "pipe",
-			},
-		);
-		const [exitCode, stderr] = await Promise.all([
-			child.exited,
-			new Response(child.stderr).text(),
-		]);
-
-		expect(exitCode).not.toBe(0);
-		expect(stderr.match(/Self-preference warning/gu)).toEqual([
-			"Self-preference warning",
-		]);
-		expect(stderr.indexOf("Self-preference warning")).toBeLessThan(
-			stderr.indexOf("Confirmation declined"),
-		);
 	});
 });

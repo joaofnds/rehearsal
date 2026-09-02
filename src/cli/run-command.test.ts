@@ -105,4 +105,51 @@ describe(runRunCommand.name, () => {
 		expect(stdout.join("")).toBe("/runs/2026.json\n");
 		expect(stderr.join("")).toBe("Target: /nonexistent-target\n");
 	});
+
+	it("warns once on stderr about a same-family Judge before loading the pipeline", async () => {
+		const events: string[] = [];
+		const { output, stdout } = recorder();
+
+		await runRunCommand(
+			{
+				args: [
+					"--target",
+					"/nonexistent-target",
+					"--model",
+					"sonnet",
+					"--judge-model",
+					"claude-sonnet-4-6",
+					"--session-budget-usd",
+					"1",
+				],
+				json: false,
+				stdinIsTerminal: true,
+			},
+			{
+				output: {
+					stdout: output.stdout,
+					stderr: (text) => {
+						events.push(text);
+						output.stderr(text);
+					},
+				},
+				loadPipeline: () => {
+					events.push("load-pipeline");
+
+					return Promise.resolve(pipeline);
+				},
+				execute: () =>
+					Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					}),
+			},
+		);
+
+		expect(
+			events.filter((event) => event.includes("Self-preference warning")),
+		).toHaveLength(1);
+		expect(events.indexOf("load-pipeline")).toBe(1);
+		expect(stdout.join("")).toBe("/runs/2026.json\n");
+	});
 });

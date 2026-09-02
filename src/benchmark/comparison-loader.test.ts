@@ -278,7 +278,8 @@ describe(loadComparisonEvidence.name, () => {
 			[
 				process.execPath,
 				"run",
-				join(CONTROL_DIR, "compare-confirmations.ts"),
+				join(CONTROL_DIR, "rehearsal.ts"),
+				"compare",
 				fixture.manifestFile,
 			],
 			CONTROL_DIR,
@@ -294,7 +295,7 @@ describe(loadComparisonEvidence.name, () => {
 		const reportText = await Bun.file(writtenReportFile).text();
 		const report = parseComparisonReport(reportText);
 
-		expect(output).toBe(`Comparison report: ${expectedReportFile}\n`);
+		expect(output).toBe(`${expectedReportFile}\n`);
 		expect(report.manifest.sha256).toBe(manifestSha);
 		expect(report.cases).toHaveLength(2);
 		expect(after).toEqual(before);
