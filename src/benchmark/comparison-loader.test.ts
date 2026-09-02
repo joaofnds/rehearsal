@@ -671,9 +671,8 @@ describe(loadComparisonEvidence.name, () => {
 	it("reports agreement for every represented Judge model and no others", async () => {
 		const runsDirectory = join(temporaryDirectory, "agreement-output");
 		await mkdir(runsDirectory);
-		const calibrationArtifact = (judgeModel: string) => ({
+		const calibrationArtifact = {
 			status: "COMPLETE",
-			judgeModel,
 			rubric: "1. `agreement`: calibrated\n",
 			grade: {
 				requirements: [
@@ -700,15 +699,15 @@ describe(loadComparisonEvidence.name, () => {
 					findings: [],
 				},
 			},
-		});
+		};
 		await Promise.all([
 			Bun.write(
 				join(runsDirectory, "opus.json"),
-				JSON.stringify(calibrationArtifact("opus")),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "opus" }),
 			),
 			Bun.write(
 				join(runsDirectory, "sonnet.json"),
-				JSON.stringify(calibrationArtifact("sonnet")),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "sonnet" }),
 			),
 		]);
 

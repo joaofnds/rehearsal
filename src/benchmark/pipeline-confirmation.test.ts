@@ -58,9 +58,8 @@ describe(runPipelineConfirmation.name, () => {
 
 	it("reports agreement only for its exact Judge model", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
-		const calibrationArtifact = (judgeModel: string) => ({
+		const calibrationArtifact = {
 			status: "COMPLETE",
-			judgeModel,
 			rubric: "1. `final`: pass the candidate\n",
 			grade: completeFinalGrade("PASS"),
 			stageScorecards: [],
@@ -71,15 +70,15 @@ describe(runPipelineConfirmation.name, () => {
 					findings: [],
 				},
 			},
-		});
+		};
 		await Promise.all([
 			Bun.write(
 				join(harness.runsDirectory, "opus.json"),
-				JSON.stringify(calibrationArtifact("opus")),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "opus" }),
 			),
 			Bun.write(
 				join(harness.runsDirectory, "sonnet.json"),
-				JSON.stringify(calibrationArtifact("sonnet")),
+				JSON.stringify({ ...calibrationArtifact, judgeModel: "sonnet" }),
 			),
 		]);
 

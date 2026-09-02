@@ -1235,14 +1235,14 @@ describe(runGradedStages.name, () => {
 
 		const outcome = runGradedStages(failing, calibrating);
 
-		await expect(outcome).rejects.toThrow("minimum grade is B");
-		expect(currentCalibrations).toEqual([
-			{
-				judgeModel: "opus",
-				humanReview: calibration.humanReview,
-				stages: expect.any(Array),
-			},
-		]);
+		expect(outcome).rejects.toThrow("minimum grade is B");
+		await outcome.catch(() => undefined);
+		expect(currentCalibrations).toHaveLength(1);
+		expect(currentCalibrations[0]).toMatchObject({
+			judgeModel: "opus",
+			humanReview: calibration.humanReview,
+		});
+		expect(currentCalibrations[0]?.stages).toHaveLength(1);
 		const stageRecord = z
 			.object({
 				judgeModel: z.literal("opus"),

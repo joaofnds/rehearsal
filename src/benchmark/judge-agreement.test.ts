@@ -6,10 +6,10 @@ import {
 	buildJudgeAgreementReport,
 	calibrationObservations,
 	finalRubricSha256,
-	type JudgeAgreementObservation,
 	loadJudgeAgreementReport,
 	stageRubricSha256,
 } from "./judge-agreement";
+import type { JudgeAgreementObservation } from "./judge-agreement";
 import type {
 	HumanReview,
 	JudgeGrade,

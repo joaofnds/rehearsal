@@ -124,6 +124,15 @@ const calibratedFinalArtifactSchema = z
 	})
 	.loose();
 const judgeManifestSchema = z.object({ judgeModel: z.string().min(1) }).loose();
+type LoadedCalibrationArtifact =
+	| {
+			readonly kind: "stage";
+			readonly record: z.infer<typeof calibratedStageArtifactSchema>;
+	  }
+	| {
+			readonly kind: "final";
+			readonly record: z.infer<typeof calibratedFinalArtifactSchema>;
+	  };
 
 interface MutableCriterionCounts {
 	judgePassHumanPass: number;
@@ -265,9 +274,18 @@ export function calibrationObservations(
 	];
 }
 
-async function readJson(path: string): Promise<unknown | undefined> {
+async function readCalibrationArtifact(
+	path: string,
+): Promise<LoadedCalibrationArtifact | undefined> {
 	try {
-		return JSON.parse(await Bun.file(path).text());
+		const document: unknown = JSON.parse(await Bun.file(path).text());
+		const stage = calibratedStageArtifactSchema.safeParse(document);
+		if (stage.success) {
+			return { kind: "stage", record: stage.data };
+		}
+		const final = calibratedFinalArtifactSchema.safeParse(document);
+
+		return final.success ? { kind: "final", record: final.data } : undefined;
 	} catch {
 		return undefined;
 	}
@@ -284,12 +302,19 @@ async function historicalStageJudgeModel(
 	}
 
 	const runName = fileName.slice(0, -suffix.length);
-	const document = await readJson(
-		join(runsDirectory, `${runName}.checkpoints`, "manifest.json"),
-	);
-	const manifest = judgeManifestSchema.safeParse(document);
+	try {
+		const manifest = judgeManifestSchema.parse(
+			JSON.parse(
+				await Bun.file(
+					join(runsDirectory, `${runName}.checkpoints`, "manifest.json"),
+				).text(),
+			),
+		);
 
-	return manifest.success ? manifest.data.judgeModel : undefined;
+		return manifest.judgeModel;
+	} catch {
+		return undefined;
+	}
 }
 
 export async function loadJudgeAgreementReport(
@@ -306,15 +331,20 @@ export async function loadJudgeAgreementReport(
 			continue;
 		}
 
-		const document = await readJson(join(runsDirectory, entry.name));
-		const stage = calibratedStageArtifactSchema.safeParse(document);
-		if (stage.success) {
+		const artifact = await readCalibrationArtifact(
+			join(runsDirectory, entry.name),
+		);
+		if (artifact === undefined) {
+			continue;
+		}
+		if (artifact.kind === "stage") {
+			const stage = artifact.record;
 			const judgeModel =
-				stage.data.judgeModel ??
+				stage.judgeModel ??
 				(await historicalStageJudgeModel(
 					runsDirectory,
 					entry.name,
-					stage.data.stage,
+					stage.stage,
 				));
 			if (judgeModel === undefined) {
 				skippedCalibrations += 1;
@@ -324,24 +354,22 @@ export async function loadJudgeAgreementReport(
 			observations.push(
 				...calibrationObservations({
 					judgeModel,
-					humanReview: stage.data.calibration.humanReview,
-					stages: [stage.data],
+					humanReview: stage.calibration.humanReview,
+					stages: [stage],
 				}),
 			);
 			continue;
 		}
 
-		const final = calibratedFinalArtifactSchema.safeParse(document);
-		if (final.success) {
-			observations.push(
-				...calibrationObservations({
-					judgeModel: final.data.judgeModel,
-					humanReview: final.data.calibration.humanReview,
-					stages: final.data.stageScorecards,
-					final: { rubric: final.data.rubric, grade: final.data.grade },
-				}),
-			);
-		}
+		const final = artifact.record;
+		observations.push(
+			...calibrationObservations({
+				judgeModel: final.judgeModel,
+				humanReview: final.calibration.humanReview,
+				stages: final.stageScorecards,
+				final: { rubric: final.rubric, grade: final.grade },
+			}),
+		);
 	}
 
 	return buildJudgeAgreementReport(observations, skippedCalibrations);
@@ -403,20 +431,23 @@ function baselineKey(observation: Readonly<JudgeAgreementObservation>): string {
 }
 
 function incrementCounts(
-	counts: MutableCriterionCounts,
+	counts: Readonly<MutableCriterionCounts>,
 	observation: Readonly<JudgeAgreementObservation>,
-): void {
+): MutableCriterionCounts {
+	const incremented = { ...counts };
 	if (observation.judgeDecision === "PASS") {
 		if (observation.humanDecision === "PASS") {
-			counts.judgePassHumanPass += 1;
+			incremented.judgePassHumanPass += 1;
 		} else {
-			counts.judgePassHumanFail += 1;
+			incremented.judgePassHumanFail += 1;
 		}
 	} else if (observation.humanDecision === "PASS") {
-		counts.judgeFailHumanPass += 1;
+		incremented.judgeFailHumanPass += 1;
 	} else {
-		counts.judgeFailHumanFail += 1;
+		incremented.judgeFailHumanFail += 1;
 	}
+
+	return incremented;
 }
 
 export function buildJudgeAgreementReport(
@@ -447,7 +478,10 @@ export function buildJudgeAgreementReport(
 			};
 			baseline.criteria.set(observation.rubricId, counts);
 		}
-		incrementCounts(counts, observation);
+		baseline.criteria.set(
+			observation.rubricId,
+			incrementCounts(counts, observation),
+		);
 	}
 
 	return {
