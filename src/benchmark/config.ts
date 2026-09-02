@@ -20,18 +20,21 @@ export const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 export type Effort = z.infer<typeof effortSchema>;
 export type WorkflowStage = string;
 
-export interface ConfirmationConfig {
-	readonly reps: number;
-	readonly approved: boolean;
-}
-
-export interface BenchmarkConfig {
-	readonly sourceDir: string;
+interface SessionKnobs {
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+}
+
+export interface ConfirmationConfig {
+	readonly reps: number;
+	readonly approved: boolean;
+}
+
+export interface BenchmarkConfig extends SessionKnobs {
+	readonly sourceDir: string;
 	readonly pipelinePath: string;
 	readonly confirmation?: ConfirmationConfig | undefined;
 }
@@ -39,14 +42,6 @@ export interface BenchmarkConfig {
 interface ParsedFlags {
 	readonly values: ReadonlyMap<string, string>;
 	readonly switches: ReadonlySet<string>;
-}
-
-interface SessionKnobs {
-	readonly model: string;
-	readonly effort?: Effort | undefined;
-	readonly judgeModel: string;
-	readonly judgeEffort?: Effort | undefined;
-	readonly sessionBudgetUsd: number;
 }
 
 function modelFamily(model: string): ModelFamily | undefined {
@@ -218,14 +213,9 @@ export function parseArgs(
 	);
 }
 
-export interface ReplayCliConfig {
+export interface ReplayCliConfig extends SessionKnobs {
 	readonly runName: string;
 	readonly stage: string;
-	readonly model: string;
-	readonly effort?: Effort | undefined;
-	readonly judgeModel: string;
-	readonly judgeEffort?: Effort | undefined;
-	readonly sessionBudgetUsd: number;
 	readonly confirmation?: ConfirmationConfig | undefined;
 }
 
