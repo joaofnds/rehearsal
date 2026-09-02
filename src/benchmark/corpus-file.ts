@@ -1,9 +1,25 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
 
 export class CorpusFileError extends Error {
 	public override name = "CorpusFileError";
+}
+
+/**
+ * A declared path is data, and `..` in it would name a file the corpus install
+ * does not hold, whose bytes would then be hashed into lineage and whose
+ * resolved path would be printed in the attempt record.
+ */
+function confinedTo(root: string, layoutPath: string): string {
+	const absolute = resolve(root, layoutPath);
+	if (!absolute.startsWith(`${root}/`)) {
+		throw new CorpusFileError(
+			`Corpus file ${layoutPath} names a path outside the corpus install`,
+		);
+	}
+
+	return absolute;
 }
 
 /**
@@ -19,7 +35,7 @@ export function resolveCorpusFile(layoutPath: string): string {
 	const claudeHome = join(homedir(), ".claude");
 	for (const prefix of ["output-styles/", "agents/", "skills/"]) {
 		if (layoutPath.startsWith(prefix)) {
-			return join(claudeHome, layoutPath);
+			return confinedTo(claudeHome, layoutPath);
 		}
 	}
 

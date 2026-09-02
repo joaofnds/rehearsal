@@ -30,6 +30,27 @@ describe(resolveCorpusFile.name, () => {
 			"Corpus file docs/vision.md names no corpus layout path",
 		);
 	});
+
+	it.each([
+		"skills/../../../../etc/passwd",
+		"agents/../../.ssh/id_rsa",
+		"output-styles/../../.claude.json",
+		"skills/build/../../../../etc/hosts",
+	])("refuses %s, which escapes the corpus install", (layoutPath) => {
+		expect(() => resolveCorpusFile(layoutPath)).toThrow(CorpusFileError);
+	});
+
+	it("names the escaping path it refuses", () => {
+		expect(() => resolveCorpusFile("agents/../../.ssh/id_rsa")).toThrow(
+			"agents/../../.ssh/id_rsa",
+		);
+	});
+
+	it("resolves a layout path whose segments are ordinary names", () => {
+		expect(resolveCorpusFile("skills/build/references/core.md")).toBe(
+			join(homedir(), ".claude/skills/build/references/core.md"),
+		);
+	});
 });
 
 describe(hashCorpusFiles.name, () => {
