@@ -173,9 +173,9 @@ describe("rehearsal", () => {
 			benchmarkRunsDirectory(CONTROL_DIR),
 			manifestSha,
 		);
+		writtenReportDirectory = reportDirectory;
 
 		const result = await runCli(["compare", fixture.manifestFile]);
-		writtenReportDirectory = reportDirectory;
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toBe(`${reportFile}\n`);
@@ -194,9 +194,9 @@ describe("rehearsal", () => {
 			benchmarkRunsDirectory(CONTROL_DIR),
 			manifestSha,
 		);
+		writtenReportDirectory = reportDirectory;
 
 		const result = await runCli(["compare", fixture.manifestFile, "--json"]);
-		writtenReportDirectory = reportDirectory;
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stderr).toBe("");
