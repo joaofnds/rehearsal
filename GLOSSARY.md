@@ -5,6 +5,10 @@
 - **Attempt** — one execution of a case's unit of work: a stage at a checkpoint
   (the original run's stage result or any replay) or one session of a session
   case. The unit a comparison presents.
+- **Attempt record** — the strict record one session attempt writes: the case,
+  the lineage, the model and effort, the declared corpus files with their
+  digests, the prompt, the reply, the path of the transcript copy, the provider
+  call metrics, and one result per declared check. It is what `--json` prints.
 - **Attempt directory** — the fresh temporary directory the harness creates and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
@@ -66,6 +70,11 @@
   any of them can make a prior attempt stale.
 - **Cut** — the 0-based line index of the first session-file record a transcript
   prefix drops. A cut of N keeps lines [0, N).
+- **Corpus layout path** — how a case names a corpus file, independent of where
+  the corpus is installed: `CLAUDE.md`, `output-styles/<name>.md`,
+  `agents/<name>.md`, or `skills/<name>/...`. One resolver maps a layout path
+  onto the install, and a declared file that does not resolve is refused before
+  any provider call.
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
@@ -82,6 +91,11 @@
   precondition (a needed approval whose flag is absent while stdin is not a
   TTY, a run that cannot be replayed); `1` an execution failure. A failing grade
   is evidence, not an error.
+- **Fork** — copying a transcript prefix into the attempt directory's project
+  slug under a fresh uuid, with every occurrence of the source session id
+  rewritten, so a session can be resumed from it without its original working
+  directory. On claude 2.1.258 the resumed session keeps that uuid and appends
+  to the forked file rather than writing a new one.
 - **Fresh checkpoint chain** — a replay's consumed checkpoint chain when none
   of its checkpoints is stale.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
@@ -131,6 +145,10 @@
 - **Run artifact transition** — one persistence operation that advances a run's
   main or stage record. Transitions are serialized; abort recording is terminal
   and cannot be overwritten by a later normal transition.
+- **Project slug** — the name the provider gives the directory it writes a
+  session file into: the working directory's real path with every `/` replaced
+  by `-`. On macOS `/tmp/x` resolves through its real path first, so it is
+  `-private-tmp-x`.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
 - **Session case** — a benchmark case whose unit of work is one Claude session

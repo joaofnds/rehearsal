@@ -3,9 +3,13 @@
 - **What this is**: A benchmark harness that runs a workflow's stages against a
   target repository, checkpoints each stage, and replays one stage from a
   checkpoint so corpus edits can be graded. A benchmark case is declared data
-  under `cases/<id>/`: its task, product brief, final rubric, stage rubrics,
-  pipeline, and declared target repository. The entry point is `rehearsal.ts`,
-  one executable with a `run`, `replay`, `compare`, and `case` command; its
+  under `cases/<id>/` and comes in two kinds: a `pipeline` case declares a
+  task, product brief, final rubric, stage rubrics, pipeline, and target
+  repository; a `session` case declares one Claude session (a prompt, an
+  optional fixture tree and transcript prefix, tool and settings overlays, the
+  corpus files it reads) judged by a deterministic check list. The entry point
+  is `rehearsal.ts`, one executable with a `run`, `replay`, `compare`, and
+  `case` command (the last with `list`, `show`, and `capture` verbs); its
   wiring is in `src/cli/` and the harness in `src/benchmark/`. Domain terms are in
   [GLOSSARY.md](GLOSSARY.md); the direction is in `docs/vision.md` and
   `docs/design.md`.

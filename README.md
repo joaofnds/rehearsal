@@ -20,8 +20,11 @@ rehearsal/cases/<id>/product-brief.md        stable product facts available to t
 rehearsal/cases/<id>/pipelines/*.json        the workflow: board columns, stages, skills, rubrics
 rehearsal/cases/<id>/rubrics/*.json          process-quality rubrics a stage adopts
 rehearsal/cases/<id>/rubric.md               external binary acceptance rubric
+rehearsal/cases/<id>/fixture/                a session case's seed tree, if it declares one
+.benchmark-runs/cases/<id>/*.jsonl           a session case's transcript prefixes, git-ignored
 target repository                            real application and real main branch
 installed Claude skills                      whichever skills the pipeline names
+installed styles and agents                  whichever a session case names as corpus
 ```
 
 Everything but `CLAUDE.md` and the installed skills belongs to one benchmark case
@@ -30,6 +33,13 @@ they stay at the control root; the case is the frozen task, not the corpus. Case
 live in this repository, never beside the corpus they grade. `rehearsal run` uses
 `audit-log` when `--case` is absent; `rehearsal case list` and
 `rehearsal case show <id>` read the declarations.
+
+A case is one of two kinds. A `pipeline` case runs the stage graph against a
+target repository, which is everything above. A `session` case runs one Claude
+session in a fresh directory the harness owns, optionally resumed from a
+captured transcript prefix, and judges it with a deterministic check list over
+the reply and the transcript. Both are declared as data under `cases/<id>/` and
+both write the same records.
 
 The executing sessions never receive the case's `rubric.md` and are not told that their work is being graded. Only normal project instructions, backlog artifacts, and Product Owner decisions enter the target workflow.
 
@@ -252,10 +262,49 @@ The instruction corpus being tuned. Change it only in response to observed behav
 ### `cases/<id>/case.json`
 
 The case declaration: the case's id (which must equal its directory name), its
-kind (`pipeline` today), its title, the case-relative paths of its task, product
-brief, final rubric, pipeline, and stage rubrics, and the target repository it
-was written against. It is parsed once at load, and a path that leaves the case
-directory is refused there rather than followed.
+kind, its title, and the inputs that kind needs. It is parsed once at load, and
+a path that leaves the case directory is refused there rather than followed.
+
+A `pipeline` case declares the case-relative paths of its task, product brief,
+final rubric, pipeline, and stage rubrics, and the target repository it was
+written against.
+
+A `session` case declares one Claude session instead of a stage graph: an
+optional `fixture` tree to seed the attempt directory from, the `prompt`, an
+optional `transcript` prefix to resume, the `tools` the session may use, an
+optional `settings` and `agents` overlay passed to the provider as inline JSON,
+the `corpusFiles` it reads in corpus layout paths, and the `checks` that judge
+it. `cases/smoke/` is the smallest one.
+
+### Session case check kinds
+
+A session case's judge is a deterministic check list, evaluated over the reply
+and the transcript with no provider call. The rep is successful when and only
+when every check passes.
+
+- `word-band { min?, max? }` counts the reply's words and reports the count
+  against the band.
+- `forbidden-text { strings }` fails naming each declared string the reply
+  contains. The strings are case data: an em dash and a backtick are declared
+  by the case that cares about them, never built into the check.
+- `tool-calls { min?, max?, names? }` counts the transcript's `tool_use`
+  records and fails on a count outside the band or a tool outside `names`.
+- `files-read { paths }` fails naming each declared path that is not the
+  `file_path` of a `Read` call in the transcript.
+
+### Corpus layout paths
+
+A session case names the corpus files it reads so that an edit to one makes a
+prior attempt stale. The paths are layout paths, not install paths: `CLAUDE.md`
+is the control root's project instructions, and `output-styles/<name>.md`,
+`agents/<name>.md`, and `skills/<name>/...` resolve under `~/.claude/`. A
+declared file that does not resolve is refused before any provider call.
+
+### `.benchmark-runs/cases/<id>/`
+
+A session case's transcript prefixes, captured by `rehearsal case capture`.
+The bytes are git-ignored and hashed into lineage; only the declaration, with
+the prefix's digest, source session, and cut, is committed.
 
 ### `cases/<id>/backlog-seed.md`
 
@@ -328,11 +377,31 @@ bun run rehearsal run \
   --model sonnet \
   --effort high \
   --session-budget-usd 10
+
+bun run rehearsal run \
+  --case smoke \
+  --model haiku \
+  --effort low \
+  --session-budget-usd 0.2
+
+bun run rehearsal case capture <case-id> \
+  --session <session-id-or-prefix> \
+  --cut <index>
 ```
 
-`--case` names a declared case under `cases/` and defaults to `audit-log`. The
-case supplies the task, product brief, final rubric, stage rubrics, pipeline,
-and the target repository it was written against; `--target` and
+`--case` names a declared case under `cases/` and defaults to `audit-log`. A
+session case takes neither `--target` nor `--pipeline`; naming either is a
+usage error rather than a flag that quietly does nothing.
+
+`rehearsal case capture` freezes a real session file as a case's transcript
+prefix: it copies lines `[0, cut)` of the source session into the case's
+transcript store, records the digest, the source session, and the cut in the
+declaration, and prints the updated declaration. `--session` takes a session id
+or a unique prefix of one, and the source is read as a stream rather than held
+in memory, because transcripts run to several megabytes.
+
+The case supplies the task, product brief, final rubric, stage rubrics,
+pipeline, and the target repository it was written against; `--target` and
 `BENCHMARK_TARGET_DIR` override that declared target, and `--pipeline` overrides
 the declared pipeline. An unknown case is refused with exit 3 before the target
 is claimed.
