@@ -62,6 +62,51 @@ describe(runRunCommand.name, () => {
 		expect(stderr).toEqual([]);
 	});
 
+	it("runs the confirmation group without a terminal when --yes answers the approval", async () => {
+		const { output, stdout } = recordOutput();
+
+		await runRunCommand(
+			{
+				args: [...args, "--confirm", "--yes"],
+				json: false,
+				stdinIsTerminal: false,
+			},
+			{
+				output,
+				loadPipeline: () => Promise.resolve(pipeline),
+				execute: () =>
+					Promise.resolve({
+						kind: "confirmation" as const,
+						recordFile: "/runs/report.json",
+					}),
+			},
+		);
+
+		expect(stdout.join("")).toBe("/runs/report.json\n");
+	});
+
+	it("refuses a confirmation group without a terminal when --yes is absent", async () => {
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [...args, "--confirm"],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					loadPipeline: () =>
+						Promise.reject(new Error("pipeline must not load")),
+					execute: () => Promise.reject(new Error("run must not start")),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+	});
+
 	it("prints the run artifact path on stdout and diagnostics on stderr", async () => {
 		const { output, stdout, stderr } = recordOutput();
 

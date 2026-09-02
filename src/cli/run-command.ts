@@ -78,7 +78,9 @@ export async function runRunCommand(
 	dependencies: RunCommandDependencies,
 ): Promise<void> {
 	const config = asUsageError(() => parseArgs(request.args));
-	requireInteractiveStdin(request.stdinIsTerminal, REVIEW_PAUSE_REASON);
+	if (config.confirmation === undefined || !config.confirmation.approved) {
+		requireInteractiveStdin(request.stdinIsTerminal, REVIEW_PAUSE_REASON);
+	}
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
