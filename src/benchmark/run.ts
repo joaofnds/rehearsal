@@ -228,6 +228,19 @@ export function buildRunArtifact(inputs: RunArtifactInputs): GradedRunArtifact {
 	};
 }
 
+export function completeRunArtifact(
+	artifact: GradedRunArtifact,
+	calibration: CalibrationResult,
+	judgeAgreement: JudgeAgreementReport,
+): GradedRunArtifact {
+	return {
+		...artifact,
+		status: "COMPLETE",
+		calibration,
+		judgeAgreement,
+	};
+}
+
 export function buildFailedJudgeRunArtifact(
 	inputs: RunArtifactBaseInputs,
 	failure: Readonly<JudgeOutputValidationError>,
@@ -903,11 +916,20 @@ export async function runBenchmark(
 			judgeEffort: config.judgeEffort,
 			sessionBudgetUsd: config.sessionBudgetUsd,
 		});
-		await abort.completeArtifact({
-			...artifact,
-			status: "COMPLETE",
-			calibration,
-		});
+		const judgeAgreement = await loadJudgeAgreementReport(
+			runFiles.runsDirectory,
+			[
+				{
+					judgeModel: config.judgeModel,
+					humanReview: calibration.humanReview,
+					stages: stageScorecards,
+					final: { rubric, grade },
+				},
+			],
+		);
+		await abort.completeArtifact(
+			completeRunArtifact(artifact, calibration, judgeAgreement),
+		);
 		console.log("Calibration recorded; restoring the target.");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

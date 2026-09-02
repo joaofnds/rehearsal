@@ -333,6 +333,7 @@ export interface GradedRunArtifact extends RunArtifactEvidence {
 	readonly grade: JudgeGrade;
 	readonly reviewFile: string;
 	readonly calibration?: CalibrationResult | undefined;
+	readonly judgeAgreement?: JudgeAgreementReport | undefined;
 }
 
 export interface FailedJudgeRunArtifact extends RunArtifactEvidence {

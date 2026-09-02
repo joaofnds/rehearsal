@@ -35,6 +35,7 @@ import {
 	buildRunManifest,
 	buildRunArtifact,
 	captureRunBaseline,
+	completeRunArtifact,
 	retainedCheckpointRecorder,
 	runBenchmark,
 	runFinalJudge,
@@ -1641,6 +1642,39 @@ describe(buildRunArtifact.name, () => {
 
 		expect(artifact.judgeAttempts).toBe(attempts);
 		expect(artifact.judgeCostUsd).toBeCloseTo(0.3);
+	});
+
+	it("completes the final artifact with calibration and Judge agreement", async () => {
+		const pipeline = await loadDefaultPipeline();
+		const awaiting = buildRunArtifact(
+			artifactInputs(pipeline, "pipelines/default.json"),
+		);
+		const calibration: CalibrationResult = {
+			humanReview: {
+				verdict: "ACCEPT",
+				summary: "The human agrees.",
+				findings: [],
+			},
+			instructionsChanged: false,
+			rubricChanged: false,
+			stageRubricsChanged: [],
+		};
+		const judgeAgreement: JudgeAgreementReport = {
+			skippedCalibrations: 1,
+			baselines: [],
+		};
+
+		const completed = completeRunArtifact(
+			awaiting,
+			calibration,
+			judgeAgreement,
+		);
+
+		expect(completed).toMatchObject({
+			status: "COMPLETE",
+			calibration,
+			judgeAgreement,
+		});
 	});
 
 	it("records the pipeline it ran and the path it came from", async () => {
