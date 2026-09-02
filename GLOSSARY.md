@@ -46,6 +46,8 @@
   checkpoint, corpus files feeding the stage, model, effort.
 - **Materialize** — write a checkpoint's frozen state into a directory,
   byte-faithfully, so a stage can run from it.
+- **Model family** — a named Claude model line — Opus, Sonnet, or Haiku —
+  recognized from either its native alias or a full model ID.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
   data.
 - **Pipeline definition** — the declared, user-authored data the harness reads
