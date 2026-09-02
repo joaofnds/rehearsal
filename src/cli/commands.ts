@@ -176,6 +176,25 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		argument: "case-id",
 		flags: [jsonFlag],
 	},
+	{
+		name: "case capture",
+		summary:
+			"Capture a session file truncated at a cut as a case's transcript prefix",
+		argument: "case-id",
+		flags: [
+			{
+				name: "--session",
+				kind: "value",
+				help: "Session id, or a prefix of one, naming the source session file",
+			},
+			{
+				name: "--cut",
+				kind: "value",
+				help: "0-based index of the first record to drop; the prefix keeps lines [0, cut)",
+			},
+			jsonFlag,
+		],
+	},
 ];
 
 const COMMAND_NAME_COLUMN =

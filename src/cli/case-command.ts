@@ -1,13 +1,24 @@
-import { join } from "node:path";
-import type { CaseDeclaration, LoadedCase } from "#benchmark/case";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import type {
+	CaseDeclaration,
+	LoadedCase,
+	SessionCaseDeclaration,
+} from "#benchmark/case";
 import {
 	CaseDeclarationError,
 	CASES_DIRECTORY,
 	listCases,
 	loadCase,
 	readCaseDeclaration,
+	transcriptPrefixPath,
 } from "#benchmark/case";
 import { CONTROL_DIR } from "#benchmark/config";
+import {
+	captureTranscriptPrefix,
+	CaptureError,
+	resolveSessionFile,
+} from "#benchmark/session-capture";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
@@ -88,5 +99,119 @@ export async function runCaseShow(
 
 	output.stdout(
 		request.json ? serialize(declaration) : `${declarationFile(caseId)}\n`,
+	);
+}
+
+export interface CaseCaptureRequest {
+	readonly caseId: string | undefined;
+	readonly session: string | undefined;
+	readonly cut: string | undefined;
+	readonly json: boolean;
+}
+
+export interface CaseCaptureDependencies {
+	readonly projectsDirectory: string;
+	readonly output: CommandOutput;
+}
+
+function requiredFlag(value: string | undefined, flag: string): string {
+	if (value === undefined || value === "") {
+		throw new UsageError(
+			`Provide ${flag}: rehearsal case capture <case-id> --session <id> --cut <index>`,
+		);
+	}
+
+	return value;
+}
+
+function parsedCut(value: string): number {
+	const cut = Number(value);
+	if (!Number.isInteger(cut)) {
+		throw new UsageError(`Cut ${value} is not an integer`);
+	}
+
+	return cut;
+}
+
+async function requireSessionDeclaration(
+	caseId: string,
+): Promise<SessionCaseDeclaration> {
+	const declaration: CaseDeclaration = await asRefusedPrecondition(() =>
+		readCaseDeclaration(caseId),
+	);
+	if (declaration.kind !== "session") {
+		throw new RefusedPreconditionError(
+			`Case ${caseId} is a pipeline case; only a session case holds a transcript prefix`,
+		);
+	}
+
+	return declaration;
+}
+
+/**
+ * A cut the source cannot satisfy is a value the command line got wrong, so it
+ * exits 2; a session id that names no file is a precondition the command
+ * refuses, so it exits 3. Both arrive here as one CaptureError and are told
+ * apart by which input the failure is about.
+ */
+async function captured(
+	sourcePath: string,
+	destinationPath: string,
+	cut: number,
+): Promise<Awaited<ReturnType<typeof captureTranscriptPrefix>>> {
+	try {
+		return await captureTranscriptPrefix(sourcePath, destinationPath, cut);
+	} catch (error) {
+		if (error instanceof CaptureError) {
+			throw new UsageError(error.message);
+		}
+
+		throw error;
+	}
+}
+
+async function resolved(
+	projectsDirectory: string,
+	session: string,
+): Promise<Awaited<ReturnType<typeof resolveSessionFile>>> {
+	try {
+		return await resolveSessionFile(projectsDirectory, session);
+	} catch (error) {
+		if (error instanceof CaptureError) {
+			throw new RefusedPreconditionError(error.message);
+		}
+
+		throw error;
+	}
+}
+
+export async function runCaseCapture(
+	request: CaseCaptureRequest,
+	dependencies: CaseCaptureDependencies,
+): Promise<void> {
+	const caseId = requiredFlag(request.caseId, "the case id");
+	const session = requiredFlag(request.session, "--session");
+	const cut = parsedCut(requiredFlag(request.cut, "--cut"));
+	const declaration = await requireSessionDeclaration(caseId);
+
+	const source = await resolved(dependencies.projectsDirectory, session);
+	const file = `${source.sessionId}-cut-${String(cut)}.jsonl`;
+	const destination = transcriptPrefixPath(caseId, file);
+	await mkdir(dirname(destination), { recursive: true });
+	const prefix = await captured(source.path, destination, cut);
+
+	const updated: SessionCaseDeclaration = {
+		...declaration,
+		transcript: {
+			file,
+			sha256: prefix.sha256,
+			sourceSession: source.sessionId,
+			cut,
+		},
+	};
+	await Bun.write(declarationFile(caseId), serialize(updated));
+
+	dependencies.output.stdout(
+		request.json ? serialize(updated) : `${declarationFile(caseId)}\n`,
 	);
 }

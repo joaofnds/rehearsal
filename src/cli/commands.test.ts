@@ -58,35 +58,40 @@ describe(topLevelHelp.name, () => {
 });
 
 describe("declared commands", () => {
-	it("declares run, replay, compare, and the two case verbs", () => {
+	it("declares run, replay, compare, and the three case verbs", () => {
 		expect(COMMANDS.map((command) => command.name)).toEqual([
 			"run",
 			"replay",
 			"compare",
 			"case list",
 			"case show",
+			"case capture",
 		]);
 	});
 
-	it.each(["run", "replay", "compare", "case list", "case show"])(
-		"names every flag %s declares in its own help",
-		(name) => {
-			const command = COMMANDS.find((candidate) => candidate.name === name);
-			const help = commandHelp(command ?? exampleCommand);
+	it.each([
+		"run",
+		"replay",
+		"compare",
+		"case list",
+		"case show",
+		"case capture",
+	])("names every flag %s declares in its own help", (name) => {
+		const command = COMMANDS.find((candidate) => candidate.name === name);
+		const help = commandHelp(command ?? exampleCommand);
 
-			expect(command?.flags.length ?? 0).toBeGreaterThan(0);
-			for (const flag of command?.flags ?? []) {
-				expect(help).toContain(flag.name);
-				expect(help).toContain(flag.help);
-				if (flag.envVar !== undefined) {
-					expect(help).toContain(flag.envVar);
-				}
-				if (flag.defaultValue !== undefined) {
-					expect(help).toContain(flag.defaultValue);
-				}
+		expect(command?.flags.length ?? 0).toBeGreaterThan(0);
+		for (const flag of command?.flags ?? []) {
+			expect(help).toContain(flag.name);
+			expect(help).toContain(flag.help);
+			if (flag.envVar !== undefined) {
+				expect(help).toContain(flag.envVar);
 			}
-		},
-	);
+			if (flag.defaultValue !== undefined) {
+				expect(help).toContain(flag.defaultValue);
+			}
+		}
+	});
 
 	it("declares the run flags the card names", () => {
 		const run = COMMANDS.find((command) => command.name === "run");

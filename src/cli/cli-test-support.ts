@@ -24,7 +24,7 @@ export function recordOutput(): OutputRecorder {
 	};
 }
 
-export async function failureOf(work: Promise<void>): Promise<Error> {
+export async function failureOf(work: Promise<unknown>): Promise<Error> {
 	try {
 		await work;
 	} catch (error) {

@@ -1,0 +1,152 @@
+import { readdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
+
+const SESSION_FILE_SUFFIX = ".jsonl";
+
+export class CaptureError extends Error {
+	public override name = "CaptureError";
+}
+
+export function claudeProjectsDirectory(): string {
+	return join(homedir(), ".claude", "projects");
+}
+
+/**
+ * The project slug is the working directory's real path with every separator
+ * replaced by a dash, which is how the provider names the directory it writes
+ * a session file into.
+ */
+export function projectSlug(realPath: string): string {
+	return realPath.replaceAll("/", "-");
+}
+
+export interface ResolvedSession {
+	readonly sessionId: string;
+	readonly path: string;
+}
+
+/**
+ * A session file lives under the slug of the directory it ran in, and the
+ * session a capture names may have run anywhere, so the search covers every
+ * slug rather than asking the caller which one to look in.
+ */
+async function sessionsUnder(
+	projectsDirectory: string,
+): Promise<readonly ResolvedSession[]> {
+	let entries: readonly string[];
+	try {
+		entries = await readdir(projectsDirectory, { recursive: true });
+	} catch {
+		throw new CaptureError(`No session directory at ${projectsDirectory}`);
+	}
+
+	return entries
+		.filter((entry) => entry.endsWith(SESSION_FILE_SUFFIX))
+		.map((entry) => ({
+			sessionId: basename(entry, SESSION_FILE_SUFFIX),
+			path: join(projectsDirectory, entry),
+		}))
+		.toSorted((left, right) => (left.sessionId < right.sessionId ? -1 : 1));
+}
+
+export async function resolveSessionFile(
+	projectsDirectory: string,
+	prefix: string,
+): Promise<ResolvedSession> {
+	const sessions = await sessionsUnder(projectsDirectory);
+	const matches = sessions.filter((session) =>
+		session.sessionId.startsWith(prefix),
+	);
+	const [only] = matches;
+	if (only === undefined) {
+		throw new CaptureError(`Session prefix ${prefix} matches no session file`);
+	}
+	if (matches.length > 1) {
+		throw new CaptureError(
+			`Session prefix ${prefix} matches ${matches.map(({ sessionId }) => sessionId).join(", ")}`,
+		);
+	}
+
+	return only;
+}
+
+export interface CapturedPrefix {
+	readonly sha256: string;
+	readonly lines: number;
+}
+
+/**
+ * Transcripts run to several megabytes, so the source is read as a stream of
+ * chunks and split on the way through: holding it as one string would put the
+ * whole session file in memory to keep a few of its lines.
+ */
+async function* sourceLines(
+	path: string,
+	observeCarry: (bytes: number) => void = () => undefined,
+): AsyncGenerator<string> {
+	const decoder = new TextDecoder();
+	let carry = "";
+
+	for await (const chunk of Bun.file(path).stream()) {
+		carry += decoder.decode(chunk, { stream: true });
+		observeCarry(carry.length);
+		const parts = carry.split("\n");
+		carry = parts.pop() ?? "";
+		for (const part of parts) {
+			yield part;
+		}
+	}
+
+	carry += decoder.decode();
+	if (carry !== "") {
+		yield carry;
+	}
+}
+
+async function countLines(path: string): Promise<number> {
+	let lines = 0;
+	for await (const line of sourceLines(path)) {
+		lines += line === "" ? 0 : 1;
+	}
+
+	return lines;
+}
+
+export interface CaptureObserver {
+	readonly carry: (characters: number) => void;
+}
+
+const IGNORE_CARRY: CaptureObserver = { carry: () => undefined };
+
+export async function captureTranscriptPrefix(
+	sourcePath: string,
+	destinationPath: string,
+	cut: number,
+	observer: CaptureObserver = IGNORE_CARRY,
+): Promise<CapturedPrefix> {
+	const total = await countLines(sourcePath);
+	if (!Number.isInteger(cut) || cut < 1 || cut > total) {
+		throw new CaptureError(
+			`Cut ${String(cut)} is outside the source's ${String(total)} lines`,
+		);
+	}
+
+	const hasher = new Bun.CryptoHasher("sha256");
+	const writer = Bun.file(destinationPath).writer();
+	let written = 0;
+
+	for await (const line of sourceLines(sourcePath, observer.carry)) {
+		if (written === cut) {
+			break;
+		}
+
+		const bytes = new TextEncoder().encode(`${line}\n`);
+		hasher.update(bytes);
+		await writer.write(bytes);
+		written += 1;
+	}
+	await writer.end();
+
+	return { sha256: hasher.digest("hex"), lines: written };
+}

@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 import { CONTROL_DIR, REQUIRED_BUN_VERSION } from "./src/benchmark/config";
-import { requireCase, runCaseList, runCaseShow } from "./src/cli/case-command";
+import {
+	requireCase,
+	runCaseCapture,
+	runCaseList,
+	runCaseShow,
+} from "./src/cli/case-command";
+import { claudeProjectsDirectory } from "./src/benchmark/session-capture";
 import { benchmarkRunsDirectory } from "./src/benchmark/run-layout";
 import { runCompare } from "./src/cli/compare-command";
 import {
@@ -48,6 +54,12 @@ function main(): Promise<number> {
 	}
 
 	return dispatch(command.name, commandLine);
+}
+
+function flagValue(flags: readonly string[], name: string): string | undefined {
+	const index = flags.indexOf(name);
+
+	return index === -1 ? undefined : flags[index + 1];
 }
 
 async function dispatch(
@@ -100,6 +112,22 @@ async function dispatch(
 			await runCaseShow(
 				{ caseId: commandLine.argument, json: commandLine.json },
 				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "case capture": {
+			await runCaseCapture(
+				{
+					caseId: commandLine.argument,
+					session: flagValue(commandLine.flags, "--session"),
+					cut: flagValue(commandLine.flags, "--cut"),
+					json: commandLine.json,
+				},
+				{
+					projectsDirectory: claudeProjectsDirectory(),
+					output: processOutput,
+				},
 			);
 
 			return EXIT_CODES.completed;
