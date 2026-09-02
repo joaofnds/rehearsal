@@ -231,7 +231,7 @@ export function parseCommandLine(
 		if (token === undefined) {
 			break;
 		}
-		if (!token.startsWith("--")) {
+		if (!token.startsWith("-")) {
 			if (command.argument === undefined || argument !== undefined) {
 				throw new UsageError(
 					`Unexpected argument ${token} for rehearsal ${command.name}`,

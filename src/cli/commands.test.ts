@@ -123,6 +123,14 @@ describe(parseCommandLine.name, () => {
 		);
 	});
 
+	it("refuses a short flag as a usage error rather than a positional argument", () => {
+		const compare = COMMANDS.find((command) => command.name === "compare");
+
+		expect(() => parseCommandLine(compare ?? exampleCommand, ["-h"])).toThrow(
+			"Unknown flag -h for rehearsal compare",
+		);
+	});
+
 	it("refuses a second positional argument", () => {
 		const compare = COMMANDS.find((command) => command.name === "compare");
 
