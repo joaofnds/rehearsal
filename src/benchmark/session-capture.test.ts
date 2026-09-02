@@ -53,7 +53,24 @@ describe(resolveSessionFile.name, () => {
 		const directory = await projectsDirectory(first, second);
 
 		expect(resolveSessionFile(directory, "11111111")).rejects.toThrow(
-			`Session prefix 11111111 matches ${first}, ${second}`,
+			`Session prefix 11111111 matches 2 session files: ${first}, ${second}`,
+		);
+	});
+
+	it("names a readable sample and the count when a prefix matches many", async () => {
+		const many = Array.from(
+			{ length: 12 },
+			(_value, index) => `2222222${index}-0000-0000-0000-000000000000`,
+		);
+		const directory = await projectsDirectory(...many);
+
+		const failure = await failureOf(resolveSessionFile(directory, "2"));
+
+		expect(failure.message).toStartWith(
+			"Session prefix 2 matches 12 session files: ",
+		);
+		expect(failure.message).toEndWith(
+			" and 7 more; give more of the session id",
 		);
 	});
 

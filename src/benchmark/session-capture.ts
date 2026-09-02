@@ -50,6 +50,27 @@ async function sessionsUnder(
 		.toSorted((left, right) => (left.sessionId < right.sessionId ? -1 : 1));
 }
 
+const AMBIGUITY_SAMPLE = 5;
+
+/**
+ * A one-character prefix can match every session on the machine, and a message
+ * that lists all of them is unreadable at the terminal the agent reads it in.
+ * The count is the fact that resolves the ambiguity; the sample is enough to
+ * recognize which sessions they are.
+ */
+function ambiguity(matches: readonly ResolvedSession[]): string {
+	const named = matches
+		.slice(0, AMBIGUITY_SAMPLE)
+		.map(({ sessionId }) => sessionId)
+		.join(", ");
+	const rest = matches.length - AMBIGUITY_SAMPLE;
+	if (rest <= 0) {
+		return named;
+	}
+
+	return `${named} and ${String(rest)} more; give more of the session id`;
+}
+
 export async function resolveSessionFile(
 	projectsDirectory: string,
 	prefix: string,
@@ -64,7 +85,7 @@ export async function resolveSessionFile(
 	}
 	if (matches.length > 1) {
 		throw new CaptureError(
-			`Session prefix ${prefix} matches ${matches.map(({ sessionId }) => sessionId).join(", ")}`,
+			`Session prefix ${prefix} matches ${String(matches.length)} session files: ${ambiguity(matches)}`,
 		);
 	}
 

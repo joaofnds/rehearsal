@@ -271,7 +271,7 @@ describe(runCaseCapture.name, () => {
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toBe(
-			`Session prefix aaaaaaaa matches ${SESSION_ID}, ${other}`,
+			`Session prefix aaaaaaaa matches 2 session files: ${SESSION_ID}, ${other}`,
 		);
 	});
 
