@@ -139,6 +139,10 @@ export async function runSessionAttempt(
 		slug,
 	);
 	const before = await listSlug(slug);
+	const created: string[] = [];
+	if (forkedFile !== undefined) {
+		created.push(forkedFile);
+	}
 
 	try {
 		const output = await request.runClaude(
@@ -147,44 +151,43 @@ export async function runSessionAttempt(
 		);
 		const after = await listSlug(slug);
 		const [written] = addedEntries(before, after);
+		if (written !== undefined) {
+			created.push(join(slug, written));
+		}
 
-		return await recordAttempt(request, attemptDirectory, slug, {
+		return await recordAttempt(request, attemptDirectory, {
 			output,
-			writtenEntry: written,
+			writtenTranscript:
+				written === undefined ? undefined : join(slug, written),
 		});
 	} finally {
-		await removeAttemptFiles(attemptDirectory, forkedFile);
+		await removeAttemptFiles(attemptDirectory, created);
 	}
 }
 
 interface AttemptOutput {
 	readonly output: string;
-	readonly writtenEntry: string | undefined;
+	readonly writtenTranscript: string | undefined;
 }
 
 async function recordAttempt(
 	request: SessionAttemptRequest,
 	attemptDirectory: string,
-	slug: string,
 	attempt: AttemptOutput,
 ): Promise<SessionAttempt> {
-	const envelope = readClaudeEnvelope(attempt.output);
-	const reply = envelope.result ?? "";
+	const { writtenTranscript } = attempt;
 	const transcriptFile = join(request.recordDirectory, "transcript.jsonl");
-	const sourceEntry =
-		attempt.writtenEntry === undefined
-			? undefined
-			: join(slug, attempt.writtenEntry);
 
 	await mkdir(request.recordDirectory, { recursive: true });
 	await Bun.write(
 		transcriptFile,
-		sourceEntry === undefined ? "" : await Bun.file(sourceEntry).text(),
+		writtenTranscript === undefined
+			? ""
+			: await Bun.file(writtenTranscript).text(),
 	);
-	if (sourceEntry !== undefined) {
-		await rm(sourceEntry, { force: true });
-	}
 
+	const envelope = readClaudeEnvelope(attempt.output);
+	const reply = envelope.result ?? "";
 	const transcript = parseTranscript(await Bun.file(transcriptFile).text());
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
@@ -201,12 +204,18 @@ async function recordAttempt(
 	};
 }
 
+/**
+ * Only the files this attempt is known to have created: the transcript it
+ * forked in and the one the provider wrote, identified by the listing diff.
+ * The list is built as they appear rather than read back at the end, so a
+ * failure after the provider wrote its transcript still removes it.
+ */
 async function removeAttemptFiles(
 	attemptDirectory: string,
-	forkedFile: string | undefined,
+	created: readonly string[],
 ): Promise<void> {
-	if (forkedFile !== undefined) {
-		await rm(forkedFile, { force: true });
+	for (const path of created) {
+		await rm(path, { force: true });
 	}
 
 	await rm(attemptDirectory, { force: true, recursive: true });

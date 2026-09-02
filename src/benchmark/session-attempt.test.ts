@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
 import { projectSlug } from "#benchmark/session-capture";
+import { failureOf } from "#cli/cli-test-support";
 import type { SessionAttemptRequest } from "#benchmark/session-attempt";
 import {
 	forkTranscript,
@@ -299,6 +300,30 @@ describe(runSessionAttempt.name, () => {
 
 		const slug = join(projects, projectSlug(attempt.attemptDirectory));
 		expect(await readdir(slug).catch(() => [])).toEqual([]);
+	});
+
+	it("removes the transcript the provider wrote even when reading the envelope fails", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+		let attemptCwd = "";
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					runClaude: async (command, cwd) => {
+						attemptCwd = await realpath(cwd);
+						await claude.run(command, cwd);
+
+						return "not a claude envelope";
+					},
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(Error);
+		expect(await readdir(join(projects, projectSlug(attemptCwd)))).toEqual([]);
 	});
 
 	it("keeps a file another session planted in the slug directory mid-run", async () => {
