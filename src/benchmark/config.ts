@@ -14,6 +14,7 @@ export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 export const DEFAULT_PIPELINE_PATH = "pipelines/default.json";
 
 const MODEL_FAMILIES = ["opus", "sonnet", "haiku"] as const;
+type ModelFamily = (typeof MODEL_FAMILIES)[number];
 
 export const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 
@@ -41,7 +42,7 @@ interface ParsedFlags {
 	readonly switches: ReadonlySet<string>;
 }
 
-function modelFamily(model: string) {
+function modelFamily(model: string): ModelFamily | undefined {
 	const terms = model.toLowerCase().split(/[^a-z0-9]+/u);
 
 	return MODEL_FAMILIES.find((family) => terms.includes(family));
@@ -49,6 +50,25 @@ function modelFamily(model: string) {
 
 function defaultJudgeModel(workflowModel: string): string {
 	return modelFamily(workflowModel) === "opus" ? "sonnet" : "opus";
+}
+
+export function judgeSelfPreferenceWarning(config: {
+	readonly model: string;
+	readonly judgeModel: string;
+}): string | undefined {
+	if (config.model === config.judgeModel) {
+		return `Self-preference warning: Judge and workflow both use model ${config.model}; grades may favor the workflow output.`;
+	}
+
+	const workflowFamily = modelFamily(config.model);
+	if (
+		workflowFamily === undefined ||
+		workflowFamily !== modelFamily(config.judgeModel)
+	) {
+		return undefined;
+	}
+
+	return `Self-preference warning: Judge model ${config.judgeModel} and workflow model ${config.model} are both in the ${workflowFamily} family; grades may favor the workflow output.`;
 }
 
 const SWITCH_FLAGS = new Set(["--confirm", "--yes"]);

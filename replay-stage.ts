@@ -29,6 +29,7 @@ import { runCommand } from "./src/benchmark/command";
 import type { ReplayCliConfig } from "./src/benchmark/config";
 import {
 	CONTROL_DIR,
+	judgeSelfPreferenceWarning,
 	parseReplayArgs,
 	REQUIRED_BUN_VERSION,
 } from "./src/benchmark/config";
@@ -103,6 +104,11 @@ async function main(): Promise<void> {
 	}
 
 	const config: ReplayCliConfig = parseReplayArgs(Bun.argv.slice(2));
+	const warning = judgeSelfPreferenceWarning(config);
+	if (warning !== undefined) {
+		console.error(warning);
+	}
+
 	const paths = benchmarkRunPaths(RUNS_DIRECTORY, config.runName);
 	await resolveRunDirectory(paths);
 	const replayDependencies: ReplayDependencies = {

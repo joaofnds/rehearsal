@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import { parseArgs, parseReplayArgs } from "./config";
+import {
+	judgeSelfPreferenceWarning,
+	parseArgs,
+	parseReplayArgs,
+} from "./config";
 
 describe(parseArgs.name, () => {
 	it.each([
@@ -49,6 +53,33 @@ describe(parseArgs.name, () => {
 			sessionBudgetUsd: 5,
 			pipelinePath: "pipelines/default.json",
 		});
+	});
+
+	it("prioritizes the CLI Judge model over the environment", () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--judge-model",
+				"haiku",
+				"--session-budget-usd",
+				"5",
+			],
+			{ BENCHMARK_JUDGE_MODEL: "opus" },
+		);
+
+		expect(config.judgeModel).toBe("haiku");
+	});
+
+	it("prioritizes the environment Judge model over the default", () => {
+		const config = parseArgs(
+			["--target", "./target", "--model", "opus", "--session-budget-usd", "5"],
+			{ BENCHMARK_JUDGE_MODEL: "haiku" },
+		);
+
+		expect(config.judgeModel).toBe("haiku");
 	});
 
 	it("selects a pipeline definition file", () => {
@@ -262,13 +293,33 @@ describe(parseReplayArgs.name, () => {
 	it("falls back to the benchmark environment variables", () => {
 		const config = parseReplayArgs(["--run", "r", "--stage", "build"], {
 			BENCHMARK_MODEL: "sonnet",
-			BENCHMARK_JUDGE_MODEL: "opus",
+			BENCHMARK_JUDGE_MODEL: "haiku",
 			BENCHMARK_SESSION_BUDGET_USD: "3",
 		});
 
 		expect(config.model).toBe("sonnet");
-		expect(config.judgeModel).toBe("opus");
+		expect(config.judgeModel).toBe("haiku");
 		expect(config.sessionBudgetUsd).toBe(3);
+	});
+
+	it("prioritizes the CLI Judge model over the environment", () => {
+		const config = parseReplayArgs(
+			[
+				"--run",
+				"run-1",
+				"--stage",
+				"build",
+				"--model",
+				"sonnet",
+				"--judge-model",
+				"haiku",
+				"--session-budget-usd",
+				"5",
+			],
+			{ BENCHMARK_JUDGE_MODEL: "opus" },
+		);
+
+		expect(config.judgeModel).toBe("haiku");
 	});
 
 	it("requires the run and the stage", () => {
@@ -284,5 +335,22 @@ describe(parseReplayArgs.name, () => {
 				{},
 			),
 		).toThrow("Provide --stage");
+	});
+});
+
+describe(judgeSelfPreferenceWarning.name, () => {
+	it("warns when unrecognized model identifiers are equal", () => {
+		expect(
+			judgeSelfPreferenceWarning({
+				model: "external-model",
+				judgeModel: "external-model",
+			}),
+		).toContain("Self-preference warning");
+	});
+
+	it("does not warn when recognized model families differ", () => {
+		expect(
+			judgeSelfPreferenceWarning({ model: "sonnet", judgeModel: "opus" }),
+		).toBeUndefined();
 	});
 });

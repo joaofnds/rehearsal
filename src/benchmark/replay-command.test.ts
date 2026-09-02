@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { randomUUID } from "node:crypto";
 import type { ReplayRequest } from "./replay";
 import { executeReplayStage } from "./replay-command";
 import type { ReplayConfirmationRequest } from "./replay-confirmation";
 import { benchmarkRunPaths } from "./run-layout";
+import { PROJECT_ROOT } from "./test-support";
 
 describe(executeReplayStage.name, () => {
 	it('runs one debug replay with the exact "single-rep evidence, not a score" label', async () => {
@@ -120,5 +122,42 @@ describe(executeReplayStage.name, () => {
 				approvalMethod: "interactive",
 			},
 		]);
+	});
+
+	it("warns once before continuing with an explicit same-family Judge", async () => {
+		const missingRun = `missing-run-${randomUUID()}`;
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				"replay-stage.ts",
+				"--run",
+				missingRun,
+				"--stage",
+				"build",
+				"--model",
+				"sonnet",
+				"--judge-model",
+				"claude-sonnet-4-6",
+				"--session-budget-usd",
+				"1",
+			],
+			{
+				cwd: PROJECT_ROOT,
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		const [exitCode, stderr] = await Promise.all([
+			child.exited,
+			new Response(child.stderr).text(),
+		]);
+
+		expect(exitCode).not.toBe(0);
+		expect(stderr.match(/Self-preference warning/gu)).toEqual([
+			"Self-preference warning",
+		]);
+		expect(stderr.indexOf("Self-preference warning")).toBeLessThan(
+			stderr.indexOf(`No replayable run named ${missingRun}`),
+		);
 	});
 });

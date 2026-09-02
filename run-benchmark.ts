@@ -24,6 +24,7 @@ import {
 } from "./src/benchmark/checks";
 import {
 	CONTROL_DIR,
+	judgeSelfPreferenceWarning,
 	parseArgs,
 	REQUIRED_BUN_VERSION,
 } from "./src/benchmark/config";
@@ -53,6 +54,11 @@ async function main(): Promise<void> {
 	}
 
 	const config = parseArgs(Bun.argv.slice(2));
+	const warning = judgeSelfPreferenceWarning(config);
+	if (warning !== undefined) {
+		console.error(warning);
+	}
+
 	const pipeline = await loadPipeline(config.pipelinePath);
 	const rl = createInterface({ input, output });
 
