@@ -1,11 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import { caseRelative, loadCase, parseCaseDeclaration } from "#benchmark/case";
+import {
+	CASES_DIRECTORY,
+	caseRelative,
+	listCases,
+	loadCase,
+	parseCaseDeclaration,
+} from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
-import { stat } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
-import { PROJECT_ROOT } from "#benchmark/test-support";
+import { PROJECT_ROOT, TestResources } from "#benchmark/test-support";
 
 /**
  * The commit before the case files moved out of the control root. Reading the
@@ -77,6 +83,27 @@ describe(caseRelative.name, () => {
 		expect(caseRelative(declaration, "rubrics/shape.json")).toBe(
 			join(CONTROL_DIR, "cases/audit-log/rubrics/shape.json"),
 		);
+	});
+});
+
+describe(listCases.name, () => {
+	const resources = TestResources.forEachTest();
+
+	it("lists the readable cases past a directory that holds no declaration", async () => {
+		const stray = join(CONTROL_DIR, CASES_DIRECTORY, "zz-stray-probe");
+		resources.track(stray);
+		await mkdir(stray, { recursive: true });
+
+		const listing = await listCases();
+
+		expect(listing.declarations.map(({ id }) => id)).toContain("audit-log");
+		expect(listing.unreadable).toEqual([
+			{
+				id: "zz-stray-probe",
+				reason:
+					"Unknown case zz-stray-probe: no declaration at cases/zz-stray-probe/case.json",
+			},
+		]);
 	});
 });
 

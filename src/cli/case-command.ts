@@ -53,14 +53,17 @@ export async function runCaseList(
 	request: CaseListRequest,
 	output: CommandOutput,
 ): Promise<void> {
-	const declarations = await asRefusedPrecondition(() => listCases());
+	const listing = await asRefusedPrecondition(() => listCases());
+	for (const { reason } of listing.unreadable) {
+		output.stderr(`${reason}\n`);
+	}
 	if (request.json) {
-		output.stdout(serialize(declarations));
+		output.stdout(serialize(listing.declarations));
 
 		return;
 	}
 
-	for (const declaration of declarations) {
+	for (const declaration of listing.declarations) {
 		output.stdout(`${declaration.id}\t${declaration.title}\n`);
 	}
 }

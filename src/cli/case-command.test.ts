@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import type { CaseDeclaration } from "#benchmark/case";
@@ -37,6 +38,22 @@ describe(runCaseList.name, () => {
 		const declarations = printedDeclarations(recorder.stdout.join(""));
 
 		expect(declarations.map(({ id }) => id)).toContain(DEFAULT_CASE_ID);
+	});
+
+	it("reports an unreadable case directory on stderr and still lists the rest", async () => {
+		const stray = join(CONTROL_DIR, CASES_DIRECTORY, "zz-stray-probe");
+		await mkdir(stray, { recursive: true });
+
+		try {
+			const recorder = recordOutput();
+
+			await runCaseList({ json: false }, recorder.output);
+
+			expect(recorder.stdout.join("")).toContain(DEFAULT_CASE_ID);
+			expect(recorder.stderr.join("")).toContain("zz-stray-probe");
+		} finally {
+			await rm(stray, { force: true, recursive: true });
+		}
 	});
 });
 

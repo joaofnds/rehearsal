@@ -128,22 +128,46 @@ export async function readCaseDeclaration(
 	return parseCaseDeclaration(id, await file.text());
 }
 
-export async function listCases(): Promise<readonly CaseDeclaration[]> {
-	const entries = await readdir(join(CONTROL_DIR, CASES_DIRECTORY), {
-		withFileTypes: true,
-	});
-	const declarations: CaseDeclaration[] = [];
-	for (const entry of entries.toSorted((left, right) =>
-		left.name.localeCompare(right.name),
-	)) {
-		if (!entry.isDirectory()) {
-			continue;
-		}
+export interface UnreadableCase {
+	readonly id: string;
+	readonly reason: string;
+}
 
-		declarations.push(await readCaseDeclaration(entry.name));
+export interface CaseListing {
+	readonly declarations: readonly CaseDeclaration[];
+	readonly unreadable: readonly UnreadableCase[];
+}
+
+async function readCaseDirectoryNames(): Promise<readonly string[]> {
+	const directory = join(CONTROL_DIR, CASES_DIRECTORY);
+	const entries = await readdir(directory, { withFileTypes: true });
+
+	return entries
+		.filter((entry) => entry.isDirectory())
+		.map(({ name }) => name)
+		.toSorted((left, right) => left.localeCompare(right));
+}
+
+/**
+ * A directory that holds no readable declaration is reported rather than
+ * thrown, because a half-written case must not hide the cases that do read.
+ */
+export async function listCases(): Promise<CaseListing> {
+	const declarations: CaseDeclaration[] = [];
+	const unreadable: UnreadableCase[] = [];
+	for (const id of await readCaseDirectoryNames()) {
+		try {
+			declarations.push(await readCaseDeclaration(id));
+		} catch (error) {
+			if (!(error instanceof CaseDeclarationError)) {
+				throw error;
+			}
+
+			unreadable.push({ id, reason: error.message });
+		}
 	}
 
-	return declarations;
+	return { declarations, unreadable };
 }
 
 async function loadPipelineWithRubrics(
