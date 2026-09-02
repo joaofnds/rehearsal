@@ -2,9 +2,10 @@
 id: ACT-24
 title: record pipeline confirmation setup failure boundary
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-09-01 13:52'
-updated_date: '2026-09-02 12:04'
+updated_date: '2026-09-02 13:23'
 labels: []
 dependencies: []
 references:
