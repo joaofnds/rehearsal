@@ -1,11 +1,11 @@
 ---
 id: ACT-7
 title: accumulate judge-vs-human agreement from calibration
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-09-02 13:48'
+updated_date: '2026-09-02 14:40'
 labels: []
 dependencies: []
 references:
@@ -22,15 +22,15 @@ Accumulate completed human calibration into Judge agreement baselines partitione
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A focused aggregation test converts every original stage or final rubric criterion in each completed calibration into one binary Judge/human observation: CAUGHT is fail/fail, MISSED is pass/fail, FALSE_POSITIVE is fail/pass, an absent Judge-related finding agrees with the original decision, NOT_PROMOTED does not alter a decision, and stage dimensions treat A/B as pass and C/D/F as fail.
-- [ ] #2 For six reviews of one criterion producing two pass/pass, two fail/fail, one pass/fail, and one fail/pass observations, the report shows those four raw counts, sample size 6, observed agreement 2/3, and Cohen's kappa 1/3; when expected agreement is 1, kappa is null while counts and observed agreement remain available.
-- [ ] #3 Observations with different exact Judge model identifiers, rubric-contract SHA-256 digests, stages, or rubric IDs appear in separate deterministic baselines and are never merged; a rubric edit or Judge-model change therefore starts a new baseline.
-- [ ] #4 A stopped stage's completed record persists its exact judgeModel and a Judge agreement snapshot that includes the current calibration; a completed final run artifact does the same for all reviewed stage and final criteria.
-- [ ] #5 Historical calibrated stage records without judgeModel are joined only to their exact neighboring run manifest; calibrated pre-manifest records are skipped, never inferred, and increase the report's skipped-calibration count.
-- [ ] #6 Stage and pipeline confirmation reports show the accumulated snapshot for their exact Judge model, and omit baselines from other Judge models.
-- [ ] #7 A newly generated comparison report is strict schema version 2 and shows the accumulated snapshots for every exact Judge model represented by its source groups; existing strict schema-version-1 comparison reports remain parseable, and unknown fields remain rejected in both versions.
-- [ ] #8 The README explains the label mapping, baseline identity, counts, null-kappa case, historical skip behavior, and report locations; GLOSSARY.md defines Judge agreement baseline and rubric criterion.
-- [ ] #9 bun test, bun run typecheck, bun run lint, and bun run fmt:check exit successfully, and a generated report is directly observed with separated model/rubric baselines and the expected counts and kappa.
+- [x] #1 A focused aggregation test converts every original stage or final rubric criterion in each completed calibration into one binary Judge/human observation: CAUGHT is fail/fail, MISSED is pass/fail, FALSE_POSITIVE is fail/pass, an absent Judge-related finding agrees with the original decision, NOT_PROMOTED does not alter a decision, and stage dimensions treat A/B as pass and C/D/F as fail.
+- [x] #2 For six reviews of one criterion producing two pass/pass, two fail/fail, one pass/fail, and one fail/pass observations, the report shows those four raw counts, sample size 6, observed agreement 2/3, and Cohen's kappa 1/3; when expected agreement is 1, kappa is null while counts and observed agreement remain available.
+- [x] #3 Observations with different exact Judge model identifiers, rubric-contract SHA-256 digests, stages, or rubric IDs appear in separate deterministic baselines and are never merged; a rubric edit or Judge-model change therefore starts a new baseline.
+- [x] #4 A stopped stage's completed record persists its exact judgeModel and a Judge agreement snapshot that includes the current calibration; a completed final run artifact does the same for all reviewed stage and final criteria.
+- [x] #5 Historical calibrated stage records without judgeModel are joined only to their exact neighboring run manifest; calibrated pre-manifest records are skipped, never inferred, and increase the report's skipped-calibration count.
+- [x] #6 Stage and pipeline confirmation reports show the accumulated snapshot for their exact Judge model, and omit baselines from other Judge models.
+- [x] #7 A newly generated comparison report is strict schema version 2 and shows the accumulated snapshots for every exact Judge model represented by its source groups; existing strict schema-version-1 comparison reports remain parseable, and unknown fields remain rejected in both versions.
+- [x] #8 The README explains the label mapping, baseline identity, counts, null-kappa case, historical skip behavior, and report locations; GLOSSARY.md defines Judge agreement baseline and rubric criterion.
+- [x] #9 bun test, bun run typecheck, bun run lint, and bun run fmt:check exit successfully, and a generated report is directly observed with separated model/rubric baselines and the expected counts and kappa.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -67,4 +67,34 @@ Resolved unknowns:
 Glossary terms to add: Judge agreement baseline; rubric criterion.
 
 No product decision remains open.
+
+Build evidence gathered 2026-09-02:
+
+- Implemented deterministic Judge/human observations, contingency summaries, observed agreement, and Cohen's kappa in `src/benchmark/judge-agreement.ts`.
+- Persisted exact-model snapshots in stopped-stage and final-run artifacts; exposed exact-model snapshots in stage confirmation, pipeline confirmation, and strict comparison report schema version 2 while retaining strict version-1 parsing.
+- Historical collection joins the exact neighboring manifest and all completed sibling stage scorecards; pre-manifest calibrations increment `skippedCalibrations`.
+- Direct production collector observation generated separate opus/rubric-A, opus/rubric-B, and sonnet/rubric-A baselines. The six-sample opus/rubric-A row reported pass/pass 2, fail/fail 2, pass/fail 1, fail/pass 1, observed agreement 2/3, and kappa 1/3. Temporary evidence was removed. A collector run against `.benchmark-runs` also observed separated real Sonnet baselines and one skipped legacy calibration.
+- Final verification: `bun test` passed 439 tests with 878 assertions; `bun run typecheck`, `bun run lint`, and `bun run fmt:check` exited successfully.
+
+Refactor pass:
+
+- Blocking correctness gap found and fixed in `947bc51`: historical stopped-stage calibration now reconstructs every completed sibling stage, not only its stopping stage.
+- No further structural opportunity remained after the focused collector boundary and explicit artifact variants were in place.
+
+Independent review dispositions:
+
+- Blocking, fixed in `c772662`: multiple findings for one criterion made the human label depend on finding order. All matching assessments are now folded, with CAUGHT/MISSED taking precedence over FALSE_POSITIVE; both permutations are covered.
+- Should-fix, fixed in `c772662`: dimension tests now pin A/B as pass and C/D/F as fail, with a same-rubric NOT_PROMOTED finding proving it does not alter the decision.
+- Should-fix, fixed in `c772662`: the production collector now has a test proving an unwritten current calibration is included exactly once.
+- Should-fix, fixed in `c772662`: comparison integration now proves all represented Judge models are included.
+- Should-fix, fixed in `c772662`: stage replay confirmation now proves exact-model agreement inclusion and other-model exclusion.
+- Style, architecture, security, and advisory refactoring axes: nothing else found. No finding remains open.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Judge agreement baselines now derive from completed human calibrations and remain partitioned by exact Judge model, stage, frozen rubric digest, and criterion. Debug-run artifacts, stage and pipeline confirmations, and comparison reports expose filtered snapshots with raw counts, observed agreement, Cohen's kappa, and explicit historical skips.
+
+The committed implementation passed the full project gates and a direct generated-report observation. The required refactor and independent review passes are complete; every review finding was fixed and verified.
+<!-- SECTION:FINAL_SUMMARY:END -->
