@@ -2,9 +2,10 @@
 id: ACT-8
 title: default the judge to a different model family
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-09-02 00:18'
+updated_date: '2026-09-02 01:10'
 labels: []
 dependencies: []
 references:
