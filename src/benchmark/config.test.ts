@@ -3,6 +3,24 @@ import { join } from "node:path";
 import { parseArgs, parseReplayArgs } from "./config";
 
 describe(parseArgs.name, () => {
+	it.each([
+		{ model: "sonnet", judgeModel: "opus" },
+		{ model: "haiku", judgeModel: "opus" },
+		{ model: "external-model", judgeModel: "opus" },
+		{ model: "opus", judgeModel: "sonnet" },
+		{ model: "claude-opus-4-8", judgeModel: "sonnet" },
+	])(
+		"defaults the Judge to $judgeModel when workflow model is $model",
+		({ model, judgeModel }) => {
+			const config = parseArgs(
+				["--target", "./target", "--model", model, "--session-budget-usd", "5"],
+				{},
+			);
+
+			expect(config.judgeModel).toBe(judgeModel);
+		},
+	);
+
 	it("resolves explicit configuration", () => {
 		const config = parseArgs(
 			[
@@ -123,7 +141,6 @@ describe(parseArgs.name, () => {
 			{},
 		);
 
-		expect(config.judgeModel).toBe("sonnet");
 		expect(config.judgeEffort).toBe("xhigh");
 	});
 
@@ -165,7 +182,34 @@ describe(parseArgs.name, () => {
 });
 
 describe(parseReplayArgs.name, () => {
-	it("resolves the replay knobs and defaults the judge to the model", () => {
+	it.each([
+		{ model: "sonnet", judgeModel: "opus" },
+		{ model: "haiku", judgeModel: "opus" },
+		{ model: "external-model", judgeModel: "opus" },
+		{ model: "opus", judgeModel: "sonnet" },
+		{ model: "claude-opus-4-8", judgeModel: "sonnet" },
+	])(
+		"defaults the Judge to $judgeModel when workflow model is $model",
+		({ model, judgeModel }) => {
+			const config = parseReplayArgs(
+				[
+					"--run",
+					"run-1",
+					"--stage",
+					"build",
+					"--model",
+					model,
+					"--session-budget-usd",
+					"5",
+				],
+				{},
+			);
+
+			expect(config.judgeModel).toBe(judgeModel);
+		},
+	);
+
+	it("resolves the replay knobs", () => {
 		const config = parseReplayArgs(
 			[
 				"--run",
@@ -187,7 +231,7 @@ describe(parseReplayArgs.name, () => {
 			stage: "discuss",
 			model: "sonnet",
 			effort: "high",
-			judgeModel: "sonnet",
+			judgeModel: "opus",
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
 		});

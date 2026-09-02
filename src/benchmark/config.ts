@@ -13,6 +13,8 @@ export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 
 export const DEFAULT_PIPELINE_PATH = "pipelines/default.json";
 
+const MODEL_FAMILIES = ["opus", "sonnet", "haiku"] as const;
+
 export const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 
 export type Effort = z.infer<typeof effortSchema>;
@@ -37,6 +39,16 @@ export interface BenchmarkConfig {
 interface ParsedFlags {
 	readonly values: ReadonlyMap<string, string>;
 	readonly switches: ReadonlySet<string>;
+}
+
+function modelFamily(model: string) {
+	const terms = model.toLowerCase().split(/[^a-z0-9]+/u);
+
+	return MODEL_FAMILIES.find((family) => terms.includes(family));
+}
+
+function defaultJudgeModel(workflowModel: string): string {
+	return modelFamily(workflowModel) === "opus" ? "sonnet" : "opus";
 }
 
 const SWITCH_FLAGS = new Set(["--confirm", "--yes"]);
@@ -127,7 +139,9 @@ export function parseArgs(
 	}
 
 	const judgeModel =
-		values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model;
+		values.get("--judge-model") ??
+		env["BENCHMARK_JUDGE_MODEL"] ??
+		defaultJudgeModel(model);
 	const effort = parseEffort(
 		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
 		"workflow",
@@ -227,7 +241,9 @@ export function parseReplayArgs(
 			model,
 			effort,
 			judgeModel:
-				values.get("--judge-model") ?? env["BENCHMARK_JUDGE_MODEL"] ?? model,
+				values.get("--judge-model") ??
+				env["BENCHMARK_JUDGE_MODEL"] ??
+				defaultJudgeModel(model),
 			judgeEffort,
 			sessionBudgetUsd,
 		},
