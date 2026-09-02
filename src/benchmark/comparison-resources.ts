@@ -103,17 +103,6 @@ export interface ComparisonResourcesReport {
 	>;
 }
 
-function assertExpectedRepCount(
-	contract: Immutable<ComparisonProjectionInput["contract"]>,
-	reps: readonly Immutable<ConfirmationRepRecord>[],
-): void {
-	if (reps.length !== contract.reps) {
-		throw new Error(
-			`Comparison arm has ${reps.length} reps; expected ${contract.reps}`,
-		);
-	}
-}
-
 function mean(values: readonly number[]): number {
 	if (values.length === 0) {
 		throw new Error("A paired estimate requires observations in every arm");
@@ -144,8 +133,6 @@ function armResources(
 	contract: Immutable<ComparisonProjectionInput["contract"]>,
 	reps: readonly Immutable<ConfirmationRepRecord>[],
 ): ArmResources {
-	assertExpectedRepCount(contract, reps);
-
 	const missingEvidence = reps.flatMap((rep) =>
 		rep.metrics.status === "MISSING"
 			? [

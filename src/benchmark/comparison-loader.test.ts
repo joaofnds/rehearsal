@@ -25,7 +25,7 @@ import { writeComparisonReport } from "./comparison-command";
 import { parseComparisonReport } from "./comparison-record";
 import { runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
-import { loadComparisonEvidence } from "./comparison-evidence";
+import { loadComparisonEvidence } from "./comparison-loader";
 import type { ComparisonArm } from "./comparison-record";
 import { benchmarkRunsDirectory, comparisonReportPaths } from "./run-layout";
 

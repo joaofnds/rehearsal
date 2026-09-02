@@ -5,7 +5,7 @@ import type {
 	ComparisonArmEvidence,
 	ComparisonCaseEvidence,
 } from "./comparison-evidence";
-import { assertComparableComparison } from "./comparison-evidence";
+import { assertComparableComparison } from "./comparison-comparability";
 import type { ComparisonArm } from "./comparison-record";
 
 interface GroupFixtureOptions {
@@ -475,6 +475,23 @@ describe(assertComparableComparison.name, () => {
 
 		expect(() => assertComparableComparison(cases)).toThrow(
 			"case case-1 arm control field reps differs from case case-1 arm baseline",
+		);
+	});
+
+	it("rejects an arm without the expected rep records", () => {
+		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
+		const baseline = arm("baseline", {
+			...first.arms.baseline.group.record,
+			repRecords: first.arms.baseline.group.record.repRecords.slice(0, 1),
+		});
+
+		expect(() =>
+			assertComparableComparison([
+				{ ...first, arms: { ...first.arms, baseline } },
+				benchmarkCase("case-2", CORPUS_DIGESTS),
+			]),
+		).toThrow(
+			"case case-1 arm baseline field repRecords has 1 reps; expected 2",
 		);
 	});
 });

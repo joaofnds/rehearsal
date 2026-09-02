@@ -35,23 +35,10 @@ export interface ComparisonQualityReport {
 	>;
 }
 
-function assertExpectedRepCount(
-	contract: Immutable<ComparisonProjectionInput["contract"]>,
-	reps: readonly Immutable<ConfirmationRepRecord>[],
-): void {
-	if (reps.length !== contract.reps) {
-		throw new Error(
-			`Comparison arm has ${reps.length} reps; expected ${contract.reps}`,
-		);
-	}
-}
-
 function armQuality(
 	contract: Immutable<ComparisonProjectionInput["contract"]>,
 	reps: readonly Immutable<ConfirmationRepRecord>[],
 ): readonly ReliabilitySummary[] {
-	assertExpectedRepCount(contract, reps);
-
 	const inputs = reps.map((rep) => {
 		if (contract.mode === "stage") {
 			return {

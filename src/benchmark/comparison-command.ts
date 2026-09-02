@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { loadComparisonEvidence } from "./comparison-evidence";
+import { loadComparisonEvidence } from "./comparison-loader";
 import { buildComparisonReport } from "./comparison-report";
 import {
 	filterJudgeAgreementReport,

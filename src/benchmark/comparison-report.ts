@@ -49,13 +49,13 @@ function reportResourceCase(
 	return benchmarkCase;
 }
 
-interface BuildReportArmRequest {
+export interface BuildReportArmRequest {
 	readonly evidence: ComparisonArmEvidence;
 	readonly quality: readonly ReliabilitySummary[];
 	readonly resources: ArmResources;
 }
 
-function buildReportArm(
+export function buildReportArm(
 	request: Immutable<BuildReportArmRequest>,
 ): ComparisonReport["cases"][number]["arms"][ComparisonArm] {
 	return {
@@ -100,7 +100,9 @@ export function buildComparisonReport(
 	};
 	const quality = buildComparisonQuality(reportInput);
 	const resources = buildComparisonResources(reportInput);
-	const contrast = (definition: (typeof COMPARISON_CONTRASTS)[number]) => ({
+	const contrast = (
+		definition: (typeof COMPARISON_CONTRASTS)[number],
+	): ComparisonReport["contrasts"]["candidateMinusBaseline"] => ({
 		minuend: definition.minuend,
 		subtrahend: definition.subtrahend,
 		quality: quality.contrasts[definition.name].quality,

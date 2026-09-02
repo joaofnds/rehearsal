@@ -11,7 +11,7 @@ import type {
 	ComparisonArmEvidence,
 	ComparisonEvidence,
 } from "./comparison-evidence";
-import { buildPairedEstimate } from "./comparison-estimator";
+import type { PairedEstimate } from "./comparison-estimator";
 import { buildComparisonQuality } from "./comparison-quality";
 import { buildComparisonReport } from "./comparison-report";
 import { buildComparisonResources } from "./comparison-resources";
@@ -497,7 +497,7 @@ describe(buildComparisonResources.name, () => {
 		const expectedEstimate = (
 			first: number,
 			second: number,
-		): ReturnType<typeof buildPairedEstimate> => ({
+		): PairedEstimate => ({
 			caseDeltas: [
 				{ caseId: "case-1", value: first },
 				{ caseId: "case-2", value: second },
