@@ -196,6 +196,29 @@ Invalid review JSON, inconsistent findings, malformed rubric IDs, an ineffective
 
 After successful calibration, the harness updates the run artifact to `COMPLETE` with the human review, changed instruction or rubric content, and revised Judge result. It then restores the target. Changes made to this control repository during review are retained and must be committed before the next run.
 
+Completed calibration also updates the Judge agreement snapshot. Every original
+rubric criterion contributes one binary Judge/human decision: `CAUGHT` is
+fail/fail, `MISSED` is pass/fail, and `FALSE_POSITIVE` is fail/pass. Because the
+review must record every finding, a criterion with no Judge-related finding keeps
+the original decision as the human decision; `NOT_PROMOTED` does not alter one.
+Stage dimensions reduce A/B to pass and C/D/F to fail.
+
+Agreement baselines never merge different exact Judge model identifiers, stages,
+or frozen rubric contracts. The contract is identified by SHA-256, so either a
+Judge-model change or a rubric edit starts a new baseline even when criterion IDs
+stay the same. Each criterion reports sample size, the four pass/fail contingency
+counts, observed agreement, and Cohen's kappa. Kappa is `null` when expected
+agreement is 1 and its denominator is therefore zero; the counts and observed
+agreement remain usable.
+
+The snapshot is stored in completed stopped-stage and final run artifacts and is
+also shown in stage/pipeline confirmation reports. Comparison reports use strict
+schema version 2 and include snapshots for every exact Judge model represented by
+their source groups; version-1 comparison reports remain readable. Current stage
+artifacts record `judgeModel` directly. Historical calibrated stage artifacts are
+attributed only through their neighboring run manifest; pre-manifest evidence is
+not guessed and increments `skippedCalibrations`.
+
 ## Restoration
 
 Normal cleanup performs these operations in the target:
