@@ -102,13 +102,6 @@ export async function captureWorkflowBackup(
 	return { directory };
 }
 
-async function restoreWorkflowBackup(
-	targetDir: string,
-	backup: WorkflowBackup,
-): Promise<void> {
-	await replaceWorkflowState(backup.directory, targetDir);
-}
-
 async function runMarkerPath(root: string): Promise<string> {
 	return join(
 		await git(root, "rev-parse", "--absolute-git-dir"),
@@ -146,7 +139,7 @@ export async function restoreTarget(
 	await git(source.root, "clean", "-fd");
 
 	if (backup) {
-		await restoreWorkflowBackup(source.root, backup);
+		await replaceWorkflowState(backup.directory, source.root);
 	}
 
 	const restored = await assertSourceReady(source.root);
