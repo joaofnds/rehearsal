@@ -8,6 +8,14 @@ import {
 	buildResourceReport,
 } from "./confirmation-report";
 import type {
+	ComparisonContrast,
+	PairedEstimate,
+} from "./comparison-estimator";
+import {
+	buildPairedEstimate,
+	COMPARISON_CONTRASTS,
+} from "./comparison-estimator";
+import type {
 	ComparisonArmEvidence,
 	ComparisonContract,
 	ComparisonEvidence,
@@ -16,19 +24,6 @@ import type { JudgeAgreementReport } from "./judge-agreement";
 import type { ComparisonArm, ComparisonReport } from "./comparison-record";
 import { comparisonReportSchema } from "./comparison-record";
 import type { Immutable } from "./contracts";
-
-export interface PairedCaseObservations {
-	readonly caseId: string;
-	readonly minuend: readonly number[];
-	readonly subtrahend: readonly number[];
-}
-
-export const COMPARISON_CONTRASTS = [
-	"candidateMinusBaseline",
-	"candidateMinusControl",
-	"baselineMinusControl",
-] as const;
-export type ComparisonContrast = (typeof COMPARISON_CONTRASTS)[number];
 
 export interface ComparisonRepCaseInput {
 	readonly caseId: string;
@@ -154,50 +149,6 @@ export interface ComparisonResourcesReport {
 	>;
 }
 
-export interface PairedEstimate {
-	readonly caseDeltas: readonly {
-		readonly caseId: string;
-		readonly value: number;
-	}[];
-	readonly meanDelta: number;
-	readonly standardError: number;
-}
-
-function mean(values: readonly number[]): number {
-	if (values.length === 0) {
-		throw new Error("A paired estimate requires observations in every arm");
-	}
-
-	const sorted = values.toSorted((left, right) => left - right);
-
-	return sorted.reduce((total, value) => total + value, 0) / sorted.length;
-}
-
-export function buildPairedEstimate(
-	cases: readonly PairedCaseObservations[],
-): PairedEstimate {
-	if (cases.length < 2) {
-		throw new Error("A paired estimate requires at least two cases");
-	}
-
-	const caseDeltas = cases.map((benchmarkCase) => ({
-		caseId: benchmarkCase.caseId,
-		value: mean(benchmarkCase.minuend) - mean(benchmarkCase.subtrahend),
-	}));
-	const meanDelta = mean(caseDeltas.map(({ value }) => value));
-	const squaredDifferences = caseDeltas.map(
-		({ value }) => (value - meanDelta) ** 2,
-	);
-	const sampleVariance =
-		mean(squaredDifferences) * (caseDeltas.length / (caseDeltas.length - 1));
-
-	return {
-		caseDeltas,
-		meanDelta,
-		standardError: Math.sqrt(sampleVariance / caseDeltas.length),
-	};
-}
-
 function assertExpectedRepCount(
 	contract: Immutable<ComparisonContract>,
 	reps: readonly Immutable<ConfirmationRepRecord>[],
@@ -309,6 +260,8 @@ export function buildComparisonQuality(
 		...request.contract.declaredStages,
 		...(request.contract.mode === "pipeline" ? ["final"] : []),
 	];
+	const [candidateMinusBaseline, candidateMinusControl, baselineMinusControl] =
+		COMPARISON_CONTRASTS;
 
 	return {
 		cases,
@@ -316,27 +269,28 @@ export function buildComparisonQuality(
 			candidateMinusBaseline: buildQualityContrast({
 				names,
 				cases,
-				minuend: "candidate",
-				subtrahend: "baseline",
+				...candidateMinusBaseline,
 			}),
 			candidateMinusControl: buildQualityContrast({
 				names,
 				cases,
-				minuend: "candidate",
-				subtrahend: "control",
+				...candidateMinusControl,
 			}),
 			baselineMinusControl: buildQualityContrast({
 				names,
 				cases,
-				minuend: "baseline",
-				subtrahend: "control",
+				...baselineMinusControl,
 			}),
 		},
 	};
 }
 
 function metricValueSummary(values: readonly number[]): MetricValueSummary {
-	return { values, mean: mean(values) };
+	const sorted = values.toSorted((left, right) => left - right);
+	const mean =
+		sorted.reduce((total, value) => total + value, 0) / sorted.length;
+
+	return { values, mean };
 }
 
 function resourceMetricSummary(
@@ -544,24 +498,23 @@ export function buildComparisonResources(
 			control: armResources(request.contract, benchmarkCase.arms.control),
 		},
 	}));
+	const [candidateMinusBaseline, candidateMinusControl, baselineMinusControl] =
+		COMPARISON_CONTRASTS;
 
 	return {
 		cases,
 		contrasts: {
 			candidateMinusBaseline: buildResourceContrast({
 				cases,
-				minuend: "candidate",
-				subtrahend: "baseline",
+				...candidateMinusBaseline,
 			}),
 			candidateMinusControl: buildResourceContrast({
 				cases,
-				minuend: "candidate",
-				subtrahend: "control",
+				...candidateMinusControl,
 			}),
 			baselineMinusControl: buildResourceContrast({
 				cases,
-				minuend: "baseline",
-				subtrahend: "control",
+				...baselineMinusControl,
 			}),
 		},
 	};
@@ -646,6 +599,12 @@ export function buildComparisonReport(
 	};
 	const quality = buildComparisonQuality(reportInput);
 	const resources = buildComparisonResources(reportInput);
+	const contrast = (definition: (typeof COMPARISON_CONTRASTS)[number]) => ({
+		minuend: definition.minuend,
+		subtrahend: definition.subtrahend,
+		quality: quality.contrasts[definition.name].quality,
+		resources: resources.contrasts[definition.name].resources,
+	});
 	const cases = evidence.cases.map((benchmarkCase) => {
 		const caseQuality = reportQualityCase(quality, benchmarkCase.caseId);
 		const caseResources = reportResourceCase(resources, benchmarkCase.caseId);
@@ -680,24 +639,9 @@ export function buildComparisonReport(
 		reps: evidence.contract.reps,
 		cases,
 		contrasts: {
-			candidateMinusBaseline: {
-				minuend: "candidate" as const,
-				subtrahend: "baseline" as const,
-				quality: quality.contrasts.candidateMinusBaseline.quality,
-				resources: resources.contrasts.candidateMinusBaseline.resources,
-			},
-			candidateMinusControl: {
-				minuend: "candidate" as const,
-				subtrahend: "control" as const,
-				quality: quality.contrasts.candidateMinusControl.quality,
-				resources: resources.contrasts.candidateMinusControl.resources,
-			},
-			baselineMinusControl: {
-				minuend: "baseline" as const,
-				subtrahend: "control" as const,
-				quality: quality.contrasts.baselineMinusControl.quality,
-				resources: resources.contrasts.baselineMinusControl.resources,
-			},
+			candidateMinusBaseline: contrast(COMPARISON_CONTRASTS[0]),
+			candidateMinusControl: contrast(COMPARISON_CONTRASTS[1]),
+			baselineMinusControl: contrast(COMPARISON_CONTRASTS[2]),
 		},
 	};
 
