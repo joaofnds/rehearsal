@@ -364,11 +364,12 @@ async function runPipelineRep(
 			plan.worktreePath,
 		);
 		worktreeCreated = true;
-		setupOperation = undefined;
+		setupOperation = "checkpoint materialization";
 		await dependencies.materializeCheckpoint(
 			frozen.checkpointDirectory,
 			plan.worktreePath,
 		);
+		setupOperation = undefined;
 		productOwner = dependencies.createProductOwner({
 			directory: join(repPaths.directory, "product-owner"),
 			model: request.model,

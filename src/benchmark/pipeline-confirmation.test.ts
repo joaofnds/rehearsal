@@ -648,6 +648,43 @@ describe(runPipelineConfirmation.name, () => {
 		).toBe(false);
 	});
 
+	it("attributes checkpoint materialization failures and preserves the worktree", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run({}, (dependencies) => ({
+			...dependencies,
+			materializeCheckpoint: (checkpointDirectory, worktreePath) => {
+				if (worktreePath.endsWith("-rep-1")) {
+					return Promise.reject(new Error("synthetic checkpoint rejection"));
+				}
+
+				return dependencies.materializeCheckpoint(
+					checkpointDirectory,
+					worktreePath,
+				);
+			},
+		}));
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		const failed = records[0];
+		const preservedPath = failed?.worktreePath ?? "missing";
+
+		expect(failed?.stages[0]).toMatchObject({
+			status: "EXECUTION_FAILED",
+			error:
+				"checkpoint materialization failed: synthetic checkpoint rejection",
+		});
+		expect(harness.logs).toContain(
+			`Pipeline rep ${failed?.repId} failed; evidence preserved at ${preservedPath}`,
+		);
+		expect(harness.removed).not.toContain(preservedPath);
+		expect((await stat(preservedPath)).isDirectory()).toBe(true);
+		await removeWorktree(harness.sourceRoot, preservedPath);
+	});
+
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const failed = Promise.withResolvers<boolean>();
