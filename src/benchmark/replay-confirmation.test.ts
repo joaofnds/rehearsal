@@ -17,6 +17,7 @@ import {
 } from "./checkpoint";
 import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
+import { parseReplayArgs } from "./config";
 import type { ClaudeCallMetrics } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 import {
@@ -43,6 +44,43 @@ import {
 const testResources = TestResources.forEachTest();
 
 describe(runReplayConfirmation.name, () => {
+	it("records the resolved Judge model in stage confirmation evidence", async () => {
+		const harness = new ReplayConfirmationHarness(testResources);
+		const run = await harness.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		testResources.track(corpusRoot);
+		for (const skill of ["discuss", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+		}
+		const config = parseReplayArgs(
+			[
+				"--run",
+				run.paths.name,
+				"--stage",
+				"discuss",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
+
+		const outcome = await harness.runConfirmation(
+			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{ model: config.model, judgeModel: config.judgeModel },
+		);
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+
+		expect({
+			model: group.inputs.model,
+			judgeModel: group.inputs.judgeModel,
+		}).toEqual({ model: "sonnet", judgeModel: "opus" });
+	});
+
 	it("uses the recorded target for delivery replay confirmations", async () => {
 		const fake = new ReplayConfirmationHarness(testResources);
 		const run = await fake.recordedRun();

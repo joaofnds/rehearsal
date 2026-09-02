@@ -7,6 +7,7 @@ import {
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import { runCommand } from "./command";
+import { parseArgs } from "./config";
 import {
 	JudgeExecutionError,
 	JudgeOutputValidationError,
@@ -27,6 +28,34 @@ import { WorkflowExecutionError } from "./workflow";
 const testResources = TestResources.forEachTest();
 
 describe(runPipelineConfirmation.name, () => {
+	it("records the resolved Judge model in pipeline confirmation evidence", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const config = parseArgs(
+			[
+				"--target",
+				harness.sourceRoot,
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
+
+		const outcome = await harness.run({
+			model: config.model,
+			judgeModel: config.judgeModel,
+		});
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+
+		expect({
+			model: group.inputs.model,
+			judgeModel: group.inputs.judgeModel,
+		}).toEqual({ model: "sonnet", judgeModel: "opus" });
+	});
+
 	it("uses the pipeline target before task setup or provider calls", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const events: string[] = [];

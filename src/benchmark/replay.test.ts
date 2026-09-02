@@ -16,6 +16,7 @@ import {
 } from "./checkpoint";
 import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
+import { parseReplayArgs } from "./config";
 import type { StageJudgeInput } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 import type { RunManifest } from "./manifest";
@@ -364,8 +365,25 @@ describe(runReplay.name, () => {
 	it("replays a delivery stage in the worktree and never touches the primary", async () => {
 		const run = await recordedRun();
 		const fake = new ReplayConfirmationHarness(testResources);
+		const config = parseReplayArgs(
+			[
+				"--run",
+				run.paths.name,
+				"--stage",
+				"build",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
 
-		const outcome = await runReplay(fake.dependencies, request(run, "build"));
+		const outcome = await runReplay(fake.dependencies, {
+			...request(run, "build"),
+			model: config.model,
+			judgeModel: config.judgeModel,
+		});
 
 		const [worktree] = fake.worktrees;
 		expect(worktree?.root).toBe(run.manifest.sourceRoot);
@@ -402,6 +420,10 @@ describe(runReplay.name, () => {
 		);
 		expect(outcome.record.stageCostUsd).toBe(1.25);
 		expect(outcome.record.judgeCostUsd).toBe(0.5);
+		expect({
+			model: outcome.record.model,
+			judgeModel: outcome.record.judgeModel,
+		}).toEqual({ model: "sonnet", judgeModel: "opus" });
 		expect(outcome.record.resultSha).toBe("result-sha");
 		expect(outcome.record.scorecard.input.commitSubjects).toEqual([
 			"replayed commit",

@@ -28,6 +28,7 @@ import type {
 } from "./run";
 import {
 	buildFailedJudgeRunArtifact,
+	buildRunManifest,
 	buildRunArtifact,
 	captureRunBaseline,
 	retainedCheckpointRecorder,
@@ -1372,6 +1373,47 @@ describe(runBenchmark.name, () => {
 		} finally {
 			await rm(absolutePipeline, { force: true });
 		}
+	});
+});
+
+describe(buildRunManifest.name, () => {
+	it("records the resolved Judge model in run evidence", async () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"/tmp/target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+		);
+		const pipeline = await loadDefaultPipeline();
+
+		const manifest = buildRunManifest({
+			timestamp: "2026-09-02T00:00:00.000Z",
+			controlSha: "control-sha",
+			source: { root: "/tmp/target", sha: "source-sha" },
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			task: "Task",
+			productBrief: "Brief",
+			config,
+			pipeline,
+		});
+		const artifact = buildRunArtifact({
+			...artifactInputs(pipeline, config.pipelinePath),
+			config,
+		});
+
+		expect({
+			manifest: { model: manifest.model, judgeModel: manifest.judgeModel },
+			artifact: { model: artifact.model, judgeModel: artifact.judgeModel },
+		}).toEqual({
+			manifest: { model: "sonnet", judgeModel: "opus" },
+			artifact: { model: "sonnet", judgeModel: "opus" },
+		});
 	});
 });
 

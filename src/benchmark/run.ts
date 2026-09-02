@@ -48,6 +48,7 @@ import type { JudgeInvoker } from "./judge-attempt";
 import { JudgeOutputValidationError } from "./judge-attempt";
 import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
+import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
 import type {
 	PipelineDefinition,
@@ -131,6 +132,40 @@ export interface RunArtifactBaseInputs {
 export interface RunArtifactInputs extends RunArtifactBaseInputs {
 	readonly judge: JudgeResult;
 	readonly reviewFile: string;
+}
+
+export interface RunManifestInputs {
+	readonly timestamp: string;
+	readonly controlSha: string;
+	readonly source: SourceBaseline;
+	readonly taskId: string;
+	readonly taskSha: string;
+	readonly task: string;
+	readonly productBrief: string;
+	readonly config: BenchmarkConfig;
+	readonly pipeline: PipelineDefinition;
+}
+
+export function buildRunManifest(inputs: RunManifestInputs): RunManifest {
+	const { config, source } = inputs;
+
+	return {
+		timestamp: inputs.timestamp,
+		controlSha: inputs.controlSha,
+		sourceRoot: source.root,
+		sourceSha: source.sha,
+		taskId: inputs.taskId,
+		taskSha: inputs.taskSha,
+		task: inputs.task,
+		productBrief: inputs.productBrief,
+		model: config.model,
+		effort: config.effort,
+		judgeModel: config.judgeModel,
+		judgeEffort: config.judgeEffort,
+		sessionBudgetUsd: config.sessionBudgetUsd,
+		pipelinePath: config.pipelinePath,
+		pipeline: inputs.pipeline,
+	};
 }
 
 function runArtifactEvidence(
@@ -678,23 +713,20 @@ export async function runBenchmark(
 			pipeline.statuses,
 		);
 		const recordRetainedCheckpoint = retainedCheckpointRecorder(runFiles.name);
-		await writeRunManifest(runFiles.manifestFile, {
-			timestamp,
-			controlSha,
-			sourceRoot: source.root,
-			sourceSha: source.sha,
-			taskId,
-			taskSha,
-			task,
-			productBrief,
-			model: config.model,
-			effort: config.effort,
-			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
-			sessionBudgetUsd: config.sessionBudgetUsd,
-			pipelinePath: config.pipelinePath,
-			pipeline,
-		});
+		await writeRunManifest(
+			runFiles.manifestFile,
+			buildRunManifest({
+				timestamp,
+				controlSha,
+				source,
+				taskId,
+				taskSha,
+				task,
+				productBrief,
+				config,
+				pipeline,
+			}),
+		);
 		const initialCheckpoint = await recordRetainedCheckpoint(
 			source.root,
 			runFiles.checkpointDirectory(INITIAL_CHECKPOINT_STAGE),
