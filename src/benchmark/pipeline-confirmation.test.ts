@@ -601,6 +601,53 @@ describe(runPipelineConfirmation.name, () => {
 		});
 	});
 
+	it("attributes worktree creation failures without preserving an uncreated worktree", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const started: number[] = [];
+
+		const outcome = await harness.run({}, (dependencies) => ({
+			...dependencies,
+			addWorktree: (targetRoot, targetSha, worktreePath) => {
+				if (worktreePath.endsWith("-rep-1")) {
+					return Promise.reject(new Error("synthetic worktree collision"));
+				}
+
+				return dependencies.addWorktree(targetRoot, targetSha, worktreePath);
+			},
+			stageSession: {
+				...dependencies.stageSession,
+				runWorkflowStage: (request) => {
+					if (request.stage === "discuss") {
+						started.push(repOrdinal(request.targetDir));
+					}
+
+					return dependencies.stageSession.runWorkflowStage(request);
+				},
+			},
+		}));
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		const failed = records[0];
+
+		expect(failed?.stages[0]).toMatchObject({
+			status: "EXECUTION_FAILED",
+			error: "worktree creation failed: synthetic worktree collision",
+		});
+		expect(started.toSorted((left, right) => left - right)).toEqual([2, 3]);
+		expect(harness.logs).not.toContain(
+			`Pipeline rep ${failed?.repId} failed; evidence preserved at ${failed?.worktreePath}`,
+		);
+		expect(
+			await stat(dirname(failed?.worktreePath ?? "missing")).then(
+				() => true,
+				() => false,
+			),
+		).toBe(false);
+	});
+
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const failed = Promise.withResolvers<boolean>();

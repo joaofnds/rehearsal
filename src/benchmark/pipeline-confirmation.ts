@@ -355,6 +355,7 @@ async function runPipelineRep(
 	let stageClock = createStageClock(now);
 	let judgingStage = false;
 	let judgingFinal = false;
+	let setupOperation: string | undefined = "worktree creation";
 
 	try {
 		await dependencies.addWorktree(
@@ -363,6 +364,7 @@ async function runPipelineRep(
 			plan.worktreePath,
 		);
 		worktreeCreated = true;
+		setupOperation = undefined;
 		await dependencies.materializeCheckpoint(
 			frozen.checkpointDirectory,
 			plan.worktreePath,
@@ -578,6 +580,10 @@ async function runPipelineRep(
 		});
 	} catch (error) {
 		const failure = error instanceof Error ? error : new Error(String(error));
+		const diagnosticError =
+			setupOperation === undefined
+				? failure.message
+				: `${setupOperation} failed: ${failure.message}`;
 		const judgeFailure =
 			failure instanceof JudgeOutputValidationError ? failure : undefined;
 		const judgeExecutionFailure =
@@ -669,7 +675,7 @@ async function runPipelineRep(
 				{
 					stage: failedStage.name,
 					status: "EXECUTION_FAILED",
-					error: failure.message,
+					error: diagnosticError,
 					elapsedMs: now() - (stageClock.read() ?? repStart),
 					...(evidence === undefined
 						? { worktreePath: plan.worktreePath }
