@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	captureTranscriptPrefix,
 	CaptureError,
+	projectSlug,
 	resolveSessionFile,
 } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
@@ -173,5 +174,18 @@ describe(captureTranscriptPrefix.name, () => {
 		expect(
 			captureTranscriptPrefix(path, await destination(), 0),
 		).rejects.toBeInstanceOf(CaptureError);
+	});
+});
+
+describe(projectSlug.name, () => {
+	it("replaces every path separator with a dash", () => {
+		expect(projectSlug("/private/tmp/x")).toBe("-private-tmp-x");
+	});
+
+	it("names a path through the /tmp symlink differently from its real path", async () => {
+		const real = await realpath("/tmp");
+
+		expect(projectSlug(real)).not.toBe(projectSlug("/tmp"));
+		expect(projectSlug(`${real}/x`)).toBe(`${real.replaceAll("/", "-")}-x`);
 	});
 });
