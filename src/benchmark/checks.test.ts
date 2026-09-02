@@ -4,6 +4,7 @@ import {
 	captureBaselineContext,
 	captureCheckIntegrity,
 	captureFileHashes,
+	captureTreatmentChecks,
 	runChecks,
 } from "./checks";
 import { runCommand } from "./command";
@@ -30,6 +31,49 @@ describe(runChecks.name, () => {
 		expect(await Bun.file(join(source.directory, "checks.log")).text()).toBe(
 			"first:host\nsecond:host\n",
 		);
+	});
+});
+
+describe(captureTreatmentChecks.name, () => {
+	it("passes when every declared command succeeds", async () => {
+		const source = await testResources.createRepository();
+		const checks = [
+			{ command: ["bun", "-e", "process.exit(0)"] },
+			{ command: ["bun", "--version"] },
+		];
+
+		const result = await captureTreatmentChecks(source.directory, checks);
+
+		expect(result).toEqual({
+			status: "PASS",
+			evidence: [
+				{
+					source: "local-checks",
+					path: checks.map(({ command }) => command.join(" ")).join("; "),
+					claim: "All treatment checks exited successfully",
+				},
+			],
+		});
+	});
+
+	it("names the failed declared command in authoritative evidence", async () => {
+		const source = await testResources.createRepository();
+		const command = ["bun", "-e", "process.exit(7)"];
+
+		const result = await captureTreatmentChecks(source.directory, [
+			{ command },
+		]);
+
+		expect(result).toEqual({
+			status: "FAIL",
+			evidence: [
+				{
+					source: "local-checks",
+					path: command.join(" "),
+					claim: "Treatment check exited 7",
+				},
+			],
+		});
 	});
 });
 

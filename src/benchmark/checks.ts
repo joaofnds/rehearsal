@@ -43,15 +43,16 @@ export async function runChecks(
 
 export async function captureTreatmentChecks(
 	targetDir: string,
+	checks: readonly TargetCheck[] = DEFAULT_TARGET_CHECKS,
 ): Promise<LocalCheckResult> {
 	try {
-		await runChecks(targetDir, "Treatment checks");
+		await runChecks(targetDir, "Treatment checks", checks);
 		return {
 			status: "PASS",
 			evidence: [
 				{
 					source: "local-checks",
-					path: "bun run typecheck; bun run check; bun run test:unit",
+					path: checks.map(({ command }) => command.join(" ")).join("; "),
 					claim: "All treatment checks exited successfully",
 				},
 			],
