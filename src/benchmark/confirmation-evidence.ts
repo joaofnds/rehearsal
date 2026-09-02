@@ -3,6 +3,10 @@ import { readdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ConfirmationCostProjection } from "./confirmation";
 import type { Effort } from "./config";
+import {
+	filterJudgeAgreementReport,
+	loadJudgeAgreementReport,
+} from "./judge-agreement";
 import type { ClaudeCallMetrics, ProviderCall } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
@@ -129,6 +133,7 @@ interface ConfirmationGroupFinalization {
 	readonly repResults: readonly ConfirmationRepResult[];
 	readonly worktreesDirectory: string;
 	readonly groupDirectory: string;
+	readonly runsDirectory: string;
 	readonly groupFile: string;
 	readonly reportFile: string;
 	readonly makespanMs: number;
@@ -196,7 +201,12 @@ export async function finalizeConfirmationGroup(
 		finalization.declaredStages,
 		reliabilityInputs,
 	);
+	const judgeAgreement = filterJudgeAgreementReport(
+		await loadJudgeAgreementReport(finalization.runsDirectory),
+		[finalization.inputs.judgeModel],
+	);
 	const report = {
+		judgeAgreement,
 		reliability:
 			finalization.mode === "stage"
 				? reliability.slice(0, finalization.declaredStages.length)

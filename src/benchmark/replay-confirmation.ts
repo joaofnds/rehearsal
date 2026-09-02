@@ -637,6 +637,7 @@ export async function runReplayConfirmation(
 		repResults,
 		worktreesDirectory,
 		groupDirectory: paths.directory,
+		runsDirectory: request.paths.runsDirectory,
 		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
 		makespanMs,

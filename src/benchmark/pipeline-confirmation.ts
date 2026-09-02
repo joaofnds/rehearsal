@@ -803,6 +803,7 @@ export async function runPipelineConfirmation(
 		repResults,
 		worktreesDirectory,
 		groupDirectory: paths.directory,
+		runsDirectory: request.runsDirectory,
 		groupFile: paths.groupFile,
 		reportFile: paths.reportFile,
 		makespanMs,

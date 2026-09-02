@@ -320,6 +320,20 @@ export async function loadJudgeAgreementReport(
 	return buildJudgeAgreementReport(observations, skippedCalibrations);
 }
 
+export function filterJudgeAgreementReport(
+	report: Readonly<JudgeAgreementReport>,
+	judgeModels: readonly string[],
+): JudgeAgreementReport {
+	const included = new Set(judgeModels);
+
+	return {
+		skippedCalibrations: report.skippedCalibrations,
+		baselines: report.baselines.filter(({ judgeModel }) =>
+			included.has(judgeModel),
+		),
+	};
+}
+
 function summarizeCriterion(
 	rubricId: string,
 	counts: Readonly<MutableCriterionCounts>,

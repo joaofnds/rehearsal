@@ -56,6 +56,63 @@ describe(runPipelineConfirmation.name, () => {
 		}).toEqual({ model: "sonnet", judgeModel: "opus" });
 	});
 
+	it("reports agreement only for its exact Judge model", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const calibrationArtifact = (judgeModel: string) => ({
+			status: "COMPLETE",
+			judgeModel,
+			rubric: "1. `final`: pass the candidate\n",
+			grade: completeFinalGrade("PASS"),
+			stageScorecards: [],
+			calibration: {
+				humanReview: {
+					verdict: "ACCEPT",
+					summary: "The human agrees.",
+					findings: [],
+				},
+			},
+		});
+		await Promise.all([
+			Bun.write(
+				join(harness.runsDirectory, "opus.json"),
+				JSON.stringify(calibrationArtifact("opus")),
+			),
+			Bun.write(
+				join(harness.runsDirectory, "sonnet.json"),
+				JSON.stringify(calibrationArtifact("sonnet")),
+			),
+		]);
+
+		const outcome = await harness.run({ judgeModel: "opus" });
+		const report = z
+			.object({
+				judgeAgreement: z.object({
+					skippedCalibrations: z.number(),
+					baselines: z.array(
+						z.object({
+							judgeModel: z.string(),
+							criteria: z.array(
+								z.object({ rubricId: z.string(), sampleSize: z.number() }),
+							),
+						}),
+					),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(outcome.reportFile).text()));
+
+		expect(report.judgeAgreement.baselines).toEqual([
+			{
+				judgeModel: "opus",
+				criteria: [
+					{ rubricId: "check-integrity", sampleSize: 1 },
+					{ rubricId: "local-checks", sampleSize: 1 },
+					{ rubricId: "tests", sampleSize: 1 },
+					{ rubricId: "worker", sampleSize: 1 },
+				],
+			},
+		]);
+	});
+
 	it("uses the pipeline target before task setup or provider calls", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const events: string[] = [];
