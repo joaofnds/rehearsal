@@ -184,8 +184,15 @@ async function freezePipelineInputs(
 	const checkpointDirectory = join(inputsDirectory, "checkpoint");
 	let initialCheckpoint: CheckpointRecord;
 	try {
-		await dependencies.runChecks(setupWorktree, "Baseline checks");
-		baselineHashes = await dependencies.captureFileHashes(setupWorktree);
+		await dependencies.runChecks(
+			setupWorktree,
+			"Baseline checks",
+			request.pipeline.target.checks,
+		);
+		baselineHashes = await dependencies.captureFileHashes(
+			setupWorktree,
+			request.pipeline.target.integrityFiles,
+		);
 		baselineContext = await dependencies.captureBaselineContext(setupWorktree);
 		({ taskId, taskSha } = await dependencies.createTaskCommit(
 			setupWorktree,
@@ -390,6 +397,7 @@ async function runPipelineRep(
 					instructions: request.instructions,
 					baselineContext: frozen.baselineContext,
 					baselineHashes: frozen.baselineHashes,
+					target: request.pipeline.target,
 					taskId: frozen.taskId,
 					taskSha: frozen.taskSha,
 					baselineSha,

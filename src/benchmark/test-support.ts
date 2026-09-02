@@ -9,7 +9,7 @@ import type { TargetDefinition } from "./pipeline";
 export const PROJECT_ROOT = join(import.meta.dir, "../..");
 export const TEST_TARGET: TargetDefinition = {
 	checks: [{ command: ["bun", "--version"] }],
-	integrityFiles: ["package.json"],
+	integrityFiles: ["base.txt"],
 };
 
 export interface TestRepository {

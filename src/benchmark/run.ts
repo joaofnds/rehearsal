@@ -49,7 +49,11 @@ import { JudgeOutputValidationError } from "./judge-attempt";
 import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { writeRunManifest } from "./manifest";
-import type { PipelineDefinition, StageDefinition } from "./pipeline";
+import type {
+	PipelineDefinition,
+	StageDefinition,
+	TargetDefinition,
+} from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { PendingStage } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
@@ -314,6 +318,7 @@ export interface StageSessionEnvironment {
 	readonly instructions: string;
 	readonly baselineContext: readonly ContextFile[];
 	readonly baselineHashes: ReadonlyMap<string, string>;
+	readonly target: TargetDefinition;
 	readonly taskId: string;
 	readonly taskSha: string;
 	readonly baselineSha: string;
@@ -441,6 +446,7 @@ export async function executeStageSession(
 			),
 			localChecks: await dependencies.captureTreatmentChecks(
 				environment.targetDir,
+				environment.target.checks,
 			),
 			taskState: taskCard,
 		};
@@ -489,6 +495,7 @@ export async function runGradedStages(
 			dependencies,
 			{
 				...context,
+				target: context.pipeline.target,
 				skillRoots,
 				baselineSha,
 				commitSubjectPattern: context.pipeline.commitSubjectPattern,
@@ -614,9 +621,12 @@ export async function runBenchmark(
 		console.log(`Target: ${source.root}`);
 		console.log(`Original commit: ${source.sha}`);
 		console.log(`Workflow backup: ${workflowBackup.directory}`);
-		await runChecks(source.root, "Baseline checks");
+		await runChecks(source.root, "Baseline checks", pipeline.target.checks);
 		await assertWorkspaceCleanAt(source.root, source.sha);
-		const baselineHashes = await captureFileHashes(source.root);
+		const baselineHashes = await captureFileHashes(
+			source.root,
+			pipeline.target.integrityFiles,
+		);
 		const baselineContext = await captureBaselineContext(source.root);
 		const [task, productBrief, instructions, rubric, claudeVersion] =
 			await Promise.all([

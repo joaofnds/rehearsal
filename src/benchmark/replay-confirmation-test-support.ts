@@ -8,6 +8,7 @@ import { runCommand } from "./command";
 import type { StageJudgeInput, StageScorecard } from "./contracts";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
+import type { TargetCheck } from "./pipeline";
 import type { ReplayDependencies } from "./replay";
 import type { ReplayConfirmationRequest } from "./replay-confirmation";
 import { runReplayConfirmation } from "./replay-confirmation";
@@ -51,6 +52,8 @@ export class ReplayConfirmationHarness {
 	public readonly worktrees: { root: string; sha: string; path: string }[] = [];
 	public readonly removed: string[] = [];
 	public readonly installed: string[] = [];
+	public readonly targetChecks: (readonly TargetCheck[])[] = [];
+	public readonly integrityFileSets: (readonly string[])[] = [];
 	public readonly judged: StageJudgeInput[] = [];
 	public readonly log: string[] = [];
 	public readonly corpusCaptures: {
@@ -297,8 +300,9 @@ export class ReplayConfirmationHarness {
 
 					return Promise.resolve(harnessResult("PASS", "checks match"));
 				},
-				captureTreatmentChecks: (targetDir) => {
+				captureTreatmentChecks: (targetDir, checks) => {
 					this.stageDirs.push(targetDir);
+					this.targetChecks.push(checks);
 
 					return Promise.resolve(harnessResult("PASS", "all green"));
 				},
@@ -346,8 +350,9 @@ export class ReplayConfirmationHarness {
 				return Promise.resolve();
 			},
 			materializeCheckpoint,
-			captureFileHashes: (targetDir) => {
+			captureFileHashes: (targetDir, integrityFiles) => {
 				this.stageDirs.push(targetDir);
+				this.integrityFileSets.push(integrityFiles);
 
 				return Promise.resolve(new Map<string, string>());
 			},

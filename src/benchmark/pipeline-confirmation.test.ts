@@ -11,9 +11,11 @@ import {
 	JudgeExecutionError,
 	JudgeOutputValidationError,
 } from "./judge-attempt";
+import type { TargetCheck } from "./pipeline";
 import { runPipelineConfirmation } from "./pipeline-confirmation";
 import {
 	CONFIRMATION_METRIC,
+	CONFIRMATION_PIPELINE,
 	PipelineConfirmationHarness,
 	completeFinalGrade,
 	pipelineStageScorecard,
@@ -25,6 +27,120 @@ import { WorkflowExecutionError } from "./workflow";
 const testResources = TestResources.forEachTest();
 
 describe(runPipelineConfirmation.name, () => {
+	it("uses the pipeline target before task setup or provider calls", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const events: string[] = [];
+		const target = {
+			checks: [
+				{ command: ["bun", "run", "first"] },
+				{ command: ["bun", "run", "second"], env: { MODE: "strict" } },
+			],
+			integrityFiles: ["package.json"],
+		};
+		const pipeline = { ...CONFIRMATION_PIPELINE, target };
+		let observedChecks: readonly TargetCheck[] | undefined;
+		let observedIntegrityFiles: readonly string[] | undefined;
+		const treatmentCheckSets: (readonly TargetCheck[])[] = [];
+
+		const outcome = await harness.run({ pipeline }, (dependencies) => ({
+			...dependencies,
+			runChecks: (_targetDir, _label, checks) => {
+				events.push("baseline checks");
+				observedChecks = checks;
+
+				return Promise.resolve();
+			},
+			captureFileHashes: (targetDir, integrityFiles) => {
+				events.push("integrity baseline");
+				observedIntegrityFiles = integrityFiles;
+
+				return dependencies.captureFileHashes(targetDir, integrityFiles);
+			},
+			createTaskCommit: (...args) => {
+				events.push("task setup");
+
+				return dependencies.createTaskCommit(...args);
+			},
+			stageSession: {
+				...dependencies.stageSession,
+				captureTreatmentChecks: (targetDir, checks) => {
+					treatmentCheckSets.push(checks);
+
+					return dependencies.stageSession.captureTreatmentChecks(
+						targetDir,
+						checks,
+					);
+				},
+				runWorkflowStage: (request) => {
+					events.push("provider call");
+
+					return dependencies.stageSession.runWorkflowStage(request);
+				},
+			},
+		}));
+
+		expect(observedChecks).toEqual(target.checks);
+		expect(observedIntegrityFiles).toEqual(target.integrityFiles);
+		expect(treatmentCheckSets).toEqual([
+			target.checks,
+			target.checks,
+			target.checks,
+		]);
+		expect(events.slice(0, 3)).toEqual([
+			"baseline checks",
+			"integrity baseline",
+			"task setup",
+		]);
+		expect(events.indexOf("provider call")).toBeGreaterThan(
+			events.indexOf("task setup"),
+		);
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+		const pipelineFile = group.inputs.files.find(
+			({ kind }) => kind === "pipeline",
+		);
+		if (pipelineFile === undefined) {
+			throw new Error("Expected a frozen pipeline input");
+		}
+		const frozenPipeline: unknown = JSON.parse(
+			await Bun.file(
+				join(dirname(outcome.groupRecordFile), pipelineFile.path),
+			).text(),
+		);
+		expect(frozenPipeline).toMatchObject({ target });
+	});
+
+	it("stops when a pipeline baseline check fails", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const events: string[] = [];
+
+		expect(
+			harness.run({}, (dependencies) => ({
+				...dependencies,
+				runChecks: () => {
+					events.push("baseline checks");
+
+					return Promise.reject(new Error("baseline failed"));
+				},
+				createTaskCommit: (...args) => {
+					events.push("task setup");
+
+					return dependencies.createTaskCommit(...args);
+				},
+				stageSession: {
+					...dependencies.stageSession,
+					runWorkflowStage: (request) => {
+						events.push("provider call");
+
+						return dependencies.stageSession.runWorkflowStage(request);
+					},
+				},
+			})),
+		).rejects.toThrow("baseline failed");
+		expect(events).toEqual(["baseline checks"]);
+	});
+
 	it("runs three frozen full-pipeline reps concurrently without changing the primary checkout", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const allStarted = Promise.withResolvers<boolean>();

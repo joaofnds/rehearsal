@@ -124,6 +124,43 @@ class ComparisonEvidenceFixture {
 		}
 	}
 
+	public async changePipelineTarget(
+		caseId: string,
+		role: ComparisonArm,
+	): Promise<void> {
+		const groupFile = this.groupFile(caseId, role);
+		const group = confirmationGroupRecordSchema.parse(
+			JSON.parse(await Bun.file(groupFile).text()),
+		);
+		const pipeline = group.inputs.files.find(({ kind }) => kind === "pipeline");
+		if (pipeline === undefined) {
+			throw new Error("Expected a frozen pipeline input");
+		}
+		const content = `${JSON.stringify({
+			stages: ["build"],
+			target: {
+				checks: [{ command: ["bun", "run", "different"] }],
+				integrityFiles: ["package.json"],
+			},
+		})}\n`;
+		await Bun.write(
+			join(this.groupDirectory(caseId, role), pipeline.path),
+			content,
+		);
+		const changed = confirmationGroupRecordSchema.parse({
+			...group,
+			inputs: {
+				...group.inputs,
+				files: group.inputs.files.map((file) =>
+					file.kind === "pipeline"
+						? { kind: file.kind, path: file.path, sha256: digest(content) }
+						: file,
+				),
+			},
+		});
+		await Bun.write(groupFile, `${JSON.stringify(changed, null, 2)}\n`);
+	}
+
 	public async usePipelineCheckpoints(
 		changedWorkflowRole?: ComparisonArm,
 	): Promise<void> {
@@ -521,6 +558,14 @@ describe(loadComparisonEvidence.name, () => {
 
 		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
 			"case case-1 arms baseline and candidate field inputs.files.checkpoint:inputs/checkpoint/checkpoint.json",
+		);
+	});
+
+	it("rejects arms whose frozen target configurations differ", async () => {
+		await fixture.changePipelineTarget("case-1", "candidate");
+
+		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
+			"case case-1 arms baseline and candidate field inputs.files.pipeline:inputs/pipeline.json",
 		);
 	});
 

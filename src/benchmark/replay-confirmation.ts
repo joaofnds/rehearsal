@@ -428,6 +428,7 @@ export async function runReplayConfirmation(
 				setupOperation = "baseline hash capture";
 				const baselineHashes = await dependencies.captureFileHashes(
 					plan.worktreePath,
+					frozen.manifest.pipeline.target.integrityFiles,
 				);
 				setupOperation = "baseline-context capture";
 				const baselineContext = await dependencies.captureBaselineContext(
@@ -456,6 +457,7 @@ export async function runReplayConfirmation(
 						instructions: frozen.instructions,
 						baselineContext,
 						baselineHashes,
+						target: frozen.manifest.pipeline.target,
 						taskId: frozen.manifest.taskId,
 						taskSha: baseSha,
 						baselineSha: baseSha,

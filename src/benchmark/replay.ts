@@ -392,7 +392,10 @@ export async function runReplay(
 		for (const { stage, causes } of staleness) {
 			dependencies.log(`Stale checkpoint ${stage}: ${causes.join("; ")}`);
 		}
-		const baselineHashes = await dependencies.captureFileHashes(worktreeDir);
+		const baselineHashes = await dependencies.captureFileHashes(
+			worktreeDir,
+			manifest.pipeline.target.integrityFiles,
+		);
 		const baselineContext =
 			await dependencies.captureBaselineContext(worktreeDir);
 		const productOwner = dependencies.createProductOwner({
@@ -417,6 +420,7 @@ export async function runReplay(
 				instructions: request.instructions,
 				baselineContext,
 				baselineHashes,
+				target: manifest.pipeline.target,
 				taskId: manifest.taskId,
 				taskSha: baseSha,
 				baselineSha: baseSha,

@@ -749,6 +749,50 @@ describe(runGradedStages.name, () => {
 		rubric: "rubrics/build.json",
 	};
 
+	it("runs the pipeline target checks after delivery validation", async () => {
+		const { dependencies } = fakeStageDependencies();
+		const events: string[] = [];
+		const observedCommands: string[][] = [];
+		const target = {
+			checks: [{ command: ["bun", "run", "custom-check"] }],
+			integrityFiles: ["custom-check.json"],
+		};
+		const context = {
+			...(await stageContext()),
+			pipeline: {
+				statuses: ["To Do", "Done"],
+				target,
+				stages: [deliveryStage],
+			},
+		};
+		const observing = {
+			...dependencies,
+			assertBuildCommitted: () => {
+				events.push("delivery validated");
+
+				return Promise.resolve({
+					resultSha: "result-sha",
+					diff: "the-diff",
+					commitSubjects: ["build commit"],
+				});
+			},
+			captureTreatmentChecks: (
+				_targetDir: string,
+				checks: readonly { readonly command: readonly string[] }[] = [],
+			) => {
+				events.push("checks run");
+				observedCommands.push(...checks.map(({ command }) => [...command]));
+
+				return Promise.resolve(harnessResult("PASS", "all green"));
+			},
+		};
+
+		await runGradedStages(observing, context);
+
+		expect(events).toEqual(["delivery validated", "checks run"]);
+		expect(observedCommands).toEqual([["bun", "run", "custom-check"]]);
+	});
+
 	it("carries every earlier artifact through a multi-stage pipeline", async () => {
 		const { dependencies, judged, executed } = fakeStageDependencies();
 		const context = {
@@ -1250,6 +1294,7 @@ describe(runBenchmark.name, () => {
 			absolutePipeline,
 			JSON.stringify({
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [{ name: "discuss", kind: "planning" }],
 			}),
 		);
@@ -1441,6 +1486,7 @@ describe(buildRunArtifact.name, () => {
 			absolute,
 			JSON.stringify({
 				statuses: ["To Do", "Done"],
+				target: TEST_TARGET,
 				stages: [
 					{
 						name: "sketch",

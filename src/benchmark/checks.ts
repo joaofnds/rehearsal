@@ -1,34 +1,14 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
-import {
-	CHECK_PATHS,
-	MAX_CONTEXT_FILE_BYTES,
-	MAX_CONTEXT_TOTAL_BYTES,
-	TEST_CONFIG_PATH,
-} from "./config";
+import { MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_TOTAL_BYTES } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 import type { TargetCheck } from "./pipeline";
-
-const DEFAULT_TARGET_CHECKS: readonly TargetCheck[] = [
-	{
-		command: ["bun", "run", "typecheck"],
-		env: { CONFIG_PATH: TEST_CONFIG_PATH },
-	},
-	{
-		command: ["bun", "run", "check"],
-		env: { CONFIG_PATH: TEST_CONFIG_PATH },
-	},
-	{
-		command: ["bun", "run", "test:unit"],
-		env: { CONFIG_PATH: TEST_CONFIG_PATH },
-	},
-];
 
 export async function runChecks(
 	targetDir: string,
 	label: string,
-	checks: readonly TargetCheck[] = DEFAULT_TARGET_CHECKS,
+	checks: readonly TargetCheck[],
 ): Promise<void> {
 	console.log(`\n${label}`);
 
@@ -39,7 +19,7 @@ export async function runChecks(
 
 export async function captureTreatmentChecks(
 	targetDir: string,
-	checks: readonly TargetCheck[] = DEFAULT_TARGET_CHECKS,
+	checks: readonly TargetCheck[],
 ): Promise<LocalCheckResult> {
 	try {
 		await runChecks(targetDir, "Treatment checks", checks);
@@ -76,19 +56,18 @@ export async function captureTreatmentChecks(
 
 export async function captureFileHashes(
 	directory: string,
-	integrityFiles?: readonly string[],
+	integrityFiles: readonly string[],
 ): Promise<Map<string, string>> {
 	const hashes = new Map<string, string>();
-	const paths = integrityFiles ?? CHECK_PATHS;
 
-	for (const path of paths) {
+	for (const path of integrityFiles) {
 		const file = Bun.file(join(directory, path));
 		const exists = await file.exists();
-		if (!exists && integrityFiles !== undefined) {
+		if (!exists) {
 			throw new Error(`Declared check-integrity file is missing: ${path}`);
 		}
 
-		const content = exists ? await file.bytes() : new Uint8Array();
+		const content = await file.bytes();
 		hashes.set(path, createHash("sha256").update(content).digest("hex"));
 	}
 

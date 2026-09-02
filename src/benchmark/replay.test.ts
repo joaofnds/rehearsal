@@ -374,6 +374,10 @@ describe(runReplay.name, () => {
 		expect(fake.stageDirs.every((dir) => dir === worktree?.path)).toBe(true);
 		expect(fake.branchExpectations).toEqual([null]);
 		expect(fake.installed).toEqual([worktree?.path ?? ""]);
+		expect(fake.integrityFileSets).toEqual([
+			run.manifest.pipeline.target.integrityFiles,
+		]);
+		expect(fake.targetChecks).toEqual([run.manifest.pipeline.target.checks]);
 		expect(fake.removed).toEqual([worktree?.path ?? ""]);
 		expect(fake.judged[0]?.priorArtifacts).toEqual([
 			{ path: SPEC_PATH, content: SPEC_CONTENT },
