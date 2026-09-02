@@ -1,11 +1,11 @@
 ---
 id: ACT-26.1
 title: 'one entry point with help, json output, and exit codes'
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 20:56'
+updated_date: '2026-09-02 21:18'
 labels: []
 dependencies: []
 references:
@@ -25,22 +25,22 @@ Why: an agent reads help instead of docs, parses JSON instead of prose, and cann
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `bun run rehearsal --help` exits 0 and lists run, replay, and compare with one description line each and the exit-code meanings
-- [ ] #2 `bun run rehearsal run --help` exits 0 and prints one line per flag naming the flag, its default, and its BENCHMARK_* environment variable, covering --target, --model, --effort, --judge-model, --judge-effort, --session-budget-usd, --pipeline, --confirm, --reps, --yes, --json
-- [ ] #3 `bun run rehearsal replay --help` and `bun run rehearsal compare --help` each exit 0 and print the same shape for their own flags
-- [ ] #4 Adding a flag to a command's declaration makes it appear in that command's --help without editing help text: a test asserts every declared flag name appears in the generated help
-- [ ] #5 `bun run rehearsal run --bogus` exits 2, prints nothing on stdout, and prints one stderr line naming --bogus
-- [ ] #6 `bun run rehearsal` with no command exits 2 and prints the top-level help on stderr
-- [ ] #7 `rehearsal compare <manifest> --json` writes the report and prints exactly the report JSON on stdout, which parseComparisonReport accepts and `jq` parses; without --json it prints only the report path
-- [ ] #8 `rehearsal compare <manifest>` with a valid manifest exits 0 and stdout contains no diagnostic text
-- [ ] #9 `rehearsal run` with stdin not a TTY exits 3 before any provider call, with a stderr line saying the review pause needs a TTY until ACT-26.3
-- [ ] #10 `rehearsal replay --run <name> --stage <stage> --confirm` without --yes and with stdin not a TTY exits 3, printing no projected cost, and does so before resolving the run directory
-- [ ] #11 `rehearsal compare <manifest> --json` writes nothing to stdout except the report JSON: `JSON.parse` of the whole stdout succeeds and equals the bytes of the report file the command wrote
-- [ ] #12 `rehearsal replay --run <name> --stage <stage> --confirm --yes` with stdin not a TTY prints no TTY-refusal message on stderr and fails instead on the named run, showing the TTY check does not fire when --yes answers it
-- [ ] #13 The existing config.test.ts parse tests pass unchanged: every flag name, environment fallback, default, and error message parseArgs and parseReplayArgs enforce today behaves identically under the new parser
-- [ ] #14 package.json has no benchmark, replay, or compare script and run-benchmark.ts, replay-stage.ts, and compare-confirmations.ts are gone; `bun run rehearsal <command>` is the only documented invocation
-- [ ] #15 README's Running and Comparing Confirmation Groups sections invoke `bun run rehearsal run`, `bun run rehearsal replay`, and `bun run rehearsal compare`, and state the exit-code meanings
-- [ ] #16 `rehearsal run --json` and `rehearsal replay --json` print the run artifact and the replay record respectively, parsed by the same schema that wrote them; a unit test over the command wiring asserts the printed bytes equal the record file's bytes
+- [x] #1 `bun run rehearsal --help` exits 0 and lists run, replay, and compare with one description line each and the exit-code meanings
+- [x] #2 `bun run rehearsal run --help` exits 0 and prints one line per flag naming the flag, its default, and its BENCHMARK_* environment variable, covering --target, --model, --effort, --judge-model, --judge-effort, --session-budget-usd, --pipeline, --confirm, --reps, --yes, --json
+- [x] #3 `bun run rehearsal replay --help` and `bun run rehearsal compare --help` each exit 0 and print the same shape for their own flags
+- [x] #4 Adding a flag to a command's declaration makes it appear in that command's --help without editing help text: a test asserts every declared flag name appears in the generated help
+- [x] #5 `bun run rehearsal run --bogus` exits 2, prints nothing on stdout, and prints one stderr line naming --bogus
+- [x] #6 `bun run rehearsal` with no command exits 2 and prints the top-level help on stderr
+- [x] #7 `rehearsal compare <manifest> --json` writes the report and prints exactly the report JSON on stdout, which parseComparisonReport accepts and `jq` parses; without --json it prints only the report path
+- [x] #8 `rehearsal compare <manifest>` with a valid manifest exits 0 and stdout contains no diagnostic text
+- [x] #9 `rehearsal run` with stdin not a TTY exits 3 before any provider call, with a stderr line saying the review pause needs a TTY until ACT-26.3
+- [x] #10 `rehearsal replay --run <name> --stage <stage> --confirm` without --yes and with stdin not a TTY exits 3, printing no projected cost, and does so before resolving the run directory
+- [x] #11 `rehearsal compare <manifest> --json` writes nothing to stdout except the report JSON: `JSON.parse` of the whole stdout succeeds and equals the bytes of the report file the command wrote
+- [x] #12 `rehearsal replay --run <name> --stage <stage> --confirm --yes` with stdin not a TTY prints no TTY-refusal message on stderr and fails instead on the named run, showing the TTY check does not fire when --yes answers it
+- [x] #13 The existing config.test.ts parse tests pass unchanged: every flag name, environment fallback, default, and error message parseArgs and parseReplayArgs enforce today behaves identically under the new parser
+- [x] #14 package.json has no benchmark, replay, or compare script and run-benchmark.ts, replay-stage.ts, and compare-confirmations.ts are gone; `bun run rehearsal <command>` is the only documented invocation
+- [x] #15 README's Running and Comparing Confirmation Groups sections invoke `bun run rehearsal run`, `bun run rehearsal replay`, and `bun run rehearsal compare`, and state the exit-code meanings
+- [x] #16 `rehearsal run --json` and `rehearsal replay --json` print the run artifact and the replay record respectively, parsed by the same schema that wrote them; a unit test over the command wiring asserts the printed bytes equal the record file's bytes
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -140,6 +140,38 @@ dispatch's decision policy and can be reversed by João.
    caller (YAGNI). Trigger to add one back: a caller outside this repository
    turns out to invoke the old script names.
 
+Decided during Build, on the same policy:
+
+9. **`src/cli/` reaches the harness through the package's `#benchmark/*` subpath
+   import, not a relative parent path.** Reason: oxlint's
+   `import/no-relative-parent-imports` refuses `../benchmark/config` and names
+   "convert to a package" as its sanctioned route; the subpath map is that route,
+   it typechecks and resolves in Bun (observed), and it states the CLI-to-harness
+   direction explicitly. `#cli/*` was added for symmetry so a CLI module's imports
+   read the same wherever they point.
+10. **Each error class lives in the module that raises it, and `exitCodeFor` reads
+    the code off the error through an `in` narrowing.** Reason: `max-classes-per-file`
+    and `import/prefer-default-export` together refuse both a two-error module and a
+    one-class-per-file layout, and the anti-slop rules refuse sniffing an `unknown`.
+    Placing each class with its raiser satisfies all three without a suppression and
+    matches how `judge-execution-error.ts` already reads.
+11. **A configuration rejection becomes a `UsageError` at the CLI boundary, not
+    inside `config.ts`.** Reason: acceptance criterion 13 pins `config.ts` and its
+    messages, and making the harness throw a CLI error type would point the harness
+    at the CLI. `asUsageError` wraps the parse call where "the caller made a
+    mistake" is known, so a missing required flag exits 2 as the exit-code table
+    says, with `config.ts` untouched.
+12. **A run that cannot be replayed is a refused precondition, exit 3, not an
+    execution failure.** Reason: the glossary's Exit code entry, settled at Shape,
+    lists "a run that cannot be replayed" under 3. The first implementation exited 1;
+    the glossary is the record and wins.
+13. **The readline prompt writes to stderr, not stdout.** Reason: "stdout carries
+    data only" is the card's rule and a prompt is not data. It only appears on a
+    terminal, where both streams reach the same screen.
+14. **`run`'s terminal gate fires before the self-preference warning and before the
+    pipeline loads.** Reason: the card says refuse before any work; a refused command
+    that first printed a warning would be reporting on a session it will not run.
+
 ## Not built, and why
 
 Each is named by ACT-26 or doc-1 but has no case in this card. The trigger that
@@ -153,6 +185,9 @@ would build it is its own card.
 - Shell completion, a config file, colored output, `--quiet`/`--verbose` — no
   current case; agents read help and JSON. Trigger: a command whose output is too
   long for a terminal reader, or João asking.
+- Splitting each command module's harness wiring from its command policy — the
+  refactor pass found it and it is filed as ACT-27, with the reverted attempt and
+  the guard that refused it. Trigger: that card.
 - A generic option-parsing dependency — the flag surface is three commands and
   about a dozen flags, all `--flag value` or switches, and `config.ts` already
   parses them. Trigger: a command needing short flags, clustering, or `--`
@@ -212,4 +247,118 @@ unrepresentable, which is the card's structural claim.
 The second test is the subprocess one, `rehearsal run --bogus` exits 2 with the
 flag named on stderr and nothing on stdout, which forces the entry point, the
 error types, and the exit-code mapping into existence together.
+## Build handoff, 2026-09-02
+
+### What changed
+
+One executable, `rehearsal.ts` at the repository root, replaces
+`run-benchmark.ts`, `replay-stage.ts`, and `compare-confirmations.ts`, which are
+deleted along with their `bun run benchmark|replay|compare` scripts. `package.json`
+gains a `rehearsal` script and a `bin` entry, so `bun run rehearsal <command>`
+works without linking.
+
+- `src/cli/commands.ts` declares the three commands and every flag as data: name,
+  value or switch, environment variable, default, and one help line. Help text is
+  generated from that table, so a flag cannot exist without its help line, and the
+  same table is what rejects an unknown flag, by name.
+- `src/cli/exit-codes.ts` names the four codes once; `UsageError` (in `commands.ts`)
+  and `RefusedPreconditionError` (in `interactive-stdin.ts`) each carry their own,
+  and `exitCodeFor` reads it, so no handler picks a number.
+- `src/cli/{run,replay,compare}-command.ts` hold one command each: parse, gate,
+  call the harness, report. `src/cli/output.ts` owns both stdout rules (the record's
+  bytes under `--json`, its path otherwise) and the stderr diagnostic writer, so a
+  change to what `--json` means is one edit, not four.
+- `src/cli/interactive-stdin.ts` is the single terminal gate. `run` calls it
+  unconditionally; `replay` calls it only for `--confirm` without `--yes`, before it
+  resolves the run directory, so a refusal costs nothing and needs no recorded run.
+- `src/benchmark/run.ts`'s `runBenchmark` returns the run's `BenchmarkRunPaths`
+  instead of `void`, which is how `run --json` prints the artifact it wrote rather
+  than recomputing the path.
+- `src/benchmark/comparison-evidence-test-support.ts` holds the on-disk
+  `ComparisonEvidenceFixture`, extracted unchanged from `comparison-loader.test.ts`
+  in its own commit, because this machine has no recorded run to compare against.
+- `config.ts` and `config.test.ts` are byte-identical to the pre-build baseline
+  (`git diff d2c70aa..HEAD -- src/benchmark/config.ts src/benchmark/config.test.ts`
+  is empty), so every flag name, environment fallback, default, and error message is
+  unchanged. The CLI translates a configuration rejection into a `UsageError` at its
+  own boundary rather than reaching into `config.ts`.
+
+### What became possible but is not wired up
+
+- The command table can carry a new command or flag with no parser or help edit; the
+  entry point's dispatch is the one place a new command still needs a line.
+- `--json` on `run` and `replay` is wired and unit tested against a written record,
+  but has never printed a real run artifact or replay record, because both need a
+  paid session. Only `compare --json` was observed end to end.
+
+### Which callers are still on the old path
+
+None. No file in the repository names the deleted scripts. The four subprocess tests
+that spawned them now spawn `rehearsal.ts`.
+
+### What I observed directly, and how
+
+Every line below is a command run in this dispatch and its output. No paid provider
+call was made; total spend for this dispatch is $0.00.
+
+- `bun run rehearsal --help` printed the three commands with one summary line each
+  and the four exit-code meanings; exit 0.
+- `bun run rehearsal run --help`, `replay --help`, and `compare --help` each printed
+  one line per declared flag with its default and `BENCHMARK_*` variable; exit 0.
+  `run --help` covered all eleven flags the card names.
+- `bun run rehearsal run --bogus` exited 2 with zero bytes on stdout and the single
+  stderr line `Unknown flag --bogus for rehearsal run`.
+- `bun run rehearsal` with no command exited 2, wrote nothing to stdout, and printed
+  the top-level help on stderr.
+- `bun run rehearsal compare <manifest> --json` exited 0 and printed only the report
+  JSON on stdout: `jq -r '.schemaVersion, (.cases|length), .manifest.sha256'` parsed
+  it (2, 2, and the manifest digest), and `cmp` reported the stdout bytes identical
+  to `.benchmark-runs/comparisons/<sha>/report.json`. Without `--json` the same
+  command printed only that path. The manifest came from the extracted fixture; the
+  written report was removed afterward and `.benchmark-runs/comparisons/` is empty
+  again.
+- `echo | bun run rehearsal replay --run any-name --stage shape --confirm --model
+  sonnet --session-budget-usd 1` exited 3, printed nothing on stdout, printed no
+  projected cost, and printed no "No replayable run named", showing it refused
+  before resolving the run directory.
+- The same command with `--yes` exited 3 with `No replayable run named any-name;
+  recorded runs: none` and no terminal-refusal message, showing the TTY check does
+  not fire when `--yes` answers it.
+- `echo | bun run rehearsal run --target /nonexistent --model sonnet
+  --session-budget-usd 1` exited 3 before printing `Target:`, naming ACT-26.3.
+- `bun run rehearsal run --model sonnet --session-budget-usd 1` exited 2 with
+  `Provide --target or BENCHMARK_TARGET_DIR`.
+- Full check, all after the last commit of code: `bun run typecheck`, `bun run lint`,
+  and `bun run fmt:check` each exited 0; `bun test` reported 502 pass, 0 fail across
+  43 files.
+
+### What I did not verify
+
+- No `run` or `replay` execution past its gate. Both need a paid session, and this
+  machine has no recorded run to replay, so `run --json` and `replay --json` printing
+  a real artifact is proven only by unit tests against a written record file, never
+  by the harness itself.
+- `runBenchmark` returning the run paths is exercised by no test that reaches its
+  success path; the compiler and the CLI's injected-fake test are the only evidence.
+- The `bin` entry is declared but was never installed or invoked as a linked
+  `rehearsal` binary; every observation went through `bun run rehearsal`.
+- Comparison of the printed help against a terminal narrower than the longest flag
+  line: the lines are not wrapped.
+
+### What stopped me, and where it went
+
+Nothing blocked the work. One structural finding is filed rather than done:
+**ACT-27**, splitting each command module's harness wiring from its command policy.
+The split was attempted and reverted here because the extracted modules each export
+one function, which `import/prefer-default-export` rejects, and pairing an arbitrary
+second export to pass the guard would be worse than the duplication. The card carries
+the case and two designs that would produce cohesive modules.
+
+### Independent review
+
+Due. The change replaces every entry point to the tool, deletes three files, alters a
+public invocation surface documented in the README, and changes a harness signature
+(`runBenchmark`). Two behaviors it introduces are refusals that stop work before it
+starts, and one of them (`run` without a TTY) makes the tool unusable
+non-interactively until ACT-26.3 lifts it; that trade deserves a second reader.
 <!-- SECTION:NOTES:END -->
