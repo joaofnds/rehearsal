@@ -111,6 +111,12 @@ describe(parseCommandLine.name, () => {
 		);
 	});
 
+	it("refuses a declared flag standing where a value belongs", () => {
+		expect(() =>
+			parseCommandLine(exampleCommand, ["--model", "--yes"]),
+		).toThrow("Flag --model needs a value for rehearsal example");
+	});
+
 	it("refuses a token that is not a flag", () => {
 		expect(() => parseCommandLine(exampleCommand, ["oops"])).toThrow(
 			"Unexpected argument oops for rehearsal example",

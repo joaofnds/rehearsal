@@ -255,7 +255,7 @@ export function parseCommandLine(
 		flags.push(token);
 		if (takesValue(command, token)) {
 			const value = args[index + 1];
-			if (value === undefined) {
+			if (value === undefined || declares(command, value)) {
 				throw new UsageError(
 					`Flag ${token} needs a value for rehearsal ${command.name}`,
 				);
