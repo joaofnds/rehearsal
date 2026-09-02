@@ -65,6 +65,33 @@ describe(readClaudeCallMetrics.name, () => {
 		});
 	});
 
+	it("reads the metrics past usage fields the provider added", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.5,
+				num_turns: 7,
+				duration_ms: 1200,
+				duration_api_ms: 900,
+				usage: {
+					input_tokens: 100,
+					output_tokens: 20,
+					cache_read_input_tokens: 30,
+					cache_creation_input_tokens: 40,
+					output_tokens_details: { reasoning_tokens: 0 },
+					server_tool_use: { web_search_requests: 0 },
+					service_tier: "standard",
+					cache_creation: { ephemeral_5m_input_tokens: 0 },
+					inference_geo: "us",
+					iterations: 1,
+					speed: "fast",
+				},
+			}),
+		);
+
+		expect(readClaudeCallMetrics(envelope)?.inputTokens).toBe(100);
+	});
+
 	it("preserves missing required metrics as absence", () => {
 		const envelope = readClaudeEnvelope(
 			JSON.stringify({ session_id: "session-1", total_cost_usd: 0.5 }),

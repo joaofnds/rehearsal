@@ -151,6 +151,12 @@ export const humanReviewSchema = z.object({
 	findings: z.array(humanFindingSchema),
 });
 
+/**
+ * Loose, like the envelope around it: the usage object's shape is the
+ * provider's, and it gains fields between releases. A strict schema here turns
+ * a provider addition into a failed run, which is the opposite of what
+ * recording usage is for.
+ */
 const claudeUsageSchema = z
 	.object({
 		input_tokens: z.number().int().nonnegative(),
@@ -158,7 +164,7 @@ const claudeUsageSchema = z
 		cache_read_input_tokens: z.number().int().nonnegative(),
 		cache_creation_input_tokens: z.number().int().nonnegative(),
 	})
-	.strict();
+	.loose();
 
 export const claudeCallMetricsSchema = z
 	.object({
