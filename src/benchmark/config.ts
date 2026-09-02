@@ -41,6 +41,14 @@ interface ParsedFlags {
 	readonly switches: ReadonlySet<string>;
 }
 
+interface SessionKnobs {
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+}
+
 function modelFamily(model: string): ModelFamily | undefined {
 	const normalized = model.toLowerCase();
 	const alias = MODEL_FAMILIES.find((family) => normalized === family);
@@ -58,18 +66,6 @@ function modelFamily(model: string): ModelFamily | undefined {
 
 function defaultJudgeModel(workflowModel: string): string {
 	return modelFamily(workflowModel) === "opus" ? "sonnet" : "opus";
-}
-
-function resolveJudgeModel(
-	values: ReadonlyMap<string, string>,
-	env: Readonly<Record<string, string | undefined>>,
-	workflowModel: string,
-): string {
-	return (
-		values.get("--judge-model") ??
-		env["BENCHMARK_JUDGE_MODEL"] ??
-		defaultJudgeModel(workflowModel)
-	);
 }
 
 export function judgeSelfPreferenceWarning(config: {
@@ -154,21 +150,14 @@ function withConfirmation<Config extends object>(
 	return { ...config, confirmation };
 }
 
-export function parseArgs(
-	args: readonly string[],
-	env: Readonly<Record<string, string | undefined>> = Bun.env,
-): BenchmarkConfig {
-	const flags = flagValues(args);
-	const { values } = flags;
-
-	const sourceDir = values.get("--target") ?? env["BENCHMARK_TARGET_DIR"];
+function parseSessionKnobs(
+	values: ReadonlyMap<string, string>,
+	env: Readonly<Record<string, string | undefined>>,
+): SessionKnobs {
 	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
-	if (sourceDir === undefined || sourceDir === "") {
-		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
-	}
 	if (model === undefined || model === "") {
 		throw new Error("Provide --model or BENCHMARK_MODEL");
 	}
@@ -178,7 +167,10 @@ export function parseArgs(
 		);
 	}
 
-	const judgeModel = resolveJudgeModel(values, env, model);
+	const judgeModel =
+		values.get("--judge-model") ??
+		env["BENCHMARK_JUDGE_MODEL"] ??
+		defaultJudgeModel(model);
 	const effort = parseEffort(
 		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
 		"workflow",
@@ -192,16 +184,30 @@ export function parseArgs(
 	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
 		throw new Error("Session budget must be a positive number");
 	}
+
+	return { model, effort, judgeModel, judgeEffort, sessionBudgetUsd };
+}
+
+export function parseArgs(
+	args: readonly string[],
+	env: Readonly<Record<string, string | undefined>> = Bun.env,
+): BenchmarkConfig {
+	const flags = flagValues(args);
+	const { values } = flags;
+
+	const sourceDir = values.get("--target") ?? env["BENCHMARK_TARGET_DIR"];
+
+	if (sourceDir === undefined || sourceDir === "") {
+		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
+	}
+
+	const sessionKnobs = parseSessionKnobs(values, env);
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(
 		{
 			sourceDir: resolve(sourceDir),
-			model,
-			effort,
-			judgeModel,
-			judgeEffort,
-			sessionBudgetUsd,
+			...sessionKnobs,
 			pipelinePath: controlRelativePath(
 				values.get("--pipeline") ??
 					env["BENCHMARK_PIPELINE"] ??
@@ -237,9 +243,6 @@ export function parseReplayArgs(
 
 	const runName = values.get("--run");
 	const stage = values.get("--stage");
-	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
-	const budgetText =
-		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
 
 	if (runName === undefined || runName === "") {
 		throw new Error("Provide --run with the run's name");
@@ -247,39 +250,15 @@ export function parseReplayArgs(
 	if (stage === undefined || stage === "") {
 		throw new Error("Provide --stage with the stage to replay");
 	}
-	if (model === undefined || model === "") {
-		throw new Error("Provide --model or BENCHMARK_MODEL");
-	}
-	if (budgetText === undefined || budgetText === "") {
-		throw new Error(
-			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
-		);
-	}
 
-	const effort = parseEffort(
-		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
-		"workflow",
-	);
-	const judgeEffort = parseEffort(
-		values.get("--judge-effort") ?? env["BENCHMARK_JUDGE_EFFORT"] ?? effort,
-		"Judge",
-	);
-	const sessionBudgetUsd = Number(budgetText);
-
-	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
-		throw new Error("Session budget must be a positive number");
-	}
+	const sessionKnobs = parseSessionKnobs(values, env);
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(
 		{
 			runName,
 			stage,
-			model,
-			effort,
-			judgeModel: resolveJudgeModel(values, env, model),
-			judgeEffort,
-			sessionBudgetUsd,
+			...sessionKnobs,
 		},
 		confirmation,
 	);
