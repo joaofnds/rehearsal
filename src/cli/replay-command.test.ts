@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { runReplayCommand } from "#cli/replay-command";
@@ -47,6 +50,16 @@ async function failureOf(work: Promise<void>): Promise<Error> {
 }
 
 describe(runReplayCommand.name, () => {
+	const temporaryDirectories: string[] = [];
+
+	afterEach(async () => {
+		await Promise.all(
+			temporaryDirectories
+				.splice(0)
+				.map((directory) => rm(directory, { force: true, recursive: true })),
+		);
+	});
+
 	it("refuses a confirmation without --yes before resolving the run, when stdin is not a terminal", async () => {
 		const resolved: string[] = [];
 		const { output, stdout, stderr } = recorder();
@@ -144,5 +157,37 @@ describe(runReplayCommand.name, () => {
 
 		expect(failure).not.toBeInstanceOf(RefusedPreconditionError);
 		expect(resolved).toEqual(["any-name"]);
+	});
+
+	it("prints the replay record's exact bytes on stdout with --json", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replay-json-"));
+		temporaryDirectories.push(directory);
+		const recordPath = join(directory, "replay.json");
+		const recordText = `${JSON.stringify({ schemaVersion: 1, stage: "shape" }, null, 2)}\n`;
+		await Bun.write(recordPath, recordText);
+		const { output, stdout } = recorder();
+
+		await runReplayCommand(
+			{
+				args: ["--run", "any-name", "--stage", "shape", ...sessionArgs],
+				json: true,
+				stdinIsTerminal: false,
+			},
+			{
+				output,
+				resolveRunDirectory: () => Promise.resolve("/runs/any-name"),
+				execute: (_config, _paths, commandOutput) => {
+					commandOutput.stderr("Replay progress\n");
+
+					return Promise.resolve({
+						kind: "debug" as const,
+						evidence: { recordPath, lineage: "lineage-1" },
+					});
+				},
+			},
+		);
+
+		expect(stdout.join("")).toBe(recordText);
+		expect(stdout.join("")).toBe(await Bun.file(recordPath).text());
 	});
 });

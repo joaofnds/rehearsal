@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
@@ -56,6 +59,16 @@ const pipeline: PipelineDefinition = {
 };
 
 describe(runRunCommand.name, () => {
+	const temporaryDirectories: string[] = [];
+
+	afterEach(async () => {
+		await Promise.all(
+			temporaryDirectories
+				.splice(0)
+				.map((directory) => rm(directory, { force: true, recursive: true })),
+		);
+	});
+
 	it("refuses before loading the pipeline when stdin is not a terminal", async () => {
 		const loaded: string[] = [];
 		const { output, stdout, stderr } = recorder();
@@ -151,5 +164,27 @@ describe(runRunCommand.name, () => {
 		).toHaveLength(1);
 		expect(events.indexOf("load-pipeline")).toBe(1);
 		expect(stdout.join("")).toBe("/runs/2026.json\n");
+	});
+
+	it("prints the run artifact's exact bytes on stdout with --json", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-json-"));
+		temporaryDirectories.push(directory);
+		const recordFile = join(directory, "artifact.json");
+		const recordText = `${JSON.stringify({ schemaVersion: 1, status: "COMPLETE" }, null, 2)}\n`;
+		await Bun.write(recordFile, recordText);
+		const { output, stdout, stderr } = recorder();
+
+		await runRunCommand(
+			{ args, json: true, stdinIsTerminal: true },
+			{
+				output,
+				loadPipeline: () => Promise.resolve(pipeline),
+				execute: () => Promise.resolve({ kind: "debug" as const, recordFile }),
+			},
+		);
+
+		expect(stdout.join("")).toBe(recordText);
+		expect(stdout.join("")).toBe(await Bun.file(recordFile).text());
+		expect(stderr).toEqual([]);
 	});
 });

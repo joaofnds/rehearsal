@@ -59,8 +59,13 @@ import {
 import type { CommandOutput } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
-type ReplayOutcome = ReplayStageOutcome<
-	Awaited<ReturnType<typeof runReplay>>,
+export interface ReplayEvidence {
+	readonly recordPath: string;
+	readonly lineage: string;
+}
+
+export type ReplayCommandOutcome = ReplayStageOutcome<
+	ReplayEvidence,
 	ReplayConfirmationOutcome
 >;
 
@@ -77,7 +82,7 @@ export interface ReplayCommandDependencies {
 		config: ReplayCliConfig,
 		paths: BenchmarkRunPaths,
 		output: CommandOutput,
-	) => Promise<ReplayOutcome>;
+	) => Promise<ReplayCommandOutcome>;
 }
 
 export async function runReplayCommand(
@@ -115,7 +120,7 @@ async function reportOutcome(
 	request: ReplayCommandRequest,
 	config: ReplayCliConfig,
 	paths: BenchmarkRunPaths,
-	outcome: ReplayOutcome,
+	outcome: ReplayCommandOutcome,
 	output: CommandOutput,
 ): Promise<void> {
 	if (outcome.kind === "confirmation") {
@@ -147,12 +152,12 @@ async function reportOutcome(
 async function attemptComparison(
 	config: ReplayCliConfig,
 	paths: BenchmarkRunPaths,
-	evidence: Awaited<ReturnType<typeof runReplay>>,
+	evidence: ReplayEvidence,
 ): Promise<string> {
 	try {
 		return `${await presentAttempts(
-			evidence.record.consumed.lineage,
-			await loadAttempts(paths, config.stage, evidence.record.consumed.lineage),
+			evidence.lineage,
+			await loadAttempts(paths, config.stage, evidence.lineage),
 		)}\n`;
 	} catch (error) {
 		if (!(error instanceof LineageMismatchError)) {
@@ -183,7 +188,7 @@ export async function executeReplay(
 	config: ReplayCliConfig,
 	paths: BenchmarkRunPaths,
 	output: CommandOutput,
-): Promise<ReplayOutcome> {
+): Promise<ReplayCommandOutcome> {
 	const replayDependencies: ReplayDependencies = {
 		createProductOwner,
 		stageSession: {
@@ -234,7 +239,14 @@ export async function executeReplay(
 				},
 				prompt: (message) => questioner.question(message),
 			},
-			runDebug: (debugRequest) => runReplay(replayDependencies, debugRequest),
+			runDebug: async (debugRequest) => {
+				const outcome = await runReplay(replayDependencies, debugRequest);
+
+				return {
+					recordPath: outcome.recordPath,
+					lineage: outcome.record.consumed.lineage,
+				};
+			},
 			runConfirmed: (confirmationRequest) =>
 				runReplayConfirmation(replayDependencies, confirmationRequest),
 			groupId: randomUUID,
