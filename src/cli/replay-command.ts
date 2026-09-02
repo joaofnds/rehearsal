@@ -58,7 +58,7 @@ import {
 	requireInteractiveStdin,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import { writeRecord } from "#cli/output";
+import { writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
 export interface ReplayEvidence {
@@ -99,10 +99,7 @@ export async function runReplayCommand(
 		);
 	}
 
-	const warning = judgeSelfPreferenceWarning(config);
-	if (warning !== undefined) {
-		dependencies.output.stderr(`${warning}\n`);
-	}
+	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
 	await dependencies.resolveRunDirectory(config.runName);
 	const paths = benchmarkRunPaths(

@@ -24,3 +24,14 @@ export async function writeRecord(
 ): Promise<void> {
 	output.stdout(json ? await Bun.file(recordFile).text() : `${recordFile}\n`);
 }
+
+export function writeDiagnostic(
+	output: CommandOutput,
+	message: string | undefined,
+): void {
+	if (message === undefined) {
+		return;
+	}
+
+	output.stderr(`${message}\n`);
+}

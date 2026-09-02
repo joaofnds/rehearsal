@@ -47,7 +47,7 @@ import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
 import { requireInteractiveStdin } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import { writeRecord } from "#cli/output";
+import { writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
 const REVIEW_PAUSE_REASON =
@@ -80,10 +80,7 @@ export async function runRunCommand(
 	const config = asUsageError(() => parseArgs(request.args));
 	requireInteractiveStdin(request.stdinIsTerminal, REVIEW_PAUSE_REASON);
 
-	const warning = judgeSelfPreferenceWarning(config);
-	if (warning !== undefined) {
-		dependencies.output.stderr(`${warning}\n`);
-	}
+	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
 	const pipeline = await dependencies.loadPipeline(config.pipelinePath);
 	const outcome = await dependencies.execute(
