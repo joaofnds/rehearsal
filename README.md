@@ -34,7 +34,7 @@ clean target repository on main
 record original SHA and back up backlog/ + .boris/
         |
         v
-run baseline typecheck, Biome, and unit tests
+run the pipeline's baseline target checks
         |
         v
 create a real Backlog.md card and install CLAUDE.md
@@ -69,7 +69,7 @@ validate and record calibration
 reset main to the original SHA and restore workflow artifacts
 ```
 
-The pipeline is configuration, not harness code: every user brings their own workflow. A definition, selected with `--pipeline` and defaulting to `pipelines/default.json`, declares the board columns the target's Backlog.md uses, each stage's name, kind, and skill, the rubric its Judge applies, and optionally the durable document a planning stage must attach. A stage that records its output only on the task card declares no artifact. Stages can be added, removed, renamed, or reordered without changing the harness; a pipeline must declare exactly one delivery stage and place it last.
+The pipeline is configuration, not harness code: every user brings their own workflow. A definition, selected with `--pipeline` and defaulting to `pipelines/default.json`, declares the target checks and check-integrity files, the board columns the target's Backlog.md uses, each stage's name, kind, and skill, the rubric its Judge applies, and optionally the durable document a planning stage must attach. A stage that records its output only on the task card declares no artifact. Stages can be added, removed, renamed, or reordered without changing the harness; a pipeline must declare exactly one delivery stage and place it last.
 
 The default pipeline follows the currently installed workflow: a `shape` stage that turns the request into acceptance observations on the card, then a `build` stage that delivers the implementation.
 
@@ -130,15 +130,15 @@ Every stage scorecard stores the frozen input, full rubric, structured source ci
 
 ## Final Grading
 
-After Build, the harness reruns:
+After delivery validation, the harness reruns the pipeline's target checks in declaration order. Each check is an argument-vector command with an optional environment overlay. The default pipeline is this example:
 
 ```sh
-bun run typecheck
-bun run check
+CONFIG_PATH=src/config/test.yaml bun run typecheck
+CONFIG_PATH=src/config/test.yaml bun run check
 CONFIG_PATH=src/config/test.yaml bun run test:unit
 ```
 
-It also compares hashes for `package.json`, `tsconfig.json`, and `biome.json`. The candidate cannot obtain a passing result by weakening the configured checks.
+The harness also compares every pipeline-declared check-integrity file with its baseline bytes. The default pipeline protects `package.json`, `tsconfig.json`, and `biome.json`. A missing baseline file is a configuration error, and a changed or deleted declared file fails check integrity, so the candidate cannot obtain a passing result by weakening the configured checks.
 
 After every stage has passed, the final Judge runs separately in safe mode with no tools. It receives only:
 

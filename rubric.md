@@ -14,5 +14,5 @@ Grade every item as PASS or FAIL. A missing, ambiguous, or unproven requirement 
 10. `wiring`: Audit HTTP, queue, worker, and persistence modules are wired into the application so the endpoint and worker can run.
 11. `behavior-coverage`: One test proves the accepted request enqueues exactly one validated payload while persistence remains empty. Another test invokes the worker with that payload and proves the expected audit row is persisted.
 12. `forbidden-tools`: The change adds no `class-validator`, `class-transformer`, TypeORM, Jest, ESLint, or Prettier usage or dependencies.
-13. `check-integrity`: Use the harness result. PASS only when `package.json`, `tsconfig.json`, and `biome.json` match the baseline before treatment checks run.
-14. `local-checks`: Use the harness result. PASS only when typecheck, Biome, and unit tests all exited successfully after the change.
+13. `check-integrity`: Use the harness result. PASS only when every check-integrity file declared by the recorded pipeline still exists with bytes identical to its baseline.
+14. `local-checks`: Use the harness result. PASS only when every target check declared by the recorded pipeline exited successfully after the change.
