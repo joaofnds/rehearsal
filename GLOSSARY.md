@@ -107,3 +107,5 @@
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
+- **Workflow state** — the untracked `backlog/` and `.boris/` trees that carry
+  workflow artifacts between stages and must be copied independently of Git.
