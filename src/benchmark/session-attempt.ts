@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, realpath, rm, rmdir } from "node:fs/promises";
+import {
+	cp,
+	mkdir,
+	mkdtemp,
+	readdir,
+	realpath,
+	rm,
+	rmdir,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { SessionCase } from "./case";
 import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
 import type { SessionSettings } from "./claude";
@@ -130,6 +138,34 @@ async function prepareSession(
 	return { sessionId, resumed: true };
 }
 
+export class FixtureError extends Error {
+	public override name = "FixtureError";
+}
+
+/**
+ * A recursive copy preserves symlinks, so a fixture holding one would give the
+ * session a live path out of the attempt directory the harness promised it
+ * owns. The tree is data a case declares, so the refusal comes before the copy
+ * and before any provider call, and it names the entry.
+ */
+async function seedFixture(
+	fixturePath: string,
+	attemptDirectory: string,
+): Promise<void> {
+	for (const entry of await readdir(fixturePath, {
+		recursive: true,
+		withFileTypes: true,
+	})) {
+		if (entry.isSymbolicLink()) {
+			throw new FixtureError(
+				`Fixture entry ${relative(fixturePath, join(entry.parentPath, entry.name))} is a symlink, which would lead out of the attempt directory`,
+			);
+		}
+	}
+
+	await cp(fixturePath, attemptDirectory, { recursive: true });
+}
+
 export async function runSessionAttempt(
 	request: SessionAttemptRequest,
 ): Promise<SessionAttempt> {
@@ -138,7 +174,7 @@ export async function runSessionAttempt(
 		await mkdtemp(join(tmpdir(), "rehearsal-attempt-")),
 	);
 	if (sessionCase.fixturePath !== undefined) {
-		await cp(sessionCase.fixturePath, attemptDirectory, { recursive: true });
+		await seedFixture(sessionCase.fixturePath, attemptDirectory);
 	}
 
 	const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));

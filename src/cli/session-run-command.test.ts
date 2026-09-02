@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
@@ -146,6 +146,27 @@ describe(runSessionDebugAttempt.name, () => {
 
 		expect(outcome.record.outcome).toBe("UNSUCCESSFUL");
 		expect(outcome.record.checks[0]?.status).toBe("FAIL");
+	});
+
+	it("refuses a fixture tree holding a symlink, before any provider call", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+		const fixture = await temporary("rehearsal-fixture-");
+		await symlink("/etc/hosts", join(fixture, "escape.md"));
+
+		const failure = await failureOf(
+			runSessionDebugAttempt({
+				sessionCase: sessionCase({ fixturePath: fixture }),
+				config,
+				runsDirectory: runs,
+				runClaude: () =>
+					Promise.reject(new Error("a provider call must not happen")),
+				projectsDirectory: projects,
+			}),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("escape.md");
 	});
 
 	it("refuses a declared corpus file that does not resolve, before any provider call", async () => {

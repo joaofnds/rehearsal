@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readdir, realpath, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	realpath,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { SessionCase } from "#benchmark/case";
@@ -349,6 +356,33 @@ describe(runSessionAttempt.name, () => {
 
 		const [only] = claude.runs;
 		expect(only?.seenFiles).toContain(join("docs", "note.md"));
+	});
+
+	/**
+	 * A recursive copy preserves symlinks, so a fixture holding one to an
+	 * absolute path would hand the session a live path out of the attempt
+	 * directory: the session would read the machine's real file through a tree
+	 * the harness promised was its own.
+	 */
+	it("refuses a fixture tree holding a symlink, naming it, before any provider call", async () => {
+		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		await mkdir(join(fixture, "docs"), { recursive: true });
+		await symlink("/etc/hosts", join(fixture, "docs", "escape.md"));
+		const projects = await projectsRoot();
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					sessionCase: sessionCase({ fixturePath: fixture }),
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.reject(new Error("a provider call must not happen")),
+				}),
+			),
+		);
+
+		expect(failure.message).toContain(join("docs", "escape.md"));
 	});
 
 	it("copies the transcript the provider wrote into the attempt record", async () => {

@@ -9,8 +9,12 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
-import type { ClaudeRunner, SessionAttempt } from "#benchmark/session-attempt";
-import { runSessionAttempt } from "#benchmark/session-attempt";
+import type {
+	ClaudeRunner,
+	SessionAttempt,
+	SessionAttemptRequest,
+} from "#benchmark/session-attempt";
+import { FixtureError, runSessionAttempt } from "#benchmark/session-attempt";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type { SessionAttemptRecord } from "#benchmark/session-record";
@@ -49,6 +53,25 @@ async function requireCorpus(
 		return await hashCorpusFiles(sessionCase.corpusFiles);
 	} catch (error) {
 		if (error instanceof CorpusFileError) {
+			throw new RefusedPreconditionError(error.message);
+		}
+
+		throw error;
+	}
+}
+
+/**
+ * A fixture tree the harness refuses to seed is a declared input the command
+ * cannot satisfy, the same shape of refusal as a corpus file that does not
+ * resolve, so it exits 3 rather than as an execution failure.
+ */
+async function attempted(
+	request: SessionAttemptRequest,
+): Promise<SessionAttempt> {
+	try {
+		return await runSessionAttempt(request);
+	} catch (error) {
+		if (error instanceof FixtureError) {
 			throw new RefusedPreconditionError(error.message);
 		}
 
@@ -135,7 +158,7 @@ export async function runSessionDebugAttempt(
 	await mkdir(recordDirectory, { recursive: true });
 
 	const startedAt = Date.now();
-	const attempt = await runSessionAttempt({
+	const attempt = await attempted({
 		sessionCase,
 		settings,
 		projectsDirectory: request.projectsDirectory,
