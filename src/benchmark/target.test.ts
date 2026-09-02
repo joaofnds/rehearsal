@@ -296,7 +296,7 @@ describe(restoreTarget.name, () => {
 	it("reproduces the captured workflow state", async () => {
 		const source = await testResources.createRepository();
 		const backlogDirectory = join(source.directory, "backlog");
-		const original = new Uint8Array([0x00, 0xff, 0x0a]);
+		const original = new Uint8Array([0, 255, 10]);
 		await mkdir(join(backlogDirectory, "empty"), { recursive: true });
 		await Bun.write(join(backlogDirectory, "original.bin"), original);
 		const baseline = await assertSourceReady(source.directory);
@@ -311,12 +311,12 @@ describe(restoreTarget.name, () => {
 
 		await restoreTarget(baseline, backup);
 
-		expect(
-			await Bun.file(join(backlogDirectory, "original.bin")).bytes(),
-		).toEqual(original);
-		expect((await stat(join(backlogDirectory, "empty"))).isDirectory()).toBe(
-			true,
-		);
+		const restored = await Bun.file(
+			join(backlogDirectory, "original.bin"),
+		).bytes();
+		const emptyDirectory = await stat(join(backlogDirectory, "empty"));
+		expect(restored).toEqual(original);
+		expect(emptyDirectory.isDirectory()).toBe(true);
 		expect(
 			await Bun.file(join(backlogDirectory, "generated.md")).exists(),
 		).toBe(false);
