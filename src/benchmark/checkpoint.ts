@@ -86,7 +86,13 @@ async function hashFile(path: string): Promise<string> {
 		.digest("hex");
 }
 
-async function hashDirectory(
+/**
+ * How a directory tree becomes lineage inputs. Both a checkpoint's workflow
+ * state and a session case's fixture hash through here, because two copies of
+ * this walk could disagree about ordering or about what counts as a file, and
+ * a lineage key that differs by walk is a stale checkpoint nobody can explain.
+ */
+export async function hashDirectory(
 	root: string,
 	prefix: string,
 ): Promise<HashedFile[]> {
