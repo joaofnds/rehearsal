@@ -1,11 +1,11 @@
 ---
 id: ACT-24
 title: record pipeline confirmation setup failure boundary
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-01 13:52'
-updated_date: '2026-09-02 13:23'
+updated_date: '2026-09-02 13:34'
 labels: []
 dependencies: []
 references:
@@ -24,11 +24,11 @@ Make every pipeline confirmation rep failure before stage execution name the set
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 When worktree creation rejects for one rep, that rep's first-stage `EXECUTION_FAILED` error is `worktree creation failed: <original cause>`, peer reps still reach stage execution, and no diagnostic-worktree preservation log is emitted for the uncreated worktree.
-- [ ] #2 When initial checkpoint materialization rejects after worktree creation, the first-stage error is `checkpoint materialization failed: <original cause>`, the created worktree remains registered, and the existing pipeline evidence-preserved log names its path.
-- [ ] #3 When corpus installation rejects before either the first or a later stage, the current stage error is `corpus installation failed: <original cause>`; any earlier judged stage and its evidence remain recorded, later stages and the final outcome are `NOT_REACHED`, and the created worktree is preserved and logged.
-- [ ] #4 Workflow-stage, stage-Judge, and final-Judge failures keep their existing unqualified error text, role-attributed provider-call evidence, retention behavior, and diagnostic-versus-completed worktree lifecycle.
-- [ ] #5 Confirmation rep and group records remain strict schema version 1 with no field-shape change, and the focused pipeline-confirmation test plus `bun test`, `bun run typecheck`, `bun run lint`, and `bun run fmt:check` exit successfully.
+- [x] #1 When worktree creation rejects for one rep, that rep's first-stage `EXECUTION_FAILED` error is `worktree creation failed: <original cause>`, peer reps still reach stage execution, and no diagnostic-worktree preservation log is emitted for the uncreated worktree.
+- [x] #2 When initial checkpoint materialization rejects after worktree creation, the first-stage error is `checkpoint materialization failed: <original cause>`, the created worktree remains registered, and the existing pipeline evidence-preserved log names its path.
+- [x] #3 When corpus installation rejects before either the first or a later stage, the current stage error is `corpus installation failed: <original cause>`; any earlier judged stage and its evidence remain recorded, later stages and the final outcome are `NOT_REACHED`, and the created worktree is preserved and logged.
+- [x] #4 Workflow-stage, stage-Judge, and final-Judge failures keep their existing unqualified error text, role-attributed provider-call evidence, retention behavior, and diagnostic-versus-completed worktree lifecycle.
+- [x] #5 Confirmation rep and group records remain strict schema version 1 with no field-shape change, and the focused pipeline-confirmation test plus `bun test`, `bun run typecheck`, `bun run lint`, and `bun run fmt:check` exit successfully.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,4 +56,21 @@ Unknowns resolved:
 Glossary terms added: none. "Setup operation" is diagnostic wording for existing preparation, not a new domain concept.
 
 No product decision was deferred.
+
+Build handoff 2026-09-02:
+- `runPipelineRep` now carries local setup context across worktree creation, initial checkpoint materialization, and corpus installation before every stage. It clears that context before stage execution and persists `<operation> failed: <original cause>` only on the diagnostic stage path.
+- Pipeline corpus installation is now an explicit `PipelineConfirmationDependencies` seam. The production entry point and `PipelineConfirmationHarness` both wire the existing `installStageCorpusSnapshot`; no pipeline caller remains on the direct-import path. Replay keeps its separate linear setup context by design.
+- Real-Git integration scenarios inject failures before worktree creation, after worktree creation, before the first stage, and before a later stage. They observed peer completion, correct diagnostic worktree preservation, retained earlier stage evidence, and unchanged strict schema-version-1 records.
+- Existing workflow, stage-Judge invocation, stage-Judge validation, and final-Judge scenarios now assert their unqualified error text and existing provider-call, retention, cleanup, and diagnostic lifecycles. Removing the corpus-label clear produced three focused failures with leaked `corpus installation failed:` prefixes; restoring it returned all 12 focused tests to green.
+- Full verification observed 422 passing tests, 0 failures, and 854 expectations across 31 files; typecheck, type-aware lint, and formatting passed. A separate direct observation printed two parsed durable rep records: first-stage and later-stage corpus failures carried the operation and original cause, the later record retained a judged discuss scorecard and complete provider metrics, and both final outcomes were `NOT_REACHED`.
+- Not verified: no paid provider session or production confirmation run was executed.
+- Refactor pass: no small safe restructuring was found. Sharing mutable attribution with replay would couple different orchestration state, while the stable evidence settlement is already shared.
+- Nothing became possible but remains unwired, and no defect stopped the build.
+- Independent review is not due: this is an internal, reversible diagnostic-string and owned dependency-seam change with no outward-facing, irreversible, or security-surfaced behavior.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Pipeline confirmation records now identify worktree creation, checkpoint materialization, and per-stage corpus installation failures while preserving the original cause, strict schema version 1, diagnostic worktrees, prior stage evidence, and existing workflow/Judge attribution. The real-Git scenarios, full 422-test suite, typecheck, type-aware lint, and formatting all passed; direct record inspection confirmed first-stage and later-stage setup attribution. No paid provider run was performed.
+<!-- SECTION:FINAL_SUMMARY:END -->
