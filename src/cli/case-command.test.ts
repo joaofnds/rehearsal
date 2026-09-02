@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import type { CaseDeclaration } from "#benchmark/case";
@@ -38,6 +38,23 @@ describe(runCaseList.name, () => {
 		const declarations = printedDeclarations(recorder.stdout.join(""));
 
 		expect(declarations.map(({ id }) => id)).toContain(DEFAULT_CASE_ID);
+	});
+
+	it("names the case directory as a refused precondition when it is absent", async () => {
+		const casesDirectory = join(CONTROL_DIR, CASES_DIRECTORY);
+		const aside = `${casesDirectory}-absent-probe`;
+		await rename(casesDirectory, aside);
+
+		try {
+			const failure = await failureOf(
+				runCaseList({ json: false }, recordOutput().output),
+			);
+
+			expect(failure).toBeInstanceOf(RefusedPreconditionError);
+			expect(failure.message).toContain(CASES_DIRECTORY);
+		} finally {
+			await rename(aside, casesDirectory);
+		}
 	});
 
 	it("reports an unreadable case directory on stderr and still lists the rest", async () => {

@@ -140,7 +140,14 @@ export interface CaseListing {
 
 async function readCaseDirectoryNames(): Promise<readonly string[]> {
 	const directory = join(CONTROL_DIR, CASES_DIRECTORY);
-	const entries = await readdir(directory, { withFileTypes: true });
+	let entries;
+	try {
+		entries = await readdir(directory, { withFileTypes: true });
+	} catch {
+		throw new CaseDeclarationError(
+			`No case directory at ${relative(CONTROL_DIR, directory)}`,
+		);
+	}
 
 	return entries
 		.filter((entry) => entry.isDirectory())
