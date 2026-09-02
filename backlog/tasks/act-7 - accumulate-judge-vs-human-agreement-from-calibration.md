@@ -1,11 +1,11 @@
 ---
 id: ACT-7
 title: accumulate judge-vs-human agreement from calibration
-status: Shape
+status: Build
 assignee:
   - '@claude'
 created_date: '2026-08-30 12:43'
-updated_date: '2026-09-02 13:33'
+updated_date: '2026-09-02 13:48'
 labels: []
 dependencies: []
 references:
@@ -17,32 +17,54 @@ ordinal: 7
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Calibration findings (CAUGHT, MISSED, FALSE_POSITIVE) are human labels of Judge decisions. Accumulate them per rubric across runs into a running judge-vs-human agreement figure, shown in reports, and re-baselined whenever the judge model changes. This measures judge drift instead of suspecting it. See docs/design.md decision 8; evidence in docs/research.md 'Judge reliability'.
+Accumulate completed human calibration into Judge agreement baselines partitioned by exact Judge model and frozen rubric contract, then show those baselines wherever Judge results are reported.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every calibration finding is accumulated per rubric across runs, keyed by the judge model that produced the original grade.
-- [ ] #2 An agreement figure per rubric is computed from the accumulated labels and shown in run reports.
-- [ ] #3 A judge-model change starts a new baseline; figures from different judge models are never merged.
+- [ ] #1 A focused aggregation test converts every original stage or final rubric criterion in each completed calibration into one binary Judge/human observation: CAUGHT is fail/fail, MISSED is pass/fail, FALSE_POSITIVE is fail/pass, an absent Judge-related finding agrees with the original decision, NOT_PROMOTED does not alter a decision, and stage dimensions treat A/B as pass and C/D/F as fail.
+- [ ] #2 For six reviews of one criterion producing two pass/pass, two fail/fail, one pass/fail, and one fail/pass observations, the report shows those four raw counts, sample size 6, observed agreement 2/3, and Cohen's kappa 1/3; when either rater has no outcome variation, kappa is null while counts and observed agreement remain available.
+- [ ] #3 Observations with different exact Judge model identifiers, rubric-contract SHA-256 digests, stages, or rubric IDs appear in separate deterministic baselines and are never merged; a rubric edit or Judge-model change therefore starts a new baseline.
+- [ ] #4 A stopped stage's completed record persists its exact judgeModel and a Judge agreement snapshot that includes the current calibration; a completed final run artifact does the same for all reviewed stage and final criteria.
+- [ ] #5 Historical calibrated stage records without judgeModel are joined only to their exact neighboring run manifest; calibrated pre-manifest records are skipped, never inferred, and increase the report's skipped-calibration count.
+- [ ] #6 Stage and pipeline confirmation reports show the accumulated snapshot for their exact Judge model, and omit baselines from other Judge models.
+- [ ] #7 A newly generated comparison report is strict schema version 2 and shows the accumulated snapshots for every exact Judge model represented by its source groups; existing strict schema-version-1 comparison reports remain parseable, and unknown fields remain rejected in both versions.
+- [ ] #8 The README explains the label mapping, baseline identity, counts, null-kappa case, historical skip behavior, and report locations; GLOSSARY.md defines Judge agreement baseline and rubric criterion.
+- [ ] #9 bun test, bun run typecheck, bun run lint, and bun run fmt:check exit successfully, and a generated report is directly observed with separated model/rubric baselines and the expected counts and kappa.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Introduce a focused `judge-agreement` module that parses calibration artifacts at the filesystem boundary with Zod, converts original grades and completed human reviews into binary criterion observations, and folds them deterministically into immutable baseline snapshots. Hash the original parsed stage-rubric contract and exact final-rubric text; derive reports from source run artifacts on demand instead of dual-writing an aggregate store.
+
+Have run completion pass its in-memory current calibration to the collector before the completed stage or final artifact is written, and persist `judgeModel` on future stage records. The collector reads prior top-level run artifacts, joins legacy stage anchors to the exact run manifest, and reports pre-manifest calibrated anchors as skipped.
+
+Add the filtered snapshot to confirmation report finalization. Pass snapshots for the source groups' represented Judge models into comparison report construction, bump generated comparison reports to strict schema version 2, and retain a strict version-1 parser for persisted reports. Document the user-visible interpretation and terms.
+
+First test: drive the pure agreement fold with six observations for one criterion whose contingency cells are 2/2/1/1, and observe sample size 6, agreement 2/3, and kappa 1/3.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Shaping evidence gathered 2026-09-02:
 
-- `docs/research.md` names Cohen's kappa and approximately 100 human-labeled examples per rubric as the reliability method; the task currently says only "agreement figure."
-- A completed calibration records `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings, and the prompt requires every finding, but it does not explicitly label rubric decisions with no finding. Kappa needs both agreement and disagreement observations.
-- Stage hard blockers and requirements already reduce to PASS/FAIL; stage dimensions use A/B versus C/D/F in calibration validation; final requirements are PASS/FAIL. The existing data can therefore form binary Judge/human observations if no finding is defined as human agreement with the original decision.
-- The project glossary defines Rubric as the whole frozen grading contract, while findings identify individual rubric IDs. "Per rubric" is therefore ambiguous between a contract and a criterion.
-- Every current run manifest and final run artifact records the exact `judgeModel`. Stage-stop records carry the workflow `model`, but can be joined to their neighboring manifest in current runs. Runs before manifests cannot establish their Judge model and must not be inferred.
-- Human calibration occurs only in single debug runs. The named report outputs are confirmation and comparison reports; a calibrated debug run instead ends in either a completed stage record or completed final run artifact.
-- A rubric is commonly revised during calibration. Aggregating only by model and rubric ID merges decisions made under materially different rubric text.
+- `docs/research.md` names Cohen's kappa and approximately 100 human-labeled examples per rubric as the reliability method.
+- A completed review is authoritative for every original rubric decision because the calibration prompt requires every finding; no Judge-related finding means the human agrees with that original decision.
+- Stage hard blockers and requirements are PASS/FAIL; stage dimensions reduce A/B to pass and C/D/F to fail; final requirements are PASS/FAIL.
+- João approved the recommendations from the shaping turn by directing Build: use every reviewed decision, partition by exact Judge model plus frozen rubric contract, show snapshots in debug-run/confirmation/comparison outputs, join manifest-associated historical stage records, and skip rather than infer pre-manifest Judge models.
+- Human calibration exists only in single debug runs. Confirmation and comparison outputs consume read-only snapshots derived from those run artifacts.
 
-Open product decisions:
-1. Observation and statistic: whether every reviewed rubric decision is a label, with an absent Judge-related finding meaning agreement, so the report can show Cohen's kappa plus raw contingency counts; or whether only explicit findings count, which permits only a selected-finding agreement rate. Recommendation: use every reviewed decision, kappa, and counts to match the adopted research method.
-2. Baseline identity: whether the baseline is keyed only by exact Judge model, as the current card says, or by exact Judge model plus the frozen rubric contract. Recommendation: include the rubric-content digest so a prompt change cannot be mistaken for model drift; retain the rubric ID inside that contract for per-criterion rows.
-3. Presentation scope: whether Judge agreement appears only on calibrated debug-run records, or also beside automated grades in confirmation and comparison reports. Recommendation: include the same read-only snapshot in completed debug-run, confirmation, and comparison reports so every interpreted Judge result carries its reliability context.
-4. Historical artifacts: whether current manifest-associated stage calibrations are included even though their stage record lacks `judgeModel`. Recommendation: join current stage records to their exact manifest, skip pre-manifest records with an explicit skipped count, and never infer the model.
+Resolved unknowns:
+- Statistic: raw contingency counts, sample size, observed agreement, and Cohen's kappa. Kappa is null when expected agreement is 1 because the denominator is zero.
+- Baseline identity: exact Judge model, stage (`final` included), and SHA-256 of the original frozen rubric contract. Criterion summaries remain separate by rubric ID inside that baseline.
+- Persistence: source calibrations remain the system of record; reports derive snapshots on demand, avoiding a second mutable store and partial-update risk.
+- Presentation: completed stopped-stage records, completed final run artifacts, confirmation reports, and comparison reports.
+- History: a stage record without judgeModel may use only its exact neighboring manifest; no manifest means an explicit skipped calibration.
+- Compatibility: newly generated comparison reports use schema version 2; persisted strict version-1 reports remain readable.
+
+Glossary terms to add: Judge agreement baseline; rubric criterion.
+
+No product decision remains open.
 <!-- SECTION:NOTES:END -->

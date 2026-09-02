@@ -39,6 +39,9 @@
   of its checkpoints is stale.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
   rubric-scored LLM with rationale.
+- **Judge agreement baseline** — accumulated binary Judge and human decisions
+  for one exact Judge model and frozen rubric contract, summarized separately
+  for each rubric criterion.
 - **Judge attempt** — one Judge call against frozen evidence and a rubric,
   recording its returned payload, call cost, and whether harness validation
   accepted or rejected it.
@@ -70,6 +73,9 @@
   in a fresh worktree.
 - **Rubric** — the frozen grading contract a Judge applies; per-stage under
   `rubrics/`, final in `rubric.md`.
+- **Rubric criterion** — one identified hard blocker, requirement, or quality
+  dimension within a rubric, reduced to a binary pass/fail decision for
+  calibration.
 - **Score** — a statistical summary over a confirmation run's rep outcomes:
   their distribution, success rate with standard error, and pass^k. A
   single-rep Judge result is evidence, not a score.
