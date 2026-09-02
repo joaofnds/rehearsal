@@ -5,8 +5,12 @@ import {
 	listCases,
 	loadCase,
 	parseCaseDeclaration,
+	requirePipelineCase,
+	requireSessionCase,
 } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
+import type { Immutable } from "#benchmark/contracts";
+import type { JsonObject } from "#benchmark/json-value";
 import { mkdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
@@ -122,14 +126,14 @@ describe("loadCase", () => {
 	});
 
 	it("resolves the declared target to a directory that exists", async () => {
-		const benchmarkCase = await loadCase("audit-log");
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		const target = await stat(benchmarkCase.targetPath);
 		expect(target.isDirectory()).toBe(true);
 	});
 
 	it("resolves a relative declared target against the case directory", async () => {
-		const benchmarkCase = await loadCase("audit-log");
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		expect(benchmarkCase.targetPath).toBe(
 			resolve(
@@ -141,7 +145,7 @@ describe("loadCase", () => {
 	});
 
 	it("returns the audit-log task, brief, and final rubric byte for byte", async () => {
-		const benchmarkCase = await loadCase("audit-log");
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		expect(benchmarkCase.task).toBe(
 			await bytesBeforeTheMove("backlog-seed.md"),
@@ -155,7 +159,7 @@ describe("loadCase", () => {
 	});
 
 	it("returns the audit-log stage rubrics byte for byte", async () => {
-		const benchmarkCase = await loadCase("audit-log");
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		expect(benchmarkCase.stageRubrics["shape"]?.content).toBe(
 			await bytesBeforeTheMove("rubrics/shape.json"),
@@ -166,7 +170,7 @@ describe("loadCase", () => {
 	});
 
 	it("returns the audit-log pipeline definition as it was before the move, with its rubrics rehomed", async () => {
-		const benchmarkCase = await loadCase("audit-log");
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		const before = await bytesBeforeTheMove("pipelines/default.json");
 		const rehomed: unknown = JSON.parse(
@@ -174,6 +178,59 @@ describe("loadCase", () => {
 		);
 		expect(benchmarkCase.pipeline).toEqual(
 			pipelineDefinitionSchema.parse(rehomed),
+		);
+	});
+});
+
+describe("loadCase for a session case", () => {
+	function sessionDeclaration(overrides: Immutable<JsonObject> = {}): string {
+		return JSON.stringify({
+			id: "smoke",
+			kind: "session",
+			title: "Smoke",
+			prompt: "Reply with the single word OK.",
+			tools: [],
+			corpusFiles: [],
+			checks: [{ kind: "word-band", max: 1 }],
+			...overrides,
+		});
+	}
+
+	it("returns the smoke case carrying its prompt, tools, and checks", async () => {
+		const loaded = requireSessionCase(await loadCase("smoke"));
+
+		expect(loaded).toMatchObject({
+			prompt: "Reply with the single word OK.",
+			tools: [],
+			checks: [
+				{ kind: "word-band", max: 1 },
+				{ kind: "tool-calls", max: 0 },
+			],
+		});
+	});
+
+	it.each(["/etc", "../../CLAUDE.md"])(
+		"refuses a fixture at %s, which leaves the case directory",
+		(fixture) => {
+			const declaration = parseCaseDeclaration(
+				"smoke",
+				sessionDeclaration({ fixture }),
+			);
+
+			expect(() => caseRelative(declaration, fixture)).toThrow(
+				`Case smoke names a path outside its case directory: ${fixture}`,
+			);
+		},
+	);
+
+	it("refuses a session declaration carrying a pipeline field, naming the key", () => {
+		expect(() =>
+			parseCaseDeclaration(
+				"smoke",
+				sessionDeclaration({ pipeline: "pipelines/default.json" }),
+			),
+		).toThrow(
+			'Case smoke declaration has an invalid declaration: Unrecognized key: "pipeline"',
 		);
 	});
 });

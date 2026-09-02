@@ -2,9 +2,14 @@ import { readdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { CONTROL_DIR } from "./config";
+import type { JsonObject } from "./json-value";
+import { jsonObjectSchema } from "./json-value";
+import { benchmarkRunsDirectory } from "./run-layout";
 import type { Immutable, StageRubric } from "./contracts";
 import type { PipelineDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
+import type { Check } from "./session-check";
+import { checkSchema } from "./session-check";
 import { loadStageRubric } from "./stage-grading";
 
 export const CASES_DIRECTORY = "cases";
@@ -22,6 +27,17 @@ const caseIdSchema = z
 
 const caseRelativePathSchema = z.string().min(1);
 
+export const transcriptPrefixSchema = z
+	.object({
+		file: z.string().min(1),
+		sha256: z.string().regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
+		sourceSession: z.string().min(1),
+		cut: z.number().int().positive(),
+	})
+	.strict();
+
+export type TranscriptPrefix = z.infer<typeof transcriptPrefixSchema>;
+
 export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 	z
 		.object({
@@ -36,9 +52,34 @@ export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 			target: z.object({ path: z.string().min(1) }).strict(),
 		})
 		.strict(),
+	z
+		.object({
+			id: caseIdSchema,
+			kind: z.literal("session"),
+			title: z.string().min(1),
+			fixture: caseRelativePathSchema.optional(),
+			prompt: z.string().min(1),
+			transcript: transcriptPrefixSchema.optional(),
+			tools: z.array(z.string().min(1)),
+			settings: jsonObjectSchema.optional(),
+			agents: jsonObjectSchema.optional(),
+			corpusFiles: z.array(z.string().min(1)),
+			checks: z.array(checkSchema).min(1),
+		})
+		.strict(),
 ]);
 
 export type CaseDeclaration = Immutable<z.infer<typeof caseDeclarationSchema>>;
+
+export type SessionCaseDeclaration = Extract<
+	CaseDeclaration,
+	{ readonly kind: "session" }
+>;
+
+export type PipelineCaseDeclaration = Extract<
+	CaseDeclaration,
+	{ readonly kind: "pipeline" }
+>;
 
 export interface LoadedStageRubric {
 	readonly rubricPath: string;
@@ -47,7 +88,8 @@ export interface LoadedStageRubric {
 }
 
 export interface BenchmarkCase {
-	readonly declaration: CaseDeclaration;
+	readonly kind: "pipeline";
+	readonly declaration: PipelineCaseDeclaration;
 	readonly task: string;
 	readonly productBrief: string;
 	readonly finalRubric: string;
@@ -177,8 +219,43 @@ export async function listCases(): Promise<CaseListing> {
 	return { declarations, unreadable };
 }
 
+export interface SessionCase {
+	readonly kind: "session";
+	readonly declaration: SessionCaseDeclaration;
+	readonly fixturePath: string | undefined;
+	readonly transcriptPath: string | undefined;
+	readonly prompt: string;
+	readonly tools: readonly string[];
+	readonly settings: Immutable<JsonObject> | undefined;
+	readonly agents: Immutable<JsonObject> | undefined;
+	readonly corpusFiles: readonly string[];
+	readonly checks: Immutable<readonly Check[]>;
+}
+
+export type LoadedCase = BenchmarkCase | SessionCase;
+
+export function requirePipelineCase(loaded: LoadedCase): BenchmarkCase {
+	if (loaded.kind !== "pipeline") {
+		throw new CaseDeclarationError(
+			`Case ${loaded.declaration.id} is a session case; this command takes a pipeline case`,
+		);
+	}
+
+	return loaded;
+}
+
+export function requireSessionCase(loaded: LoadedCase): SessionCase {
+	if (loaded.kind !== "session") {
+		throw new CaseDeclarationError(
+			`Case ${loaded.declaration.id} is a pipeline case; this command takes a session case`,
+		);
+	}
+
+	return loaded;
+}
+
 async function loadPipelineWithRubrics(
-	declaration: CaseDeclaration,
+	declaration: PipelineCaseDeclaration,
 	pipelinePath: string,
 ): Promise<{
 	readonly pipeline: PipelineDefinition;
@@ -202,7 +279,7 @@ async function loadPipelineWithRubrics(
  * to it by `caseRelative`. The base is the case directory all the same: one
  * base for every path in a declaration.
  */
-function declaredTarget(declaration: CaseDeclaration): string {
+function declaredTarget(declaration: PipelineCaseDeclaration): string {
 	const { path } = declaration.target;
 	if (isAbsolute(path)) {
 		return path;
@@ -211,8 +288,9 @@ function declaredTarget(declaration: CaseDeclaration): string {
 	return resolve(caseDirectory(declaration.id), path);
 }
 
-export async function loadCase(id: string): Promise<BenchmarkCase> {
-	const declaration = await readCaseDeclaration(id);
+async function loadPipelineCase(
+	declaration: PipelineCaseDeclaration,
+): Promise<BenchmarkCase> {
 	const pipelinePath = relative(
 		CONTROL_DIR,
 		caseRelative(declaration, declaration.pipeline),
@@ -226,6 +304,7 @@ export async function loadCase(id: string): Promise<BenchmarkCase> {
 		]);
 
 	return {
+		kind: "pipeline",
 		declaration,
 		task,
 		productBrief,
@@ -237,6 +316,50 @@ export async function loadCase(id: string): Promise<BenchmarkCase> {
 		stageRubrics,
 		targetPath: declaredTarget(declaration),
 	};
+}
+
+/**
+ * The transcript prefix's bytes are git-ignored run state, not case input, so
+ * the declaration names the file and the loader resolves it under the run
+ * directory rather than inside the committed case directory.
+ */
+export function transcriptPrefixPath(caseId: string, file: string): string {
+	return join(
+		benchmarkRunsDirectory(CONTROL_DIR),
+		CASES_DIRECTORY,
+		caseId,
+		file,
+	);
+}
+
+function loadSessionCase(declaration: SessionCaseDeclaration): SessionCase {
+	const { fixture, transcript } = declaration;
+
+	return {
+		kind: "session",
+		declaration,
+		fixturePath:
+			fixture === undefined ? undefined : caseRelative(declaration, fixture),
+		transcriptPath:
+			transcript === undefined
+				? undefined
+				: transcriptPrefixPath(declaration.id, transcript.file),
+		prompt: declaration.prompt,
+		tools: declaration.tools,
+		settings: declaration.settings,
+		agents: declaration.agents,
+		corpusFiles: declaration.corpusFiles,
+		checks: declaration.checks,
+	};
+}
+
+export async function loadCase(id: string): Promise<LoadedCase> {
+	const declaration = await readCaseDeclaration(id);
+	if (declaration.kind === "session") {
+		return loadSessionCase(declaration);
+	}
+
+	return loadPipelineCase(declaration);
 }
 
 /**

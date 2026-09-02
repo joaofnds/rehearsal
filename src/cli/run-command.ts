@@ -20,8 +20,8 @@ import {
 	captureTreatmentChecks,
 	runChecks,
 } from "#benchmark/checks";
-import type { BenchmarkCase } from "#benchmark/case";
-import { withPipeline } from "#benchmark/case";
+import type { BenchmarkCase, LoadedCase } from "#benchmark/case";
+import { requirePipelineCase, withPipeline } from "#benchmark/case";
 import type { BenchmarkConfig } from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import {
@@ -70,7 +70,7 @@ export type RunOutcome =
 
 export interface RunCommandDependencies {
 	readonly output: CommandOutput;
-	readonly requireCase: (caseId: string) => Promise<BenchmarkCase>;
+	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
@@ -89,7 +89,9 @@ export async function runRunCommand(
 	dependencies: RunCommandDependencies,
 ): Promise<void> {
 	const caseId = asUsageError(() => parseCaseId(request.args));
-	const benchmarkCase = await dependencies.requireCase(caseId);
+	const benchmarkCase = requirePipelineCase(
+		await dependencies.requireCase(caseId),
+	);
 	const config = asUsageError(() =>
 		parseArgs(request.args, Bun.env, {
 			caseId: benchmarkCase.declaration.id,

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { BenchmarkCase, CaseDeclaration } from "#benchmark/case";
+import type { CaseDeclaration, LoadedCase } from "#benchmark/case";
 import {
 	CaseDeclarationError,
 	CASES_DIRECTORY,
@@ -31,7 +31,7 @@ async function asRefusedPrecondition<Loaded>(
 	}
 }
 
-export function requireCase(caseId: string): Promise<BenchmarkCase> {
+export function requireCase(caseId: string): Promise<LoadedCase> {
 	return asRefusedPrecondition(() => loadCase(caseId));
 }
 

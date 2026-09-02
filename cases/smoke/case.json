@@ -1,0 +1,12 @@
+{
+	"id": "smoke",
+	"kind": "session",
+	"title": "One-word reply with no tools, the cheapest session case",
+	"prompt": "Reply with the single word OK.",
+	"tools": [],
+	"corpusFiles": [],
+	"checks": [
+		{ "kind": "word-band", "max": 1 },
+		{ "kind": "tool-calls", "max": 0 }
+	]
+}

@@ -27,6 +27,7 @@ const pipeline: PipelineDefinition = {
 };
 
 const auditLogCase: BenchmarkCase = {
+	kind: "pipeline",
 	declaration: {
 		id: "audit-log",
 		kind: "pipeline",
