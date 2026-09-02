@@ -1,11 +1,11 @@
 ---
 id: ACT-12
 title: deduplicate the CLI session knobs between run and replay parsing
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-30 21:27'
-updated_date: '2026-09-02 16:08'
+updated_date: '2026-09-02 16:21'
 labels: []
 dependencies: []
 modified_files:
@@ -67,6 +67,16 @@ Build handoff (2026-09-02):
 - Refactor pass: deduplicated the session field contract across both public config interfaces in `8756c72`; no larger structural task was warranted.
 - Independent review: due because this changes the CLI parsing path other users run.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-02 16:21
+---
+Review (2026-09-02): clean. Reviewed the implementation range cd41ae5..8756c72 in src/benchmark/config.ts and src/benchmark/config.test.ts, plus direct production callers run-benchmark.ts and replay-stage.ts. Style, architecture, security, spec conformance, testing, and refactoring axes found nothing; no axes were skipped. The shared parser preserves each of the nine acceptance observations, including precedence, environment fallback, defaults, and validation. Observed: bun test passed 453 tests across 35 files; bun run typecheck, bun run lint, and bun run fmt:check exited successfully. A direct Bun invocation with conflicting environment values printed identical CLI-selected session values for run and replay. Verdict: proceed.
+---
+<!-- COMMENTS:END -->
 
 ## Final Summary
 
