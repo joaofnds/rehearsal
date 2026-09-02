@@ -23,14 +23,14 @@
 			"name": "shape",
 			"kind": "planning",
 			"skill": "shape",
-			"rubric": "rubrics/shape.json",
+			"rubric": "cases/audit-log/rubrics/shape.json",
 			"requiresAcceptanceCriteria": true
 		},
 		{
 			"name": "build",
 			"kind": "delivery",
 			"skill": "build",
-			"rubric": "rubrics/build.json"
+			"rubric": "cases/audit-log/rubrics/build.json"
 		}
 	]
 }
