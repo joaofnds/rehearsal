@@ -66,15 +66,27 @@ interface AttemptRecordInputs {
 }
 
 /**
- * `effort` and `metrics` are absent rather than explicitly undefined: with
- * exact optional property types an undefined value is a different shape from
- * an omitted key, and the record's schema is strict about which one it takes.
+ * The record is assembled rather than declared in one literal because its three
+ * optional keys must be omitted, not set to undefined: exact optional property
+ * types make those different shapes and the schema is strict about which it
+ * takes.
+ */
+interface MutableAttemptRecord extends SessionAttemptRecord {
+	effort?: SessionAttemptRecord["effort"];
+	reply?: SessionAttemptRecord["reply"];
+	metrics?: SessionAttemptRecord["metrics"];
+}
+
+/**
+ * An absent `reply` is the session that produced none: the schema pairs it with
+ * the `NO_REPLY` outcome and an empty check list, so a reply that never arrived
+ * cannot be recorded as one that passed its checks.
  */
 function buildAttemptRecord(
 	inputs: Immutable<AttemptRecordInputs>,
 ): SessionAttemptRecord {
 	const { attempt, settings, sessionCase } = inputs;
-	const common = {
+	const record: MutableAttemptRecord = {
 		schemaVersion: 1,
 		caseId: sessionCase.declaration.id,
 		lineage: inputs.lineage,
@@ -82,26 +94,23 @@ function buildAttemptRecord(
 		sessionBudgetUsd: settings.budgetUsd,
 		corpusFiles: inputs.corpusFiles.map((file) => ({ ...file })),
 		prompt: sessionCase.prompt,
-		reply: attempt.reply,
 		transcriptFile: attempt.transcriptFile,
 		outcome: attempt.outcome,
 		checks: attempt.checks.map((check) => ({ ...check })),
 		elapsedMs: inputs.elapsedMs,
-	} as const;
+	};
 
-	if (settings.effort === undefined) {
-		return attempt.metrics === undefined
-			? common
-			: { ...common, metrics: { ...attempt.metrics } };
+	if (settings.effort !== undefined) {
+		record.effort = settings.effort;
+	}
+	if (attempt.reply !== undefined) {
+		record.reply = attempt.reply;
+	}
+	if (attempt.metrics !== undefined) {
+		record.metrics = { ...attempt.metrics };
 	}
 
-	return attempt.metrics === undefined
-		? { ...common, effort: settings.effort }
-		: {
-				...common,
-				effort: settings.effort,
-				metrics: { ...attempt.metrics },
-			};
+	return record;
 }
 
 export interface SessionRunOutcome {

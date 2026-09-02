@@ -11,6 +11,81 @@ const corpusFileSchema = z
 	})
 	.strict();
 
+interface RecordedOutcome {
+	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
+	readonly reply?: string | undefined;
+	readonly checks: readonly { readonly status: "PASS" | "FAIL" }[];
+}
+
+interface RecordProblem {
+	readonly message: string;
+	readonly path: string;
+}
+
+/**
+ * A session that produced no reply had nothing to check, so a record carrying
+ * either a reply or a check result under that outcome describes something that
+ * cannot have happened. A checked attempt is the mirror: it carries the reply
+ * it checked and one result per declared check, and it is successful when and
+ * only when every one of them passes.
+ */
+function problemsWith(record: RecordedOutcome): readonly RecordProblem[] {
+	if (record.outcome === "NO_REPLY") {
+		return noReplyProblems(record);
+	}
+
+	return checkedProblems(record);
+}
+
+function noReplyProblems(record: RecordedOutcome): readonly RecordProblem[] {
+	const problems: RecordProblem[] = [];
+	if (record.reply !== undefined) {
+		problems.push({
+			message: "A session attempt with no reply records no reply",
+			path: "reply",
+		});
+	}
+	if (record.checks.length > 0) {
+		problems.push({
+			message: "A session attempt with no reply evaluates no check",
+			path: "checks",
+		});
+	}
+
+	return problems;
+}
+
+function checkedProblems(record: RecordedOutcome): readonly RecordProblem[] {
+	const problems: RecordProblem[] = [];
+	if (record.reply === undefined) {
+		problems.push({
+			message:
+				"A session attempt that was checked records the reply it checked",
+			path: "reply",
+		});
+	}
+	if (record.checks.length === 0) {
+		problems.push({
+			message:
+				"A checked session attempt records one result per declared check",
+			path: "checks",
+		});
+
+		return problems;
+	}
+
+	const passed = record.checks.every(({ status }) => status === "PASS");
+	if (passed !== (record.outcome === "SUCCESSFUL")) {
+		problems.push({
+			message:
+				"A session attempt is successful when and only when every check passes",
+			path: "outcome",
+		});
+	}
+
+	return problems;
+}
+
 export const sessionAttemptRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
@@ -21,26 +96,22 @@ export const sessionAttemptRecordSchema = z
 		sessionBudgetUsd: z.number().positive(),
 		corpusFiles: z.array(corpusFileSchema),
 		prompt: z.string().min(1),
-		reply: z.string(),
+		reply: z.string().optional(),
 		transcriptFile: z.string().min(1),
 		metrics: claudeCallMetricsSchema.optional(),
-		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL"]),
-		checks: z.array(checkResultSchema).min(1),
+		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
+		checks: z.array(checkResultSchema),
 		elapsedMs: z.number().nonnegative(),
 	})
 	.strict()
 	.superRefine((record, context) => {
-		const passed = record.checks.every(({ status }) => status === "PASS");
-		if (passed === (record.outcome === "SUCCESSFUL")) {
-			return;
+		for (const problem of problemsWith(record)) {
+			context.addIssue({
+				code: "custom",
+				message: problem.message,
+				path: [problem.path],
+			});
 		}
-
-		context.addIssue({
-			code: "custom",
-			message:
-				"A session attempt is successful when and only when every check passes",
-			path: ["outcome"],
-		});
 	});
 
 export type SessionAttemptRecord = z.infer<typeof sessionAttemptRecordSchema>;

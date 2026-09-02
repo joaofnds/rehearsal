@@ -24,12 +24,18 @@ export interface SessionAttemptRequest {
 	readonly runClaude: ClaudeRunner;
 }
 
+/**
+ * A session that terminated without producing a reply (max turns, an exhausted
+ * budget) has no reply to check, which is a different fact from a reply that
+ * failed one. `reply` is absent exactly when the outcome is `NO_REPLY`, so no
+ * value of this type says a check passed over a reply that never arrived.
+ */
 export interface SessionAttempt {
 	readonly attemptDirectory: string;
-	readonly reply: string;
+	readonly reply: string | undefined;
 	readonly transcriptFile: string;
 	readonly metrics: ClaudeCallMetrics | undefined;
-	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL";
+	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
 	readonly checks: readonly CheckResult[];
 }
 
@@ -163,7 +169,19 @@ async function recordAttempt(
 	);
 
 	const envelope = readClaudeEnvelope(attempt.output);
-	const reply = envelope.result ?? "";
+	const metrics = readClaudeCallMetrics(envelope);
+	const reply = envelope.result;
+	if (reply === undefined) {
+		return {
+			attemptDirectory,
+			reply,
+			transcriptFile,
+			metrics,
+			outcome: "NO_REPLY",
+			checks: [],
+		};
+	}
+
 	const transcript = parseTranscript(await Bun.file(transcriptFile).text());
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
@@ -174,7 +192,7 @@ async function recordAttempt(
 		attemptDirectory,
 		reply,
 		transcriptFile,
-		metrics: readClaudeCallMetrics(envelope),
+		metrics,
 		outcome: result.outcome,
 		checks: result.results,
 	};

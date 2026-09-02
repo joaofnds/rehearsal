@@ -413,6 +413,65 @@ describe(runSessionAttempt.name, () => {
 	});
 
 	/**
+	 * A max-turns or budget-exhausted termination returns an envelope with no
+	 * `result` and `is_error` unset, which is not a reply of zero words: the
+	 * smoke case's own checks (word band at most 1, no tool calls) both pass
+	 * over the empty string.
+	 */
+	function replylessClaude(
+		run: SessionAttemptRequest["runClaude"],
+	): SessionAttemptRequest["runClaude"] {
+		return async (command, cwd) => {
+			await run(command, cwd);
+
+			return JSON.stringify({
+				type: "result",
+				subtype: "error_max_turns",
+				session_id: namedSession(command),
+				is_error: false,
+				total_cost_usd: 0.0012,
+				num_turns: 30,
+			});
+		};
+	}
+
+	it("records an envelope with no result as no reply rather than as a passing empty one", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: sessionCase({
+					checks: [
+						{ kind: "word-band", max: 1 },
+						{ kind: "tool-calls", max: 0 },
+					],
+				}),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: replylessClaude(claude.run),
+			}),
+		);
+
+		expect(attempt.outcome).toBe("NO_REPLY");
+	});
+
+	it("evaluates no check when the session produced no reply", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: replylessClaude(claude.run),
+			}),
+		);
+
+		expect(attempt.checks).toEqual([]);
+	});
+
+	/**
 	 * The planted names bracket the provider's own file in codepoint order, so a
 	 * subject that picks the attempt's transcript by sorting the new entries
 	 * takes a planted one whichever direction it sorts. A test that plants only
