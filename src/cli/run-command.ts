@@ -47,6 +47,7 @@ import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
 import { requireInteractiveStdin } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
+import { writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
 const REVIEW_PAUSE_REASON =
@@ -91,11 +92,7 @@ export async function runRunCommand(
 		pipeline,
 	);
 
-	dependencies.output.stdout(
-		request.json
-			? await Bun.file(outcome.recordFile).text()
-			: `${outcome.recordFile}\n`,
-	);
+	await writeRecord(dependencies.output, outcome.recordFile, request.json);
 }
 
 export async function executeRun(

@@ -58,6 +58,7 @@ import {
 	requireInteractiveStdin,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
+import { writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
 export interface ReplayEvidence {
@@ -129,21 +130,13 @@ async function reportOutcome(
 		for (const recordFile of outcome.evidence.repRecordFiles) {
 			output.stderr(`Confirmation rep: ${recordFile}\n`);
 		}
-		output.stdout(
-			request.json
-				? await Bun.file(outcome.evidence.reportFile).text()
-				: `${outcome.evidence.reportFile}\n`,
-		);
+		await writeRecord(output, outcome.evidence.reportFile, request.json);
 
 		return;
 	}
 
 	output.stderr(await attemptComparison(config, paths, outcome.evidence));
-	output.stdout(
-		request.json
-			? await Bun.file(outcome.evidence.recordPath).text()
-			: `${outcome.evidence.recordPath}\n`,
-	);
+	await writeRecord(output, outcome.evidence.recordPath, request.json);
 }
 
 /**

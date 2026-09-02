@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
-import type { CommandOutput } from "#cli/output";
+import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { runReplayCommand } from "#cli/replay-command";
 
 const sessionArgs = [
@@ -14,40 +14,6 @@ const sessionArgs = [
 	"--session-budget-usd",
 	"1",
 ];
-
-interface OutputRecorder {
-	readonly output: CommandOutput;
-	readonly stdout: readonly string[];
-	readonly stderr: readonly string[];
-}
-
-function recorder(): OutputRecorder {
-	const stdout: string[] = [];
-	const stderr: string[] = [];
-
-	return {
-		stdout,
-		stderr,
-		output: {
-			stdout: (text) => {
-				stdout.push(text);
-			},
-			stderr: (text) => {
-				stderr.push(text);
-			},
-		},
-	};
-}
-
-async function failureOf(work: Promise<void>): Promise<Error> {
-	try {
-		await work;
-	} catch (error) {
-		return error instanceof Error ? error : new Error(String(error));
-	}
-
-	throw new Error("Expected the command to fail");
-}
 
 describe(runReplayCommand.name, () => {
 	const temporaryDirectories: string[] = [];
@@ -62,7 +28,7 @@ describe(runReplayCommand.name, () => {
 
 	it("refuses a confirmation without --yes before resolving the run, when stdin is not a terminal", async () => {
 		const resolved: string[] = [];
-		const { output, stdout, stderr } = recorder();
+		const { output, stdout, stderr } = recordOutput();
 
 		const failure = await failureOf(
 			runReplayCommand(
@@ -98,7 +64,7 @@ describe(runReplayCommand.name, () => {
 
 	it("does not check for a terminal when --yes answers the approval", async () => {
 		const resolved: string[] = [];
-		const { output } = recorder();
+		const { output } = recordOutput();
 
 		const failure = await failureOf(
 			runReplayCommand(
@@ -134,7 +100,7 @@ describe(runReplayCommand.name, () => {
 
 	it("does not check for a terminal for a single debug rep", async () => {
 		const resolved: string[] = [];
-		const { output } = recorder();
+		const { output } = recordOutput();
 
 		const failure = await failureOf(
 			runReplayCommand(
@@ -165,7 +131,7 @@ describe(runReplayCommand.name, () => {
 		const recordPath = join(directory, "replay.json");
 		const recordText = `${JSON.stringify({ schemaVersion: 1, stage: "shape" }, null, 2)}\n`;
 		await Bun.write(recordPath, recordText);
-		const { output, stdout } = recorder();
+		const { output, stdout } = recordOutput();
 
 		await runReplayCommand(
 			{

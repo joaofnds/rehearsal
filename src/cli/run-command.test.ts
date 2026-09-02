@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
-import type { CommandOutput } from "#cli/output";
+import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { runRunCommand } from "#cli/run-command";
 
 const args = [
@@ -17,40 +17,6 @@ const args = [
 	"--session-budget-usd",
 	"1",
 ];
-
-interface OutputRecorder {
-	readonly output: CommandOutput;
-	readonly stdout: readonly string[];
-	readonly stderr: readonly string[];
-}
-
-function recorder(): OutputRecorder {
-	const stdout: string[] = [];
-	const stderr: string[] = [];
-
-	return {
-		stdout,
-		stderr,
-		output: {
-			stdout: (text) => {
-				stdout.push(text);
-			},
-			stderr: (text) => {
-				stderr.push(text);
-			},
-		},
-	};
-}
-
-async function failureOf(work: Promise<void>): Promise<Error> {
-	try {
-		await work;
-	} catch (error) {
-		return error instanceof Error ? error : new Error(String(error));
-	}
-
-	throw new Error("Expected the command to fail");
-}
 
 const pipeline: PipelineDefinition = {
 	statuses: ["To Do", "Build", "Done"],
@@ -71,7 +37,7 @@ describe(runRunCommand.name, () => {
 
 	it("refuses before loading the pipeline when stdin is not a terminal", async () => {
 		const loaded: string[] = [];
-		const { output, stdout, stderr } = recorder();
+		const { output, stdout, stderr } = recordOutput();
 
 		const failure = await failureOf(
 			runRunCommand(
@@ -97,7 +63,7 @@ describe(runRunCommand.name, () => {
 	});
 
 	it("prints the run artifact path on stdout and diagnostics on stderr", async () => {
-		const { output, stdout, stderr } = recorder();
+		const { output, stdout, stderr } = recordOutput();
 
 		await runRunCommand(
 			{ args, json: false, stdinIsTerminal: true },
@@ -121,7 +87,7 @@ describe(runRunCommand.name, () => {
 
 	it("warns once on stderr about a same-family Judge before loading the pipeline", async () => {
 		const events: string[] = [];
-		const { output, stdout } = recorder();
+		const { output, stdout } = recordOutput();
 
 		await runRunCommand(
 			{
@@ -172,7 +138,7 @@ describe(runRunCommand.name, () => {
 		const recordFile = join(directory, "artifact.json");
 		const recordText = `${JSON.stringify({ schemaVersion: 1, status: "COMPLETE" }, null, 2)}\n`;
 		await Bun.write(recordFile, recordText);
-		const { output, stdout, stderr } = recorder();
+		const { output, stdout, stderr } = recordOutput();
 
 		await runRunCommand(
 			{ args, json: true, stdinIsTerminal: true },

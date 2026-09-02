@@ -1,6 +1,7 @@
 import { writeComparisonReport } from "#benchmark/comparison-command";
 import { UsageError } from "#cli/commands";
 import type { CommandOutput } from "#cli/output";
+import { writeRecord } from "#cli/output";
 
 export interface CompareRequest {
 	readonly manifestPath: string | undefined;
@@ -24,7 +25,5 @@ export async function runCompare(
 		runsDirectory: request.runsDirectory,
 	});
 
-	output.stdout(
-		request.json ? await Bun.file(reportFile).text() : `${reportFile}\n`,
-	);
+	await writeRecord(output, reportFile, request.json);
 }

@@ -6,24 +6,17 @@ import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-s
 import { parseComparisonReport } from "#benchmark/comparison-record";
 import { runCompare } from "#cli/compare-command";
 import { UsageError } from "#cli/commands";
-import type { CommandOutput } from "#cli/output";
+import type { OutputRecorder } from "#cli/cli-test-support";
+import { recordOutput } from "#cli/cli-test-support";
 
 describe(runCompare.name, () => {
 	let temporaryDirectory: string;
 	let runsDirectory: string;
 	let fixture: ComparisonEvidenceFixture;
-	const stdout: string[] = [];
-	const stderr: string[] = [];
-	const output: CommandOutput = {
-		stdout: (text) => {
-			stdout.push(text);
-		},
-		stderr: (text) => {
-			stderr.push(text);
-		},
-	};
+	let recorder: OutputRecorder;
 
 	beforeEach(async () => {
+		recorder = recordOutput();
 		temporaryDirectory = await mkdtemp(
 			join(tmpdir(), "rehearsal-compare-cli-"),
 		);
@@ -31,8 +24,6 @@ describe(runCompare.name, () => {
 		await mkdir(runsDirectory);
 		fixture = new ComparisonEvidenceFixture(temporaryDirectory);
 		await fixture.write();
-		stdout.length = 0;
-		stderr.length = 0;
 	});
 
 	afterEach(async () => {
@@ -42,11 +33,11 @@ describe(runCompare.name, () => {
 	it("prints only the report path when --json is absent", async () => {
 		await runCompare(
 			{ manifestPath: fixture.manifestFile, runsDirectory, json: false },
-			output,
+			recorder.output,
 		);
 
-		const reportFile = stdout.join("").trim();
-		expect(stdout.join("")).toBe(`${reportFile}\n`);
+		const reportFile = recorder.stdout.join("").trim();
+		expect(recorder.stdout.join("")).toBe(`${reportFile}\n`);
 		expect(dirname(dirname(reportFile))).toBe(
 			join(runsDirectory, "comparisons"),
 		);
@@ -58,10 +49,10 @@ describe(runCompare.name, () => {
 	it("prints the report file's exact bytes on stdout with --json", async () => {
 		await runCompare(
 			{ manifestPath: fixture.manifestFile, runsDirectory, json: true },
-			output,
+			recorder.output,
 		);
 
-		const printed = stdout.join("");
+		const printed = recorder.stdout.join("");
 		const report = parseComparisonReport(printed);
 		const reportFile = join(
 			runsDirectory,
@@ -70,14 +61,14 @@ describe(runCompare.name, () => {
 			"report.json",
 		);
 		expect(printed).toBe(await Bun.file(reportFile).text());
-		expect(stderr).toEqual([]);
+		expect(recorder.stderr).toEqual([]);
 	});
 
 	it("refuses a missing manifest argument as a usage error", () => {
 		expect(
 			runCompare(
 				{ manifestPath: undefined, runsDirectory, json: false },
-				output,
+				recorder.output,
 			),
 		).rejects.toThrow(UsageError);
 	});
