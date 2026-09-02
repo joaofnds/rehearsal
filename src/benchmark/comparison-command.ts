@@ -3,6 +3,11 @@ import { mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadComparisonEvidence } from "./comparison-evidence";
 import { buildComparisonReport } from "./comparison-report";
+import {
+	filterJudgeAgreementReport,
+	loadJudgeAgreementReport,
+} from "./judge-agreement";
+import { COMPARISON_ARMS } from "./comparison-record";
 import { comparisonReportPaths } from "./run-layout";
 
 export interface WriteComparisonReportRequest {
@@ -53,7 +58,16 @@ export async function writeComparisonReport(
 	request: Readonly<WriteComparisonReportRequest>,
 ): Promise<string> {
 	const evidence = await loadComparisonEvidence(request.manifestPath);
-	const report = buildComparisonReport(evidence);
+	const judgeModels = evidence.cases.flatMap((benchmarkCase) =>
+		COMPARISON_ARMS.map(
+			(arm) => benchmarkCase.arms[arm].group.record.inputs.judgeModel,
+		),
+	);
+	const judgeAgreement = filterJudgeAgreementReport(
+		await loadJudgeAgreementReport(request.runsDirectory),
+		judgeModels,
+	);
+	const report = buildComparisonReport(evidence, judgeAgreement);
 	const paths = comparisonReportPaths(
 		request.runsDirectory,
 		evidence.manifest.sha256,

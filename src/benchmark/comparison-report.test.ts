@@ -714,11 +714,35 @@ describe(buildComparisonResources.name, () => {
 
 describe(buildComparisonReport.name, () => {
 	it("records strict versioned results and all frozen source provenance", () => {
-		const report = buildComparisonReport(reportEvidence());
+		const judgeAgreement = {
+			skippedCalibrations: 1,
+			baselines: [
+				{
+					judgeModel: "opus",
+					stage: "final",
+					rubricSha256: "9".repeat(64),
+					criteria: [
+						{
+							rubricId: "correctness",
+							sampleSize: 1,
+							judgePassHumanPass: 1,
+							judgeFailHumanFail: 0,
+							judgePassHumanFail: 0,
+							judgeFailHumanPass: 0,
+							observedAgreement: 1,
+							cohensKappa: null,
+						},
+					],
+				},
+			],
+		};
+
+		const report = buildComparisonReport(reportEvidence(), judgeAgreement);
 		const candidate = report.cases.at(0)?.arms.candidate;
 
 		expect(parseComparisonReport(JSON.stringify(report))).toEqual(report);
-		expect(report.schemaVersion).toBe(1);
+		expect(report.schemaVersion).toBe(2);
+		expect(report.judgeAgreement).toEqual(judgeAgreement);
 		expect(report.manifest).toEqual({ sha256: "8".repeat(64) });
 		expect(report.mode).toBe("pipeline");
 		expect(report.declaredStages).toEqual(["discuss", "build"]);
@@ -745,6 +769,23 @@ describe(buildComparisonReport.name, () => {
 		expect(() =>
 			parseComparisonReport(
 				JSON.stringify({ ...report, unexpected: "not strict" }),
+			),
+		).toThrow();
+	});
+
+	it("parses persisted version-one reports strictly", () => {
+		const current = buildComparisonReport(reportEvidence(), {
+			skippedCalibrations: 0,
+			baselines: [],
+		});
+		const { judgeAgreement: _judgeAgreement, ...reportWithoutAgreement } =
+			current;
+		const legacy = { ...reportWithoutAgreement, schemaVersion: 1 as const };
+
+		expect(parseComparisonReport(JSON.stringify(legacy))).toEqual(legacy);
+		expect(() =>
+			parseComparisonReport(
+				JSON.stringify({ ...legacy, unexpected: "not strict" }),
 			),
 		).toThrow();
 	});

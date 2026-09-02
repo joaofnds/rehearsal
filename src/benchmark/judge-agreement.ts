@@ -50,6 +50,33 @@ export interface JudgeAgreementReport {
 	readonly baselines: readonly JudgeAgreementBaseline[];
 }
 
+const judgeAgreementCriterionSchema = z
+	.object({
+		rubricId: z.string().min(1),
+		sampleSize: z.number().int().positive(),
+		judgePassHumanPass: z.number().int().nonnegative(),
+		judgeFailHumanFail: z.number().int().nonnegative(),
+		judgePassHumanFail: z.number().int().nonnegative(),
+		judgeFailHumanPass: z.number().int().nonnegative(),
+		observedAgreement: z.number().min(0).max(1),
+		cohensKappa: z.number().min(-1).max(1).nullable(),
+	})
+	.strict();
+const judgeAgreementBaselineSchema = z
+	.object({
+		judgeModel: z.string().min(1),
+		stage: z.string().min(1),
+		rubricSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+		criteria: z.array(judgeAgreementCriterionSchema).min(1),
+	})
+	.strict();
+export const judgeAgreementReportSchema = z
+	.object({
+		skippedCalibrations: z.number().int().nonnegative(),
+		baselines: z.array(judgeAgreementBaselineSchema),
+	})
+	.strict();
+
 export interface CalibratedStage {
 	readonly stage: string;
 	readonly rubric: StageRubric;

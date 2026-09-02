@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { z } from "zod";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
@@ -665,5 +666,77 @@ describe(loadComparisonEvidence.name, () => {
 		expect(report.cases).toHaveLength(2);
 		expect(after).toEqual(before);
 		expect(await Bun.file(externalCallMarker).exists()).toBe(false);
+	});
+
+	it("reports agreement for every represented Judge model and no others", async () => {
+		const runsDirectory = join(temporaryDirectory, "agreement-output");
+		await mkdir(runsDirectory);
+		const calibrationArtifact = (judgeModel: string) => ({
+			status: "COMPLETE",
+			judgeModel,
+			rubric: "1. `agreement`: calibrated\n",
+			grade: {
+				requirements: [
+					{
+						id: "agreement",
+						status: "PASS",
+						evidence: [
+							{
+								source: "diff",
+								path: "change.diff",
+								claim: "calibrated evidence",
+							},
+						],
+					},
+				],
+				verdict: "PASS",
+				summary: "calibrated grade",
+			},
+			stageScorecards: [],
+			calibration: {
+				humanReview: {
+					verdict: "ACCEPT",
+					summary: "The human agrees.",
+					findings: [],
+				},
+			},
+		});
+		await Promise.all([
+			Bun.write(
+				join(runsDirectory, "opus.json"),
+				JSON.stringify(calibrationArtifact("opus")),
+			),
+			Bun.write(
+				join(runsDirectory, "sonnet.json"),
+				JSON.stringify(calibrationArtifact("sonnet")),
+			),
+		]);
+
+		const reportFile = await writeComparisonReport({
+			manifestPath: fixture.manifestFile,
+			runsDirectory,
+		});
+		const report = z
+			.object({
+				schemaVersion: z.literal(2),
+				judgeAgreement: z.object({
+					baselines: z.array(
+						z.object({
+							judgeModel: z.string(),
+							criteria: z.array(
+								z.object({ rubricId: z.string(), sampleSize: z.number() }),
+							),
+						}),
+					),
+				}),
+			})
+			.parse(JSON.parse(await Bun.file(reportFile).text()));
+
+		expect(report.judgeAgreement.baselines).toEqual([
+			{
+				judgeModel: "opus",
+				criteria: [{ rubricId: "agreement", sampleSize: 1 }],
+			},
+		]);
 	});
 });

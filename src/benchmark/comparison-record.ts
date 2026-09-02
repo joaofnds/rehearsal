@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Immutable } from "./contracts";
+import { judgeAgreementReportSchema } from "./judge-agreement";
 
 export const COMPARISON_ARMS = ["baseline", "candidate", "control"] as const;
 export type ComparisonArm = (typeof COMPARISON_ARMS)[number];
@@ -301,28 +302,45 @@ const reportContrastSchema = z
 	})
 	.strict();
 
+const comparisonReportFields = {
+	manifest: z.object({ sha256: sha256Schema }).strict(),
+	mode: z.enum(["stage", "pipeline"]),
+	declaredStages: z.array(z.string().min(1)).min(1),
+	reps: z.number().int().min(2),
+	cases: z.array(reportCaseSchema).min(2),
+	contrasts: z
+		.object({
+			candidateMinusBaseline: reportContrastSchema,
+			candidateMinusControl: reportContrastSchema,
+			baselineMinusControl: reportContrastSchema,
+		})
+		.strict(),
+};
+const legacyComparisonReportSchema = z
+	.object({ schemaVersion: z.literal(1), ...comparisonReportFields })
+	.strict();
 export const comparisonReportSchema = z
 	.object({
-		schemaVersion: z.literal(1),
-		manifest: z.object({ sha256: sha256Schema }).strict(),
-		mode: z.enum(["stage", "pipeline"]),
-		declaredStages: z.array(z.string().min(1)).min(1),
-		reps: z.number().int().min(2),
-		cases: z.array(reportCaseSchema).min(2),
-		contrasts: z
-			.object({
-				candidateMinusBaseline: reportContrastSchema,
-				candidateMinusControl: reportContrastSchema,
-				baselineMinusControl: reportContrastSchema,
-			})
-			.strict(),
+		schemaVersion: z.literal(2),
+		judgeAgreement: judgeAgreementReportSchema,
+		...comparisonReportFields,
 	})
 	.strict();
 
 export type ComparisonReport = Immutable<
 	z.infer<typeof comparisonReportSchema>
 >;
+export type LegacyComparisonReport = Immutable<
+	z.infer<typeof legacyComparisonReportSchema>
+>;
 
-export function parseComparisonReport(text: string): ComparisonReport {
-	return comparisonReportSchema.parse(JSON.parse(text));
+export function parseComparisonReport(
+	text: string,
+): ComparisonReport | LegacyComparisonReport {
+	return z
+		.discriminatedUnion("schemaVersion", [
+			legacyComparisonReportSchema,
+			comparisonReportSchema,
+		])
+		.parse(JSON.parse(text));
 }

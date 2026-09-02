@@ -12,6 +12,7 @@ import type {
 	ComparisonContract,
 	ComparisonEvidence,
 } from "./comparison-evidence";
+import type { JudgeAgreementReport } from "./judge-agreement";
 import type { ComparisonArm, ComparisonReport } from "./comparison-record";
 import { comparisonReportSchema } from "./comparison-record";
 import type { Immutable } from "./contracts";
@@ -628,6 +629,7 @@ function buildReportArm(
 
 export function buildComparisonReport(
 	evidence: Immutable<ComparisonEvidence>,
+	judgeAgreement: Immutable<JudgeAgreementReport>,
 ): ComparisonReport {
 	const reportInput = {
 		contract: evidence.contract,
@@ -670,7 +672,8 @@ export function buildComparisonReport(
 		};
 	});
 	const report = {
-		schemaVersion: 1 as const,
+		schemaVersion: 2 as const,
+		judgeAgreement,
 		manifest: { sha256: evidence.manifest.sha256 },
 		mode: evidence.contract.mode,
 		declaredStages: evidence.contract.declaredStages,
