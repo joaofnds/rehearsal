@@ -43,7 +43,16 @@ interface ParsedFlags {
 }
 
 function modelFamily(model: string): ModelFamily | undefined {
-	const terms = model.toLowerCase().split(/[^a-z0-9]+/u);
+	const normalized = model.toLowerCase();
+	const alias = MODEL_FAMILIES.find((family) => normalized === family);
+	if (alias !== undefined) {
+		return alias;
+	}
+
+	const terms = normalized.split(/[^a-z0-9]+/u);
+	if (!terms.includes("claude")) {
+		return undefined;
+	}
 
 	return MODEL_FAMILIES.find((family) => terms.includes(family));
 }

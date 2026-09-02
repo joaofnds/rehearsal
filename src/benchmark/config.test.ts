@@ -11,6 +11,7 @@ describe(parseArgs.name, () => {
 		{ model: "sonnet", judgeModel: "opus" },
 		{ model: "haiku", judgeModel: "opus" },
 		{ model: "external-model", judgeModel: "opus" },
+		{ model: "vendor-opus-model", judgeModel: "opus" },
 		{ model: "opus", judgeModel: "sonnet" },
 		{ model: "claude-opus-4-8", judgeModel: "sonnet" },
 	])(
@@ -217,6 +218,7 @@ describe(parseReplayArgs.name, () => {
 		{ model: "sonnet", judgeModel: "opus" },
 		{ model: "haiku", judgeModel: "opus" },
 		{ model: "external-model", judgeModel: "opus" },
+		{ model: "vendor-opus-model", judgeModel: "opus" },
 		{ model: "opus", judgeModel: "sonnet" },
 		{ model: "claude-opus-4-8", judgeModel: "sonnet" },
 	])(
@@ -351,6 +353,15 @@ describe(judgeSelfPreferenceWarning.name, () => {
 	it("does not warn when recognized model families differ", () => {
 		expect(
 			judgeSelfPreferenceWarning({ model: "sonnet", judgeModel: "opus" }),
+		).toBeUndefined();
+	});
+
+	it("does not warn when unequal unrecognized identifiers share a family word", () => {
+		expect(
+			judgeSelfPreferenceWarning({
+				model: "vendor-opus-model",
+				judgeModel: "other-opus-model",
+			}),
 		).toBeUndefined();
 	});
 });
