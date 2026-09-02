@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "./command";
@@ -293,32 +293,52 @@ describe(restoreTarget.name, () => {
 		expect(restoredSha.trim()).toBe(source.sha);
 	});
 
-	it("preserves every workflow path that existed before the run", async () => {
+	it("reproduces the captured workflow state", async () => {
 		const source = await testResources.createRepository();
 		const backlogDirectory = join(source.directory, "backlog");
-		const borisDirectory = join(source.directory, ".boris");
-		await mkdir(backlogDirectory);
-		await mkdir(borisDirectory);
-		await Bun.write(join(backlogDirectory, "original.md"), "original\n");
-		await Bun.write(join(borisDirectory, "CONTEXT.md"), "context\n");
+		const original = new Uint8Array([0x00, 0xff, 0x0a]);
+		await mkdir(join(backlogDirectory, "empty"), { recursive: true });
+		await Bun.write(join(backlogDirectory, "original.bin"), original);
 		const baseline = await assertSourceReady(source.directory);
 		const backup = await captureWorkflowBackup(source.directory);
 		testResources.track(backup.directory);
-		await Bun.write(join(backlogDirectory, "original.md"), "changed\n");
+		await Bun.write(join(backlogDirectory, "original.bin"), "changed\n");
 		await Bun.write(join(backlogDirectory, "generated.md"), "generated\n");
-		await Bun.write(join(borisDirectory, "CONTEXT.md"), "rewritten\n");
+		await Bun.write(
+			join(source.directory, ".boris", "CONTEXT.md"),
+			"created\n",
+		);
 
 		await restoreTarget(baseline, backup);
 
-		expect(await Bun.file(join(backlogDirectory, "original.md")).text()).toBe(
-			"original\n",
+		expect(
+			await Bun.file(join(backlogDirectory, "original.bin")).bytes(),
+		).toEqual(original);
+		expect((await stat(join(backlogDirectory, "empty"))).isDirectory()).toBe(
+			true,
 		);
 		expect(
 			await Bun.file(join(backlogDirectory, "generated.md")).exists(),
 		).toBe(false);
-		expect(await Bun.file(join(borisDirectory, "CONTEXT.md")).text()).toBe(
-			"context\n",
+		expect(await Bun.file(join(source.directory, ".boris")).exists()).toBe(
+			false,
 		);
+	});
+});
+
+describe(captureWorkflowBackup.name, () => {
+	it("rejects a workflow path discovery failure", async () => {
+		const source = await testResources.createRepository();
+		await mkdir(join(source.directory, "backlog"));
+		await chmod(source.directory, 0o000);
+
+		try {
+			expect(captureWorkflowBackup(source.directory)).rejects.toThrow(
+				/permission denied|EACCES/iu,
+			);
+		} finally {
+			await chmod(source.directory, 0o755);
+		}
 	});
 });
 
