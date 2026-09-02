@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { installInstructions } from "./backlog";
 import {
 	captureStageCorpus,
+	installStageCorpusSnapshot,
 	materializeCheckpoint,
 	recordCheckpoint,
 } from "./checkpoint";
@@ -241,6 +242,7 @@ export class PipelineConfirmationHarness {
 				await removeWorktree(targetRoot, worktreePath);
 			},
 			materializeCheckpoint,
+			installStageCorpusSnapshot,
 			recordCheckpoint,
 			recordRetentionRef: (_targetRoot, runName, targetSha) => {
 				this.retained.set(runName, targetSha);

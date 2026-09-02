@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import {
 	parseConfirmationGroupRecord,
@@ -630,7 +630,7 @@ describe(runPipelineConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
-		const failed = records[0];
+		const [failed] = records;
 
 		expect(failed?.stages[0]).toMatchObject({
 			status: "EXECUTION_FAILED",
@@ -669,7 +669,7 @@ describe(runPipelineConfirmation.name, () => {
 				parseConfirmationRepRecord(await Bun.file(path).text()),
 			),
 		);
-		const failed = records[0];
+		const [failed] = records;
 		const preservedPath = failed?.worktreePath ?? "missing";
 
 		expect(failed?.stages[0]).toMatchObject({
@@ -681,8 +681,95 @@ describe(runPipelineConfirmation.name, () => {
 			`Pipeline rep ${failed?.repId} failed; evidence preserved at ${preservedPath}`,
 		);
 		expect(harness.removed).not.toContain(preservedPath);
-		expect((await stat(preservedPath)).isDirectory()).toBe(true);
+		const preserved = await stat(preservedPath);
+
+		expect(preserved.isDirectory()).toBe(true);
 		await removeWorktree(harness.sourceRoot, preservedPath);
+	});
+
+	it("attributes corpus installation failures before each stage and preserves prior evidence", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run({}, (dependencies) => ({
+			...dependencies,
+			installStageCorpusSnapshot: (snapshotDirectory, worktreePath) => {
+				const ordinal = repOrdinal(worktreePath);
+				const stage = basename(snapshotDirectory);
+				if (ordinal === 1 && stage === "discuss") {
+					return Promise.reject(
+						new Error("synthetic discuss corpus rejection"),
+					);
+				}
+				if (ordinal === 2 && stage === "build") {
+					return Promise.reject(new Error("synthetic build corpus rejection"));
+				}
+
+				return dependencies.installStageCorpusSnapshot(
+					snapshotDirectory,
+					worktreePath,
+				);
+			},
+		}));
+		const records = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		const [firstStageFailure, laterStageFailure] = records;
+		const firstPreservedPath = firstStageFailure?.worktreePath ?? "missing";
+		const laterPreservedPath = laterStageFailure?.worktreePath ?? "missing";
+
+		expect(firstStageFailure?.stages).toMatchObject([
+			{
+				stage: "discuss",
+				status: "EXECUTION_FAILED",
+				error: "corpus installation failed: synthetic discuss corpus rejection",
+				worktreePath: firstPreservedPath,
+			},
+			{
+				stage: "build",
+				status: "NOT_REACHED",
+				reason: "discuss execution failed",
+			},
+		]);
+		expect(laterStageFailure?.stages).toMatchObject([
+			{
+				stage: "discuss",
+				status: "JUDGED",
+				grade: "A",
+				verdict: "CONTINUE",
+				evidence: {
+					recordFile: "stages/discuss.json",
+				},
+			},
+			{
+				stage: "build",
+				status: "EXECUTION_FAILED",
+				error: "corpus installation failed: synthetic build corpus rejection",
+				worktreePath: laterPreservedPath,
+			},
+		]);
+		expect(
+			records.slice(0, 2).map(({ finalOutcome }) => finalOutcome.status),
+		).toEqual(["NOT_REACHED", "NOT_REACHED"]);
+		expect(harness.logs).toContain(
+			`Pipeline rep ${firstStageFailure?.repId} failed; evidence preserved at ${firstPreservedPath}`,
+		);
+		expect(harness.logs).toContain(
+			`Pipeline rep ${laterStageFailure?.repId} failed; evidence preserved at ${laterPreservedPath}`,
+		);
+		expect(
+			await Promise.all(
+				[firstPreservedPath, laterPreservedPath].map((path) =>
+					stat(path).then((entry) => entry.isDirectory()),
+				),
+			),
+		).toEqual([true, true]);
+		await Promise.all(
+			[firstPreservedPath, laterPreservedPath].map((path) =>
+				removeWorktree(harness.sourceRoot, path),
+			),
+		);
 	});
 
 	it("lets pipeline peers finish and preserves only a pre-evidence failure", async () => {

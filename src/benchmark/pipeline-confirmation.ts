@@ -5,6 +5,7 @@ import type { createTaskCommit } from "./backlog";
 import type {
 	CheckpointRecord,
 	HashedFile,
+	installStageCorpusSnapshot,
 	materializeCheckpoint,
 	recordCheckpoint,
 } from "./checkpoint";
@@ -12,7 +13,6 @@ import {
 	hashArtifacts,
 	hashWorkflowState,
 	initialCheckpointInputs,
-	installStageCorpusSnapshot,
 	snapshotStageCorpus,
 } from "./checkpoint";
 import type {
@@ -102,6 +102,7 @@ export interface PipelineConfirmationDependencies {
 	readonly addWorktree: typeof addWorktree;
 	readonly removeWorktree: typeof removeWorktree;
 	readonly materializeCheckpoint: typeof materializeCheckpoint;
+	readonly installStageCorpusSnapshot: typeof installStageCorpusSnapshot;
 	readonly recordCheckpoint: typeof recordCheckpoint;
 	readonly recordRetentionRef: typeof recordRetentionRef;
 	readonly captureBuildCandidate: typeof captureBuildCandidate;
@@ -383,10 +384,12 @@ async function runPipelineRep(
 			currentStageIndex = index;
 			currentSession = undefined;
 			stageClock = createStageClock(now);
-			await installStageCorpusSnapshot(
+			setupOperation = "corpus installation";
+			await dependencies.installStageCorpusSnapshot(
 				frozen.corpusDirectories[definition.name] ?? "",
 				plan.worktreePath,
 			);
+			setupOperation = undefined;
 			currentSession = await executeStageSession(
 				measuredStageDependencies(dependencies.stageSession, stageClock),
 				{

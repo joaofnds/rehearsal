@@ -11,6 +11,7 @@ import {
 import { executeBenchmark } from "./src/benchmark/benchmark-command";
 import {
 	captureStageCorpus,
+	installStageCorpusSnapshot,
 	materializeCheckpoint,
 	recordCheckpoint,
 	skillSearchRoots,
@@ -129,6 +130,7 @@ async function main(): Promise<void> {
 						addWorktree,
 						removeWorktree,
 						materializeCheckpoint,
+						installStageCorpusSnapshot,
 						recordCheckpoint,
 						recordRetentionRef,
 						captureBuildCandidate,
