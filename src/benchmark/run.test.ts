@@ -29,6 +29,7 @@ import type {
 import {
 	buildFailedJudgeRunArtifact,
 	buildRunArtifact,
+	captureRunBaseline,
 	retainedCheckpointRecorder,
 	runBenchmark,
 	runFinalJudge,
@@ -1282,6 +1283,56 @@ describe(runGradedStages.name, () => {
 			.parse(calibratedRecord);
 		expect(calibrated.input.commitSubjects).toEqual(["build commit"]);
 		expect(calibrated.calibration.humanReview.verdict).toBe("REJECT");
+	});
+});
+
+describe(captureRunBaseline.name, () => {
+	it("captures the normal run baseline from the pipeline target", async () => {
+		const events: string[] = [];
+		const target = {
+			checks: [{ command: ["bun", "run", "custom-baseline"] }],
+			integrityFiles: ["custom-check.json"],
+		};
+		const hashes = new Map([["custom-check.json", "hash"]]);
+		const context = [{ path: "base.txt", content: "base\n" }];
+
+		const baseline = await captureRunBaseline(
+			{
+				runChecks: (targetDir, label, checks) => {
+					events.push(`${targetDir}:${label}:${checks[0]?.command.join(" ")}`);
+
+					return Promise.resolve();
+				},
+				assertWorkspaceCleanAt: (targetDir, sha) => {
+					events.push(`${targetDir}:clean:${sha}`);
+
+					return Promise.resolve();
+				},
+				captureFileHashes: (targetDir, integrityFiles) => {
+					events.push(`${targetDir}:hash:${integrityFiles.join(",")}`);
+
+					return Promise.resolve(hashes);
+				},
+				captureBaselineContext: (targetDir) => {
+					events.push(`${targetDir}:context`);
+
+					return Promise.resolve(context);
+				},
+			},
+			{ root: "/target", sha: "source-sha" },
+			target,
+		);
+
+		expect(events).toEqual([
+			"/target:Baseline checks:bun run custom-baseline",
+			"/target:clean:source-sha",
+			"/target:hash:custom-check.json",
+			"/target:context",
+		]);
+		expect(baseline).toEqual({
+			baselineHashes: hashes,
+			baselineContext: context,
+		});
 	});
 });
 

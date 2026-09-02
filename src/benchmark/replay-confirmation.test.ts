@@ -43,6 +43,31 @@ import {
 const testResources = TestResources.forEachTest();
 
 describe(runReplayConfirmation.name, () => {
+	it("uses the recorded target for delivery replay confirmations", async () => {
+		const fake = new ReplayConfirmationHarness(testResources);
+		const run = await fake.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		testResources.track(corpusRoot);
+		for (const skill of ["discuss", "build", "doctrine"]) {
+			await mkdir(join(corpusRoot, skill), { recursive: true });
+			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+		}
+
+		await fake.runConfirmation(
+			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{ stage: "build", reps: 2 },
+		);
+
+		expect(fake.integrityFileSets).toEqual([
+			run.manifest.pipeline.target.integrityFiles,
+			run.manifest.pipeline.target.integrityFiles,
+		]);
+		expect(fake.targetChecks).toEqual([
+			run.manifest.pipeline.target.checks,
+			run.manifest.pipeline.target.checks,
+		]);
+	});
+
 	it("runs three frozen stage replay reps concurrently without changing the primary checkout", async () => {
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-confirmed-replay-"));
 		testResources.track(parent);

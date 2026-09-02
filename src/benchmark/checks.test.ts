@@ -21,16 +21,22 @@ describe(runChecks.name, () => {
 		const script = [
 			"const path = 'checks.log';",
 			"const previous = await Bun.file(path).exists() ? await Bun.file(path).text() : '';",
-			String.raw`await Bun.write(path, previous + Bun.env.CHECK_VALUE + ':' + (Bun.env.PATH === undefined ? 'missing' : 'host') + '\n');`,
+			String.raw`await Bun.write(path, previous + Bun.env.CHECK_VALUE + ':' + Bun.env.PATH + ':' + (Bun.env.HOME === undefined ? 'missing' : 'host') + '\n');`,
 		].join(" ");
 
 		await runChecks(source.directory, "Custom checks", [
-			{ command: ["bun", "-e", script], env: { CHECK_VALUE: "first" } },
-			{ command: ["bun", "-e", script], env: { CHECK_VALUE: "second" } },
+			{
+				command: [process.execPath, "-e", script],
+				env: { CHECK_VALUE: "first", PATH: "first-path" },
+			},
+			{
+				command: [process.execPath, "-e", script],
+				env: { CHECK_VALUE: "second", PATH: "second-path" },
+			},
 		]);
 
 		expect(await Bun.file(join(source.directory, "checks.log")).text()).toBe(
-			"first:host\nsecond:host\n",
+			"first:first-path:host\nsecond:second-path:host\n",
 		);
 	});
 });
@@ -74,6 +80,21 @@ describe(captureTreatmentChecks.name, () => {
 					claim: "Treatment check exited 7",
 				},
 			],
+		});
+	});
+
+	it("names a declared command that cannot be launched", async () => {
+		const source = await testResources.createRepository();
+		const command = ["act-15-command-does-not-exist"];
+
+		const result = await captureTreatmentChecks(source.directory, [
+			{ command },
+		]);
+
+		expect(result.evidence[0]).toEqual({
+			source: "local-checks",
+			path: command.join(" "),
+			claim: "Treatment check exited unknown",
 		});
 	});
 });

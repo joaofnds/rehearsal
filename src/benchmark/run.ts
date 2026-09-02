@@ -81,6 +81,7 @@ import {
 	recordRetentionRef,
 	teardownTarget,
 } from "./target";
+import type { SourceBaseline } from "./target";
 import type { ProductOwner, ProductOwnerSnapshot } from "./workflow";
 import { createProductOwner, runWorkflowStage } from "./workflow";
 
@@ -579,6 +580,36 @@ export async function runGradedStages(
 	return { workflow, stageScorecards, checkpoints, buildEvidence };
 }
 
+interface RunBaselineDependencies {
+	readonly runChecks: typeof runChecks;
+	readonly assertWorkspaceCleanAt: typeof assertWorkspaceCleanAt;
+	readonly captureFileHashes: typeof captureFileHashes;
+	readonly captureBaselineContext: typeof captureBaselineContext;
+}
+
+interface RunBaseline {
+	readonly baselineHashes: ReadonlyMap<string, string>;
+	readonly baselineContext: readonly ContextFile[];
+}
+
+export async function captureRunBaseline(
+	dependencies: RunBaselineDependencies,
+	source: SourceBaseline,
+	target: TargetDefinition,
+): Promise<RunBaseline> {
+	await dependencies.runChecks(source.root, "Baseline checks", target.checks);
+	await dependencies.assertWorkspaceCleanAt(source.root, source.sha);
+	const baselineHashes = await dependencies.captureFileHashes(
+		source.root,
+		target.integrityFiles,
+	);
+	const baselineContext = await dependencies.captureBaselineContext(
+		source.root,
+	);
+
+	return { baselineHashes, baselineContext };
+}
+
 export async function runBenchmark(
 	config: BenchmarkConfig,
 	rl: Questioner,
@@ -621,13 +652,16 @@ export async function runBenchmark(
 		console.log(`Target: ${source.root}`);
 		console.log(`Original commit: ${source.sha}`);
 		console.log(`Workflow backup: ${workflowBackup.directory}`);
-		await runChecks(source.root, "Baseline checks", pipeline.target.checks);
-		await assertWorkspaceCleanAt(source.root, source.sha);
-		const baselineHashes = await captureFileHashes(
-			source.root,
-			pipeline.target.integrityFiles,
+		const { baselineHashes, baselineContext } = await captureRunBaseline(
+			{
+				runChecks,
+				assertWorkspaceCleanAt,
+				captureFileHashes,
+				captureBaselineContext,
+			},
+			source,
+			pipeline.target,
 		);
-		const baselineContext = await captureBaselineContext(source.root);
 		const [task, productBrief, instructions, rubric, claudeVersion] =
 			await Promise.all([
 				Bun.file(join(CONTROL_DIR, "backlog-seed.md")).text(),

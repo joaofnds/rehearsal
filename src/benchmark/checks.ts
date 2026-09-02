@@ -5,6 +5,17 @@ import { MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_TOTAL_BYTES } from "./config";
 import type { ContextFile, LocalCheckResult } from "./contracts";
 import type { TargetCheck } from "./pipeline";
 
+class TargetCheckLaunchError extends Error {
+	public override name = "TargetCheckLaunchError";
+
+	public constructor(
+		public readonly command: readonly string[],
+		cause: Readonly<Error>,
+	) {
+		super(`Target check could not launch: ${command.join(" ")}`, { cause });
+	}
+}
+
 export async function runChecks(
 	targetDir: string,
 	label: string,
@@ -13,7 +24,16 @@ export async function runChecks(
 	console.log(`\n${label}`);
 
 	for (const check of checks) {
-		await runCommand(check.command, targetDir, { env: check.env });
+		try {
+			await runCommand(check.command, targetDir, { env: check.env });
+		} catch (error) {
+			if (error instanceof CommandError) {
+				throw error;
+			}
+
+			const cause = error instanceof Error ? error : new Error(String(error));
+			throw new TargetCheckLaunchError(check.command, cause);
+		}
 	}
 }
 
@@ -34,10 +54,13 @@ export async function captureTreatmentChecks(
 			],
 		};
 	} catch (error) {
-		const command =
-			error instanceof CommandError
-				? error.command.join(" ")
-				: "unknown command";
+		let command = "unknown command";
+		if (
+			error instanceof CommandError ||
+			error instanceof TargetCheckLaunchError
+		) {
+			command = error.command.join(" ");
+		}
 		const exitCode = error instanceof CommandError ? error.exitCode : "unknown";
 		console.error(`Treatment check failed: ${command} exited ${exitCode}`);
 

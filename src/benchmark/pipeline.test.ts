@@ -21,6 +21,20 @@ describe("the default pipeline", () => {
 		]);
 	});
 
+	it("declares the NestJS target checks and integrity files", async () => {
+		const definition = await loadDefaultPipeline();
+		const env = { CONFIG_PATH: "src/config/test.yaml" };
+
+		expect(definition.target).toEqual({
+			checks: [
+				{ command: ["bun", "run", "typecheck"], env },
+				{ command: ["bun", "run", "check"], env },
+				{ command: ["bun", "run", "test:unit"], env },
+			],
+			integrityFiles: ["package.json", "tsconfig.json", "biome.json"],
+		});
+	});
+
 	it("names a rubric that parses for every declared stage", async () => {
 		const definition = await loadDefaultPipeline();
 
@@ -170,6 +184,20 @@ describe(parsePipeline.name, () => {
 			definition: {
 				...target,
 				integrityFiles: ["package.json", "package.json"],
+			},
+		},
+		{
+			name: "dot-aliased duplicate integrity files",
+			definition: {
+				...target,
+				integrityFiles: ["package.json", "./package.json"],
+			},
+		},
+		{
+			name: "separator-aliased duplicate integrity files",
+			definition: {
+				...target,
+				integrityFiles: ["config/check.json", "config//check.json"],
 			},
 		},
 		{

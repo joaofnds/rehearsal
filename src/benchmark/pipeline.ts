@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, normalize, relative, resolve } from "node:path";
 import { z } from "zod";
 import { INITIAL_CHECKPOINT_STAGE } from "./checkpoint";
 import { CONTROL_DIR } from "./config";
@@ -63,7 +63,8 @@ const targetDefinitionSchema = z
 			.array(targetRelativePathSchema)
 			.min(1)
 			.refine(
-				(paths) => new Set(paths).size === paths.length,
+				(paths) =>
+					new Set(paths.map((path) => normalize(path))).size === paths.length,
 				"must contain unique paths",
 			),
 	})
