@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { z } from "zod";
 import { recordCheckpoint } from "./checkpoint";
 import { runCommand } from "./command";
@@ -1680,8 +1680,9 @@ describe(buildRunArtifact.name, () => {
 	});
 
 	it("records the pipeline it ran and the path it came from", async () => {
-		const pipelinePath = join("pipelines", `custom-${randomUUID()}.json`);
-		const absolute = join(PROJECT_ROOT, pipelinePath);
+		const directory = await testResources.createControlDirectory();
+		const absolute = join(directory, "custom.json");
+		const pipelinePath = relative(PROJECT_ROOT, absolute);
 		await Bun.write(
 			absolute,
 			JSON.stringify({
@@ -1705,19 +1706,15 @@ describe(buildRunArtifact.name, () => {
 			}),
 		);
 
-		try {
-			const pipeline = await loadPipeline(pipelinePath, AUDIT_LOG_RUBRICS_PATH);
+		const pipeline = await loadPipeline(pipelinePath, AUDIT_LOG_RUBRICS_PATH);
 
-			const artifact = buildRunArtifact(artifactInputs(pipeline, pipelinePath));
+		const artifact = buildRunArtifact(artifactInputs(pipeline, pipelinePath));
 
-			expect(artifact.pipelinePath).toBe(pipelinePath);
-			expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
-				"sketch",
-				"build",
-			]);
-		} finally {
-			await rm(absolute, { force: true });
-		}
+		expect(artifact.pipelinePath).toBe(pipelinePath);
+		expect(artifact.pipeline.stages.map(({ name }) => name)).toEqual([
+			"sketch",
+			"build",
+		]);
 	});
 
 	it("records the default pipeline when the run used it", async () => {

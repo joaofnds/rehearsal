@@ -34,6 +34,19 @@ export class TestResources {
 		this.directories.push(directory);
 	}
 
+	/**
+	 * `loadPipeline` refuses a definition outside the control repository, so a
+	 * test pipeline has to live under it. Tracking the directory before it holds
+	 * anything is what keeps an interrupted run from leaving a stray file that
+	 * `assertControlReady` would then refuse every run over.
+	 */
+	public async createControlDirectory(): Promise<string> {
+		const directory = await mkdtemp(join(PROJECT_ROOT, "rehearsal-test-"));
+		this.track(directory);
+
+		return directory;
+	}
+
 	public async createRepository(): Promise<TestRepository> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
 		this.track(directory);

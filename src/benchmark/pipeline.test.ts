@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { PipelineDefinition } from "./pipeline";
 import { loadPipeline, parsePipeline } from "./pipeline";
-import { PROJECT_ROOT } from "./test-support";
+import { PROJECT_ROOT, TestResources } from "./test-support";
 import { parseStageRubric } from "./stage-grading";
 
 const AUDIT_LOG_CASE = "cases/audit-log";
+
+const testResources = TestResources.forEachTest();
 
 function loadDefaultPipeline(): Promise<PipelineDefinition> {
 	return loadPipeline(
@@ -58,12 +58,9 @@ describe(loadPipeline.name, () => {
 	});
 
 	it("rejects a delivery stage whose rubric lacks the harness blockers", async () => {
-		const path = join(
-			AUDIT_LOG_CASE,
-			"pipelines",
-			`invalid-${randomUUID()}.json`,
-		);
-		const absolute = join(PROJECT_ROOT, path);
+		const directory = await testResources.createControlDirectory();
+		const absolute = join(directory, "invalid.json");
+		const path = relative(PROJECT_ROOT, absolute);
 		await Bun.write(
 			absolute,
 			JSON.stringify({
@@ -83,13 +80,9 @@ describe(loadPipeline.name, () => {
 			}),
 		);
 
-		try {
-			expect(loadPipeline(path, `${AUDIT_LOG_CASE}/rubrics`)).rejects.toThrow(
-				/ship/u,
-			);
-		} finally {
-			await rm(absolute, { force: true });
-		}
+		expect(loadPipeline(path, `${AUDIT_LOG_CASE}/rubrics`)).rejects.toThrow(
+			/ship/u,
+		);
 	});
 });
 
