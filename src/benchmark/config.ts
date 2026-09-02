@@ -52,6 +52,18 @@ function defaultJudgeModel(workflowModel: string): string {
 	return modelFamily(workflowModel) === "opus" ? "sonnet" : "opus";
 }
 
+function resolveJudgeModel(
+	values: ReadonlyMap<string, string>,
+	env: Readonly<Record<string, string | undefined>>,
+	workflowModel: string,
+): string {
+	return (
+		values.get("--judge-model") ??
+		env["BENCHMARK_JUDGE_MODEL"] ??
+		defaultJudgeModel(workflowModel)
+	);
+}
+
 export function judgeSelfPreferenceWarning(config: {
 	readonly model: string;
 	readonly judgeModel: string;
@@ -158,10 +170,7 @@ export function parseArgs(
 		);
 	}
 
-	const judgeModel =
-		values.get("--judge-model") ??
-		env["BENCHMARK_JUDGE_MODEL"] ??
-		defaultJudgeModel(model);
+	const judgeModel = resolveJudgeModel(values, env, model);
 	const effort = parseEffort(
 		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
 		"workflow",
@@ -260,10 +269,7 @@ export function parseReplayArgs(
 			stage,
 			model,
 			effort,
-			judgeModel:
-				values.get("--judge-model") ??
-				env["BENCHMARK_JUDGE_MODEL"] ??
-				defaultJudgeModel(model),
+			judgeModel: resolveJudgeModel(values, env, model),
 			judgeEffort,
 			sessionBudgetUsd,
 		},
