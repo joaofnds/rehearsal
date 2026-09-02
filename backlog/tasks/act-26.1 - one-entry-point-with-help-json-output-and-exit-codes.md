@@ -33,7 +33,7 @@ Why: an agent reads help instead of docs, parses JSON instead of prose, and cann
 - [x] #6 `bun run rehearsal` with no command exits 2 and prints the top-level help on stderr
 - [x] #7 `rehearsal compare <manifest> --json` writes the report and prints exactly the report JSON on stdout, which parseComparisonReport accepts and `jq` parses; without --json it prints only the report path
 - [x] #8 `rehearsal compare <manifest>` with a valid manifest exits 0 and stdout contains no diagnostic text
-- [x] #9 `rehearsal run` with stdin not a TTY exits 3 before any provider call, with a stderr line saying the review pause needs a TTY until ACT-26.3
+- [x] #9 `rehearsal run` without `--confirm --yes` and with stdin not a TTY exits 3 before any provider call, with a stderr line saying the review pause needs a TTY until ACT-26.3; `run --confirm --yes` passes the gate, because the calibration pause that lacks a flag lives only on the debug path
 - [x] #10 `rehearsal replay --run <name> --stage <stage> --confirm` without --yes and with stdin not a TTY exits 3, printing no projected cost, and does so before resolving the run directory
 - [x] #11 `rehearsal compare <manifest> --json` writes nothing to stdout except the report JSON: `JSON.parse` of the whole stdout succeeds and equals the bytes of the report file the command wrote
 - [x] #12 `rehearsal replay --run <name> --stage <stage> --confirm --yes` with stdin not a TTY prints no TTY-refusal message on stderr and fails instead on the named run, showing the TTY check does not fire when --yes answers it
@@ -361,4 +361,73 @@ public invocation surface documented in the README, and changes a harness signat
 (`runBenchmark`). Two behaviors it introduces are refusals that stop work before it
 starts, and one of them (`run` without a TTY) makes the tool unusable
 non-interactively until ACT-26.3 lifts it; that trade deserves a second reader.
+## Review fixes, 2026-09-02
+
+Five findings from the independent review, each fixed in its own commit, plus
+one test-hygiene fix the review named. The card stays in Review; the reviewer
+moves it.
+
+### What was wrong, and what each fix observed
+
+1. **`--json` was truncated at 131072 bytes on a pipe** (blocking).
+   `process.exit` discards whatever `process.stdout.write` still has buffered,
+   and on a pipe that write is asynchronous, so any record past the pipe buffer
+   arrived cut mid-JSON: exactly the case the card exists to serve. Fixed by
+   setting `process.exitCode` and letting the process end once the write drains
+   (`fix(cli): let stdout drain before the process ends`). Observed: a 352012-byte
+   comparison report piped through `| cat` delivered all 352012 bytes and
+   `JSON.parse` accepted the whole stdout; before the fix the same pipe delivered
+   exactly 131072. Every exit code still propagates (2, 3, and 0 checked directly).
+2. **The README claimed a stdout rule two of three commands break** (blocking, as
+   documentation). Verified: 17 `console.log` sites in `src/benchmark/` write to
+   fd 1 and Bun's `console.log` goes to stdout, so `run --json > artifact.json`
+   is not parseable JSON. Those sites predate this card. The README now says
+   `compare` honors the rule, `run` and `replay` do not yet, and names ACT-26.7
+   with what a caller does meanwhile (`docs(readme): state the stdout rule as it
+   actually holds`). The harness-wide move is **ACT-26.7**, created with six
+   acceptance criteria.
+3. **The `run` TTY gate refused `--confirm --yes`, which never prompts**
+   (blocking). Verified that `pipeline-confirmation.ts` holds no Questioner and
+   never calls `collectCalibration`: the pause without a flag is only on the debug
+   path, so the confirmation group, the agent-facing workload, was refused although
+   `--yes` already answers its one prompt. Now gated on the same predicate replay
+   uses (`fix(cli): let run --confirm --yes proceed without a TTY`). Observed both
+   directions: `--confirm --yes` without a TTY reached the cost projection and the
+   target check; plain `run` still exits 3 naming ACT-26.3. Acceptance criterion 9
+   was reworded to match, in place, so the other criteria keep their numbers.
+4. **A declared flag name in a value position was silently swallowed**
+   (should-fix). `run --target --json` consumed `--json` as the target's value and
+   failed later with a not-a-git-repository error. The parser now consults the flag
+   table it already holds (`fix(cli): refuse a declared flag standing where a value
+   belongs`). Observed: `Flag --target needs a value for rehearsal run`, exit 2.
+5. **`compare -h` exited 1 instead of 2** (should-fix). `-h` was taken for the
+   manifest path. Only a token with no leading dash is a positional argument now
+   (`fix(cli): treat an undeclared short flag as a usage error`). Observed:
+   `compare`, `run`, and `replay` all exit 2 on `-h`. A manifest whose name starts
+   with a dash is still reachable as `./-name.json`.
+6. **The compare tests registered their cleanup after the call that created the
+   directory**, so a failure left a report directory in the working repository.
+   Two lines moved (`test(cli): register the report cleanup before the call that
+   writes it`).
+
+### Review findings accepted as notes, with no code change
+
+- Acceptance criterion 5 says "one stderr line", and the test spawns `rehearsal.ts`
+  directly, where that holds. Through the documented `bun run rehearsal`
+  invocation there are two lines, because `bun run` echoes the command it runs.
+- `expect(help).toContain(flag.name)` in `commands.test.ts` is tautological: the
+  help is generated from the same table the assertion reads. Its sibling
+  assertions on the help line, the default, and the environment variable do carry
+  protection.
+- The `bin` entry in `package.json` has never been exercised; every observation
+  went through `bun run rehearsal`.
+- `src/cli` files import same-directory siblings through `#cli/*` while
+  `src/benchmark` files use relative paths for their siblings. The two halves of
+  the repository do not read alike.
+
+### Full check after the last commit
+
+`bun run typecheck`, `bun run lint`, and `bun run fmt:check` each exited 0;
+`bun test` reported 507 pass, 0 fail across 43 files. No paid provider call was
+made in this dispatch; spend $0.00.
 <!-- SECTION:NOTES:END -->
