@@ -201,9 +201,13 @@ function asScorecard(stage: Readonly<CalibratableStageRecord>): StageScorecard {
 /**
  * The rubric text a stage is rejudged against is read from the path the
  * scorecard recorded, not one recomputed from the case: an edit lands in the
- * file the run graded from, and that is the file this reads back. A rubric
- * that has since been deleted is simply unchanged, so the stage is not
- * rejudged.
+ * file the run graded from, and that is the file this reads back.
+ *
+ * A rubric the command cannot read is refused, for the same reason an
+ * unreadable case is: reading it as absent means the stage is not rejudged,
+ * which the record then states as a rubric that did not change. The paused
+ * loop re-prompts on the same read, so anything else would leave the two
+ * paths disagreeing about a recorded result.
  */
 async function currentSources(
 	request: Readonly<CalibrateRequest>,
@@ -214,13 +218,22 @@ async function currentSources(
 		request.readCurrentSources ??
 		((id: string | undefined) => readControlSources(id, frozen.finalRubric));
 	const { instructions, finalRubric } = await read(caseId);
-	const stageRubrics = await readStageRubrics(frozen.stageScorecards, (path) =>
-		Bun.file(path)
-			.text()
-			.catch(() => undefined),
+	const stageRubrics = await readStageRubrics(
+		frozen.stageScorecards,
+		readStageRubricText,
 	);
 
 	return { instructions, finalRubric, stageRubrics };
+}
+
+async function readStageRubricText(path: string): Promise<string> {
+	try {
+		return await Bun.file(path).text();
+	} catch (error) {
+		throw new RefusedPreconditionError(
+			`Cannot read the stage rubric this run graded against at ${path}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }
 
 /**

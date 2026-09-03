@@ -502,6 +502,44 @@ describe(runCalibrate.name, () => {
 	});
 
 	/**
+	 * Same rule as the final rubric: a rubric the scorecard recorded a path
+	 * for and the command cannot read is refused, not recorded as one that
+	 * did not change. The paused loop re-prompts for the same read, so the
+	 * two paths would otherwise disagree about the recorded result.
+	 */
+	it("refuses a stage rubric it cannot read", async () => {
+		const fixture = await writeRunFixture();
+		directories.push(fixture.runsDirectory);
+		await rm(fixture.stageRubricPath);
+		await writeReview(fixture.reviewFile, []);
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runCalibrate(
+				{
+					id: RUN_NAME,
+					runsDirectory: fixture.runsDirectory,
+					json: false,
+					confirmRejudge: false,
+					readCurrentSources: unchangedControlSources,
+				},
+				() => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure?.message).toContain(fixture.stageRubricPath);
+		const artifact = artifactSchema.parse(
+			JSON.parse(await Bun.file(fixture.artifactFile).text()),
+		);
+		expect(artifact.status).toBe("AWAITING_HUMAN_REVIEW");
+	});
+
+	/**
 	 * Through the production reader, not the seam: an artifact naming a case
 	 * that is not there is refused, rather than recorded COMPLETE with the
 	 * reviewer's rubric edit discarded as "unchanged".

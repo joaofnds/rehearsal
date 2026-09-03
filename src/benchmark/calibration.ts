@@ -354,20 +354,16 @@ async function rejudgeFinal(
  * Which file holds a stage's current rubric: the path its scorecard recorded,
  * never one recomputed from the case. An edit lands in the file the run graded
  * from, so that is the file a rejudge reads back, and this is the one place
- * that is stated. The caller decides what a rubric it cannot read means: the
- * interactive loop treats it as an incomplete calibration and re-prompts, the
- * command treats it as a rubric that did not change.
+ * that is stated. A rubric neither caller can read is a refusal, phrased for
+ * the caller: the interactive loop re-prompts, the command exits.
  */
 export async function readStageRubrics(
 	stageScorecards: readonly Readonly<StageScorecard>[],
-	readText: (path: string) => Promise<string | undefined>,
+	readText: (path: string) => Promise<string>,
 ): Promise<ReadonlyMap<WorkflowStage, string>> {
 	const stageRubrics = new Map<WorkflowStage, string>();
 	for (const scorecard of stageScorecards) {
-		const text = await readText(scorecard.rubricPath);
-		if (text !== undefined) {
-			stageRubrics.set(scorecard.stage, text);
-		}
+		stageRubrics.set(scorecard.stage, await readText(scorecard.rubricPath));
 	}
 
 	return stageRubrics;
