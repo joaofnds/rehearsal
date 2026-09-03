@@ -83,22 +83,44 @@ async function summaryOf(
 	text: string,
 	runsDirectory: string,
 ): Promise<string> {
+	if (id.kind === "group") {
+		const summary = await groupSummaryOf(id.groupId, text, runsDirectory);
+
+		return summary;
+	}
 	if (id.kind === "run") {
 		return runSummary(id.run, parseRunSummaryRecord(text));
-	}
-	if (id.kind === "group") {
-		const paths = confirmationGroupPaths(runsDirectory, id.groupId);
-		const report = parseGroupReportSummaryRecord(
-			await recordText(`group:${id.groupId}`, paths.reportFile),
-		);
-
-		return groupSummary(parseConfirmationGroupRecord(text), report);
 	}
 	if (id.kind === "comparison") {
 		return comparisonSummary(id.manifestDigest, parseComparisonReport(text));
 	}
 
 	return text;
+}
+
+/**
+ * The reliability half of a group's summary lives in the report it writes
+ * beside its record, so a group whose record reads but whose report does not
+ * is a missing report, not a missing group: saying "No record group:<id>"
+ * would deny a group that is there and that `--json` prints.
+ */
+async function groupSummaryOf(
+	groupId: string,
+	text: string,
+	runsDirectory: string,
+): Promise<string> {
+	const { reportFile } = confirmationGroupPaths(runsDirectory, groupId);
+	const file = Bun.file(reportFile);
+	if (!(await file.exists())) {
+		throw new RefusedPreconditionError(
+			`No report for group:${groupId} at ${displayPath(reportFile)}; its record reads, so --json prints it`,
+		);
+	}
+
+	return groupSummary(
+		parseConfirmationGroupRecord(text),
+		parseGroupReportSummaryRecord(await file.text()),
+	);
 }
 
 export interface ShowRequest {

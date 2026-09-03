@@ -231,6 +231,46 @@ describe(runShow.name, () => {
 		});
 	});
 
+	describe("when a group's report is missing but its record is not", () => {
+		it("names the report rather than claiming the group does not exist", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeGroupWithoutCaseId("group-no-report");
+			const recorder = recordOutput();
+
+			const failure = await failureOf(
+				runShow(
+					{
+						id: "group:group-no-report",
+						json: false,
+						runsDirectory: fixture.runsDirectory,
+					},
+					recorder.output,
+				),
+			);
+
+			expect(failure).toBeInstanceOf(RefusedPreconditionError);
+			expect(failure.message).toContain("report.json");
+			expect(failure.message).not.toContain("No record group:group-no-report");
+		});
+
+		it("still prints the group record's own bytes with --json", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeGroupWithoutCaseId("group-no-report");
+			const paths = confirmationGroupPaths(
+				fixture.runsDirectory,
+				"group-no-report",
+			);
+
+			const stdout = await printed(
+				"group:group-no-report",
+				true,
+				fixture.runsDirectory,
+			);
+
+			expect(stdout).toBe(await Bun.file(paths.groupFile).text());
+		});
+	});
+
 	describe("when the id is missing or malformed", () => {
 		it("refuses no argument by naming every id form", async () => {
 			const fixture = await writtenFixture();
