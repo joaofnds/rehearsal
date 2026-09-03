@@ -188,6 +188,7 @@ async function dispatch(
 					id: commandLine.argument,
 					json: commandLine.json,
 					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+					checkout: flagValue(commandLine.flags, "--checkout"),
 				},
 				processOutput,
 			);

@@ -409,6 +409,24 @@ export function assertCommitSubjects(
 	}
 }
 
+/**
+ * Whether the target still holds a run's retained candidate. `rev-parse
+ * --verify` fails on a name that resolves to nothing, which is the question,
+ * and `git` turns that into a thrown CommandError.
+ */
+export async function refExists(
+	repositoryRoot: string,
+	reference: string,
+): Promise<boolean> {
+	try {
+		await git(repositoryRoot, "rev-parse", "--verify", "--quiet", reference);
+
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export async function addWorktree(
 	repositoryRoot: string,
 	sha: string,

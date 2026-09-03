@@ -16,6 +16,10 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { LIST_KINDS, runList } from "#cli/list-command";
 import { runShow } from "#cli/show-command";
+import { runCommand } from "#benchmark/command";
+import { recordRetentionRef, removeWorktree } from "#benchmark/target";
+import { TestResources } from "#benchmark/test-support";
+import { RUN_NAME } from "#cli/calibrate-test-support";
 
 describe("naming a record a session pastes onto a card", () => {
 	/**
@@ -401,5 +405,154 @@ describe("list and show are read-only", () => {
 		}
 
 		expect(await digestOfTree(root)).toEqual(before);
+	});
+});
+
+describe("show --checkout", () => {
+	const resources = TestResources.forEachTest();
+
+	interface CheckoutFixture {
+		readonly runsDirectory: string;
+		readonly targetDirectory: string;
+		readonly resultSha: string;
+		readonly checkoutPath: string;
+	}
+
+	async function retainedRun(): Promise<CheckoutFixture> {
+		const target = await resources.createRepository();
+		const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+		resources.track(runsDirectory);
+		await Bun.write(
+			benchmarkRunPaths(runsDirectory, RUN_NAME).artifactFile,
+			JSON.stringify({
+				status: "AWAITING_HUMAN_REVIEW",
+				sourceRoot: target.directory,
+				resultSha: target.sha,
+			}),
+		);
+		await recordRetentionRef(target.directory, RUN_NAME, target.sha);
+		const checkoutRoot = await mkdtemp(join(tmpdir(), "rehearsal-checkout-"));
+		resources.track(checkoutRoot);
+
+		return {
+			runsDirectory,
+			targetDirectory: target.directory,
+			resultSha: target.sha,
+			checkoutPath: join(checkoutRoot, "candidate"),
+		};
+	}
+
+	it("adds a detached worktree of the retained candidate and prints its path", async () => {
+		const fixture = await retainedRun();
+		const { output, stdout, stderr } = recordOutput();
+
+		await runShow(
+			{
+				id: `run:${RUN_NAME}`,
+				json: false,
+				runsDirectory: fixture.runsDirectory,
+				checkout: fixture.checkoutPath,
+			},
+			output,
+		);
+
+		expect(stdout).toEqual([`${fixture.checkoutPath}\n`]);
+		expect(stderr).toEqual([]);
+		const head = await runCommand(
+			["git", "rev-parse", "HEAD"],
+			fixture.checkoutPath,
+		);
+		expect(head.trim()).toBe(fixture.resultSha);
+		await removeWorktree(fixture.targetDirectory, fixture.checkoutPath);
+	});
+
+	it("refuses a directory that already exists and creates no worktree", async () => {
+		const fixture = await retainedRun();
+		await Bun.write(join(fixture.checkoutPath, "already"), "there\n");
+		const { output, stdout } = recordOutput();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: `run:${RUN_NAME}`,
+					json: false,
+					runsDirectory: fixture.runsDirectory,
+					checkout: fixture.checkoutPath,
+				},
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain(fixture.checkoutPath);
+		expect(stdout).toEqual([]);
+		const worktrees = await runCommand(
+			["git", "worktree", "list"],
+			fixture.targetDirectory,
+		);
+		expect(worktrees).not.toContain(fixture.checkoutPath);
+	});
+
+	it("refuses a target holding no retention ref for the run", async () => {
+		const fixture = await retainedRun();
+		await runCommand(
+			["git", "update-ref", "-d", `refs/rehearsal/${RUN_NAME}`],
+			fixture.targetDirectory,
+		);
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: `run:${RUN_NAME}`,
+					json: false,
+					runsDirectory: fixture.runsDirectory,
+					checkout: fixture.checkoutPath,
+				},
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain(`refs/rehearsal/${RUN_NAME}`);
+	});
+
+	it("refuses --checkout on an id that is not a run", async () => {
+		const fixture = await retainedRun();
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: `case:${DEFAULT_CASE_ID}`,
+					json: false,
+					runsDirectory: fixture.runsDirectory,
+					checkout: fixture.checkoutPath,
+				},
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(UsageError);
+		expect(failure.message).toContain("--checkout");
+		expect(failure.message).toContain("run id");
+	});
+
+	it("accepts the run under a bare name as well as run:<name>", async () => {
+		const fixture = await retainedRun();
+		const { output, stdout } = recordOutput();
+
+		await runShow(
+			{
+				id: RUN_NAME,
+				json: false,
+				runsDirectory: fixture.runsDirectory,
+				checkout: fixture.checkoutPath,
+			},
+			output,
+		);
+
+		expect(stdout).toEqual([`${fixture.checkoutPath}\n`]);
+		await removeWorktree(fixture.targetDirectory, fixture.checkoutPath);
 	});
 });

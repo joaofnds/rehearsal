@@ -229,7 +229,14 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		name: "show",
 		summary: "Print one record by its id, as its bytes or as a card summary",
 		argument: "record-id",
-		flags: [jsonFlag],
+		flags: [
+			{
+				name: "--checkout",
+				kind: "value",
+				help: "Materialize a run's retained candidate as a detached worktree in the new directory named, and print its path",
+			},
+			jsonFlag,
+		],
 	},
 	{
 		name: "stale",

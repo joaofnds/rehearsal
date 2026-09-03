@@ -18,11 +18,14 @@ import {
 	replayRecordFile,
 	sessionAttemptPaths,
 } from "#benchmark/run-layout";
+import { exists } from "node:fs/promises";
+import { z } from "zod";
+import { addWorktree, refExists } from "#benchmark/target";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import type { RecordId } from "#cli/record-id";
-import { parseRecordId, recordIdForms } from "#cli/record-id";
+import type { RecordId, RunRecordId } from "#cli/record-id";
+import { parseRecordId, parseRunRecordId, recordIdForms } from "#cli/record-id";
 
 function recordFileFor(id: RecordId, runsDirectory: string): string {
 	switch (id.kind) {
@@ -127,6 +130,7 @@ export interface ShowRequest {
 	readonly id: string | undefined;
 	readonly json: boolean;
 	readonly runsDirectory: string;
+	readonly checkout?: string | undefined;
 }
 
 export async function runShow(
@@ -138,6 +142,13 @@ export async function runShow(
 			`Provide the record id: rehearsal show <${recordIdForms().join(" | ")}>`,
 		);
 	}
+	if (request.checkout !== undefined) {
+		output.stdout(
+			`${await checkoutRetainedCandidate(request.id, request.checkout, request.runsDirectory)}\n`,
+		);
+
+		return;
+	}
 
 	const id = parseRecordId(request.id);
 	const text = await recordText(
@@ -147,5 +158,78 @@ export async function runShow(
 
 	output.stdout(
 		request.json ? text : await summaryOf(id, text, request.runsDirectory),
+	);
+}
+
+const retainedRunSchema = z.object({ sourceRoot: z.string().min(1) }).loose();
+
+/**
+ * The run recorded which repository it ran in and which commit it produced, so
+ * `--checkout` takes no target of its own: a second answer could disagree with
+ * the first. The worktree is of the retention ref rather than of the sha,
+ * because the ref is what keeps that commit reachable once the target was
+ * restored.
+ */
+async function checkoutRetainedCandidate(
+	given: string,
+	directory: string,
+	runsDirectory: string,
+): Promise<string> {
+	const id = parseCheckoutRunId(given);
+	const { artifactFile } = benchmarkRunPaths(runsDirectory, id.run);
+	const text = await recordText(given, artifactFile);
+	const { sourceRoot } = retainedRunSchema.parse(JSON.parse(text));
+	const reference = `refs/rehearsal/${id.run}`;
+	await refuseExistingDirectory(directory);
+	await refuseUnretainedRun(sourceRoot, reference, id.run);
+	await addWorktree(sourceRoot, reference, directory);
+
+	return directory;
+}
+
+/**
+ * `--checkout` names one thing to materialize, and only a run retains a
+ * candidate. A prefixed id of another kind is refused by name, so the caller
+ * is told which id to give rather than failing later on a missing ref.
+ */
+function parseCheckoutRunId(given: string): RunRecordId {
+	const parsed = given.includes(":")
+		? parseRecordId(given)
+		: parseRunRecordId(given);
+	if (parsed.kind !== "run") {
+		throw new UsageError(
+			"--checkout takes a run id: rehearsal show run:<name> --checkout <dir>",
+		);
+	}
+
+	return parsed;
+}
+
+/**
+ * The caller owns the directory they named and the harness never removes one,
+ * so writing into a directory that is already there could bury work. Git would
+ * refuse a non-empty one anyway; refusing here says why.
+ */
+async function refuseExistingDirectory(directory: string): Promise<void> {
+	if (!(await exists(directory))) {
+		return;
+	}
+
+	throw new RefusedPreconditionError(
+		`${directory} already exists; --checkout writes a worktree into a new directory`,
+	);
+}
+
+async function refuseUnretainedRun(
+	sourceRoot: string,
+	reference: string,
+	run: string,
+): Promise<void> {
+	if (await refExists(sourceRoot, reference)) {
+		return;
+	}
+
+	throw new RefusedPreconditionError(
+		`No ${reference} in ${sourceRoot}; run ${run} retained no candidate there`,
 	);
 }
