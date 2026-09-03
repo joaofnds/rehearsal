@@ -124,19 +124,30 @@ function caseDirectory(id: string, root: string = casesRoot()): string {
 	return join(root, id);
 }
 
+/**
+ * A declaration is untrusted data, so a path it names is confined to the one
+ * directory that path's kind may reach before anything opens it. `resolve`
+ * folds away `..` and absolute paths alike, so the containment is decided on
+ * the resolved path rather than on the text the declaration carried.
+ */
+function confinedTo(directory: string, path: string, refusal: string): string {
+	const absolute = resolve(directory, path);
+	if (!absolute.startsWith(`${directory}/`)) {
+		throw new CaseDeclarationError(refusal);
+	}
+
+	return absolute;
+}
+
 export function caseRelative(
 	declaration: CaseDeclaration,
 	path: string,
 ): string {
-	const directory = caseDirectory(declaration.id);
-	const absolute = resolve(directory, path);
-	if (!absolute.startsWith(`${directory}/`)) {
-		throw new CaseDeclarationError(
-			`Case ${declaration.id} names a path outside its case directory: ${path}`,
-		);
-	}
-
-	return absolute;
+	return confinedTo(
+		caseDirectory(declaration.id),
+		path,
+		`Case ${declaration.id} names a path outside its case directory: ${path}`,
+	);
 }
 
 export function parseCaseDeclaration(
@@ -352,11 +363,10 @@ async function loadPipelineCase(
  * directory rather than inside the committed case directory.
  */
 export function transcriptPrefixPath(caseId: string, file: string): string {
-	return join(
-		benchmarkRunsDirectory(CONTROL_DIR),
-		CASES_DIRECTORY,
-		caseId,
+	return confinedTo(
+		join(benchmarkRunsDirectory(CONTROL_DIR), CASES_DIRECTORY, caseId),
 		file,
+		`Case ${caseId} names a transcript outside its prefix directory: ${file}`,
 	);
 }
 
