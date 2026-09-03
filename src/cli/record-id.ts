@@ -73,32 +73,39 @@ export function recordIdForms(): readonly string[] {
  * satisfying the id's shape can still name a destination outside it: `run:..`
  * reads a sibling of `.benchmark-runs`, and `group:../../../../etc/passwd`
  * leaves the repository entirely. Shape is not destination, and refusing the
- * segment here means no caller can hold an id that escapes.
+ * segment here means no caller can hold an id that escapes. The message names
+ * the id as the caller typed it, because an id they never wrote tells them
+ * nothing about which one to correct.
  */
-function confined(prefix: string, text: string): string {
+interface IdBody {
+	/** The id exactly as the caller typed it, which is what a refusal names. */
+	readonly given: string;
+	/** The form this prefix takes, which is what a malformed body is told. */
+	readonly form: string;
+	/** Everything after the prefix, which is what the segments come from. */
+	readonly body: string;
+}
+
+function confined(id: IdBody, text: string): string {
 	if (text === "." || text === ".." || text.includes("/")) {
 		throw new UsageError(
-			`Record id ${prefix}:${text} names a path outside the runs directory`,
+			`Record id ${id.given} names a path outside the runs directory`,
 		);
 	}
 
 	return text;
 }
 
-function segment(prefix: string, form: string, text: string): string {
-	if (text === "") {
-		throw new UsageError(`Record id ${prefix}: takes the form ${form}`);
+function segment(id: IdBody): string {
+	if (id.body === "") {
+		throw new UsageError(`Record id ${id.given} takes the form ${id.form}`);
 	}
 
-	return confined(prefix, text);
+	return confined(id, id.body);
 }
 
-function twoSegments(
-	prefix: string,
-	form: string,
-	text: string,
-): readonly [string, string] {
-	const parts = text.split("/");
+function twoSegments(id: IdBody): readonly [string, string] {
+	const parts = id.body.split("/");
 	const [first, second] = parts;
 	if (
 		parts.length !== 2 ||
@@ -107,32 +114,32 @@ function twoSegments(
 		second === undefined ||
 		second === ""
 	) {
-		throw new UsageError(`Record id ${prefix}:${text} takes the form ${form}`);
+		throw new UsageError(`Record id ${id.given} takes the form ${id.form}`);
 	}
 
-	return [confined(prefix, first), confined(prefix, second)];
+	return [confined(id, first), confined(id, second)];
 }
 
-function parseAttemptId(body: string): RecordId {
+function parseAttemptId(id: string, body: string): RecordId {
 	const separator = body.indexOf(":");
 	const attemptKind = separator === -1 ? body : body.slice(0, separator);
 	const rest = separator === -1 ? "" : body.slice(separator + 1);
 
 	if (attemptKind === "session") {
-		const [caseId, uuid] = twoSegments(
-			"attempt:session",
-			"attempt:session:<case>/<uuid>",
-			rest,
-		);
+		const [caseId, uuid] = twoSegments({
+			given: id,
+			form: "attempt:session:<case>/<uuid>",
+			body: rest,
+		});
 
 		return { kind: "attempt:session", caseId, uuid };
 	}
 	if (attemptKind === "stage") {
-		const [lineage, timestamp] = twoSegments(
-			"attempt:stage",
-			"attempt:stage:<lineage>/<timestamp>",
-			rest,
-		);
+		const [lineage, timestamp] = twoSegments({
+			given: id,
+			form: "attempt:stage:<lineage>/<timestamp>",
+			body: rest,
+		});
 
 		return { kind: "attempt:stage", lineage, timestamp };
 	}
@@ -159,33 +166,43 @@ export function parseRecordId(text: string): RecordId {
 	const body = text.slice(separator + 1);
 	switch (prefix) {
 		case "case": {
-			return { kind: "case", caseId: segment(prefix, "case:<id>", body) };
+			return {
+				kind: "case",
+				caseId: segment({ given: text, form: "case:<id>", body }),
+			};
 		}
 		case "run": {
-			return { kind: "run", run: segment(prefix, "run:<name>", body) };
+			return {
+				kind: "run",
+				run: segment({ given: text, form: "run:<name>", body }),
+			};
 		}
 		case "checkpoint": {
-			const [run, stage] = twoSegments(
-				prefix,
-				"checkpoint:<run>/<stage>",
+			const [run, stage] = twoSegments({
+				given: text,
+				form: "checkpoint:<run>/<stage>",
 				body,
-			);
+			});
 
 			return { kind: "checkpoint", run, stage };
 		}
 		case "attempt": {
-			return parseAttemptId(body);
+			return parseAttemptId(text, body);
 		}
 		case "group": {
 			return {
 				kind: "group",
-				groupId: segment(prefix, "group:<group-id>", body),
+				groupId: segment({ given: text, form: "group:<group-id>", body }),
 			};
 		}
 		case "comparison": {
 			return {
 				kind: "comparison",
-				manifestDigest: segment(prefix, "comparison:<manifest-digest>", body),
+				manifestDigest: segment({
+					given: text,
+					form: "comparison:<manifest-digest>",
+					body,
+				}),
 			};
 		}
 		default: {

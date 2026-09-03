@@ -72,9 +72,13 @@ describe(parseRecordId.name, () => {
 			expect(() => parseRecordId(text)).toThrow(UsageError);
 		});
 
-		it("names the segment it refused", () => {
-			expect(() => parseRecordId("run:../../etc/passwd")).toThrow(
-				/names a path outside/u,
+		it.each([
+			"run:../../etc/passwd",
+			"checkpoint:a/..",
+			"attempt:session:smoke/..",
+		])("reports %s as the user typed it", (text) => {
+			expect(() => parseRecordId(text)).toThrow(
+				`Record id ${text} names a path outside the runs directory`,
 			);
 		});
 	});
