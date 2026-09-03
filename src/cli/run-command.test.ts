@@ -533,3 +533,36 @@ describe("runRunCommand for a session case", () => {
 		expect(stdout.join("")).toContain("attempt.json");
 	});
 });
+
+describe("--corpus on a pipeline case", () => {
+	/**
+	 * A pipeline stage's corpus is its skills, and a project-level skill does not
+	 * shadow the user-level one on claude 2.1.258, so a stage run against a
+	 * corpus source would hash bytes the harness cannot deliver. Refusing names
+	 * ACT-28, which owns the mechanism.
+	 */
+	it("refuses before the run starts, naming ACT-28", async () => {
+		const { output, stdout, stderr } = recordOutput();
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [...args, "--corpus", "/some/corpus"],
+					json: false,
+					stdinIsTerminal: true,
+				},
+				{
+					output,
+					requireCase: loadsAuditLog().requireCase,
+					executeSession: neverASession,
+					execute: () => Promise.reject(new Error("run must not start")),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("ACT-28");
+		expect(stdout).toEqual([]);
+		expect(stderr).toEqual([]);
+	});
+});

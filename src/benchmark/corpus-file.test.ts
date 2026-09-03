@@ -8,9 +8,11 @@ import {
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
+import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
 const live = await resolveCorpusSource(undefined);
+const resources = TestResources.forEachTest();
 
 describe(resolveCorpusFile.name, () => {
 	it.each([
@@ -79,5 +81,27 @@ describe(hashCorpusFiles.name, () => {
 		expect(failure.message).toContain(
 			join(homedir(), ".claude/output-styles/no-such-style.md"),
 		);
+	});
+});
+
+describe("hashing a directory source's own bytes", () => {
+	it("returns the directory's digests, which differ from the live install's for the same layout path", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(
+			join(root, "output-styles/brief.md"),
+			"a brief the live install does not hold\n",
+		);
+		const source = await resolveCorpusSource(root);
+
+		const [variant] = await hashCorpusFiles(source, ["output-styles/brief.md"]);
+		const [installed] = await hashCorpusFiles(live, ["output-styles/brief.md"]);
+
+		expect(variant?.resolvedPath).toBe(join(root, "output-styles/brief.md"));
+		expect(variant?.sha256).toBe(
+			new Bun.CryptoHasher("sha256")
+				.update("a brief the live install does not hold\n")
+				.digest("hex"),
+		);
+		expect(variant?.sha256).not.toBe(installed?.sha256 ?? "");
 	});
 });

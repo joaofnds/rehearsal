@@ -35,11 +35,28 @@ export interface SessionCorpusSnapshot {
 
 /**
  * A project-level skill does not shadow the user-level one on claude 2.1.258,
- * so a snapshot carrying skill bytes would be hashed into lineage and then not
+ * so a corpus carrying skill bytes would be hashed into lineage and then not
  * delivered: the attempt would record a measurement of a corpus the session
  * never read. ACT-28 owns the delivery mechanism; until it lands, refusing is
  * the only honest answer.
  */
+export function undeliverableSkill(subject: string): SessionCorpusError {
+	return new SessionCorpusError(
+		`${subject}, and a project-level skill does not shadow the user-level one: ACT-28 owns the delivery mechanism, so a skill variant cannot be measured yet`,
+	);
+}
+
+/**
+ * A stage's corpus is the skill it invokes, so a stage cannot run against a
+ * corpus source at all. A session case is where a corpus variant is measured
+ * until ACT-28 lands.
+ */
+export function stageCorpusRefusal(corpus: string): SessionCorpusError {
+	return undeliverableSkill(
+		`A stage's corpus is the skill it invokes, so --corpus ${corpus} cannot reach it`,
+	);
+}
+
 function refuseSkills(layoutPaths: readonly string[]): void {
 	const skill = layoutPaths.find((layoutPath) =>
 		layoutPath.startsWith("skills/"),
@@ -48,9 +65,7 @@ function refuseSkills(layoutPaths: readonly string[]): void {
 		return;
 	}
 
-	throw new SessionCorpusError(
-		`Corpus source carries ${skill}, and a project-level skill does not shadow the user-level one: ACT-28 owns the delivery mechanism, so a skill variant cannot be measured yet`,
-	);
+	throw undeliverableSkill(`Corpus source carries ${skill}`);
 }
 
 function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {

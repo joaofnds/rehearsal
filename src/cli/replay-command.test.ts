@@ -157,3 +157,47 @@ describe(runReplayCommand.name, () => {
 		expect(stdout.join("")).toBe(await Bun.file(recordPath).text());
 	});
 });
+
+describe("--corpus on a stage replay", () => {
+	/**
+	 * A replayed stage's corpus is the skill it invokes, and a project-level
+	 * skill does not shadow the user-level one, so a replay against a corpus
+	 * source would record bytes the harness cannot deliver.
+	 */
+	it("refuses before the run directory is resolved, naming ACT-28", async () => {
+		const resolved: string[] = [];
+		const { output, stdout } = recordOutput();
+
+		const failure = await failureOf(
+			runReplayCommand(
+				{
+					args: [
+						"--run",
+						"any-name",
+						"--stage",
+						"shape",
+						...sessionArgs,
+						"--corpus",
+						"/some/corpus",
+					],
+					json: false,
+					stdinIsTerminal: true,
+				},
+				{
+					output,
+					resolveRunDirectory: (name) => {
+						resolved.push(name);
+
+						return Promise.resolve("/runs/any-name");
+					},
+					execute: () => Promise.reject(new Error("replay must not run")),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("ACT-28");
+		expect(resolved).toEqual([]);
+		expect(stdout).toEqual([]);
+	});
+});
