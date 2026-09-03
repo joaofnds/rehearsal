@@ -567,4 +567,227 @@ and every record read off disk). Worth a reviewer's attention in particular:
   run:x at /Users/.../x.json`). That is useful to an agent and it discloses
   the control repository's location on stderr. I left it because every other
   command in this CLI already prints absolute record paths on stdout.
+
+## Review fixes (directed dispatch)
+
+Ten findings fixed, each in its own commit, plus one refactor commit. Every
+verification below is a tool result from this dispatch. No paid provider call
+was made; spend $0.00.
+
+`bun run typecheck`, `bun run lint`, and `bun run fmt:check` each exited 0;
+`bun test` reported 931 pass, 0 fail across 63 files and exited 0.
+
+### Fresh-clone suite
+
+The reason finding 3 existed. Cloned this repository to `/tmp/rehearsal-final`
+at `721601b`, `bun install --frozen-lockfile`, then `bun test` twice:
+
+- Second run: 930 pass, 1 fail. The one failure is `loadCase > resolves the
+  declared target to a directory that exists`, ACT-26.4's, which depends on a
+  repository outside this one. **Pre-existing clone failure, not from this
+  card.**
+- First run additionally failed four tests, all one cause: `rehearsal compare`
+  exits 1 with a raw ENOENT when `.benchmark-runs` does not exist. Reproduced
+  at `3798639`, the Shape commit before any of this card's code, so it predates
+  this card. Filed as **ACT-30**.
+
+Before the fix, the same clone failed 8: those four plus the three this card
+owned plus ACT-26.4's.
+
+### The commits
+
+1. `d864e52` — **finding 1**, `stale` died on one unreadable attempt record.
+   `staleCases` now returns `{ records, unreadable }` and `runStale` prints the
+   unreadable on stderr, exit 0. Observed: over a copy of this repository's
+   runs directory with one `{ not json` attempt record added, the old code
+   exited 1 printing nothing on stdout; the new code printed
+   `attempt:session:smoke/broken-0000-0000: JSON Parse error: Expected '}'` on
+   stderr, `case:smoke output-styles/brief.md changed` on stdout, exit 0.
+   **Mutation that proves the test:** removing the `try`/`catch` around
+   `parseSessionAttemptRecord` fails both new tests (the module-level one and
+   the command-level one).
+2. `0e0d7cf` — **finding 2**, `stale` could never report model or effort
+   staleness. It compared each checkpoint against the manifest that produced
+   it. `stale` now reads `--model` and `--effort` through `parseStaleArgs`,
+   beside `parseReplayArgs`, with the same `BENCHMARK_MODEL` and
+   `BENCHMARK_EFFORT` fallbacks. Unlike run and replay it requires neither: a
+   knob it was not given asserts nothing. Observed: over a fixture recorded at
+   sonnet, `BENCHMARK_MODEL=opus` printed
+   `checkpoint:.../discuss model sonnet is now opus` and the same for build;
+   `--effort high` printed `effort none is now high`; with no knobs neither
+   half fired. **Mutation:** reverting to `manifest.model`/`manifest.effort`
+   fails all three new tests.
+3. `db0e90c` — **finding 3**, three tests asserted exact counts against
+   `.benchmark-runs`. The record-less attempt directory is now a fixture
+   (`writeEmptyAttemptDirectory`) beside the unreadable group that already
+   covered the same tolerance, and the two end-to-end CLI tests read `cases/`,
+   the one listing a fresh checkout can answer. **Mutation:** removing the
+   `collect` tolerance fails both the group test and the new attempt test.
+   Criterion 23's observation is recorded below rather than asserted forever.
+4. `10436b7` — **finding 4**, `stale --corpus <dir>` crashed on a valid corpus
+   with no CLAUDE.md. The read is now per-run, once a manifest says a
+   checkpoint exists, and a corpus that cannot supply the file fails as
+   `CorpusFileError`, which the command translates to exit 3. Observed:
+   `rehearsal stale --corpus /tmp/styles-corpus` (holding only
+   `output-styles/brief.md`) exited 1 with a raw ENOENT before, and exits 0
+   printing `case:smoke output-styles/brief.md changed` after.
+5. `e6115ae` — **finding 5**, `stale --corpus chezmoi:<ref>` leaked two temp
+   directories per invocation. `discardRender` moved to `corpus-source.ts`,
+   beside the render that creates both directories, and `runStale` discards in
+   a `finally`. Observed with a real chezmoi render: 26 `rehearsal-chezmoi-*`
+   directories before and 26 after with the fix, 26 before and 28 after
+   without it. The README's "none of them writes anything" now names the
+   exception.
+6. `d135bf9` — **finding 6**, `stale` discarded `listing.unreadable` from
+   `listCases`. Observed: with a stray `cases/zz-observe-probe/` directory,
+   `rehearsal stale` printed
+   `case:zz-observe-probe: Unknown case zz-observe-probe: no declaration at
+   cases/zz-observe-probe/case.json` on stderr and `case:smoke ...` on stdout,
+   exit 0. The probe directory was removed after.
+7. `f122d90` — **finding 7**, `stale`'s skill roots diverged from replay's.
+   `corpusSkillRoots(source)` in `checkpoint.ts` is now the one spelling: the
+   live install is `skillSearchRoots(CONTROL_DIR)`, and a resolved directory or
+   render is its own root alone. Observed: `stale`'s live roots and
+   `skillSearchRoots(CONTROL_DIR)` print the identical two-element array.
+8. `394f642` — **finding 8**, the live-corpus branch was untested.
+   `recordCorpusFrom` now takes a corpus root rather than a directory path, so
+   a fixture records through the same resolver `stale` reads by. What the
+   branch asserts stays independent of which skills a machine has installed,
+   which is why the clone is green.
+9. `0663073` — **finding 9**, "most recent attempt" by mtime was untested.
+   `writeAttemptAt` puts two attempts for one case on disk under caller-named
+   uuids with explicit `utimes`. **Mutations:** reversing the comparison
+   (`>` to `<`) and taking the first attempt found each fail both new tests.
+10. `51ec20d` — **finding 10**, the dispatch test's weak guard. Each declared
+    command now states the exit code and reason it refuses a bare invocation,
+    and `run` and `replay` are additionally given every session knob so the
+    refusal itself is asserted (`run` exit 3 "stdin is not a terminal",
+    `replay` exit 3 "No replayable run named absent"). The child gets an
+    environment with no `BENCHMARK_` knob so a value on the machine cannot
+    change the answer. **Mutation:** weakening `run`'s expected code to 0 fails
+    the test.
+11. `7026fda` — **finding 14**, deleted the `summary purity` test.
+12. `1980157` — **finding 19**, absolute paths on stderr. `displayPath` in
+    `config.ts` names a path control-relative when it is under the control
+    root, unchanged otherwise. Observed: `show run:absent` prints
+    `No record run:absent at .benchmark-runs/absent.json`, and every
+    `list attempts` stderr reason now names `.benchmark-runs/sessions/...`
+    with no home directory.
+13. `0c51cd1` — **finding 13**, `parseRecordId("checkpoint:a/..")` reported an
+    id the caller never typed. The id as given, its form, and its body now
+    travel as one value. Observed: all three of `checkpoint:a/..`,
+    `attempt:session:x/..`, `run:../../etc/passwd` now name themselves exactly.
+14. `10a4227` — **finding 15**, `show case:<id>` bypassed `caseIdSchema`.
+    `isCaseId` is now the one question the declaration parser, `case show`, and
+    the record-id parser ask. Observed: `show 'case:Some Weird Name'` exits 2
+    with "names no case: a case id is lowercase letters, digits, or dashes"
+    (it exited 3 with an absolute path before); `show case:smoke --json` still
+    exits 0.
+15. `30bfe6b` — **finding 20**, the `void caseId` escape hatch. The builder now
+    yields the group's fields without a case and `group` parses them with the
+    case added, so the legacy record is built by never naming a case.
+16. `1878b43` — **finding 22**, `show group:<id>` with a missing `report.json`.
+    Observed: the summary path now exits 3 with "No report for
+    group:group-no-report at .../report.json; its record reads, so --json
+    prints it", and `--json` exits 0 printing the record.
+17. `721601b` — the refactor pass. Adding the tolerance to `stale` made it the
+    third command with the same stderr loop over `{ id, reason }`, identical to
+    `list`'s. `writeUnreadable` in `output.ts`, which already owns how a
+    command writes each kind of thing, is now the one place. `list attempts`
+    output re-observed identical after.
+
+### Criterion 23, as a CLI observation
+
+Criterion 23 asked for an observation against this repository's own
+`.benchmark-runs`. It is recorded here rather than asserted in the suite,
+because a criterion asking for a one-time observation does not need a permanent
+assertion, and the counts grow with every session attempt.
+
+`bun run rehearsal list attempts`, this dispatch, exit 0: eight
+`attempt:session:smoke/<uuid>` lines on stdout, each with its case, outcome,
+and model (`smoke SUCCESSFUL haiku` and similar). Three record-less attempt
+directories named on stderr with their reason —
+`attempt:session:smoke/94eee86e-…`,
+`attempt:session:zz-symlink-probe/540c4b90-…`, and
+`attempt:session:zz-symlink-probe/a2e72959-…`, each
+`ENOENT: no such file or directory, open '.benchmark-runs/sessions/…/attempt.json'`.
+The tolerance the criterion observes stays pinned by two fixture tests
+(`writeUnreadableGroup` for criterion 7, `writeEmptyAttemptDirectory` for the
+attempt form).
+
+### Findings recorded, no code change
+
+- **Finding 11.** The traversal fix is correct on POSIX and confinement holds
+  for every caller within this change. One caller outside it,
+  `resolveRunDirectory` in `replay-command.ts:252-253`, passes the raw `--run`
+  argument into the path builder without going through the parser; pre-existing
+  and out of scope. `confined` is byte-oriented and assumes POSIX separators,
+  so nobody should read a stronger guarantee into it.
+- **Finding 12.** Two of the eight traversal test cases are rejected by the
+  arity check before reaching confinement, so deleting the confinement calls
+  would leave them green. Only the two `attempt:` cases exercise confinement
+  for two-segment ids.
+- **Findings 16, 17, 18, 21.** `list cases` and `show case:` read the control
+  repository rather than the runs directory, so the read-only test does not
+  cover the `case:` form; markdown cells are not escaped, reachable only
+  through operator-written fixtures; `stale` and `list` join fields with tabs
+  while one joined field is an error message that could contain a tab; and
+  `latestAttemptRecord` re-walks the sessions tree once per case, which is
+  nothing at eleven attempts.
+- **A corpus file's absolute path still reaches stderr through
+  `CorpusFileError`.** `stale --corpus chezmoi:HEAD` printed
+  `Corpus file output-styles/brief.md does not exist at /var/folders/…`. The
+  message comes from `corpus-file.ts`, shared with `run` and `replay`, and the
+  path is outside the control root so `displayPath` leaves it. Finding 19 named
+  `recordText` and the listing reasons, which are fixed; widening to the shared
+  corpus error was out of scope.
+- **One flaky test.** `runReplayConfirmation > cleans completed Judge outcomes
+  while preserving a pre-evidence failure` failed once in a full-suite run this
+  dispatch and passed on its own and on the next two full runs. Not touched by
+  this work; recorded so a later reader does not read one red as a regression.
+
+### Decided autonomously
+
+Nobody was available during this dispatch. Each follows the dispatch's decision
+policy and is reversible by João.
+
+1. **`stale` declares `--model` and `--effort`, and requires neither**
+   (finding 2). doc-1's surface sketch shows only `[--corpus <source>]`, but
+   the glossary's Stale checkpoint entry — "recorded corpus files, model,
+   effort, or an upstream checkpoint no longer match the current state" — is
+   the settled constraint the fix has to satisfy, and two of those four were
+   unreachable. Requiring `--model` the way `run` and `replay` do would break
+   bare `rehearsal stale`; `stale` pays for nothing, so a knob it was not given
+   asserts nothing and that half of the comparison stays silent. Trigger to
+   revisit: a caller who needs `stale` to refuse rather than stay silent about
+   an unasserted knob.
+2. **A checkpoint compared against a corpus with no CLAUDE.md is a refused
+   precondition, not a cause** (finding 4). A missing declared *case* file is a
+   staleness cause because the case cannot run against that corpus at all; a
+   missing CLAUDE.md means the checkpoint comparison cannot be performed, which
+   is a different claim. The case half still answers, which is what the finding
+   asked for.
+3. **Recency stays mtime; the attempt's start time remains the recorded
+   trigger** (finding 9). Persisting it changes `sessionAttemptRecordSchema`,
+   a record this card only reads, and a record-shape change carries a
+   both-directions compatibility obligation that belongs to the card owning the
+   writer. The two-attempt test pins the behaviour either way. Trigger
+   unchanged: adding a timestamp to the session attempt record.
+4. **`attempt:session:<case>/<uuid>` keeps only confinement, not
+   `isCaseId`** (finding 15). Its case segment names a recorded directory
+   rather than a declared case; refusing one would make `list` print an id
+   `show` rejects, breaking the card's one structural claim.
+5. **Findings 13 and 15 are two commits; findings 1 and 6 are two commits.**
+   Both pairs touch the same files. 13 and 15 were separated by committing 13's
+   parameter-object change alone and re-applying 15 on top, verified green at
+   each step.
+6. **The `compare` ENOENT became ACT-30 rather than a fix here.** It reproduces
+   at `3798639`, before this card's first commit, and lives in `compare`'s
+   code. The dispatch scoped this run to the listed findings.
+
+### Left in the tree, not mine
+
+`backlog/tasks/act-25 - …md` was modified before this dispatch began (a
+`references: dotfiles:DOT-18` addition). It belongs to no work here and was
+left untouched and uncommitted.
 <!-- SECTION:NOTES:END -->
