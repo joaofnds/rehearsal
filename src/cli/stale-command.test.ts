@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
 import { pathExists } from "#benchmark/file-presence";
-import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
+import {
+	directorySource,
+	RecordedRunsFixture,
+} from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runStale } from "#cli/stale-command";
@@ -114,7 +117,7 @@ describe(runStale.name, () => {
 		const root = await temporaryDirectory("rehearsal-stale-cli-");
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
-		await fixture.recordCorpusFrom(corpusRoot);
+		await fixture.recordCorpusFrom(directorySource(corpusRoot));
 		await fixture.writeAttemptReading(corpusRoot, "smoke", [
 			"output-styles/brief.md",
 		]);
@@ -322,6 +325,34 @@ describe(runStale.name, () => {
 				expect(failure.message).toContain("CLAUDE.md");
 				expect(recorder.stdout).toEqual([]);
 			});
+		});
+	});
+
+	describe("when no --corpus is given, which is the live install", () => {
+		/**
+		 * The branch a user gets by typing `rehearsal stale`. Every other test
+		 * hands it a directory, and this one differs: the source resolves to the
+		 * live install and the instructions come from the control repository.
+		 */
+		it("compares a case against the live install, not a corpus root", async () => {
+			const root = await temporaryDirectory("rehearsal-stale-live-cli-");
+			const fixture = new RecordedRunsFixture(root);
+			await fixture.writeAttemptReading(
+				await corpusDirectory("build skill\n"),
+				"smoke",
+				["output-styles/brief.md"],
+			);
+			const recorder = recordOutput();
+			const runner = refusingRunner();
+
+			await runStale(
+				{ corpus: undefined, runsDirectory: root },
+				{ output: recorder.output, corpusSource: runner.dependencies },
+			);
+
+			expect(runner.commands).toEqual([]);
+			expect(recorder.stdout.join("")).toContain("case:smoke");
+			expect(recorder.stdout.join("")).toContain("output-styles/brief.md");
 		});
 	});
 

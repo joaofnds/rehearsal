@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CASES_DIRECTORY } from "./case";
 import { CONTROL_DIR } from "./config";
-import { RecordedRunsFixture } from "./run-records-test-support";
+import { resolveCorpusFile } from "./corpus-file";
+import { resolveCorpusSource } from "./corpus-source";
+import {
+	directorySource,
+	RecordedRunsFixture,
+} from "./run-records-test-support";
 import { TestResources } from "./test-support";
 import { staleCases, staleCheckpoints } from "./staleness-report";
 
@@ -56,12 +61,14 @@ describe(staleCheckpoints.name, () => {
 	it("names the stage whose recorded corpus no longer matches, with its cause", async () => {
 		const fixture = await writtenFixture();
 		const corpus = await corpusDirectory("build skill, edited\n");
-		await fixture.recordCorpusFrom(await corpusDirectory("build skill\n"));
+		await fixture.recordCorpusFrom(
+			directorySource(await corpusDirectory("build skill\n")),
+		);
 
-		const stale = await staleCheckpoints(fixture.runsDirectory, {
-			kind: "directory",
-			root: corpus,
-		});
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
 
 		expect(stale.map(({ id }) => id)).toEqual([
 			`checkpoint:${fixture.replayableRun}/build`,
@@ -72,14 +79,45 @@ describe(staleCheckpoints.name, () => {
 	it("names no checkpoint when the corpus still holds the recorded bytes", async () => {
 		const fixture = await writtenFixture();
 		const corpus = await corpusDirectory("build skill\n");
-		await fixture.recordCorpusFrom(corpus);
+		await fixture.recordCorpusFrom(directorySource(corpus));
 
-		const stale = await staleCheckpoints(fixture.runsDirectory, {
-			kind: "directory",
-			root: corpus,
-		});
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
 
 		expect(stale).toEqual([]);
+	});
+
+	describe("when no corpus is named, which is the live install", () => {
+		/**
+		 * The branch a user gets by typing `rehearsal stale`, and it differs from
+		 * every branch the tests above take: the instructions come from the
+		 * control repository's own CLAUDE.md rather than from a file under the
+		 * corpus root, because that is where the live install's project
+		 * instructions are. The skills the live branch searches are pinned by
+		 * `corpusSkillRoots`, which cannot be asserted here without depending on
+		 * which skills this machine happens to have installed.
+		 */
+		it("reads the instructions from the control repository, not the corpus root", async () => {
+			const live = await resolveCorpusSource(undefined);
+
+			expect(resolveCorpusFile(live, "CLAUDE.md")).toBe(
+				join(CONTROL_DIR, "CLAUDE.md"),
+			);
+			expect(resolveCorpusFile(live, "CLAUDE.md")).not.toStartWith(live.root);
+		});
+
+		it("answers over a runs directory holding no run, reaching no skill", async () => {
+			const runsDirectory = await temporaryDirectory("rehearsal-stale-live-");
+
+			const stale = await staleCheckpoints(
+				runsDirectory,
+				await resolveCorpusSource(undefined),
+			);
+
+			expect(stale).toEqual([]);
+		});
 	});
 
 	describe("when the corpus holds no CLAUDE.md", () => {
@@ -101,11 +139,11 @@ describe(staleCheckpoints.name, () => {
 		it("names every checkpoint the recorded model no longer matches", async () => {
 			const fixture = await writtenFixture();
 			const corpus = await corpusDirectory("build skill\n");
-			await fixture.recordCorpusFrom(corpus);
+			await fixture.recordCorpusFrom(directorySource(corpus));
 
 			const stale = await staleCheckpoints(
 				fixture.runsDirectory,
-				{ kind: "directory", root: corpus },
+				directorySource(corpus),
 				{ model: "opus" },
 			);
 
@@ -121,11 +159,11 @@ describe(staleCheckpoints.name, () => {
 		it("names every checkpoint the recorded effort no longer matches", async () => {
 			const fixture = await writtenFixture();
 			const corpus = await corpusDirectory("build skill\n");
-			await fixture.recordCorpusFrom(corpus);
+			await fixture.recordCorpusFrom(directorySource(corpus));
 
 			const stale = await staleCheckpoints(
 				fixture.runsDirectory,
-				{ kind: "directory", root: corpus },
+				directorySource(corpus),
 				{ effort: "high" },
 			);
 
@@ -168,10 +206,10 @@ describe(staleCases.name, () => {
 			await styleCorpus("the brief style\n"),
 		);
 
-		const report = await staleCases(runsDirectory, {
-			kind: "directory",
-			root: await styleCorpus("the brief style, edited\n"),
-		});
+		const report = await staleCases(
+			runsDirectory,
+			directorySource(await styleCorpus("the brief style, edited\n")),
+		);
 
 		expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
 		expect(report.records.at(0)?.causes).toEqual([
@@ -183,10 +221,7 @@ describe(staleCases.name, () => {
 		const corpus = await styleCorpus("the brief style\n");
 		const runsDirectory = await runsWithSmokeAttempt(corpus);
 
-		const report = await staleCases(runsDirectory, {
-			kind: "directory",
-			root: corpus,
-		});
+		const report = await staleCases(runsDirectory, directorySource(corpus));
 
 		expect(report.records).toEqual([]);
 	});
@@ -198,10 +233,10 @@ describe(staleCases.name, () => {
 			const fixture = new RecordedRunsFixture(runsDirectory);
 			await fixture.writeUnreadableAttempt("smoke", HALF_WRITTEN_UUID);
 
-			const report = await staleCases(runsDirectory, {
-				kind: "directory",
-				root: await styleCorpus("the brief style, edited\n"),
-			});
+			const report = await staleCases(
+				runsDirectory,
+				directorySource(await styleCorpus("the brief style, edited\n")),
+			);
 
 			expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
 			expect(report.unreadable.map(({ id }) => id)).toEqual([
@@ -220,10 +255,10 @@ describe(staleCases.name, () => {
 			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-unread-"));
 			roots.push(root);
 
-			const report = await staleCases(root, {
-				kind: "directory",
-				root: await styleCorpus("the brief style\n"),
-			});
+			const report = await staleCases(
+				root,
+				directorySource(await styleCorpus("the brief style\n")),
+			);
 
 			expect(report.unreadable.map(({ id }) => id)).toEqual([
 				"case:zz-stale-probe",
@@ -236,10 +271,10 @@ describe(staleCases.name, () => {
 			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-none-"));
 			roots.push(root);
 
-			const report = await staleCases(root, {
-				kind: "directory",
-				root: await styleCorpus("the brief style\n"),
-			});
+			const report = await staleCases(
+				root,
+				directorySource(await styleCorpus("the brief style\n")),
+			);
 
 			expect(report.records).toEqual([]);
 		});

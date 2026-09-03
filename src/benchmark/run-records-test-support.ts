@@ -1,12 +1,12 @@
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { z } from "zod";
 import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
 import type { CheckpointRecord } from "./checkpoint";
-import { captureStageCorpus } from "./checkpoint";
-import { hashCorpusFiles } from "./corpus-file";
+import { captureStageCorpus, corpusSkillRoots } from "./checkpoint";
+import type { CorpusRoot } from "./corpus-file";
+import { hashCorpusFiles, resolveCorpusFile } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import { confirmationGroupRecordSchema } from "./confirmation-record";
 import type { ConfirmationGroupRecord } from "./confirmation-record";
@@ -87,6 +87,15 @@ function manifest(timestamp: string): RunManifest {
 			],
 		},
 	};
+}
+
+/**
+ * A directory in corpus layout, named the way `resolveCorpusSource` names one,
+ * so a test can hand a fixture or a staleness report the same value the
+ * command would have resolved.
+ */
+export function directorySource(root: string): CorpusRoot {
+	return { kind: "directory", root };
 }
 
 export function corpusPath(stage: string): string {
@@ -268,18 +277,21 @@ export class RecordedRunsFixture {
 
 	/**
 	 * Re-records every checkpoint's corpus files by hashing a real corpus
-	 * directory through `captureStageCorpus`, so a staleness observation
-	 * compares what the harness records against what it would record today
-	 * rather than against a digest this fixture made up.
+	 * through the same resolver and roots `stale` reads it by, so a staleness
+	 * observation compares what the harness records against what it would
+	 * record today rather than against a digest this fixture made up. Taking a
+	 * corpus root rather than a directory path is what lets the live install be
+	 * recorded against too.
 	 */
-	public async recordCorpusFrom(corpusRoot: string): Promise<void> {
+	public async recordCorpusFrom(source: CorpusRoot): Promise<void> {
 		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
-		const instructions = await Bun.file(join(corpusRoot, "CLAUDE.md")).text();
+		const instructions = await Bun.file(
+			resolveCorpusFile(source, "CLAUDE.md"),
+		).text();
+		const roots = corpusSkillRoots(source);
 
 		for (const stage of this.stages) {
-			const corpusFiles = await captureStageCorpus(stage, instructions, [
-				join(corpusRoot, "skills"),
-			]);
+			const corpusFiles = await captureStageCorpus(stage, instructions, roots);
 			const directory = paths.checkpointDirectory(stage);
 			await Bun.write(
 				checkpointRecordFile(directory),
