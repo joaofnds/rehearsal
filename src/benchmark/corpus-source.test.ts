@@ -158,7 +158,7 @@ describe("rendering a chezmoi corpus source", () => {
 		expect(archive).toEqual([
 			"sh",
 			"-c",
-			`git -C /dotfiles archive HEAD~1 | tar -x -C ${source.sourceDirectory}`,
+			`git -C '/dotfiles' archive 'HEAD~1' | tar -x -C '${source.sourceDirectory}'`,
 		]);
 		expect(apply).toEqual([
 			"chezmoi",
@@ -171,6 +171,25 @@ describe("rendering a chezmoi corpus source", () => {
 			"encrypted,scripts",
 		]);
 		expect(apply?.includes("--verbose")).toBe(false);
+	});
+
+	/**
+	 * The ref is a flag value and the archive needs a pipe, so it reaches a
+	 * shell. Unquoted, `HEAD; rm -rf ~` would run as a second command.
+	 */
+	it("quotes the ref it passes to the shell, so a ref cannot carry a second command", async () => {
+		const fake = runner();
+
+		const source = await rendered("chezmoi:HEAD; touch /tmp/pwned", fake.run);
+		resources.track(source.root);
+		resources.track(source.sourceDirectory);
+
+		const archive = fake.commands
+			.map((recorded) => recorded.command)
+			.find((command) => command[0] === "sh");
+		expect(archive?.[2]).toBe(
+			`git -C '/dotfiles' archive 'HEAD; touch /tmp/pwned' | tar -x -C '${source.sourceDirectory}'`,
+		);
 	});
 
 	it("records the ref's resolved commit rather than the ref string", async () => {

@@ -102,6 +102,16 @@ async function directorySource(source: string): Promise<DirectoryCorpusSource> {
 	return { kind: "directory", root };
 }
 
+/**
+ * The archive needs a pipe, so it goes through a shell, and the ref is a flag
+ * value: unquoted, `HEAD; rm -rf ~` would run as a second command. Single
+ * quotes make a POSIX shell take every byte literally, and the only byte that
+ * can end them is a quote itself.
+ */
+function shellQuoted(value: string): string {
+	return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 function scratchDirectory(prefix: string): Promise<string> {
 	return mkdtemp(join(tmpdir(), prefix));
 }
@@ -130,7 +140,7 @@ async function renderChezmoi(
 			[
 				"sh",
 				"-c",
-				`git -C ${dotfilesDirectory} archive ${ref} | tar -x -C ${sourceDirectory}`,
+				`git -C ${shellQuoted(dotfilesDirectory)} archive ${shellQuoted(ref)} | tar -x -C ${shellQuoted(sourceDirectory)}`,
 			],
 			tmpdir(),
 		);
