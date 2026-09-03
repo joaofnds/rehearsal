@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
 import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
 import type { SessionSettings } from "#benchmark/claude";
@@ -197,8 +196,6 @@ export async function runSessionDebugAttempt(
 	);
 	const corpusFiles = corpus.files;
 	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
-
-	await mkdir(recordDirectory, { recursive: true });
 
 	const startedAt = Date.now();
 	const attempt = await attempted({

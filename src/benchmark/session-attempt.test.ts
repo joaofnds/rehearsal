@@ -4,6 +4,7 @@ import {
 	mkdtemp,
 	readdir,
 	realpath,
+	rm,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -618,6 +619,30 @@ describe(runSessionAttempt.name, () => {
 		expect(failure).toBeInstanceOf(SessionInputError);
 		expect(failure.message).toBe(
 			`Case probe declares transcript prefix.jsonl at ${declared}, but ${prefix.path} hashes ${prefix.sha256}`,
+		);
+	});
+
+	it("refuses a declared transcript prefix that is not on disk, naming the case and the file, before any provider call", async () => {
+		const prefix = await writtenPrefix(
+			`${transcriptLine(SOURCE_SESSION, "bytes that will not be there")}\n`,
+		);
+		await rm(prefix.path);
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					sessionCase: resumingCase(prefix.path, prefix.sha256),
+					projectsDirectory: await projectsRoot(),
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.reject(new Error("a provider call must not happen")),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInputError);
+		expect(failure.message).toBe(
+			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. The prefix bytes are git-ignored run state; recapture them with \`rehearsal case capture\`.`,
 		);
 	});
 

@@ -154,12 +154,23 @@ export class SessionInputError extends Error {
  * is what turns that claim into a precondition: an attempt either resumes the
  * bytes the case was captured from or it refuses, before the provider is paid
  * to read them.
+ *
+ * A prefix that is absent is the same refusal, not a filesystem error. A fresh
+ * clone has every committed case declaration and none of the git-ignored bytes
+ * they name, so absence is the ordinary state there, and the message says how
+ * to get the bytes back.
  */
 async function verifiedPrefix(
 	sessionCase: SessionCase,
 	transcriptPath: string,
 	declared: TranscriptPrefix,
 ): Promise<void> {
+	if (!(await Bun.file(transcriptPath).exists())) {
+		throw new SessionInputError(
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. The prefix bytes are git-ignored run state; recapture them with \`rehearsal case capture\`.`,
+		);
+	}
+
 	const hasher = new Bun.CryptoHasher("sha256");
 	for await (const chunk of Bun.file(transcriptPath).stream()) {
 		hasher.update(chunk);
