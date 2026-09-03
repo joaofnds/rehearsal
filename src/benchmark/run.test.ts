@@ -36,6 +36,7 @@ import type {
 import {
 	buildFailedJudgeRunArtifact,
 	finishGradedRun,
+	pauseForFailureInspection,
 	pausesOnFailure,
 	buildRunManifest,
 	buildRunArtifact,
@@ -1825,6 +1826,60 @@ describe(pausesOnFailure.name, () => {
 			expect(pausesOnFailure(pause, stageFailureCalibrated)).toBe(stops);
 		},
 	);
+});
+
+describe(pauseForFailureInspection.name, () => {
+	it("asks the reviewer to inspect the target before it is restored", async () => {
+		const asked: string[] = [];
+		const reported: string[] = [];
+
+		await pauseForFailureInspection(
+			{
+				question: (prompt) => {
+					asked.push(prompt);
+
+					return Promise.resolve("");
+				},
+			},
+			"/tmp/target",
+			(message) => {
+				reported.push(message);
+			},
+		);
+
+		expect(asked).toEqual([
+			"The run failed. Inspect /tmp/target if useful, then press Enter to restore the target.",
+		]);
+		expect(reported).toEqual([]);
+	});
+
+	/**
+	 * A terminal closed mid-run, on SIGHUP, makes the prompt throw
+	 * ERR_USE_AFTER_CLOSE. Left bare, that error propagates in place of the
+	 * failure that got the run here, so the reason the run failed is lost.
+	 */
+	it("restores without the prompt when stdin has closed, keeping the run's own failure", async () => {
+		const reported: string[] = [];
+
+		const settled = pauseForFailureInspection(
+			{
+				question: () =>
+					Promise.reject(
+						new Error("readline was closed [ERR_USE_AFTER_CLOSE]"),
+					),
+			},
+			"/tmp/target",
+			(message) => {
+				reported.push(message);
+			},
+		);
+
+		expect(settled).resolves.toBeUndefined();
+		await settled;
+		expect(reported).toEqual([
+			"No interactive stdin; restoring the target now.",
+		]);
+	});
 });
 
 describe(finishGradedRun.name, () => {

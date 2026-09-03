@@ -351,6 +351,28 @@ export function pausesOnFailure(
 }
 
 /**
+ * The stop a failed run makes so the reviewer can inspect the target before it
+ * is restored. It is best effort: a terminal that closed mid-run, on SIGHUP,
+ * makes the prompt throw, and that error would otherwise propagate in place of
+ * the failure that got the run here. The restore then proceeds either way,
+ * because holding the target for a reviewer who is not there is the worse
+ * outcome.
+ */
+export async function pauseForFailureInspection(
+	rl: Questioner,
+	targetDir: string,
+	report: (message: string) => void,
+): Promise<void> {
+	try {
+		await rl.question(
+			`The run failed. Inspect ${targetDir} if useful, then press Enter to restore the target.`,
+		);
+	} catch {
+		report("No interactive stdin; restoring the target now.");
+	}
+}
+
+/**
  * What a run does once the final Judge has spoken, and the one place the two
  * paths differ. With `--pause` the reviewer is still holding the target, so
  * the run calibrates and completes the artifact. Without it the artifact stays
@@ -1065,9 +1087,7 @@ export async function runBenchmark(
 		console.error(message);
 		await abort.markAborted(message);
 		if (pausesOnFailure(config.pause, stageFailureCalibrated)) {
-			await rl.question(
-				`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
-			);
+			await pauseForFailureInspection(rl, source.root, console.error);
 		}
 		throw error;
 	} finally {
