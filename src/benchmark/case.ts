@@ -25,6 +25,15 @@ const caseIdSchema = z
 		"must be lowercase letters, digits, or dashes",
 	);
 
+/**
+ * A case id names a directory under `cases/`, so every route into a case —
+ * the declaration parser, `case show`, and a `case:` record id — asks this one
+ * question rather than each deciding for itself what a case id is.
+ */
+export function isCaseId(text: string): boolean {
+	return caseIdSchema.safeParse(text).success;
+}
+
 const caseRelativePathSchema = z.string().min(1);
 
 export const transcriptPrefixSchema = z
@@ -172,7 +181,7 @@ export async function readCaseDeclaration(
 	id: string,
 	root: string = casesRoot(),
 ): Promise<CaseDeclaration> {
-	if (!caseIdSchema.safeParse(id).success) {
+	if (!isCaseId(id)) {
 		throw new CaseDeclarationError(
 			`Unknown case ${id}: a case id is lowercase letters, digits, or dashes`,
 		);

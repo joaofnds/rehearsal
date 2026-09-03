@@ -83,6 +83,25 @@ describe(parseRecordId.name, () => {
 		});
 	});
 
+	describe("when a case id is not a case id", () => {
+		it.each(["case:Some Weird Name", "case:UPPER", "case:-leading-dash"])(
+			"refuses %s the way case show refuses the same mistake",
+			(text) => {
+				expect(() => parseRecordId(text)).toThrow(UsageError);
+				expect(() => parseRecordId(text)).toThrow(
+					/lowercase letters, digits, or dashes/u,
+				);
+			},
+		);
+
+		it("accepts the case ids this repository declares", () => {
+			expect(parseRecordId("case:audit-log")).toEqual({
+				kind: "case",
+				caseId: "audit-log",
+			});
+		});
+	});
+
 	describe("when a known prefix carries the wrong body", () => {
 		it("names the form that prefix takes", () => {
 			expect(() => parseRecordId("checkpoint:only-one-part")).toThrow(

@@ -1,3 +1,4 @@
+import { isCaseId } from "#benchmark/case";
 import { unhandled } from "#benchmark/contracts";
 import { UsageError } from "#cli/commands";
 
@@ -104,6 +105,23 @@ function segment(id: IdBody): string {
 	return confined(id, id.body);
 }
 
+/**
+ * A `case:` id names a directory under `cases/`, so it answers to what a case
+ * id is rather than only to confinement: `case show` refuses the same mistake
+ * with the same sentence, and an id `show` accepts must be one `case show`
+ * would have accepted.
+ */
+function caseSegment(id: IdBody): string {
+	const caseId = segment(id);
+	if (!isCaseId(caseId)) {
+		throw new UsageError(
+			`Record id ${id.given} names no case: a case id is lowercase letters, digits, or dashes`,
+		);
+	}
+
+	return caseId;
+}
+
 function twoSegments(id: IdBody): readonly [string, string] {
 	const parts = id.body.split("/");
 	const [first, second] = parts;
@@ -168,7 +186,7 @@ export function parseRecordId(text: string): RecordId {
 		case "case": {
 			return {
 				kind: "case",
-				caseId: segment({ given: text, form: "case:<id>", body }),
+				caseId: caseSegment({ given: text, form: "case:<id>", body }),
 			};
 		}
 		case "run": {
