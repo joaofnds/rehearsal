@@ -278,7 +278,7 @@ function revisedGrades(calibration: Readonly<CalibrationResult>): string {
 export interface JudgeKnobs {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
-	readonly sessionBudgetUsd: number;
+	readonly sessionBudgetUsd?: number | undefined;
 }
 
 export interface CalibrateJudges {
@@ -290,15 +290,30 @@ export interface CalibrateJudges {
  * A rejudge runs under the model, effort, and budget the original Judge ran
  * under, which the record carries. The agreement baseline is keyed on the exact
  * Judge model, so a rejudge under a different one would start a new baseline
- * instead of adding to the run's.
+ * instead of adding to the run's, and running at the provider's default effort
+ * rather than the recorded one would compare two Judges rather than two
+ * rubrics.
+ *
+ * A record written before the budget was recorded has none, so the rejudge it
+ * would need is refused rather than run at a limit nobody set.
  */
 export function judgesFor(knobs: Readonly<JudgeKnobs>): CalibrateJudges {
+	const budget = (): number => {
+		if (knobs.sessionBudgetUsd === undefined) {
+			throw new RefusedPreconditionError(
+				"This run recorded no session budget, so its evidence cannot be rejudged under the limit it ran with; calibrate it against the rubrics it froze",
+			);
+		}
+
+		return knobs.sessionBudgetUsd;
+	};
+
 	return {
 		stageJudge: (scorecard, source) =>
 			runStageJudge(
 				knobs.judgeModel,
 				knobs.judgeEffort,
-				knobs.sessionBudgetUsd,
+				budget(),
 				scorecard.input,
 				source,
 			),
@@ -306,7 +321,7 @@ export function judgesFor(knobs: Readonly<JudgeKnobs>): CalibrateJudges {
 			runJudge(
 				knobs.judgeModel,
 				knobs.judgeEffort,
-				knobs.sessionBudgetUsd,
+				budget(),
 				rubric,
 				candidate.baselineContext,
 				candidate.diff,
@@ -314,6 +329,19 @@ export function judgesFor(knobs: Readonly<JudgeKnobs>): CalibrateJudges {
 				candidate.checkIntegrity,
 				candidate.localChecks,
 			),
+	};
+}
+
+/**
+ * The knobs the rejudge runs under, taken off whichever record the run left.
+ * Passed as themselves rather than as the record they came from, so a field
+ * the record happens to share a name with cannot reach the Judge.
+ */
+function judgeKnobsOf(record: Readonly<CalibratableRecord>): JudgeKnobs {
+	return {
+		judgeModel: record.record.judgeModel,
+		judgeEffort: record.record.judgeEffort,
+		sessionBudgetUsd: record.record.sessionBudgetUsd,
 	};
 }
 
@@ -342,7 +370,7 @@ export async function runCalibrate(
 	const frozen = frozenEvidence(record);
 	const current = await currentSources(request, frozen, recordedCaseId(record));
 
-	const judges = buildJudges(record.record);
+	const judges = buildJudges(judgeKnobsOf(record));
 	const calibration = await reportIncomplete(output, () =>
 		calibrate(frozen, current, review, {
 			stageJudge: judges.stageJudge,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { CalibrationIncompleteError } from "#benchmark/calibration";
 import { calibratableArtifactSchema } from "#benchmark/calibration-record";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
-import type { CurrentControlSources } from "#cli/calibrate-command";
+import type { CurrentControlSources, JudgeKnobs } from "#cli/calibrate-command";
 import { runCalibrate } from "#cli/calibrate-command";
 import {
 	FINAL_RUBRIC,
@@ -348,6 +348,76 @@ describe(runCalibrate.name, () => {
 		expect(record.calibration.stageRubricsChanged).toEqual(["discuss"]);
 		expect(record.judgeAgreement.skippedCalibrations).toBe(0);
 		expect(stdout).toEqual([`${fixture.stageFile}\n`]);
+	});
+
+	it("rejudges a stopped stage under the Judge knobs the record froze", async () => {
+		const fixture = await writeStoppedStageFixture();
+		directories.push(fixture.runsDirectory);
+		await Bun.write(
+			fixture.stageRubricPath,
+			stageRubricText("Scope is explicit and observable"),
+		);
+		await writeReview(fixture.reviewFile, [MISSED_SCOPE]);
+		const { output } = recordOutput();
+		const knobs: JudgeKnobs[] = [];
+
+		await runCalibrate(
+			{
+				id: RUN_NAME,
+				runsDirectory: fixture.runsDirectory,
+				json: false,
+				confirmRejudge: true,
+				readCurrentSources: unchangedControlSources,
+			},
+			(recorded) => {
+				knobs.push(recorded);
+
+				return rejudgingStage()(recorded);
+			},
+			output,
+		);
+
+		expect(knobs).toEqual([
+			{ judgeModel: "sonnet", judgeEffort: "medium", sessionBudgetUsd: 5 },
+		]);
+	});
+
+	/**
+	 * A stage record written before this card carries the Judge's model but
+	 * neither its effort nor the session budget. It still calibrates: a record
+	 * the command cannot parse is a record it reports as absent, and the
+	 * evidence in it was paid for.
+	 */
+	it("calibrates a stage record written without the Judge knobs", async () => {
+		const fixture = await writeStoppedStageFixture({ judgeModel: "sonnet" });
+		directories.push(fixture.runsDirectory);
+		await writeReview(fixture.reviewFile, []);
+		const { output } = recordOutput();
+
+		await runCalibrate(
+			{
+				id: RUN_NAME,
+				runsDirectory: fixture.runsDirectory,
+				json: false,
+				confirmRejudge: false,
+				readCurrentSources: unchangedControlSources,
+			},
+			() => ({
+				stageJudge: () => Promise.reject(new Error("no provider call")),
+				finalJudge: () => Promise.reject(new Error("no provider call")),
+			}),
+			output,
+		);
+
+		const record = z
+			.object({
+				calibration: z.object({ stageRubricsChanged: z.array(z.string()) }),
+				judgeAgreement: z.object({ skippedCalibrations: z.number() }),
+			})
+			.loose()
+			.parse(JSON.parse(await Bun.file(fixture.stageFile).text()));
+		expect(record.calibration.stageRubricsChanged).toEqual([]);
+		expect(record.judgeAgreement.skippedCalibrations).toBe(0);
 	});
 
 	/**

@@ -684,6 +684,8 @@ export async function runGradedStages(
 			corpusFiles,
 			model: context.model,
 			judgeModel: context.judgeModel,
+			judgeEffort: context.judgeEffort,
+			sessionBudgetUsd: context.sessionBudgetUsd,
 			effort: context.effort,
 		};
 		const writeStageRecord =

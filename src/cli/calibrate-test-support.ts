@@ -1,7 +1,8 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { StageScorecard } from "#benchmark/contracts";
+import type { Effort } from "#benchmark/config";
+import type { StageJudgeRecord, StageScorecard } from "#benchmark/contracts";
 import { benchmarkRunPaths } from "#benchmark/run-layout";
 import { parseStageRubric } from "#benchmark/stage-grading";
 
@@ -187,12 +188,31 @@ export async function writeRunFixture(
 }
 
 /**
+ * How the Judge ran, as the stage record carries it. A record written before
+ * the effort and the budget were recorded carries only the model, so a test
+ * that means to read one passes those knobs alone.
+ */
+export interface StageJudgeKnobs {
+	readonly judgeModel: string;
+	readonly judgeEffort?: Effort | undefined;
+	readonly sessionBudgetUsd?: number | undefined;
+}
+
+export const RECORDED_JUDGE_KNOBS: StageJudgeKnobs = {
+	judgeModel: "sonnet",
+	judgeEffort: "medium",
+	sessionBudgetUsd: 5,
+};
+
+/**
  * A run that stopped at a stage: no artifact, only the stage's own record,
  * written by `writeStageProgress` with the scorecard's STOP verdict and no
  * calibration. `calibrate` picks the record it completes from what the run
  * left on disk, so this fixture is what makes it pick the stage.
  */
-export async function writeStoppedStageFixture(): Promise<RunFixture> {
+export async function writeStoppedStageFixture(
+	judgeKnobs: Readonly<StageJudgeKnobs> = RECORDED_JUDGE_KNOBS,
+): Promise<RunFixture> {
 	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
 	const stageRubricPath = join(runsDirectory, "discuss.json");
 	await Bun.write(stageRubricPath, stageRubricText("Scope is explicit"));
@@ -200,13 +220,14 @@ export async function writeStoppedStageFixture(): Promise<RunFixture> {
 	const scorecard = stageScorecard(stageRubricPath, "PASS", "STOP");
 	await Bun.write(
 		paths.stageFile("discuss"),
+		// JSON.stringify drops an absent budget, which is the pre-card shape.
 		JSON.stringify({
 			...scorecard,
 			corpusFiles: [],
 			model: "sonnet",
-			judgeModel: "sonnet",
-			sessionBudgetUsd: 5,
-		}),
+			effort: "medium",
+			...judgeKnobs,
+		} satisfies Omit<StageJudgeRecord, "sessionBudgetUsd"> & StageJudgeKnobs),
 	);
 
 	return {

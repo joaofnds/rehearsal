@@ -439,6 +439,7 @@ describe(createRunAbort.name, () => {
 			corpusFiles: [],
 			model: "sonnet",
 			judgeModel: "opus",
+			sessionBudgetUsd: 5,
 		});
 		await Promise.all([abortWrite, completionWrite]);
 
@@ -477,6 +478,7 @@ describe(createRunAbort.name, () => {
 			corpusFiles: [],
 			model: "sonnet",
 			judgeModel: "opus",
+			sessionBudgetUsd: 5,
 		});
 		const abortWrite = abort.markAborted("run interrupted");
 		blocked.release();

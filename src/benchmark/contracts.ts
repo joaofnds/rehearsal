@@ -365,6 +365,8 @@ export interface StageJudgeRecord extends StageScorecard {
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
 	readonly judgeModel: string;
+	readonly judgeEffort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
 	readonly effort?: Effort | undefined;
 	readonly calibration?: CalibrationResult | undefined;
 	readonly judgeAgreement?: JudgeAgreementReport | undefined;

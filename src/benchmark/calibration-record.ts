@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { effortSchema } from "./config";
 import type { Immutable } from "./contracts";
 import {
 	evidenceSchema,
@@ -15,11 +16,16 @@ import {
  * a rejudge is applied to, and the knobs the Judges ran under. Loose at the
  * top level, because the artifact carries far more than this and a reader that
  * refused the rest would refuse every artifact a later card adds a field to.
+ *
+ * The effort and the budget are optional because a stage record written before
+ * they were recorded carries neither, and its evidence was still paid for. A
+ * rejudge needs a budget and refuses when the record has none; a calibration
+ * that rejudges nothing needs neither.
  */
 const judgeKnobsSchema = z.object({
 	judgeModel: z.string().min(1),
-	judgeEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
-	sessionBudgetUsd: z.number().positive(),
+	judgeEffort: effortSchema.optional(),
+	sessionBudgetUsd: z.number().positive().optional(),
 });
 
 const localCheckResultSchema = z.object({
