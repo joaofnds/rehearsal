@@ -514,5 +514,159 @@ criterion 23's test covers it).
 
 ### Running cost
 
-This dispatch's paid work: **USD 0.13**, two sealed Judge calls, against the
-USD 2.00 observation cap.
+The Build dispatch's paid work: **USD 0.13**, two sealed Judge calls, against
+the USD 2.00 observation cap. The review-fix dispatch below added USD 0.00.
+
+## Review fixes, dispatch of 2026-09-03
+
+Sixteen findings from the review, each in its own commit, test first wherever a
+test could pin it. No provider call was made: **USD 0.00** this dispatch. Every
+verification claim below names the command whose output showed it.
+
+### What was fixed, and the commit for each
+
+| Finding | Commit | What the fix does |
+|---|---|---|
+| 1 (blocking) | `d923149` | `calibrate` can read the stopped-stage record a run writes |
+| 2 (blocking) | `46601ed` | a signal during the no-pause restore no longer fails the graded artifact |
+| 3 (blocking) | `224e1f4` | an unreadable case is refused, not recorded as "rubric unchanged" |
+| 4 | `48937fc` | an unreadable stage rubric is refused, matching the pause path |
+| 5 | `d5e00d4` | `calibrate` completes the artifact through `completeRunArtifact` |
+| 6 | `63aa357` | `--checkout` tells a missing ref from an unreadable repository |
+| 7 | `9c7c0a1` | the double rejudge is recorded as a deliberate cost, with its reason |
+| 8 | `0ddf33b` | boundary JSON reads name the file at exit 2 instead of exit 1 |
+| 9 | `b9ed40a` | the dead `--confirm-rejudge` entry leaves `SWITCH_FLAGS` |
+| 10 | `af2560e` | `contextFileSchema` and `localCheckResultSchema` stated once |
+| 11 | `84ec85d` | one name per stage-shape schema; the loose one is `gradedStageSchema` |
+| 12 | `ab5c854` | nested schemas are loose, so a later card's field is not deleted |
+| 14 | `ab48124` | the run stops printing and documenting a review file it never writes |
+| 15 | `1fbedd5` | the failure pause degrades again when stdin closed mid-run |
+| 16 | `4e20333` | `addWorktree`'s second parameter is `committish` |
+| 17 | `5837f8c` | the `--checkout` worktree is removed through tracked resources |
+
+### What proves findings 1, 2, and 3
+
+Each new test was watched fail against the old behavior, and the mutation that
+restores the old behavior was run to confirm the test catches it.
+
+1. **Finding 1.** `writeStoppedStageFixture` now writes exactly what
+   `runGradedStages` builds. Against the old schema,
+   `bun test src/cli/calibrate-command.test.ts` failed with
+   `RefusedPreconditionError: No run 2026-09-03T00-00-00.000Z awaiting
+   calibration` — criterion 5's own scenario, where paid evidence is
+   unreachable. Reverting `sessionBudgetUsd` to required afterwards fails
+   "calibrates a stage record written without the Judge knobs"; reverting
+   `buildJudges(judgeKnobsOf(record))` to `buildJudges(record.record)` fails
+   "rejudges a stopped stage under the Judge knobs the record froze".
+2. **Finding 2.** "leaves an artifact awaiting review alone when a signal
+   arrives" fires the registered SIGINT handler over `fileRunArtifactPersistence`.
+   With the `awaitArtifactReview` call removed, the assertion diff is
+   `- "status": "AWAITING_HUMAN_REVIEW"` / `+ "status": "FAILED"`: the defect
+   observed directly. Swapping the retention ref ahead of the seam fails
+   "pins the candidate under refs/rehearsal and asks nothing without a pause",
+   so the ordering is pinned too.
+3. **Finding 3.** Restoring `.catch(() => frozenRubric)` fails three tests:
+   "refuses a case that is not there", "refuses a case that declares no final
+   rubric", and "refuses a run whose case cannot be read". The third runs
+   through `runCalibrate` with no `readCurrentSources` seam, so the production
+   reader executes.
+
+### Finding 13, answered
+
+`readControlSources` is exported and has four tests of its own, and one
+`runCalibrate` test omits the `readCurrentSources` seam so the production
+reader runs end to end. They read the repository's committed cases:
+`audit-log` for a readable final rubric, `smoke` for a case that declares
+none, and an id that is not there. No provider call, no fixture case
+directory. The finding-3 fix is not left as unprotected as the defect was.
+
+`readCurrentSources` itself remains a test-only seam on the production request
+type, set in eleven places all in the test file. It is now bypassed by at least
+one test rather than by none, but the seam is still a production field only
+tests write. Removing it is a separate change and is not made here.
+
+### Finding 18, recorded
+
+`--checkout` runs `git worktree add` with `cwd` set to the artifact's
+`sourceRoot`, so a hostile artifact could name a repository whose
+`post-checkout` hook then runs. Not an escalation: writing that artifact
+already requires local write access to the runs directory, and no shell is
+involved (`Bun.spawn` takes an argv array). Recorded because `sourceRoot` is
+the one field this change carries from a file into a process's working
+directory. Finding 6's fix touches the same path and does not widen it: it
+only tells apart two ways the `git` call can fail.
+
+### Decided autonomously
+
+Nobody was available during this dispatch. Each follows the dispatch's decision
+policy and is reversible.
+
+1. **The stage record carries `judgeEffort` and `sessionBudgetUsd`, written by
+   the run; the schema accepts a record without them.** A faithful rejudge
+   needs the Judge's own effort, not the workflow's `effort` the record already
+   held, and the budget it ran under; the artifact already carries both, so the
+   stage record now matches it. Both are optional in the schema because a
+   record written before them still holds evidence that was paid for, and a
+   record the reader refuses is one it reports as absent — the very defect
+   finding 1 names. A rejudge that would need a missing budget is refused where
+   the budget is needed, rather than the whole record being invisible.
+2. **An unreadable stage rubric is refused (finding 4), not recorded as
+   unchanged.** The doc comment called the old behavior deliberate, but it made
+   `calibrate` write a COMPLETE calibration claiming a rubric did not change
+   over a file it could not open, while `--pause` re-prompts for the same read.
+   One rule for both rubric reads, and both paths now agree about the recorded
+   result. This left no caller wanting an absent rubric, so `readStageRubrics`
+   returns text rather than text-or-nothing.
+3. **The double rejudge stays, recorded as a deliberate cost (finding 7).**
+   Persisting revised grades between invocations would need a new record kind,
+   its schema, a staleness rule, and a cleanup path — a card, not a directed
+   fix. It would also be wrong: each invocation reads the rubrics and
+   instructions as they stand then, so a cached grade would let a caller
+   confirm a result the current corpus no longer produces, which is what the
+   confirmation exists to prevent. The refusal message and the README now say
+   the second invocation rejudges again.
+4. **`judge-agreement`'s scorecard schema is renamed rather than unified
+   (finding 11).** The two `stageGradeSchema` were byte-identical, so that one
+   is imported. The two `stageScorecardSchema` were not: contracts' is strict
+   over eight fields, judge-agreement's loose over three. They are two concepts,
+   so the loose one is named for what it reads, `gradedStageSchema`, and says
+   why it stays loose. Forcing one definition would have made the agreement
+   report refuse every stage file a later card adds a field to.
+5. **`completeRunArtifact` became generic over its artifact (finding 5).** The
+   command parses a loose `CalibratableArtifact`, not a `GradedRunArtifact`, so
+   reusing the function needed either a cast or a type parameter. The type
+   parameter keeps the status literal in the return type, which is what makes a
+   typo a compile error — verified by introducing `"COMPLTE"` and reading
+   `TS2322: Type '"COMPLTE"' is not assignable to type '"COMPLETE"'`.
+6. **`refExists` discriminates on git's exit code (finding 6).** Observed
+   directly rather than recalled: `git rev-parse --verify --quiet` exits 1 for a
+   name that resolves to nothing, 128 for a missing directory and for a
+   directory holding no repository. Exit 1 is the answer; anything else is
+   raised, and `--checkout` turns it into a refusal naming the recorded path.
+
+### What was not verified
+
+- **No end-to-end run.** No provider call was made, so no artifact was produced
+  by a real pipeline. Findings 1 and 2 are proven over fixtures and fake
+  persistence, which is where the defects live; the run-level wiring
+  (`runBenchmark`'s catch block, the `Human review:` print) is covered by the
+  extracted functions' tests and by reading, not by a live run.
+- **The `Human review:` line itself.** The print now sits behind
+  `if (config.pause)`. Reaching it needs a full graded run, so it is verified by
+  reading, not observed.
+- **`--checkout` against a repository whose `post-checkout` hook runs.** Finding
+  18 is recorded, not tested.
+
+### Suite state
+
+Working tree, this dispatch: `bun run typecheck` exit 0, `bun run lint` exit 0,
+`bun run fmt:check` exit 0, `bun test` exit 0 with 995 pass and 0 fail across 65
+files (up from 974 pass; 21 tests added).
+
+Fresh clone of this commit into a temporary directory, after
+`bun install --frozen-lockfile`: typecheck, lint, and fmt:check each exit 0.
+`bun test` on the first run has exactly the five expected pre-existing failures
+(four `compare` ENOENT and the one `loadCase` target test), 990 pass. A second
+run in the same clone has one failure, the `loadCase` one: the four `compare`
+failures need `.benchmark-runs/comparisons` to exist, and the first run creates
+it. No sixth failure was added and none of the five was fixed.
