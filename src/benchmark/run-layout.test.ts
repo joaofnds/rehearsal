@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
+	checkpointRecordFile,
 	comparisonDigests,
 	confirmationGroupIds,
 	confirmationGroupPaths,
@@ -13,6 +14,7 @@ import {
 	runNameFromCheckpointsEntry,
 	runNameFromTimestamp,
 	sessionAttemptIds,
+	sessionAttemptPaths,
 } from "./run-layout";
 
 describe(benchmarkRunPaths.name, () => {
@@ -137,6 +139,49 @@ describe(confirmationGroupPaths.name, () => {
 		);
 		expect(rep.checkpointDirectory("build")).toBe(
 			join(paths.repsDirectory, "group-1-rep-2", "checkpoints", "build"),
+		);
+	});
+});
+
+describe(sessionAttemptPaths.name, () => {
+	it("assigns one durable path to a session attempt's record and corpus", () => {
+		const paths = sessionAttemptPaths(benchmarkRunsDirectory("/control"), {
+			caseId: "smoke",
+			uuid: "uuid-1",
+		});
+
+		expect(paths).toEqual({
+			directory: join(
+				"/control",
+				".benchmark-runs",
+				"sessions",
+				"smoke",
+				"uuid-1",
+			),
+			recordFile: join(
+				"/control",
+				".benchmark-runs",
+				"sessions",
+				"smoke",
+				"uuid-1",
+				"attempt.json",
+			),
+			corpusDirectory: join(
+				"/control",
+				".benchmark-runs",
+				"sessions",
+				"smoke",
+				"uuid-1",
+				"corpus",
+			),
+		});
+	});
+});
+
+describe(checkpointRecordFile.name, () => {
+	it("names the record file inside a checkpoint directory", () => {
+		expect(checkpointRecordFile("/checkpoints/build")).toBe(
+			join("/checkpoints", "build", "checkpoint.json"),
 		);
 	});
 });

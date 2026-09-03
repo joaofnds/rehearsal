@@ -4,6 +4,9 @@ import { join } from "node:path";
 
 const CHECKPOINTS_SUFFIX = ".checkpoints";
 const MANIFEST_FILE = "manifest.json";
+const CHECKPOINT_FILE = "checkpoint.json";
+const ATTEMPT_FILE = "attempt.json";
+const SESSIONS_DIRECTORY = "sessions";
 const RECORD_SUFFIX = ".json";
 
 export interface BenchmarkRunPaths {
@@ -134,6 +137,34 @@ export function confirmationGroupPaths(
 	};
 }
 
+/**
+ * Where one session attempt keeps its record and the corpus snapshot it ran
+ * against. The command that writes an attempt and the three that read one all
+ * come through here, so the layout is stated once and a change to it cannot
+ * leave a reader looking at the old shape.
+ */
+export function sessionAttemptPaths(
+	runsDirectory: string,
+	attempt: SessionAttemptId,
+): SessionAttemptPaths {
+	const directory = join(
+		runsDirectory,
+		SESSIONS_DIRECTORY,
+		attempt.caseId,
+		attempt.uuid,
+	);
+
+	return {
+		directory,
+		recordFile: join(directory, ATTEMPT_FILE),
+		corpusDirectory: join(directory, "corpus"),
+	};
+}
+
+export function checkpointRecordFile(checkpointDirectory: string): string {
+	return join(checkpointDirectory, CHECKPOINT_FILE);
+}
+
 export function comparisonReportPaths(
 	runsDirectory: string,
 	manifestDigest: string,
@@ -191,10 +222,16 @@ export interface SessionAttemptId {
 	readonly uuid: string;
 }
 
+export interface SessionAttemptPaths {
+	readonly directory: string;
+	readonly recordFile: string;
+	readonly corpusDirectory: string;
+}
+
 export async function sessionAttemptIds(
 	runsDirectory: string,
 ): Promise<readonly SessionAttemptId[]> {
-	const sessionsDirectory = join(runsDirectory, "sessions");
+	const sessionsDirectory = join(runsDirectory, SESSIONS_DIRECTORY);
 	const attempts: SessionAttemptId[] = [];
 
 	for (const caseId of await directoryNames(sessionsDirectory)) {

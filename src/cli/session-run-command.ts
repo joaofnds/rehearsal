@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
 import type { SessionSettings } from "#benchmark/claude";
@@ -21,6 +20,7 @@ import {
 	SessionCorpusError,
 	snapshotSessionCorpus,
 } from "#benchmark/session-corpus";
+import { sessionAttemptPaths } from "#benchmark/run-layout";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type {
@@ -181,16 +181,15 @@ export async function runSessionDebugAttempt(
 ): Promise<SessionRunOutcome> {
 	const { sessionCase, config } = request;
 	const settings = settingsOf(config);
-	const recordDirectory = join(
-		request.runsDirectory,
-		"sessions",
-		sessionCase.declaration.id,
-		randomUUID(),
-	);
+	const attemptPaths = sessionAttemptPaths(request.runsDirectory, {
+		caseId: sessionCase.declaration.id,
+		uuid: randomUUID(),
+	});
+	const recordDirectory = attemptPaths.directory;
 	const corpus = await requireCorpus(
 		sessionCase,
 		config.corpus,
-		join(recordDirectory, "corpus"),
+		attemptPaths.corpusDirectory,
 	);
 	const corpusFiles = corpus.files;
 	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
@@ -218,7 +217,7 @@ export async function runSessionDebugAttempt(
 			elapsedMs: Date.now() - startedAt,
 		}),
 	);
-	const recordFile = join(recordDirectory, "attempt.json");
+	const { recordFile } = attemptPaths;
 	await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
 
 	return { recordFile, record };

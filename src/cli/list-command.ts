@@ -1,5 +1,4 @@
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { listCases } from "#benchmark/case";
 import { parseCheckpointRecord } from "#benchmark/checkpoint";
 import { unhandled } from "#benchmark/contracts";
@@ -9,6 +8,7 @@ import { parseRunSummaryRecord } from "#benchmark/record-summary";
 import { readReplayRecord } from "#benchmark/replay";
 import {
 	benchmarkRunPaths,
+	checkpointRecordFile,
 	comparisonDigests,
 	comparisonReportPaths,
 	confirmationGroupIds,
@@ -17,14 +17,13 @@ import {
 	replayAttemptIds,
 	replayRecordFile,
 	sessionAttemptIds,
+	sessionAttemptPaths,
 } from "#benchmark/run-layout";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { UsageError } from "#cli/commands";
 import type { CommandOutput } from "#cli/output";
 import type { RecordId } from "#cli/record-id";
 import { formatRecordId } from "#cli/record-id";
-
-const ATTEMPT_FILE = "attempt.json";
 
 export const LIST_KINDS = [
 	"cases",
@@ -172,7 +171,7 @@ async function listCheckpoints(runsDirectory: string): Promise<RecordListing> {
 			const paths = benchmarkRunPaths(runsDirectory, run);
 			const record = parseCheckpointRecord(
 				await Bun.file(
-					join(paths.checkpointDirectory(stage), "checkpoint.json"),
+					checkpointRecordFile(paths.checkpointDirectory(stage)),
 				).text(),
 			);
 
@@ -228,10 +227,10 @@ async function listAttempts(runsDirectory: string): Promise<RecordListing> {
 	const sessions = await collect(
 		await sessionAttemptIds(runsDirectory),
 		({ caseId, uuid }) => ({ kind: "attempt:session", caseId, uuid }),
-		async ({ caseId, uuid }) => {
+		async (attempt) => {
 			const record = parseSessionAttemptRecord(
 				await Bun.file(
-					join(runsDirectory, "sessions", caseId, uuid, ATTEMPT_FILE),
+					sessionAttemptPaths(runsDirectory, attempt).recordFile,
 				).text(),
 			);
 

@@ -23,14 +23,14 @@ import { replayRecordSchema } from "./replay";
 import type { SessionAttemptId, StageAttemptId } from "./run-layout";
 import {
 	benchmarkRunPaths,
+	checkpointRecordFile,
 	comparisonReportPaths,
 	confirmationGroupPaths,
 	replayRecordFile,
+	sessionAttemptPaths,
 } from "./run-layout";
 
 const CASE_ID = "audit-log";
-const ATTEMPT_FILE = "attempt.json";
-const CHECKPOINT_FILE = "checkpoint.json";
 const CORPUS_DIGEST = "a".repeat(64);
 const COMPARISON_DIGEST = "c".repeat(64);
 
@@ -262,13 +262,8 @@ export class RecordedRunsFixture {
 	}
 
 	public get sessionAttemptFile(): string {
-		return join(
-			this.runsDirectory,
-			"sessions",
-			this.sessionAttempt.caseId,
-			this.sessionAttempt.uuid,
-			ATTEMPT_FILE,
-		);
+		return sessionAttemptPaths(this.runsDirectory, this.sessionAttempt)
+			.recordFile;
 	}
 
 	/**
@@ -287,7 +282,7 @@ export class RecordedRunsFixture {
 			]);
 			const directory = paths.checkpointDirectory(stage);
 			await Bun.write(
-				join(directory, CHECKPOINT_FILE),
+				checkpointRecordFile(directory),
 				serialize({ ...checkpoint(stage, corpusPath(stage)), corpusFiles }),
 			);
 		}
@@ -309,7 +304,7 @@ export class RecordedRunsFixture {
 		);
 		const { uuid } = this.sessionAttempt;
 		await Bun.write(
-			join(this.runsDirectory, "sessions", caseId, uuid, ATTEMPT_FILE),
+			sessionAttemptPaths(this.runsDirectory, { caseId, uuid }).recordFile,
 			serialize(
 				sessionAttemptRecordSchema.parse({
 					...sessionAttempt(caseId),
@@ -363,7 +358,7 @@ export class RecordedRunsFixture {
 			const directory = paths.checkpointDirectory(stage);
 			await mkdir(directory, { recursive: true });
 			await Bun.write(
-				join(directory, CHECKPOINT_FILE),
+				checkpointRecordFile(directory),
 				serialize(checkpoint(stage, corpusPath(stage))),
 			);
 		}

@@ -20,13 +20,12 @@ import { loadRunManifest } from "./manifest";
 import type { RunManifest } from "./manifest";
 import {
 	benchmarkRunPaths,
+	checkpointRecordFile,
 	recordedRunNames,
 	sessionAttemptIds,
+	sessionAttemptPaths,
 } from "./run-layout";
 import { parseSessionAttemptRecord } from "./session-record";
-
-const CHECKPOINT_FILE = "checkpoint.json";
-const ATTEMPT_FILE = "attempt.json";
 
 /**
  * One record an edit invalidated, named by the id `show` accepts back and by
@@ -88,7 +87,7 @@ async function checkpointChain(
 
 	for (const stage of stages) {
 		const file = Bun.file(
-			join(paths.checkpointDirectory(stage), CHECKPOINT_FILE),
+			checkpointRecordFile(paths.checkpointDirectory(stage)),
 		);
 		if (await file.exists()) {
 			chain.push(parseCheckpointRecord(await file.text()));
@@ -165,13 +164,7 @@ async function latestAttemptRecord(
 	for (const attempt of attempts.filter(
 		(candidate) => candidate.caseId === caseId,
 	)) {
-		const file = join(
-			runsDirectory,
-			"sessions",
-			caseId,
-			attempt.uuid,
-			ATTEMPT_FILE,
-		);
+		const { recordFile: file } = sessionAttemptPaths(runsDirectory, attempt);
 		const stats = await stat(file).catch(() => undefined);
 		if (
 			stats !== undefined &&

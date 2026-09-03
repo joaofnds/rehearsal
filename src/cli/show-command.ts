@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { caseDeclarationPath, casesRoot } from "#benchmark/case";
 import { parseComparisonReport } from "#benchmark/comparison-record";
 import { parseConfirmationGroupRecord } from "#benchmark/confirmation-record";
@@ -12,18 +11,17 @@ import {
 } from "#benchmark/record-summary";
 import {
 	benchmarkRunPaths,
+	checkpointRecordFile,
 	comparisonReportPaths,
 	confirmationGroupPaths,
 	replayRecordFile,
+	sessionAttemptPaths,
 } from "#benchmark/run-layout";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import type { RecordId } from "#cli/record-id";
 import { parseRecordId, recordIdForms } from "#cli/record-id";
-
-const CHECKPOINT_FILE = "checkpoint.json";
-const ATTEMPT_FILE = "attempt.json";
 
 function recordFileFor(id: RecordId, runsDirectory: string): string {
 	switch (id.kind) {
@@ -36,10 +34,10 @@ function recordFileFor(id: RecordId, runsDirectory: string): string {
 		case "checkpoint": {
 			const paths = benchmarkRunPaths(runsDirectory, id.run);
 
-			return join(paths.checkpointDirectory(id.stage), CHECKPOINT_FILE);
+			return checkpointRecordFile(paths.checkpointDirectory(id.stage));
 		}
 		case "attempt:session": {
-			return join(runsDirectory, "sessions", id.caseId, id.uuid, ATTEMPT_FILE);
+			return sessionAttemptPaths(runsDirectory, id).recordFile;
 		}
 		case "attempt:stage": {
 			return replayRecordFile(runsDirectory, id.lineage, id.timestamp);
