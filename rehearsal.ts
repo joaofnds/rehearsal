@@ -27,6 +27,9 @@ import {
 	topLevelHelp,
 } from "./src/cli/commands";
 import { EXIT_CODES, exitCodeFor } from "./src/cli/exit-codes";
+import { runList } from "./src/cli/list-command";
+import { runShow } from "./src/cli/show-command";
+import { runStale } from "./src/cli/stale-command";
 import { processOutput } from "./src/cli/output";
 
 function main(): Promise<number> {
@@ -108,6 +111,40 @@ async function dispatch(
 					execute: executeRun,
 					executeSession: executeSessionRun,
 				},
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "list": {
+			await runList(
+				{
+					kind: commandLine.argument,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+				},
+				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "show": {
+			await runShow(
+				{
+					id: commandLine.argument,
+					json: commandLine.json,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+				},
+				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "stale": {
+			await runStale(
+				{
+					corpus: flagValue(commandLine.flags, "--corpus"),
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+				},
+				{ output: processOutput },
 			);
 
 			return EXIT_CODES.completed;

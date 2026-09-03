@@ -175,6 +175,24 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		flags: [jsonFlag],
 	},
 	{
+		name: "list",
+		summary:
+			"List recorded cases, runs, checkpoints, attempts, groups, or comparisons",
+		argument: "cases|runs|checkpoints|attempts|groups|comparisons",
+		flags: [],
+	},
+	{
+		name: "show",
+		summary: "Print one record by its id, as its bytes or as a card summary",
+		argument: "record-id",
+		flags: [jsonFlag],
+	},
+	{
+		name: "stale",
+		summary: "List the checkpoints and session cases a corpus edit invalidated",
+		flags: [corpusFlag],
+	},
+	{
 		name: "case list",
 		summary: "List every declared benchmark case under cases/",
 		flags: [jsonFlag],

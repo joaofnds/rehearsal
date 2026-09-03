@@ -341,3 +341,98 @@ describe("rehearsal", () => {
 		},
 	);
 });
+
+describe("every declared command", () => {
+	/**
+	 * Adding an entry to COMMANDS without a dispatch case fails only at runtime,
+	 * where typecheck, lint, and the suite all stay green. Invoking each declared
+	 * name and refusing the "declared but not wired up" message is the guard.
+	 */
+	it.each(COMMANDS.map((command) => command.name))(
+		"reaches a dispatch case for rehearsal %s",
+		async (name) => {
+			const result = await runCli(name.split(" "));
+
+			expect(result.stderr).not.toContain("declared but not wired up");
+			expect(result.exitCode).not.toBe(1);
+		},
+	);
+});
+
+describe("reading the records", () => {
+	it("prints one line per attempt this repository recorded, ids show accepts back", async () => {
+		const result = await runCli(["list", "attempts"]);
+
+		expect(result.exitCode).toBe(0);
+		const printed = result.stdout.trimEnd().split("\n");
+		expect(printed).toHaveLength(8);
+		for (const line of printed) {
+			expect(line.startsWith("attempt:session:")).toBe(true);
+		}
+		expect(result.stderr.trimEnd().split("\n")).toHaveLength(3);
+	});
+
+	it("shows an attempt list prints, exactly as the record on disk", async () => {
+		const listed = await runCli(["list", "attempts"]);
+		const id = listed.stdout.split("\t")[0] ?? "";
+
+		const result = await runCli(["show", id, "--json"]);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stderr).toBe("");
+		expect(() => {
+			JSON.parse(result.stdout);
+		}).not.toThrow();
+	});
+
+	it("refuses an unknown list kind with a usage exit code and no stdout", async () => {
+		const result = await runCli(["list", "bogus"]);
+
+		expect(result.exitCode).toBe(2);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("comparisons");
+	});
+
+	it("refuses show with no argument by naming the id forms", async () => {
+		const result = await runCli(["show"]);
+
+		expect(result.exitCode).toBe(2);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("checkpoint:<run>/<stage>");
+	});
+
+	it("refuses an id whose prefix names no record kind", async () => {
+		const result = await runCli(["show", "nonsense"]);
+
+		expect(result.exitCode).toBe(2);
+		expect(result.stdout).toBe("");
+	});
+
+	it("refuses a malformed body by naming the form its prefix takes", async () => {
+		const result = await runCli(["show", "checkpoint:only-one-part"]);
+
+		expect(result.exitCode).toBe(2);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("checkpoint:<run>/<stage>");
+	});
+
+	it("refuses a well-formed id naming no record as a precondition", async () => {
+		const result = await runCli(["show", "run:absent"]);
+
+		expect(result.exitCode).toBe(3);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("run:absent");
+	});
+
+	it("refuses a corpus source that does not resolve as a precondition", async () => {
+		const result = await runCli([
+			"stale",
+			"--corpus",
+			"/nonexistent-corpus-probe",
+		]);
+
+		expect(result.exitCode).toBe(3);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("/nonexistent-corpus-probe");
+	});
+});
