@@ -4,6 +4,7 @@ title: 'stage confirmation reps read the live skill, not the frozen corpus snaps
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:09'
+updated_date: '2026-09-03 00:14'
 labels:
   - defect
 dependencies: []
@@ -21,3 +22,17 @@ installStageCorpusSnapshot (src/benchmark/checkpoint.ts) copies the frozen skill
 - [ ] #1 A stage session run with a corpus snapshot whose skill bytes carry a marker not present in the live install reports that marker, observed once directly
 - [ ] #2 The mechanism that delivers frozen skill bytes to a stage session is recorded on the card with the observation that shows it works
 <!-- AC:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 00:14
+---
+Confirmed independently by the orchestrator on 2026-09-03, with a probe run separately from the one that found it. A temporary directory held .claude/skills/style/SKILL.md declaring the marker ORCH-MARKER-4417; the session was asked to invoke the style skill and report the marker it states. The reply was the live style skill's content, Beck's four rules of simplicity, and the planted marker never appeared. So a project-level skill does not shadow a same-named user-level skill on claude 2.1.258.
+
+What this means for evidence already recorded: every confirmation rep and every replay that installed a corpus snapshot ran its stage against whatever skills were live at that moment, while lineage recorded the frozen bytes. Any score attributed to a frozen corpus was produced by the live one, and a chezmoi apply mid-run would silently change a rep without invalidating its checkpoint. Comparisons between corpus versions are the feature this breaks, because both arms may have read the same live skill.
+
+claude --help on 2.1.258 declares no --skills flag. The candidates named in the help text are --plugin-dir, which loads a directory as a plugin carrying skills, and --setting-sources, which controls which setting sources contribute CLAUDE.md, skills, plugins, hooks, and MCP. Choosing between them is this card's work. Output styles and agent definitions do shadow correctly, so the fix is likely a per-session flag for skills rather than an on-disk overlay.
+---
+<!-- COMMENTS:END -->
