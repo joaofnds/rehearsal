@@ -4,11 +4,12 @@ title: compare dies with a raw ENOENT when .benchmark-runs does not exist
 status: To Do
 assignee: []
 created_date: '2026-09-03 02:34'
-updated_date: '2026-09-03 11:55'
+updated_date: '2026-09-03 13:06'
 labels: []
 dependencies: []
 references:
   - ACT-34
+priority: medium
 ordinal: 32008
 ---
 

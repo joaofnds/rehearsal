@@ -4,9 +4,10 @@ title: 'stage confirmation reps read the live skill, not the frozen corpus snaps
 status: Shape
 assignee: []
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 11:58'
+updated_date: '2026-09-03 13:07'
 labels:
   - defect
+milestone: m-0
 dependencies: []
 priority: high
 ordinal: 30008

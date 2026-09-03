@@ -6,10 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-03 11:54'
+updated_date: '2026-09-03 13:07'
 labels: []
 dependencies: []
 parent_task_id: ACT-26
+priority: low
 ordinal: 29008
 ---
 
@@ -37,4 +38,6 @@ Why: an agent that pipes `--json` into a parser gets a stream with harness prose
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-03: the description says 17 console.log sites in src/benchmark/. `grep -rn 'console\.log' src/benchmark/ | wc -l` returns 14, across calibration.ts, workflow.ts, target.ts, checks.ts, and run.ts. The writer's count stands as written; the current fact is 14. Acceptance #5 is stated as a grep returning no match, so it is unaffected by the count.
+
+Per decision-1, the count with its command: `grep -rn 'console\.log' src/benchmark/ | wc -l` returns 14 on 2026-09-03 (calibration.ts 1, checks.ts 1, run.ts 9, target.ts 1, workflow.ts 2). Re-run it rather than trusting either number.
 <!-- SECTION:NOTES:END -->

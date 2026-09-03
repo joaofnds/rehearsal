@@ -4,9 +4,10 @@ title: delete the temporary directories the test suite creates
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:32'
-updated_date: '2026-09-03 11:54'
+updated_date: '2026-09-03 13:07'
 labels: []
 dependencies: []
+priority: medium
 ordinal: 31008
 ---
 
@@ -26,4 +27,6 @@ Most test suites make their scratch directories with mkdtemp directly and never 
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-03: the description counts over 1500 leaked directories in $TMPDIR. `ls /tmp | grep -c '^rehearsal-'` now returns 210, because /tmp was cleaned since the observation. The leak itself is unchanged and confirmed: 45 files under src/ call mkdtemp, while 24 reference TestResources.
+
+Per decision-1, the counts with their commands, on 2026-09-03: `ls $TMPDIR | grep -c '^rehearsal-'` returns 210 (the leak's visible size, which a /tmp clean resets and which therefore says nothing about progress); `grep -rln 'mkdtemp' src/ | wc -l` returns 45 and `grep -rln 'TestResources' src/ | wc -l` returns 24 (the work's actual size, which only this card's fix changes). Prioritize on the second pair.
 <!-- SECTION:NOTES:END -->

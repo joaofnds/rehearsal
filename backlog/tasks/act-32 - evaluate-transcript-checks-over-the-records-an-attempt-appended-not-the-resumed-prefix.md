@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 04:21'
-updated_date: '2026-09-03 11:58'
+updated_date: '2026-09-03 13:07'
 labels:
   - defect
 dependencies: []
@@ -37,4 +37,6 @@ Until this lands, the four brief-reply cases record a FAIL on `tool-calls` that 
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-03: premise re-checked. src/benchmark/session-attempt.ts passes `toolUses(transcript)` over the whole forked transcript at line 318; the card cites line 284, which moved with ACT-25's later commits. One site, unchanged in substance.
+
+Per decision-1, a line number is not a measurement: the site is the `toolUses(transcript)` call in `recordAttempt`'s request assembly in src/benchmark/session-attempt.ts, one call, found by `grep -n 'toolUses' src/benchmark/session-attempt.ts`.
 <!-- SECTION:NOTES:END -->
