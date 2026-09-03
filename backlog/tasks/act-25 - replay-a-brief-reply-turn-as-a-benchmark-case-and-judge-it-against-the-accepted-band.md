@@ -7,7 +7,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 14:55'
-updated_date: '2026-09-03 04:25'
+updated_date: '2026-09-03 04:26'
 labels: []
 dependencies:
   - ACT-26.5
@@ -528,4 +528,221 @@ Independent review is due. The card carries a paid observation whose
 interpretation is a judgment call, one deliberately unfixed harness defect, and
 a departure from the direction on the backtick that Shape recorded and Build
 did not revisit.
+
+---
+
+## Review fixes, 2026-09-03
+
+Six findings from the independent review, each in its own commit, tests first.
+No provider call was made: spend for this dispatch is USD 0.00.
+
+### Finding 4 (blocking), both halves
+
+**Containment.** `d75b615`. `transcriptPrefixPath` joined the declared file onto
+the prefix directory with no containment check, unlike `caseRelative`, which
+refuses a declared path that resolves outside the case directory. Reproduced
+before the fix: `transcriptPrefixPath("brief-reply-92b2e8b0",
+"../../../../../../etc/passwd")` returned `/Users/etc/passwd`. The rule now
+lives in one `confinedTo` helper both routes call, so the two paths into a case
+cannot drift on what "inside the case" means.
+
+The test fails against the old behavior: with the guard removed, the escape case
+reports `Received function did not throw / Received value:
+"/Users/joaofnds/code/rehearsal/.benchmark-runs/cases/smoke/etc/passwd"`. One of
+the three cases first written (`../smoke/x.jsonl`) turned out not to escape,
+since it resolves back into the same directory; it was replaced with
+`../audit-log/x.jsonl`, which does.
+
+**Digest.** `3685140`. The declared `sha256` was read by nothing. The attempt now
+hashes the prefix before forking it and refuses on a mismatch, naming the case,
+the declared digest, and the one found. The refusal is a declared input the
+command cannot satisfy, so it exits 3 like a fixture the harness will not seed.
+`FixtureError` became `SessionInputError`: the two refusals are one concept,
+every caller already treated them alike, and the lint rule against two classes
+in one file was the design signal rather than something to suppress.
+
+Observed directly, no provider call, with a runner that rejects if reached:
+
+- the declaration whose digest matches reaches the runner
+  (`Error: PROVIDER CALL REACHED`);
+- the same case pointed at `brief-reply-40878d26`'s prefix is refused:
+  `SessionInputError: Case brief-reply-92b2e8b0 declares transcript
+  92b2e8b0-...-cut-1268.jsonl at 20892c74..., but
+  .benchmark-runs/cases/brief-reply-40878d26/40878d26-...-cut-491.jsonl hashes
+  39f452f1...`. This is the reviewer's own cross-pointing probe, now caught.
+
+End to end, appending one byte to `brief-reply-40878d26`'s prefix and running
+`rehearsal run --case brief-reply-40878d26 --model haiku --effort low
+--session-budget-usd 0.01`: exit 3, the mismatch message, no attempt record, no
+cost. The prefix was restored to its declared digest afterwards.
+
+### Finding 1 (should-fix)
+
+`b7173ae`. Reproduced first: deleting `settings`, emptying `corpusFiles`, and
+setting an arbitrary prompt on `cases/brief-reply-e3dea673/case.json` left
+`bun test src/benchmark/case.test.ts` at 31 pass, 0 fail. Prompt, tools,
+settings, and corpusFiles moved into the `TURNS` table-driven assertion, which
+was extended rather than replaced; the standalone 92b2e8b0 test is folded in,
+since the table now claims for all four everything it claimed for one (finding
+7).
+
+The new test fails against the old declarations: with the same mutation in
+place it reports `(fail) ... runs brief-reply-e3dea673 against the brief style
+overlay ...`, and with `settings` alone deleted from `brief-reply-02f0f204` it
+fails on that case and only that case. Both declarations were restored; `git
+diff -- cases/` is empty.
+
+### Finding 2 (should-fix)
+
+`e3deff3`. Reproduced: serializing all four committed declarations exactly as
+`serializeCommitted` produces them and running `oxfmt --check` reports format
+issues on all four, because oxfmt collapses `"corpusFiles":
+["output-styles/brief.md"]` onto one line and `JSON.stringify` cannot.
+
+The judgment that shelling out to a dev-time formatter would be worse than the
+residue stands. What changed is that the residue stops being hidden: the doc
+comment now states what the tab indent actually buys and names the collapsing
+oxfmt does that no serializer option reproduces, and the command prints the
+follow-up step on stderr, where the operator meets it and where it leaves the
+record `--json` writes to stdout untouched. The README's capture section says
+the same. Both surfaces were chosen rather than one, because the README serves
+the reader who has not run the command yet and stderr serves the one who just
+did.
+
+Observed end to end: `rehearsal case capture brief-reply-92b2e8b0 --session
+92b2e8b0 --cut 1268` exits 0, prints the declaration path on stdout and
+``Run `bun run fmt` before committing: ...`` on stderr, and leaves
+`bun run fmt:check` failing on `cases/brief-reply-92b2e8b0/case.json` with
+exactly the two collapsed arrays. `bun run fmt` restores the file byte for
+byte, so the documented step closes the loop.
+
+### Finding 3 (should-fix)
+
+`84150f3`. The capture probe declared empty `tools` and `corpusFiles`, so its
+serialized form happened to satisfy oxfmt while every real declaration does not:
+the fixture hid finding 2. It now carries a settings overlay, a corpus file, and
+a forbidden-text check, which give it the short arrays oxfmt collapses. The
+indent test's name claimed the indent the repository formats to, which the
+repository formats no real case to; it now claims only what it checks, a tab
+rather than the two spaces a run-directory record takes.
+
+### Finding 6 (small)
+
+`f1bccf5`. `cases/brief-reply-92b2e8b0/case.json` placed `transcript` after
+`prompt`; all four now read `id kind title prompt tools settings corpusFiles
+checks transcript`. `rehearsal case show brief-reply-92b2e8b0 --json` still
+exits 0.
+
+### Finding 5, recorded and not fixed
+
+A session case whose transcript prefix is missing fails with a raw ENOENT at
+exit 1 rather than a refused precondition at exit 3. Reproduced by moving
+`.benchmark-runs/cases/brief-reply-40878d26/40878d26-3572-4a08-a668-4e4c275e462e-cut-491.jsonl`
+aside and running `rehearsal run --case brief-reply-40878d26 --model haiku
+--effort low --session-budget-usd 0.01`:
+
+    exit=1
+    single-rep evidence, not a score
+    ENOENT: no such file or directory, open '/Users/joaofnds/code/rehearsal/.benchmark-runs/cases/brief-reply-40878d26/40878d26-3572-4a08-a668-4e4c275e462e-cut-491.jsonl'
+
+It costs no money: `prepareSession` runs before the provider call, and after
+this dispatch the digest verification reads the file even earlier, so the ENOENT
+now comes from the hash rather than from the fork. The prefixes are gitignored,
+so a fresh clone has four committed cases whose transcript files do not exist
+and whose only signal is this stack trace. The fix is a stat-and-refuse in the
+same place the digest is checked, naming the case and the missing file, which is
+a small change but outside this card's diff. Filed as **ACT-33** rather than
+made here, with the reproduction above and three acceptance criteria. ACT-30 is
+the same shape for `compare` against a missing `.benchmark-runs`, so a fix that
+gives the two one refusal is worth considering when either is picked up. The
+prefix was restored afterwards.
+
+### Verification for this dispatch
+
+All four gates on the final tree, each run directly:
+`bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
+`bun test` 0 with 1016 pass and 0 fail. `git status` clean apart from this card.
+
+Fresh clone, `bun install` then `bun test`: 5 fail, 1011 pass, and the identical
+five fail in a clean clone at `b47750e`, the commit before this dispatch. They
+are `loadComparisonEvidence > writes one read-only comparison report ...`,
+`loadCase > resolves the declared target to a directory that exists`, and three
+`rehearsal` comparison-report stdout tests. No sixth failure was added.
+
+One run of the fresh clone also failed `runReplayConfirmation > runs three
+frozen stage replay reps concurrently ...` at 5005ms, a timeout. It passes alone
+and did not recur on a clean rerun of the same clone, and nothing in this
+dispatch touches replay or confirmation, so it reads as load-dependent variation
+rather than a signal. Recorded because it was observed, not because it is
+believed to be a defect.
+
+An earlier clone run appeared to show only one pre-existing failure; that clone
+had `.benchmark-runs/comparisons` left behind by its own previous run, which
+made the four comparison tests pass. The five-failure figure is from clean
+clones at both commits.
+
+### Paid calls
+
+None. USD 0.00 this dispatch. The observations that would have cost money were
+already recorded on this card and in the orchestrator's comment, and every new
+observation above was made with a fake runner or with a command that refuses
+before the provider is called.
+
+### Decided autonomously
+
+Nobody answers questions in this run. Each follows the dispatch's decision
+policy and can be reversed.
+
+1. **`FixtureError` became `SessionInputError` rather than gaining a second
+   error class beside it.** The lint rule allows one class per file and refused
+   the second. The style skill treats a suppression as a design decision to be
+   avoided by reading the surfaces, and the surface here says the two refusals
+   are one concept: both are declared inputs the attempt reads before it calls
+   the provider, both are caught at the same `instanceof` site, and no caller
+   ever distinguished them. A separate file holding one error class only
+   `session-attempt.ts` throws would have existed to satisfy a lint count. The
+   rename touches three source sites and no test asserted the old class by name.
+
+2. **The formatter step is named in both the command's stderr and the README,
+   not one of them.** Finding 2 left the choice open. Two different readers meet
+   the problem at two different moments, and the residue is permanent rather
+   than a transitional note, so a reader who arrives through either route should
+   not have to find the other. stderr rather than stdout, so the record `--json`
+   prints stays exactly the record's bytes.
+
+3. **The digest refusal is verified in `prepareSession` rather than at load
+   time.** `loadCase` is synchronous about paths and is called by `case show`
+   and `case list`, which have no business hashing megabytes of transcript to
+   print a title. The check belongs where the bytes are about to be used, which
+   is also where the refusal can precede the paid call, and that is the claim
+   the message makes.
+
+4. **Finding 5 was recorded, not fixed.** The dispatch directed it. The
+   reproduction above is written so the card that fixes it needs no rediscovery.
+
+5. **The README gained the transcript-digest paragraph alongside the formatter
+   one, in the same commit.** They are two paragraphs of one section describing
+   behavior this dispatch shipped, and the operator who captures a prefix is the
+   one who later meets a prefix that no longer matches. Splitting the section
+   across two commits would have cost a reader more than it bought.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 04:26
+---
+Orchestrator's control observation, 2026-09-03: the settings overlay IS honored on --resume, and the 196-word reply is a real style failure rather than a configuration failure.
+
+Build stopped after one attempt because the reply was prose but not brief-style, and correctly reported that the transcript records no output style so nothing in the artifact could settle whether the overlay applied. It named the cheap control that would. I ran it: the same case with settings removed, one attempt, opus/high, 2.455190 USD.
+
+The two replies differ in text and in shape. With outputStyle brief, the reply opens 'It's Python because it builds binary files, and shell can't', the conclusion in the first sentence in plain words, at 196 words. Without any style, the reply opens 'It's Python for two reasons, and one of them is real' and develops discursively, at 184 words. Different text, different opening move, so the overlay reached the session and changed the output.
+
+What this means for the case: the word-band failure is the measurement working. On this turn the model wrote 196 words where João accepted 76, missing the style's own length rule while following its plainness and conclusion-first rules. That is the regression signal these four cases exist to produce. It is not evidence that the harness failed to deliver the style.
+
+The control case was temporary, run from cases/zz-control-nostyle, and deleted after; it was never committed. Its cost is on the run's total.
+
+The three unrun turns stay unobserved, projected about 7 USD cold against the remaining cap.
+---
+<!-- COMMENTS:END -->
