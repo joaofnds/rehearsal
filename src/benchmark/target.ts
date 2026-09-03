@@ -435,10 +435,10 @@ export async function refExists(
 
 export async function addWorktree(
 	repositoryRoot: string,
-	sha: string,
+	committish: string,
 	path: string,
 ): Promise<void> {
-	await git(repositoryRoot, "worktree", "add", "--detach", path, sha);
+	await git(repositoryRoot, "worktree", "add", "--detach", path, committish);
 }
 
 // --force: a replay worktree holds untracked workflow state by design.
