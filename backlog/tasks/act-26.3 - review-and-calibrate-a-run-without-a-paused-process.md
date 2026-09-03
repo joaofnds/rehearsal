@@ -1,11 +1,11 @@
 ---
 id: ACT-26.3
 title: review and calibrate a run without a paused process
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 03:20'
+updated_date: '2026-09-03 04:07'
 labels: []
 dependencies: []
 references:
@@ -318,6 +318,59 @@ is its caller's problem.
 The second test is `run --pause` without a TTY exits 3 while plain `run` does
 not, which forces the flag through the parser, the table, and the gate together.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 04:07
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 995 pass, 0 fail across 65 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, all three fixed.
+
+1. calibrate could not read any stopped-stage record a real run writes. The reader required sessionBudgetUsd, which StageJudgeRecord has never carried; the orchestrator read both sites and confirmed the field has never been on a stage record. So criterion 5's own scenario, a run stopping at a stage without --pause, produced exit 3 and "No run awaiting calibration" while the record sat in the runs directory, after the evidence had been paid for. The suite was green because writeStoppedStageFixture hand-added sessionBudgetUsd and judgeModel, so criterion 19 was checked against a shape that never exists on disk. Fixed in d923149: the fixture now writes exactly what runGradedStages builds, which made the test fail with criterion 5's error, and the run now records the Judge knobs while the reader accepts a record without them. A rejudge that needs a budget is refused where it is needed rather than the record being invisible. Both mutations fail: making the budget required, and building the judges from the record rather than its knobs.
+
+2. A SIGINT during the no-pause restore rewrote the graded artifact as FAILED. completeArtifact is the only normal transition that clears the pending artifact, and the no-pause branch returned without calling it while signal handlers stayed registered until after the restore, a multi-second window of git operations. The reviewer drove the abort with fake persistence and fired the registered handler: the no-pause path wrote AWAITING_HUMAN_REVIEW then FAILED, the pause path wrote COMPLETE. Since loadRecord refuses any status but AWAITING_HUMAN_REVIEW, the run became permanently uncalibratable without hand-editing. The window did not exist before this card, because every path ended in completeArtifact. Fixed in 46601ed and pinned by firing the handler; removing the fix yields the FAILED status in the assertion diff.
+
+3. calibrate silently dropped the reviewer's rubric edit when the case was unreadable. A blanket catch substituted the frozen rubric, which by construction records rubricChanged false. The reviewer pointed an artifact's caseId at a missing case and got exit 0, COMPLETE, and the rubric edit discarded with no final rejudge; an ACCEPT or stage-only review would never notice. The pause path wraps the same read and re-prompts, so the two paths disagreed about a decision that changes the recorded result. Fixed in 224e1f4. One of the three pinning tests runs through runCalibrate without the test seam, so the production reader executes, which closes the gap finding 13 named.
+
+SHOULD-FIX, all fixed.
+
+4. A missing stage rubric silently recorded "unchanged" while the pause path re-prompts. Fixed in 48937fc with one rule for both rubric reads, which left no caller wanting an absent rubric.
+5. calibrate reimplemented completeRunArtifact with a widened status string, so a typo in COMPLETE would type-check and produce an artifact loadJudgeAgreementReport skips forever with no error. Fixed in d5e00d4; introducing "COMPLTE" now fails typecheck.
+6. --checkout misdiagnosed a moved or deleted target repository, telling the caller the run retained no candidate when the candidate may be intact elsewhere. Fixed in 63aa357 by discriminating on git's exit code, observed against four repository states: 0 for a present ref, 1 for an absent one, 128 for a missing directory and for a directory holding no repository.
+7. Every rejudge is paid for twice, because the first invocation runs the Judge calls then refuses without writing, and the second re-runs from scratch. Not a spec miss, since criterion 14 mandates the protocol. Kept deliberately and recorded in 9c7c0a1: a cache would let a caller confirm a result the current corpus no longer produces.
+8. Boundary JSON reads died with raw parser errors at exit 1, including the review file a human hand-edits under --pause, where a trailing comma gave no path and no hint. Fixed in 0ddf33b following review's own guarded read.
+9. A --confirm-rejudge entry in SWITCH_FLAGS was dead, since calibrate never reaches that parser and parseCommandLine refuses the flag on run first. Removed in b9ed40a.
+10, 11: the same schema knowledge was stated three times and two same-named scorecard schemas differed in strictness, which would have made the agreement reader and calibrate disagree after any future edit. Fixed in af2560e and 84ec85d; the grade schemas were identical and are now imported, while the looser scorecard schema is renamed rather than falsely unified.
+12. Nested schemas stripped unknown keys while the top level was loose, so the first field added to a scorecard, judge input, grade, or attempt would be silently deleted from every artifact calibrate completes. Nothing is lost today. Fixed in ab5c854, after a probe showed a loose object with omit does not strip and an earlier test had passed for the wrong reason.
+14. The no-pause run printed "Human review: <path>" and the README claimed the run writes that file, though it is written only inside the pause path. Fixed in ab48124.
+15. The failure pause no longer degraded when stdin closed mid-run, so a terminal closed on SIGHUP would report the readline error rather than the run failure. Restored in 1fbedd5.
+16, 17: addWorktree's second parameter was named sha while show passes a ref, correctly, and two checkout tests removed their worktree as the last statement so an earlier assertion failure would leak it. Fixed in 4e20333 and 5837f8c.
+
+NOTES.
+13. readCurrentSources is a test-only seam on the production request type, set in eleven places all in the test file, which is why finding 3 lived in code no test reached. The finding 3 fix adds a test that reaches the production reader.
+18. --checkout runs git with cwd set to the artifact's sourceRoot, so a hostile artifact could point at a repository whose post-checkout hook then runs. Not an escalation: writing that artifact already needs local write access to the control repository, and no shell is involved anywhere. Recorded because sourceRoot is the one field in this change flowing from a file into a process's working directory.
+Criterion 4 stays unchecked. The reviewer confirmed the card's account is accurate and the ordering is correct: the pin happens in the try, the restore in the finally, and no test reaches runBenchmark because it constructs its own collaborators. ACT-31 carries it. The finding 2 fix strengthened the adjacent ordering, which is now asserted.
+
+The reviewer named a strength the fixes preserved: the calibrate extraction is the right cut, a pure function of values with the loop and prompts left in collectCalibration, and its determinism test is a real assertion rather than a tautology.
+
+Fresh-clone result, measured by the orchestrator: 5 failures on the first run in a clean clone, 1 on the second. The four compare failures need the runs directory to exist and the first run creates it, so the expected-five figure holds only for a first run. No sixth failure was added by this card, and none of the five was touched: four are ACT-30's and one is ACT-26.4's target test, which depends on a repository outside this one.
+
+Paid spend on this card: 0.13 USD across two sealed Judge calls during Build, none during the fixes. Run total after this card: about 0.45 USD against the 50 USD ceiling.
+
+Observed live by the orchestrator: eleven commands declared, calibrate carrying --confirm-rejudge, --pause refused without a terminal with a message naming the flag, and a bare run no longer refused. Observed by the worker with real Judge calls: calibrate refuses at exit 3 with the revised grades on stderr and nothing written, then completes the artifact with the flag, recording the rejudge as human-confirmed with the changed stage named.
+
+Not observed: the no-pause run path end to end, because no run artifact has ever existed on this machine and producing one costs a full pipeline, projected well past the run's ceiling at the card's own budget. Every artifact-reading path other than the paid calibrate observation is fixture-proven.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The review pause is a flag, not the only path. A run without --pause grades the candidate, writes the preliminary artifact, pins the candidate under refs/rehearsal/<run>, restores the target, and exits, so no process has to be held open. rehearsal review records a run's review from a file or from flags; rehearsal calibrate rejudges the frozen evidence with the current rubrics and records the result, refusing at exit 3 with the revised grades on stderr when a grade changed unless --confirm-rejudge is given; rehearsal show <run> --checkout <dir> materializes the retained candidate as a detached worktree. --pause keeps the interactive flow and needs a terminal. Calibration's judgment is now a pure function of its evidence, shared by both paths. Review found three blocking defects, all fixed: calibrate could not read any stopped-stage record a real run writes, because the test fixture manufactured a field the harness never wrote; Ctrl-C during the restore rewrote a graded artifact as FAILED and made it permanently uncalibratable; and an unreadable case silently discarded the reviewer's rubric edit while recording that the rubric did not change. Thirteen should-fix defects fixed. Criterion 4 stays unchecked and is carried by ACT-31: the pin-before-restore ordering is correct but unreachable by any test, since runBenchmark constructs its own collaborators. Observed with real Judge calls: the refusal without the flag, and the completed artifact with it. Not observed: the no-pause run end to end, which costs a full pipeline.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Build handoff
 
