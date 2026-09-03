@@ -418,6 +418,13 @@ before any provider call, and the snapshot is the only place the bytes are read
 from for hashing and for delivery, so a run against a moving source cannot
 record one corpus and read another.
 
+What is snapshotted, delivered, and selected is what the case declared in its
+`corpusFiles`, never everything the source happens to hold: a source carrying a
+second output style does not change which style the attempt runs against. A
+declared entry that is a symlink, or a declared directory holding one, is
+refused naming the entry, because a copy would follow it and snapshot bytes from
+outside the source while the record said otherwise.
+
 The variant reaches the session as project-level files under the attempt
 directory the harness owns and deletes, which shadow the same-named user-level
 ones. Nothing installed moves and no running session is affected, and because

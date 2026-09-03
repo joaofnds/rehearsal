@@ -7,8 +7,10 @@
   case. The unit a comparison presents.
 - **Attempt record** — the strict record one session attempt writes: the case,
   the lineage, the model and effort, the declared corpus files with their
-  digests, the prompt, the reply, the path of the transcript copy, the provider
-  call metrics, and one result per declared check. It is what `--json` prints.
+  digests, the corpus snapshot origin, the prompt, the reply, the path of the
+  transcript copy, the provider call metrics, and one result per declared check.
+  It is what `--json` prints. A record carrying no origin was written before the
+  field existed and read the live install.
 - **Attempt directory** — the fresh temporary directory the harness creates and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
@@ -84,6 +86,9 @@
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
+  A session attempt's snapshot holds the files its case declared and no others,
+  so a source carrying an undeclared style cannot change what the attempt runs
+  against.
 - **Corpus overlay** — the project-level files a session attempt is given so it
   reads a corpus variant: the snapshot's output styles and agent definitions
   written under the attempt directory's `.claude/`, where they shadow the
@@ -92,10 +97,10 @@
   skill cannot be delivered this way, because a project-level skill does not
   shadow a user-level one.
 - **Corpus snapshot origin** — how a snapshot's bytes were selected, recorded
-  beside them: the live install, a directory, or a chezmoi ref with the commit
-  that ref resolved to. The commit rather than the ref, because `chezmoi:HEAD`
-  names different bytes on different days and two runs at one ref must be
-  comparable.
+  beside them and persisted in the attempt record: the live install, a
+  directory, or a chezmoi ref with the commit that ref resolved to. The commit
+  rather than the ref, because `chezmoi:HEAD` names different bytes on different
+  days and two runs at one ref must be comparable.
 - **Corpus source** — where an attempt's corpus bytes come from, named by
   `--corpus`: a directory already in corpus layout, or `chezmoi:<ref>`, the
   chezmoi source at that git ref rendered into a scratch destination and mapped
