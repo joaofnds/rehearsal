@@ -14,6 +14,7 @@ import {
 	comparisonReportPaths,
 } from "#benchmark/run-layout";
 import { COMMANDS } from "#cli/commands";
+import { EXIT_CODES } from "#cli/exit-codes";
 import { PROJECT_ROOT } from "#benchmark/test-support";
 
 const PIPE_BUFFER_BYTES = 131_072;
@@ -24,12 +25,27 @@ interface CliResult {
 	readonly stderr: string;
 }
 
+/**
+ * The session knobs read an environment fallback, so a `BENCHMARK_MODEL` set on
+ * the machine running the suite would change which refusal a command makes.
+ * The child gets an environment with none of them, so every assertion below is
+ * about the code rather than about this shell.
+ */
+function environmentWithoutKnobs(): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(Bun.env)
+			.filter(([name]) => !name.startsWith("BENCHMARK_"))
+			.map(([name, value]) => [name, value ?? ""]),
+	);
+}
+
 async function runCli(
 	args: readonly string[],
 	stdin: "inherit" | "empty" = "empty",
 ): Promise<CliResult> {
 	const child = Bun.spawn([process.execPath, "rehearsal.ts", ...args], {
 		cwd: PROJECT_ROOT,
+		env: environmentWithoutKnobs(),
 		stdin: stdin === "empty" ? new Blob([""]) : "inherit",
 		stdout: "pipe",
 		stderr: "pipe",
@@ -342,19 +358,90 @@ describe("rehearsal", () => {
 	);
 });
 
+/**
+ * What each declared command does when invoked with no argument and no flag,
+ * against a non-TTY stdin. `run` and `replay` are the two that could reach a
+ * provider, and each is held to the exact refusal that stops it: a weaker
+ * assertion, one that accepts 0, would go on passing the day a change lets
+ * `run` proceed and start a paid session from the suite.
+ */
+const BARE_REFUSALS: ReadonlyMap<string, { code: number; reason: string }> =
+	new Map([
+		["run", { code: EXIT_CODES.usageError, reason: "Provide --model" }],
+		["replay", { code: EXIT_CODES.usageError, reason: "Provide --run" }],
+		[
+			"compare",
+			{
+				code: EXIT_CODES.usageError,
+				reason: "Provide the comparison manifest",
+			},
+		],
+		["list", { code: EXIT_CODES.usageError, reason: "is not one of" }],
+		["show", { code: EXIT_CODES.usageError, reason: "Provide the record id" }],
+		["stale", { code: EXIT_CODES.completed, reason: "" }],
+		["case list", { code: EXIT_CODES.completed, reason: "" }],
+		[
+			"case show",
+			{ code: EXIT_CODES.usageError, reason: "Provide the case id" },
+		],
+		[
+			"case capture",
+			{ code: EXIT_CODES.usageError, reason: "Provide the case id" },
+		],
+	]);
+
 describe("every declared command", () => {
 	/**
 	 * Adding an entry to COMMANDS without a dispatch case fails only at runtime,
 	 * where typecheck, lint, and the suite all stay green. Invoking each declared
-	 * name and refusing the "declared but not wired up" message is the guard.
+	 * name is the guard, and asserting the exact code and reason is what keeps
+	 * the guard from passing on a command that started doing something else.
 	 */
 	it.each(COMMANDS.map((command) => command.name))(
-		"reaches a dispatch case for rehearsal %s",
+		"refuses rehearsal %s with no argument, exactly as declared",
 		async (name) => {
+			const expected = BARE_REFUSALS.get(name);
+
 			const result = await runCli(name.split(" "));
 
+			expect(expected).toBeDefined();
 			expect(result.stderr).not.toContain("declared but not wired up");
-			expect(result.exitCode).not.toBe(1);
+			expect(result.exitCode).toBe(expected?.code ?? -1);
+			expect(result.stderr).toContain(expected?.reason ?? "");
+		},
+	);
+});
+
+describe("a paying command given every session knob", () => {
+	/**
+	 * What actually stands between the suite and a paid session once the usage
+	 * errors above are satisfied: `run` refuses because the review pause needs a
+	 * TTY, and `replay` refuses because no recorded run answers `--run`. Naming
+	 * the refusal each makes is what fails loudly if a change ever lets one of
+	 * them proceed to a provider call from a test.
+	 */
+	it.each([
+		{ name: "run", args: [], reason: "stdin is not a terminal" },
+		{
+			name: "replay",
+			args: ["--run", "absent", "--stage", "build"],
+			reason: "No replayable run named absent",
+		},
+	])(
+		"refuses $name before any provider call",
+		async ({ name, args, reason }) => {
+			const result = await runCli([
+				name,
+				...args,
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"1",
+			]);
+
+			expect(result.exitCode).toBe(EXIT_CODES.refusedPrecondition);
+			expect(result.stderr).toContain(reason);
+			expect(result.stdout).toBe("");
 		},
 	);
 });
