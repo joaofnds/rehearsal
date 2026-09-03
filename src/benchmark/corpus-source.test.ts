@@ -110,16 +110,29 @@ interface RecordedCommand {
 	readonly cwd: string;
 }
 
+/**
+ * The real shell decides whether a pipeline failed, so `fails` is how a test
+ * says which command the shell would have returned nonzero for: `runCommand`
+ * turns a nonzero exit into a rejection, and that is what the fake reproduces.
+ */
 class FakeCommandRunner {
 	public readonly commands: RecordedCommand[] = [];
 
-	public constructor(private readonly outputs: ReadonlyMap<string, string>) {}
+	public constructor(
+		private readonly outputs: ReadonlyMap<string, string>,
+		private readonly fails: (command: readonly string[]) => boolean = () =>
+			false,
+	) {}
 
 	public readonly run = (
 		command: readonly string[],
 		cwd: string,
 	): Promise<string> => {
 		this.commands.push({ command: [...command], cwd });
+
+		if (this.fails(command)) {
+			return Promise.reject(new Error("git archive failed: exit 129"));
+		}
 
 		return Promise.resolve(this.outputs.get(command[0] ?? "") ?? "");
 	};
@@ -158,7 +171,7 @@ describe("rendering a chezmoi corpus source", () => {
 		expect(archive).toEqual([
 			"sh",
 			"-c",
-			`git -C '/dotfiles' archive 'HEAD~1' | tar -x -C '${source.sourceDirectory}'`,
+			`set -o pipefail; git -C '/dotfiles' archive 'HEAD~1' | tar -x -C '${source.sourceDirectory}'`,
 		]);
 		expect(apply).toEqual([
 			"chezmoi",
@@ -188,8 +201,44 @@ describe("rendering a chezmoi corpus source", () => {
 			.map((recorded) => recorded.command)
 			.find((command) => command[0] === "sh");
 		expect(archive?.[2]).toBe(
-			`git -C '/dotfiles' archive 'HEAD; touch /tmp/pwned' | tar -x -C '${source.sourceDirectory}'`,
+			`set -o pipefail; git -C '/dotfiles' archive 'HEAD; touch /tmp/pwned' | tar -x -C '${source.sourceDirectory}'`,
 		);
+	});
+
+	/**
+	 * `tar` succeeds on an empty stream, so without `pipefail` the pipeline
+	 * reports tar's exit code and a failed archive renders an empty tree that
+	 * the attempt then measures and records lineage over.
+	 */
+	it("fails the render when the archive step fails, rather than reporting tar's success", async () => {
+		const fake = new FakeCommandRunner(
+			new Map([["git", "abc123def456\n"]]),
+			(command) =>
+				command[0] === "sh" &&
+				(command[2] ?? "").startsWith("set -o pipefail; "),
+		);
+
+		const failure = await failureOf(
+			resolveCorpusSource("chezmoi:HEAD", {
+				runCommand: fake.run,
+				dotfilesDirectory: "/dotfiles",
+			}),
+		);
+
+		expect(failure.message).toContain("archive failed");
+	});
+
+	it("makes the pipeline's own failure the shell's exit status", async () => {
+		const fake = runner();
+
+		const source = await rendered("chezmoi:HEAD", fake.run);
+		resources.track(source.root);
+		resources.track(source.sourceDirectory);
+
+		const archive = fake.commands
+			.map((recorded) => recorded.command)
+			.find((command) => command[0] === "sh");
+		expect(archive?.[2]).toStartWith("set -o pipefail; ");
 	});
 
 	/**

@@ -134,6 +134,11 @@ function scratchDirectory(prefix: string): Promise<string> {
 }
 
 /**
+ * `tar` exits 0 on an empty stream, so without `pipefail` the pipeline reports
+ * tar's status and a failed archive renders an empty tree that the attempt
+ * measures and records lineage over: a render failure would become a wrong
+ * measurement rather than an error.
+ *
  * `--verbose` stalls chezmoi 2.72.0 through a pipe and the gpg-encrypted file
  * blocks on a passphrase without `--exclude encrypted`, so neither the flag nor
  * the exclusions are a preference: without them the render hangs an autonomous
@@ -165,7 +170,7 @@ async function renderChezmoi(
 			[
 				"sh",
 				"-c",
-				`git -C ${shellQuoted(dotfilesDirectory)} archive ${shellQuoted(ref)} | tar -x -C ${shellQuoted(sourceDirectory)}`,
+				`set -o pipefail; git -C ${shellQuoted(dotfilesDirectory)} archive ${shellQuoted(ref)} | tar -x -C ${shellQuoted(sourceDirectory)}`,
 			],
 			tmpdir(),
 		);
