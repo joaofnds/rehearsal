@@ -259,31 +259,50 @@ describe("loadCase for the brief-reply cases", () => {
 		});
 	});
 
-	it.each([
-		["brief-reply-e3dea673", "e3dea673-663a-4a3e-b89f-4ffb568e7109", 873, 145],
-		["brief-reply-02f0f204", "02f0f204-613d-49d2-8999-67ba79fedbb1", 1270, 136],
-		["brief-reply-40878d26", "40878d26-3572-4a08-a668-4e4c275e462e", 491, 108],
-		["brief-reply-92b2e8b0", "92b2e8b0-1cac-4855-87be-ba84d5cee5b9", 1268, 76],
-	])(
-		"cuts %s at its own turn and states the accepted length in its title",
-		async (caseId, sourceSession, cut, acceptedWords) => {
+	const TURNS = [
+		{
+			caseId: "brief-reply-e3dea673",
+			sourceSession: "e3dea673-663a-4a3e-b89f-4ffb568e7109",
+			cut: 873,
+			acceptedWords: 145,
+		},
+		{
+			caseId: "brief-reply-02f0f204",
+			sourceSession: "02f0f204-613d-49d2-8999-67ba79fedbb1",
+			cut: 1270,
+			acceptedWords: 136,
+		},
+		{
+			caseId: "brief-reply-40878d26",
+			sourceSession: "40878d26-3572-4a08-a668-4e4c275e462e",
+			cut: 491,
+			acceptedWords: 108,
+		},
+		{
+			caseId: "brief-reply-92b2e8b0",
+			sourceSession: "92b2e8b0-1cac-4855-87be-ba84d5cee5b9",
+			cut: 1268,
+			acceptedWords: 76,
+		},
+	];
+
+	it.each(TURNS)(
+		"cuts $caseId at its own turn and states the accepted length in its title",
+		async ({ caseId, sourceSession, cut, acceptedWords }) => {
 			const loaded = requireSessionCase(await loadCase(caseId));
 
+			expect(loaded.declaration.title).toContain(
+				`${String(acceptedWords)} words`,
+			);
 			expect(loaded.declaration).toMatchObject({
-				title: expect.stringContaining(`${String(acceptedWords)} words`),
 				transcript: { sourceSession, cut },
 			});
 		},
 	);
 
-	it.each([
-		"brief-reply-e3dea673",
-		"brief-reply-02f0f204",
-		"brief-reply-40878d26",
-		"brief-reply-92b2e8b0",
-	])(
-		"judges %s by a band with a ceiling and no floor, the em dash alone, and no tool calls",
-		async (caseId) => {
+	it.each(TURNS)(
+		"judges $caseId by a band with a ceiling and no floor, the em dash alone, and no tool calls",
+		async ({ caseId }) => {
 			const loaded = requireSessionCase(await loadCase(caseId));
 
 			expect(loaded.checks).toEqual([
