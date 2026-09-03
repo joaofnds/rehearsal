@@ -1859,6 +1859,11 @@ describe(finishGradedRun.name, () => {
 
 					return Promise.resolve();
 				},
+				awaitArtifactReview: () => {
+					order.push("await-review");
+
+					return Promise.resolve();
+				},
 				log: () => undefined,
 			},
 		};
@@ -1893,7 +1898,10 @@ describe(finishGradedRun.name, () => {
 
 		await finishGradedRun(request, dependencies);
 
-		expect(order).toEqual([`retain:${request.runName}:${request.resultSha}`]);
+		expect(order).toEqual([
+			"await-review",
+			`retain:${request.runName}:${request.resultSha}`,
+		]);
 	});
 
 	it("calibrates and completes the artifact with a pause", async () => {
@@ -1931,6 +1939,11 @@ describe(finishGradedRun.name, () => {
 				completeArtifact: (artifact) => {
 					order.push("complete");
 					completed.push(artifact);
+
+					return Promise.resolve();
+				},
+				awaitArtifactReview: () => {
+					order.push("await-review");
 
 					return Promise.resolve();
 				},

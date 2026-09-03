@@ -47,6 +47,7 @@ export interface RunAbort {
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly writePendingArtifact: (artifact: RunArtifact) => Promise<void>;
 	readonly completeArtifact: (artifact: RunArtifact) => Promise<void>;
+	readonly awaitArtifactReview: () => Promise<void>;
 	readonly writeFailedArtifact: (
 		artifact: FailedJudgeRunArtifact,
 	) => Promise<void>;
@@ -234,6 +235,18 @@ export function createRunAbort(
 			pendingArtifact = undefined;
 		});
 	};
+	/**
+	 * The artifact is finished at AWAITING_HUMAN_REVIEW and no further
+	 * transition is coming, so it stops being pending. Without this the
+	 * restore that follows is a window in which a signal rewrites a fully
+	 * graded artifact FAILED, and `calibrate` reads only AWAITING_HUMAN_REVIEW.
+	 */
+	const awaitArtifactReview = (): Promise<void> =>
+		enqueueNormalTransition(() => {
+			pendingArtifact = undefined;
+
+			return Promise.resolve();
+		});
 	const writeFailedArtifact = (
 		artifact: FailedJudgeRunArtifact,
 	): Promise<void> => {
@@ -344,6 +357,7 @@ export function createRunAbort(
 		completeStage,
 		writePendingArtifact,
 		completeArtifact,
+		awaitArtifactReview,
 		writeFailedArtifact,
 		markAborted,
 		teardown,

@@ -527,6 +527,48 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	/**
+	 * A run without `--pause` deliberately leaves the artifact awaiting review
+	 * and then restores the target, which is seconds of git work with the
+	 * signal handlers still registered. The artifact is not pending during
+	 * that window: it is finished, and rewriting it FAILED would strand
+	 * evidence `loadRecord` then refuses to read.
+	 */
+	it("leaves an artifact awaiting review alone when a signal arrives", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-await-"));
+		testResources.track(directory);
+		const artifactFile = join(directory, "run.json");
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+		);
+		const handlers = new Map<
+			NodeJS.Signals,
+			(signal: NodeJS.Signals) => void
+		>();
+		const exited = Promise.withResolvers<number>();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: (signal, handler) => {
+					handlers.set(signal, handler);
+				},
+				releaseSignal: () => undefined,
+				exit: exited.resolve,
+				reportError: () => undefined,
+				persistence: fileRunArtifactPersistence,
+			},
+			{ artifactFile, teardown: () => Promise.resolve() },
+		);
+
+		await abort.writePendingArtifact(artifact);
+		await abort.awaitArtifactReview();
+		handlers.get("SIGINT")?.("SIGINT");
+		await exited.promise;
+
+		expect(JSON.parse(await Bun.file(artifactFile).text())).toEqual(artifact);
+	});
+
 	it("retains completed calibration when completion is interrupted", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const artifactFile = "/runs/run.json";

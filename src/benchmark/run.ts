@@ -319,6 +319,7 @@ export interface FinishGradedRunDependencies {
 		calibration: Readonly<CalibrationResult>,
 	) => Promise<JudgeAgreementReport>;
 	readonly completeArtifact: (artifact: GradedRunArtifact) => Promise<void>;
+	readonly awaitArtifactReview: () => Promise<void>;
 	readonly log: (message: string) => void;
 }
 
@@ -344,12 +345,18 @@ export function pausesOnFailure(
  * retention ref before the caller restores, because restoring makes the commit
  * unreachable and only the ref keeps gc from pruning it. `review` and
  * `calibrate` finish the record afterwards, from the frozen evidence.
+ *
+ * That artifact stops being pending before the restore begins. The restore is
+ * seconds of git work with the signal handlers still registered, and an
+ * artifact still pending is one an interrupt rewrites FAILED, which is a
+ * status `calibrate` refuses to read.
  */
 export async function finishGradedRun(
 	request: Readonly<FinishGradedRunRequest>,
 	dependencies: Readonly<FinishGradedRunDependencies>,
 ): Promise<void> {
 	if (!request.pause) {
+		await dependencies.awaitArtifactReview();
 		await dependencies.recordRetentionRef(
 			request.targetDir,
 			request.runName,
@@ -1032,6 +1039,7 @@ export async function runBenchmark(
 						},
 					]),
 				completeArtifact: abort.completeArtifact,
+				awaitArtifactReview: abort.awaitArtifactReview,
 				log: console.log,
 			},
 		);
