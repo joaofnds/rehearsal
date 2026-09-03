@@ -30,6 +30,7 @@ import type { JudgeAgreementCalibration } from "#benchmark/judge-agreement";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
 import { runJudge } from "#benchmark/judge";
 import { runStageJudge } from "#benchmark/stage-grading";
+import { completeRunArtifact } from "#benchmark/run";
 import { benchmarkRunPaths } from "#benchmark/run-layout";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
@@ -419,7 +420,7 @@ export async function runCalibrate(
 	]);
 	const completed =
 		record.kind === "final"
-			? { ...record.record, status: "COMPLETE", calibration, judgeAgreement }
+			? completeRunArtifact(record.record, calibration, judgeAgreement)
 			: { ...record.record, calibration, judgeAgreement };
 	await Bun.write(record.file, `${JSON.stringify(completed, null, 2)}\n`);
 

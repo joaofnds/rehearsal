@@ -230,17 +230,30 @@ export function buildRunArtifact(inputs: RunArtifactInputs): GradedRunArtifact {
 	};
 }
 
-export function completeRunArtifact(
-	artifact: GradedRunArtifact,
+/**
+ * The one transition that finishes a graded run's artifact. Generic over the
+ * artifact so the command that completes a record it parsed back off disk
+ * uses this rather than restating the status literal: a typo in "COMPLETE"
+ * would type-check as a widened string and produce an artifact
+ * `loadJudgeAgreementReport` skips forever without saying so.
+ */
+export function completeRunArtifact<T extends { readonly status: string }>(
+	artifact: T,
 	calibration: CalibrationResult,
 	judgeAgreement: JudgeAgreementReport,
-): GradedRunArtifact {
+): T & CompletedRunArtifact {
 	return {
 		...artifact,
 		status: "COMPLETE",
 		calibration,
 		judgeAgreement,
 	};
+}
+
+interface CompletedRunArtifact {
+	readonly status: "COMPLETE";
+	readonly calibration: CalibrationResult;
+	readonly judgeAgreement: JudgeAgreementReport;
 }
 
 export function buildFailedJudgeRunArtifact(
