@@ -1,0 +1,31 @@
+{
+	"id": "brief-reply-92b2e8b0",
+	"kind": "session",
+	"title": "Trunk turn on a Python build script; the brief he accepted ran 76 words",
+	"prompt": "Tools are unavailable now. Write your reply to João for this turn.",
+	"transcript": {
+		"file": "92b2e8b0-1cac-4855-87be-ba84d5cee5b9-cut-1268.jsonl",
+		"sha256": "20892c7483640ca71b0f237280659622f4bee4cd95e4ad29151e4970dc5d115e",
+		"sourceSession": "92b2e8b0-1cac-4855-87be-ba84d5cee5b9",
+		"cut": 1268
+	},
+	"tools": [],
+	"settings": {
+		"outputStyle": "brief"
+	},
+	"corpusFiles": ["output-styles/brief.md"],
+	"checks": [
+		{
+			"kind": "word-band",
+			"max": 154
+		},
+		{
+			"kind": "forbidden-text",
+			"strings": ["—"]
+		},
+		{
+			"kind": "tool-calls",
+			"max": 0
+		}
+	]
+}

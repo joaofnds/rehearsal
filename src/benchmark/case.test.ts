@@ -234,3 +234,28 @@ describe("loadCase for a session case", () => {
 		);
 	});
 });
+
+describe("loadCase for the brief-reply cases", () => {
+	it("returns the 92b2e8b0 turn cut at the fired reply, judged by the band, the em dash, and no tool calls", async () => {
+		const loaded = requireSessionCase(await loadCase("brief-reply-92b2e8b0"));
+
+		expect(loaded).toMatchObject({
+			prompt:
+				"Tools are unavailable now. Write your reply to João for this turn.",
+			tools: [],
+			settings: { outputStyle: "brief" },
+			corpusFiles: ["output-styles/brief.md"],
+			declaration: {
+				transcript: {
+					sourceSession: "92b2e8b0-1cac-4855-87be-ba84d5cee5b9",
+					cut: 1268,
+				},
+			},
+			checks: [
+				{ kind: "word-band", max: 154 },
+				{ kind: "forbidden-text", strings: ["—"] },
+				{ kind: "tool-calls", max: 0 },
+			],
+		});
+	});
+});
