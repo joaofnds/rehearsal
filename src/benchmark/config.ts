@@ -51,7 +51,15 @@ export interface ConfirmationConfig {
 	readonly approved: boolean;
 }
 
-export interface BenchmarkConfig extends SessionKnobs {
+/**
+ * The `--corpus` source string as the caller wrote it, resolved into a corpus
+ * source before any provider call. Absent means the live install.
+ */
+interface CorpusSelection {
+	readonly corpus?: string | undefined;
+}
+
+export interface BenchmarkConfig extends SessionKnobs, CorpusSelection {
 	readonly caseId: string;
 	readonly sourceDir: string;
 	readonly pipelinePath: string;
@@ -175,6 +183,22 @@ function withConfirmation<Config extends object>(
 	return { ...config, confirmation };
 }
 
+/**
+ * The key is omitted rather than set to undefined: exact optional property
+ * types make those different shapes, and a record built from this configuration
+ * must not carry a corpus key naming nothing.
+ */
+function withCorpus<Config extends object>(
+	config: Config,
+	corpus: string | undefined,
+): Config & CorpusSelection {
+	if (corpus === undefined) {
+		return config;
+	}
+
+	return { ...config, corpus };
+}
+
 function parseSessionKnobs(
 	values: ReadonlyMap<string, string>,
 	env: Readonly<Record<string, string | undefined>>,
@@ -248,21 +272,24 @@ export function parseArgs(
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(
-		{
-			caseId: caseDefaults.caseId,
-			sourceDir: resolve(sourceDir),
-			...sessionKnobs,
-			pipelinePath: controlRelativePath(
-				values.get("--pipeline") ??
-					env["BENCHMARK_PIPELINE"] ??
-					caseDefaults.pipelinePath,
-			),
-		},
+		withCorpus(
+			{
+				caseId: caseDefaults.caseId,
+				sourceDir: resolve(sourceDir),
+				...sessionKnobs,
+				pipelinePath: controlRelativePath(
+					values.get("--pipeline") ??
+						env["BENCHMARK_PIPELINE"] ??
+						caseDefaults.pipelinePath,
+				),
+			},
+			values.get("--corpus"),
+		),
 		confirmation,
 	);
 }
 
-export interface SessionRunConfig extends SessionKnobs {
+export interface SessionRunConfig extends SessionKnobs, CorpusSelection {
 	readonly caseId: string;
 	readonly confirmation?: ConfirmationConfig | undefined;
 }
@@ -287,12 +314,15 @@ export function parseSessionArgs(
 	}
 
 	return withConfirmation(
-		{ caseId, ...parseSessionKnobs(flags.values, env) },
+		withCorpus(
+			{ caseId, ...parseSessionKnobs(flags.values, env) },
+			flags.values.get("--corpus"),
+		),
 		parseConfirmation(flags),
 	);
 }
 
-export interface ReplayCliConfig extends SessionKnobs {
+export interface ReplayCliConfig extends SessionKnobs, CorpusSelection {
 	readonly runName: string;
 	readonly stage: string;
 	readonly confirmation?: ConfirmationConfig | undefined;
@@ -324,11 +354,14 @@ export function parseReplayArgs(
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(
-		{
-			runName,
-			stage,
-			...sessionKnobs,
-		},
+		withCorpus(
+			{
+				runName,
+				stage,
+				...sessionKnobs,
+			},
+			values.get("--corpus"),
+		),
 		confirmation,
 	);
 }

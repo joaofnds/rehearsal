@@ -9,6 +9,8 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
+import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
+import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
 	SessionAttempt,
@@ -48,9 +50,10 @@ function settingsOf(config: SessionRunConfig): SessionSettings {
  */
 async function requireCorpus(
 	sessionCase: SessionCase,
+	source: ResolvedCorpusSource,
 ): Promise<readonly ResolvedCorpusFile[]> {
 	try {
-		return await hashCorpusFiles(sessionCase.corpusFiles);
+		return await hashCorpusFiles(source, sessionCase.corpusFiles);
 	} catch (error) {
 		if (error instanceof CorpusFileError) {
 			throw new RefusedPreconditionError(error.message);
@@ -146,7 +149,8 @@ export async function runSessionDebugAttempt(
 ): Promise<SessionRunOutcome> {
 	const { sessionCase, config } = request;
 	const settings = settingsOf(config);
-	const corpusFiles = await requireCorpus(sessionCase);
+	const corpusSource = await resolveCorpusSource(config.corpus);
+	const corpusFiles = await requireCorpus(sessionCase, corpusSource);
 	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
 
 	const recordDirectory = join(

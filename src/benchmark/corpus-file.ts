@@ -1,6 +1,6 @@
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
+import type { ResolvedCorpusSource } from "./corpus-source";
 
 export class CorpusFileError extends Error {
 	public override name = "CorpusFileError";
@@ -22,20 +22,31 @@ function confinedTo(root: string, layoutPath: string): string {
 	return absolute;
 }
 
+export const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
+	"output-styles/",
+	"agents/",
+	"skills/",
+];
+
 /**
- * The one place that knows where the corpus is installed. A case names a file
- * in corpus layout paths, and this maps that layout onto the live install;
- * ACT-26.6 replaces the body with a corpus source and nothing else moves.
+ * The one place that knows where a corpus layout path lands. A case names a
+ * file in corpus layout paths, and this maps that layout onto the root the
+ * resolved source carries, so the reader never learns where the bytes came
+ * from.
  */
-export function resolveCorpusFile(layoutPath: string): string {
+export function resolveCorpusFile(
+	source: ResolvedCorpusSource,
+	layoutPath: string,
+): string {
 	if (layoutPath === "CLAUDE.md") {
-		return PROJECT_INSTRUCTIONS_PATH;
+		return source.kind === "live"
+			? PROJECT_INSTRUCTIONS_PATH
+			: confinedTo(source.root, layoutPath);
 	}
 
-	const claudeHome = join(homedir(), ".claude");
-	for (const prefix of ["output-styles/", "agents/", "skills/"]) {
+	for (const prefix of CORPUS_LAYOUT_PREFIXES) {
 		if (layoutPath.startsWith(prefix)) {
-			return confinedTo(claudeHome, layoutPath);
+			return confinedTo(source.root, layoutPath);
 		}
 	}
 
@@ -56,11 +67,12 @@ export interface ResolvedCorpusFile {
  * failure this ordering prevents.
  */
 export async function hashCorpusFiles(
+	source: ResolvedCorpusSource,
 	layoutPaths: readonly string[],
 ): Promise<readonly ResolvedCorpusFile[]> {
 	const hashed: ResolvedCorpusFile[] = [];
 	for (const layoutPath of layoutPaths) {
-		const resolvedPath = resolveCorpusFile(layoutPath);
+		const resolvedPath = resolveCorpusFile(source, layoutPath);
 		const file = Bun.file(resolvedPath);
 		if (!(await file.exists())) {
 			throw new CorpusFileError(

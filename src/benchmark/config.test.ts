@@ -7,6 +7,7 @@ import {
 	parseArgs,
 	parseCaseId,
 	parseReplayArgs,
+	parseSessionArgs,
 } from "./config";
 
 const CASE_DEFAULTS: CaseDefaults = {
@@ -600,5 +601,51 @@ describe(judgeSelfPreferenceWarning.name, () => {
 				judgeModel: "other-opus-model",
 			}),
 		).toBeUndefined();
+	});
+});
+
+describe("the corpus source flag", () => {
+	const knobs = ["--model", "haiku", "--session-budget-usd", "1"];
+
+	it("carries --corpus onto a run configuration", () => {
+		const config = parseArgs(
+			[...knobs, "--corpus", "/variants/brief"],
+			{},
+			CASE_DEFAULTS,
+		);
+
+		expect(config.corpus).toBe("/variants/brief");
+	});
+
+	it("carries --corpus onto a session run configuration", () => {
+		const config = parseSessionArgs(
+			[...knobs, "--corpus", "chezmoi:HEAD"],
+			{},
+			"smoke",
+		);
+
+		expect(config.corpus).toBe("chezmoi:HEAD");
+	});
+
+	it("carries --corpus onto a replay configuration", () => {
+		const config = parseReplayArgs(
+			[
+				...knobs,
+				"--run",
+				"run-1",
+				"--stage",
+				"build",
+				"--corpus",
+				"chezmoi:HEAD",
+			],
+			{},
+		);
+
+		expect(config.corpus).toBe("chezmoi:HEAD");
+	});
+
+	it("leaves the corpus absent when --corpus is not given, which is the live install", () => {
+		expect(parseArgs(knobs, {}, CASE_DEFAULTS).corpus).toBeUndefined();
+		expect(parseSessionArgs(knobs, {}, "smoke").corpus).toBeUndefined();
 	});
 });

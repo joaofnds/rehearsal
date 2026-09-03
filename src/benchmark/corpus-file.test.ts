@@ -7,7 +7,10 @@ import {
 	hashCorpusFiles,
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
+import { resolveCorpusSource } from "#benchmark/corpus-source";
 import { failureOf } from "#cli/cli-test-support";
+
+const live = await resolveCorpusSource(undefined);
 
 describe(resolveCorpusFile.name, () => {
 	it.each([
@@ -18,15 +21,17 @@ describe(resolveCorpusFile.name, () => {
 		["agents/reviewer.md", join(homedir(), ".claude/agents/reviewer.md")],
 		["skills/build/SKILL.md", join(homedir(), ".claude/skills/build/SKILL.md")],
 	])("resolves %s onto the install", (layoutPath, expected) => {
-		expect(resolveCorpusFile(layoutPath)).toBe(expected);
+		expect(resolveCorpusFile(live, layoutPath)).toBe(expected);
 	});
 
 	it("resolves CLAUDE.md to the control root's project instructions", () => {
-		expect(resolveCorpusFile("CLAUDE.md")).toBe(PROJECT_INSTRUCTIONS_PATH);
+		expect(resolveCorpusFile(live, "CLAUDE.md")).toBe(
+			PROJECT_INSTRUCTIONS_PATH,
+		);
 	});
 
 	it("refuses a path that is not a corpus layout path, naming it", () => {
-		expect(() => resolveCorpusFile("docs/vision.md")).toThrow(
+		expect(() => resolveCorpusFile(live, "docs/vision.md")).toThrow(
 			"Corpus file docs/vision.md names no corpus layout path",
 		);
 	});
@@ -37,17 +42,17 @@ describe(resolveCorpusFile.name, () => {
 		"output-styles/../../.claude.json",
 		"skills/build/../../../../etc/hosts",
 	])("refuses %s, which escapes the corpus install", (layoutPath) => {
-		expect(() => resolveCorpusFile(layoutPath)).toThrow(CorpusFileError);
+		expect(() => resolveCorpusFile(live, layoutPath)).toThrow(CorpusFileError);
 	});
 
 	it("names the escaping path it refuses", () => {
-		expect(() => resolveCorpusFile("agents/../../.ssh/id_rsa")).toThrow(
+		expect(() => resolveCorpusFile(live, "agents/../../.ssh/id_rsa")).toThrow(
 			"agents/../../.ssh/id_rsa",
 		);
 	});
 
 	it("resolves a layout path whose segments are ordinary names", () => {
-		expect(resolveCorpusFile("skills/build/references/core.md")).toBe(
+		expect(resolveCorpusFile(live, "skills/build/references/core.md")).toBe(
 			join(homedir(), ".claude/skills/build/references/core.md"),
 		);
 	});
@@ -55,7 +60,7 @@ describe(resolveCorpusFile.name, () => {
 
 describe(hashCorpusFiles.name, () => {
 	it("hashes each declared file's bytes under its layout path", async () => {
-		const [only] = await hashCorpusFiles(["CLAUDE.md"]);
+		const [only] = await hashCorpusFiles(live, ["CLAUDE.md"]);
 
 		expect(only?.path).toBe("CLAUDE.md");
 		expect(only?.sha256).toBe(
@@ -67,7 +72,7 @@ describe(hashCorpusFiles.name, () => {
 
 	it("refuses a declared file that does not exist, naming the resolved path", async () => {
 		const failure = await failureOf(
-			hashCorpusFiles(["output-styles/no-such-style.md"]),
+			hashCorpusFiles(live, ["output-styles/no-such-style.md"]),
 		);
 
 		expect(failure).toBeInstanceOf(CorpusFileError);
