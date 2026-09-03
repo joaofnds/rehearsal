@@ -238,29 +238,6 @@ describe("loadCase for a session case", () => {
 });
 
 describe("loadCase for the brief-reply cases", () => {
-	it("returns the 92b2e8b0 turn cut at the fired reply, judged by the band, the em dash, and no tool calls", async () => {
-		const loaded = requireSessionCase(await loadCase("brief-reply-92b2e8b0"));
-
-		expect(loaded).toMatchObject({
-			prompt:
-				"Tools are unavailable now. Write your reply to João for this turn.",
-			tools: [],
-			settings: { outputStyle: "brief" },
-			corpusFiles: ["output-styles/brief.md"],
-			declaration: {
-				transcript: {
-					sourceSession: "92b2e8b0-1cac-4855-87be-ba84d5cee5b9",
-					cut: 1268,
-				},
-			},
-			checks: [
-				{ kind: "word-band", max: 154 },
-				{ kind: "forbidden-text", strings: ["—"] },
-				{ kind: "tool-calls", max: 0 },
-			],
-		});
-	});
-
 	const TURNS = [
 		{
 			caseId: "brief-reply-e3dea673",
@@ -312,6 +289,27 @@ describe("loadCase for the brief-reply cases", () => {
 				{ kind: "forbidden-text", strings: ["\u2014"] },
 				{ kind: "tool-calls", max: 0 },
 			]);
+		},
+	);
+
+	/**
+	 * The four cases differ only in which turn they resume: what they run is
+	 * one measurement of one corpus file under one style, so every case that
+	 * lost the overlay, the corpus file, or the prompt would be measuring
+	 * something else while still passing every per-turn assertion above.
+	 */
+	it.each(TURNS)(
+		"runs $caseId against the brief style overlay with the same prompt, no tools, and the one corpus file it reads",
+		async ({ caseId }) => {
+			const loaded = requireSessionCase(await loadCase(caseId));
+
+			expect(loaded).toMatchObject({
+				prompt:
+					"Tools are unavailable now. Write your reply to João for this turn.",
+				tools: [],
+				settings: { outputStyle: "brief" },
+				corpusFiles: ["output-styles/brief.md"],
+			});
 		},
 	);
 });
