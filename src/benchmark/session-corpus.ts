@@ -1,6 +1,7 @@
-import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
+import { pathExists } from "./file-presence";
 import type {
 	ChezmoiCorpusSource,
 	ResolvedCorpusSource,
@@ -146,7 +147,7 @@ export async function installSessionCorpusSnapshot(
 
 	for (const kind of ["output-styles", "agents"]) {
 		const installed = join(snapshot.root, kind);
-		if ((await stat(installed).catch(() => undefined)) === undefined) {
+		if (!(await pathExists(installed))) {
 			continue;
 		}
 

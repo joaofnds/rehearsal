@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import type { Stats } from "node:fs";
 import { cp, mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +6,7 @@ import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
 import type { Immutable } from "./contracts";
+import { statIfExists } from "./file-presence";
 import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
 
 export interface HashedFile {
@@ -64,20 +64,6 @@ export function lineageKey(inputs: LineageInputs): string {
 			effort: inputs.effort ?? null,
 		}),
 	);
-}
-
-// Only a missing path may read as absent; any other failure (EACCES, EIO)
-// must surface, or a checkpoint would silently record partial state as truth.
-async function statIfExists(path: string): Promise<Stats | undefined> {
-	try {
-		return await stat(path);
-	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-			return undefined;
-		}
-
-		throw error;
-	}
 }
 
 async function hashFile(path: string): Promise<string> {

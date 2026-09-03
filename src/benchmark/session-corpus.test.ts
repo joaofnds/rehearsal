@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, stat, symlink } from "node:fs/promises";
+import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "#benchmark/config";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
+import { pathExists } from "#benchmark/file-presence";
 import type { ChezmoiCorpusSource } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import {
@@ -24,10 +25,6 @@ async function directoryCorpus(
 	}
 
 	return root;
-}
-
-async function exists(path: string): Promise<boolean> {
-	return (await stat(path).catch(() => undefined)) !== undefined;
 }
 
 function sha256Of(contents: string): string {
@@ -130,8 +127,8 @@ describe(snapshotSessionCorpus.name, () => {
 			[],
 		);
 
-		expect(await exists(rendered)).toBe(false);
-		expect(await exists(sourceDirectory)).toBe(false);
+		expect(await pathExists(rendered)).toBe(false);
+		expect(await pathExists(sourceDirectory)).toBe(false);
 	});
 
 	it("records the chezmoi source's resolved commit on the snapshot", async () => {

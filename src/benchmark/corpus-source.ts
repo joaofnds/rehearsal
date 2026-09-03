@@ -1,7 +1,8 @@
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "./command";
+import { pathExists } from "./file-presence";
 
 export class CorpusSourceError extends Error {
 	public override name = "CorpusSourceError";
@@ -75,13 +76,9 @@ const CORPUS_LAYOUT_ENTRIES: readonly string[] = [
 	"agents",
 ];
 
-async function exists(path: string): Promise<boolean> {
-	return (await stat(path).catch(() => undefined)) !== undefined;
-}
-
 async function holdsCorpusLayout(root: string): Promise<boolean> {
 	for (const entry of CORPUS_LAYOUT_ENTRIES) {
-		if (await exists(join(root, entry))) {
+		if (await pathExists(join(root, entry))) {
 			return true;
 		}
 	}
@@ -91,7 +88,7 @@ async function holdsCorpusLayout(root: string): Promise<boolean> {
 
 async function directorySource(source: string): Promise<DirectoryCorpusSource> {
 	const root = resolve(source);
-	if (!(await exists(root))) {
+	if (!(await pathExists(root))) {
 		throw new CorpusSourceError(
 			`Corpus source ${root} is neither an existing directory nor a chezmoi:<ref> source`,
 		);
@@ -221,7 +218,7 @@ export async function corpusLayoutEntries(
 	}
 
 	const instructions = join(source.root, "CLAUDE.md");
-	if (source.kind !== "chezmoi" && (await exists(instructions))) {
+	if (source.kind !== "chezmoi" && (await pathExists(instructions))) {
 		entries.unshift({ layoutPath: "CLAUDE.md", sourcePath: instructions });
 	}
 
