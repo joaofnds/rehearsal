@@ -8,9 +8,9 @@
   repository; a `session` case declares one Claude session (a prompt, an
   optional fixture tree and transcript prefix, tool and settings overlays, the
   corpus files it reads) judged by a deterministic check list. The entry point
-  is `rehearsal.ts`, one executable with a `run`, `replay`, `compare`, `list`,
-  `show`, `stale`, and `case` command (the last with `list`, `show`, and
-  `capture` verbs); its
+  is `rehearsal.ts`, one executable with a `run`, `replay`, `review`,
+  `calibrate`, `compare`, `list`, `show`, `stale`, and `case` command (the last
+  with `list`, `show`, and `capture` verbs); its
   wiring is in `src/cli/` and the harness in `src/benchmark/`. Domain terms are in
   [GLOSSARY.md](GLOSSARY.md); the direction is in `docs/vision.md` and
   `docs/design.md`.

@@ -172,9 +172,50 @@ Human acceptance remains the final calibration standard. Passing stage grades an
 
 ## Human Calibration
 
-After grading, the implementation remains in the real target repository. The harness writes a preliminary run artifact with status `AWAITING_HUMAN_REVIEW`, creates a neighboring `<timestamp>.review.json`, prints both paths, and waits.
+A run grades the candidate and writes a preliminary artifact with status
+`AWAITING_HUMAN_REVIEW` beside an empty `<timestamp>.review.json`. What happens
+next depends on whether the run was asked to pause.
 
-Use this pause to inspect commits, code, tests, architecture, and the structured grade. Record the human verdict and findings in the review file:
+Without `--pause` the run does not stop. It pins the final candidate under
+`refs/rehearsal/<run>` in the target, restores the target, prints the artifact
+path, and exits 0. The candidate outlives the run because of that ref:
+restoring `main` makes the commit unreachable, and only the ref keeps gc from
+pruning it. Nothing is asked, so an agent or a CI job can drive the run and
+record the review afterwards.
+
+```sh
+bun run rehearsal show run:<name> --checkout /tmp/candidate
+
+bun run rehearsal review <name> \
+  --verdict REJECT \
+  --summary 'The worker drops request metadata.' \
+  --finding '{"description":"The persisted row omits request metadata.","paths":["src/audit/worker/audit.worker.ts"],"stage":"build","judgeAssessment":"MISSED","rubricId":"worker-metadata"}'
+
+bun run rehearsal calibrate <name> --confirm-rejudge
+```
+
+With `--pause` the run keeps today's interactive flow: it holds the target with
+the candidate in place, prints both paths, and waits at a prompt until the
+review file and the rubric edits validate. `--pause` needs a terminal and is
+refused before any provider call without one.
+
+### Reading the candidate
+
+`show run:<name> --checkout <dir>` adds a detached worktree of
+`refs/rehearsal/<name>` in the repository the run recorded as its source, and
+prints that directory. It takes no `--target`: the run recorded which
+repository it ran in. `<dir>` must not already exist, and the caller owns it;
+remove it with `git worktree remove` when finished. Under `--pause` the
+candidate is still in the target, so no checkout is needed.
+
+### Recording the review
+
+`rehearsal review <run>` writes `<run>.review.json`. Give it either `--file`
+with a review JSON document, or `--verdict`, `--summary`, and one `--finding`
+per finding, each a JSON object; the two forms cannot be combined. Findings are
+recorded in the order given. The review is written only after the run is known
+to exist and the review parses, so a mistyped name or a malformed review never
+destroys one already recorded.
 
 ```json
 {
@@ -201,18 +242,38 @@ Each finding has one Judge assessment:
 
 `stage` names the pipeline stage the finding belongs to, or `final` for the final Judge; omitted values default to `final` for compatibility with existing review files. `CAUGHT`, `MISSED`, and `FALSE_POSITIVE` findings require a `rubricId`. Human acceptance cannot contain a `CAUGHT` or `MISSED` defect.
 
-If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under the case's `rubrics/`; for a final finding, edit the case's `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading. Press Enter when the review and control-file edits are ready.
+If the work reveals an agent-behavior problem, edit `CLAUDE.md`. For a stage-specific `MISSED` or `FALSE_POSITIVE`, edit the corresponding file under the case's `rubrics/`; for a final finding, edit the case's `rubric.md`. During a stage-failure pause no final grade exists yet, so a `rubric.md` edit is recorded in the calibration result but rejudged only by a run that reaches final grading.
+
+### Calibrating
+
+`rehearsal calibrate <run>` reads the record the run left behind, the artifact
+awaiting review or the stage file of a run that stopped at a stage, together
+with the review and the instruction and rubric files as they stand now. It
+rejudges what changed and records the result. It reads only frozen evidence,
+never the live target, so it runs long after the target was restored.
 
 When a stage rubric changes, the harness regrades the exact same transcript and frozen stage artifacts. When `rubric.md` changes, it runs the final Judge again against the exact same candidate diff, baseline context, and local-check results. Calibration succeeds only when:
 
 - every `CAUGHT` finding maps to an original failing requirement
 - every `MISSED` finding maps to a revised failing requirement
 - every `FALSE_POSITIVE` maps from an original failure to a revised pass
-- you confirm that the revised result reaches those conclusions for the right reasons
+- the revised result is confirmed to reach those conclusions for the right reasons
 
-Invalid review JSON, inconsistent findings, malformed rubric IDs, an ineffective rubric revision, or a rejected rejudge result leaves the target in place and returns to the review prompt. This makes the flawed candidate the regression fixture for the new Judge rule instead of waiting for another implementation run.
+That last confirmation is the one question the paused loop asks and the command
+cannot. `--confirm-rejudge` stands in for the typed yes: without it, a
+calibration whose rejudge revised any grade prints the revised grades on stderr,
+writes nothing, and exits 3, so the second invocation approves a result the
+caller has seen. A calibration that needed no rejudge completes without the
+flag, because there is nothing to approve.
 
-After successful calibration, the harness updates the run artifact to `COMPLETE` with the human review, changed instruction or rubric content, and revised Judge result. It then restores the target. Changes made to this control repository during review are retained and must be committed before the next run.
+Invalid review JSON, inconsistent findings, malformed rubric IDs, or an
+ineffective rubric revision leave the record where it was and exit 3 with the
+reason. Under `--pause` the same refusal returns to the review prompt with the
+target still in place. Either way the flawed candidate stays the regression
+fixture for the new Judge rule instead of waiting for another implementation
+run.
+
+A successful calibration rewrites the record as `COMPLETE` with the human review, changed instruction or rubric content, and revised Judge result. Changes made to this control repository during review are retained and must be committed before the next run.
 
 Completed calibration also updates the Judge agreement snapshot. Every original
 rubric criterion contributes one binary Judge/human decision: `CAUGHT` is
@@ -663,13 +724,13 @@ is written.
 
 1. Commit a clean control state.
 2. Run the benchmark against the same target SHA, model selections, and effort levels.
-3. Inspect the actual target implementation during the review pause.
-4. Record the human verdict and classify every finding against the original Judge result.
+3. Inspect the candidate: `show run:<name> --checkout <dir>` after a run without `--pause`, or the target itself during a `--pause` run.
+4. Record the human verdict and classify every finding against the original Judge result: `rehearsal review <run>` without a pause, or the review file at the prompt with one.
 5. Update `CLAUDE.md` for behavior failures.
 6. Update the responsible stage rubric, or the case's `rubric.md` for final-product findings, when the Judge missed a defect or produced a false positive.
-7. Press Enter to rejudge the same candidate and validate the revised rubric.
+7. Rejudge the same candidate and validate the revised rubric: `rehearsal calibrate <run>`, then again with `--confirm-rejudge` once the printed grades are right. Under `--pause`, press Enter and type yes.
 8. Correct ineffective rubric changes until calibration passes.
-9. Let the harness record calibration and restore the target.
+9. Remove the checkout worktree when finished with it.
 10. Commit control changes.
 11. Run again and compare completed artifacts.
 
