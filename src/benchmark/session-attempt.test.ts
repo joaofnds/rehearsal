@@ -20,6 +20,7 @@ import {
 	forkTranscript,
 	runSessionAttempt,
 	sessionCaseArgs,
+	SessionInputError,
 } from "#benchmark/session-attempt";
 
 const resources = TestResources.forEachTest();
@@ -426,7 +427,7 @@ describe(forkTranscript.name, () => {
 	});
 });
 
-function resumingCase(transcriptPath: string): SessionCase {
+function resumingCase(transcriptPath: string, sha256: string): SessionCase {
 	const base = sessionCase({ transcriptPath });
 
 	return {
@@ -435,12 +436,28 @@ function resumingCase(transcriptPath: string): SessionCase {
 			...base.declaration,
 			transcript: {
 				file: "prefix.jsonl",
-				sha256: "0".repeat(64),
+				sha256,
 				sourceSession: SOURCE_SESSION,
 				cut: 1,
 			},
 		},
 	};
+}
+
+async function writtenPrefix(text: string): Promise<PrefixOnDisk> {
+	const directory = await mkdtemp(join(tmpdir(), "rehearsal-prefix-"));
+	const path = join(directory, "prefix.jsonl");
+	await writeFile(path, text);
+
+	return {
+		path,
+		sha256: new Bun.CryptoHasher("sha256").update(text).digest("hex"),
+	};
+}
+
+interface PrefixOnDisk {
+	readonly path: string;
+	readonly sha256: string;
 }
 
 /**
@@ -563,17 +580,14 @@ describe(runSessionAttempt.name, () => {
 	});
 
 	it("copies the forked transcript when the resumed session appends to it rather than writing a new file", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-prefix-"));
-		const prefix = join(directory, "prefix.jsonl");
-		await writeFile(
-			prefix,
+		const prefix = await writtenPrefix(
 			`${transcriptLine(SOURCE_SESSION, "the codeword is PLUMBAGO")}\n`,
 		);
 		const projects = await projectsRoot();
 
 		const attempt = await runSessionAttempt(
 			request({
-				sessionCase: resumingCase(prefix),
+				sessionCase: resumingCase(prefix.path, prefix.sha256),
 				projectsDirectory: projects,
 				recordDirectory: await recordDirectory(),
 				runClaude: appendingClaude(projects, "PLUMBAGO"),
@@ -581,6 +595,30 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(await Bun.file(attempt.transcriptFile).text()).toContain("PLUMBAGO");
+	});
+
+	it("refuses a transcript prefix whose bytes do not match the declared digest, naming the case and both digests", async () => {
+		const prefix = await writtenPrefix(
+			`${transcriptLine(SOURCE_SESSION, "bytes the declaration never hashed")}\n`,
+		);
+		const declared = "a".repeat(64);
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					sessionCase: resumingCase(prefix.path, declared),
+					projectsDirectory: await projectsRoot(),
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.reject(new Error("a provider call must not happen")),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInputError);
+		expect(failure.message).toBe(
+			`Case probe declares transcript prefix.jsonl at ${declared}, but ${prefix.path} hashes ${prefix.sha256}`,
+		);
 	});
 
 	it("removes the transcript the provider wrote even when reading the envelope fails", async () => {

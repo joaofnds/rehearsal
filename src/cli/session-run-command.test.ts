@@ -48,6 +48,23 @@ function sessionCase(
 	};
 }
 
+function resumingCase(transcriptPath: string): SessionCase {
+	const base = sessionCase({ transcriptPath });
+
+	return {
+		...base,
+		declaration: {
+			...base.declaration,
+			transcript: {
+				file: "prefix.jsonl",
+				sha256: "a".repeat(64),
+				sourceSession: "11111111-1111-1111-1111-111111111111",
+				cut: 1,
+			},
+		},
+	};
+}
+
 /**
  * The provider writes its session file under the id the command line named,
  * which is what lets the harness account for the file it must remove.
@@ -168,6 +185,27 @@ describe(runSessionDebugAttempt.name, () => {
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toContain("escape.md");
+	});
+
+	it("refuses a transcript prefix whose bytes do not match the declared digest, before any provider call", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+		const prefix = join(await temporary("rehearsal-prefix-"), "prefix.jsonl");
+		await writeFile(prefix, "bytes the declaration never hashed\n");
+
+		const failure = await failureOf(
+			runSessionDebugAttempt({
+				sessionCase: resumingCase(prefix),
+				config,
+				runsDirectory: runs,
+				runClaude: () =>
+					Promise.reject(new Error("a provider call must not happen")),
+				projectsDirectory: projects,
+			}),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("prefix.jsonl");
 	});
 
 	it("refuses a declared corpus file that does not resolve, before any provider call", async () => {

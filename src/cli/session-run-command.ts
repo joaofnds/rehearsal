@@ -14,7 +14,10 @@ import type {
 	SessionAttempt,
 	SessionAttemptRequest,
 } from "#benchmark/session-attempt";
-import { FixtureError, runSessionAttempt } from "#benchmark/session-attempt";
+import {
+	runSessionAttempt,
+	SessionInputError,
+} from "#benchmark/session-attempt";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
 	SessionCorpusError,
@@ -94,9 +97,10 @@ async function requireCorpus(
 }
 
 /**
- * A fixture tree the harness refuses to seed is a declared input the command
+ * A fixture tree the harness refuses to seed, and a transcript prefix whose
+ * bytes are not the ones the case declares, are declared inputs the command
  * cannot satisfy, the same shape of refusal as a corpus file that does not
- * resolve, so it exits 3 rather than as an execution failure.
+ * resolve, so they exit 3 rather than as an execution failure.
  */
 async function attempted(
 	request: SessionAttemptRequest,
@@ -104,7 +108,7 @@ async function attempted(
 	try {
 		return await runSessionAttempt(request);
 	} catch (error) {
-		if (error instanceof FixtureError) {
+		if (error instanceof SessionInputError) {
 			throw new RefusedPreconditionError(error.message);
 		}
 

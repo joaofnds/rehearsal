@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import type { SessionCase } from "./case";
+import type { SessionCase, TranscriptPrefix } from "./case";
 import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
 import type { SessionSettings } from "./claude";
 import type { ClaudeCallMetrics } from "./contracts";
@@ -138,6 +138,42 @@ export function sessionCaseArgs(
 }
 
 /**
+ * A fixture tree and a transcript prefix are both declared inputs the attempt
+ * reads before it calls the provider, and a caller does the same thing with
+ * either refusal: report it and pay for nothing. One type keeps that response
+ * in one place rather than growing a class per input the harness can refuse.
+ */
+export class SessionInputError extends Error {
+	public override name = "SessionInputError";
+}
+
+/**
+ * The prefix's bytes are git-ignored run state that the declaration only names,
+ * so the file on disk can be any file the machine has and the declaration is
+ * the only claim about which bytes this case resumes. Hashing before the fork
+ * is what turns that claim into a precondition: an attempt either resumes the
+ * bytes the case was captured from or it refuses, before the provider is paid
+ * to read them.
+ */
+async function verifiedPrefix(
+	sessionCase: SessionCase,
+	transcriptPath: string,
+	declared: TranscriptPrefix,
+): Promise<void> {
+	const hasher = new Bun.CryptoHasher("sha256");
+	for await (const chunk of Bun.file(transcriptPath).stream()) {
+		hasher.update(chunk);
+	}
+
+	const found = hasher.digest("hex");
+	if (found !== declared.sha256) {
+		throw new SessionInputError(
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file} at ${declared.sha256}, but ${transcriptPath} hashes ${found}`,
+		);
+	}
+}
+
+/**
  * A resumed session is the fork the harness wrote under a fresh uuid; a session
  * with no transcript is named by that uuid through `--session-id`. Either way
  * the attempt owns exactly `<sessionId>.jsonl` under its slug.
@@ -152,6 +188,8 @@ async function prepareSession(
 		return { sessionId, resumed: false };
 	}
 
+	await verifiedPrefix(sessionCase, transcriptPath, declaration.transcript);
+
 	await mkdir(slug, { recursive: true });
 	await forkTranscript(
 		transcriptPath,
@@ -161,10 +199,6 @@ async function prepareSession(
 	);
 
 	return { sessionId, resumed: true };
-}
-
-export class FixtureError extends Error {
-	public override name = "FixtureError";
 }
 
 /**
@@ -182,7 +216,7 @@ async function seedFixture(
 		withFileTypes: true,
 	})) {
 		if (entry.isSymbolicLink()) {
-			throw new FixtureError(
+			throw new SessionInputError(
 				`Fixture entry ${relative(fixturePath, join(entry.parentPath, entry.name))} is a symlink, which would lead out of the attempt directory`,
 			);
 		}
