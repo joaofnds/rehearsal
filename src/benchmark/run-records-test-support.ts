@@ -310,13 +310,35 @@ export class RecordedRunsFixture {
 		caseId: string,
 		layoutPaths: readonly string[],
 	): Promise<void> {
-		const corpusFiles = await hashCorpusFiles(
-			{ kind: "directory", root: corpusRoot },
+		await this.writeAttemptAt(
+			this.sessionAttempt.uuid,
+			corpusRoot,
+			caseId,
 			layoutPaths,
 		);
-		const { uuid } = this.sessionAttempt;
+	}
+
+	/**
+	 * One attempt under a uuid the caller names, so a test can put two attempts
+	 * for one case on disk and set their modification times itself. Recency is
+	 * decided by mtime today, and without two records nothing observes that.
+	 */
+	public async writeAttemptAt(
+		uuid: string,
+		corpusRoot: string,
+		caseId: string,
+		layoutPaths: readonly string[],
+	): Promise<string> {
+		const corpusFiles = await hashCorpusFiles(
+			directorySource(corpusRoot),
+			layoutPaths,
+		);
+		const { recordFile } = sessionAttemptPaths(this.runsDirectory, {
+			caseId,
+			uuid,
+		});
 		await Bun.write(
-			sessionAttemptPaths(this.runsDirectory, { caseId, uuid }).recordFile,
+			recordFile,
 			serialize(
 				sessionAttemptRecordSchema.parse({
 					...sessionAttempt(caseId),
@@ -324,6 +346,8 @@ export class RecordedRunsFixture {
 				}),
 			),
 		);
+
+		return recordFile;
 	}
 
 	public async writeGroupReport(groupId: string): Promise<void> {

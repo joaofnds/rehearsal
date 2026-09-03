@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CASES_DIRECTORY } from "./case";
@@ -14,6 +14,8 @@ import { TestResources } from "./test-support";
 import { staleCases, staleCheckpoints } from "./staleness-report";
 
 const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
+const EARLY = new Date("2026-09-01T00:00:00.000Z");
+const LATE = new Date("2026-09-02T00:00:00.000Z");
 
 describe(staleCheckpoints.name, () => {
 	const roots: string[] = [];
@@ -224,6 +226,60 @@ describe(staleCases.name, () => {
 		const report = await staleCases(runsDirectory, directorySource(corpus));
 
 		expect(report.records).toEqual([]);
+	});
+
+	describe("when a case has two attempts", () => {
+		const OLDER = "0f6b6f2a-0000-4000-8000-00000000000a";
+		const NEWER = "0f6b6f2a-0000-4000-8000-00000000000b";
+
+		/**
+		 * Recency is decided by the record file's modification time, because the
+		 * attempt record carries no timestamp and a uuid gives no order. Setting
+		 * both times explicitly is what makes the choice observable rather than
+		 * an accident of which uuid `readdir` happened to yield first.
+		 */
+		async function twoAttempts(
+			olderCorpus: string,
+			newerCorpus: string,
+		): Promise<string> {
+			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-two-"));
+			roots.push(root);
+			const fixture = new RecordedRunsFixture(root);
+			const older = await fixture.writeAttemptAt(OLDER, olderCorpus, "smoke", [
+				"output-styles/brief.md",
+			]);
+			const newer = await fixture.writeAttemptAt(NEWER, newerCorpus, "smoke", [
+				"output-styles/brief.md",
+			]);
+			await utimes(older, EARLY, EARLY);
+			await utimes(newer, LATE, LATE);
+
+			return root;
+		}
+
+		it("answers from the most recent one", async () => {
+			const corpus = await styleCorpus("the brief style\n");
+			const runsDirectory = await twoAttempts(
+				await styleCorpus("some older style\n"),
+				corpus,
+			);
+
+			const report = await staleCases(runsDirectory, directorySource(corpus));
+
+			expect(report.records).toEqual([]);
+		});
+
+		it("ignores the older one even when the corpus still matches it", async () => {
+			const older = await styleCorpus("some older style\n");
+			const runsDirectory = await twoAttempts(
+				older,
+				await styleCorpus("the brief style\n"),
+			);
+
+			const report = await staleCases(runsDirectory, directorySource(older));
+
+			expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
+		});
 	});
 
 	describe("when one attempt record cannot be read", () => {
