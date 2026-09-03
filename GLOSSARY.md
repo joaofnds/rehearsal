@@ -112,6 +112,11 @@
   byte-faithfully, so a stage can run from it.
 - **Model family** — a named Claude model line — Opus, Sonnet, or Haiku —
   recognized from either its native alias or a full model ID.
+- **No reply** — the outcome of a session attempt whose envelope carried no
+  result, the provider having stopped at its turn or budget limit. It is not a
+  reply of zero words: no check is evaluated and none is recorded, so the
+  attempt reads as a measurement that did not happen rather than one that
+  passed.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
   data.
 - **Pipeline definition** — the declared, user-authored data the harness reads
@@ -157,6 +162,11 @@
   agent definitions, the corpus files it reads, and its check list. It runs in
   an attempt directory, once as a debug attempt or under `--confirm` as reps,
   with the same records, reports, and cost ceiling as a stage replay.
+- **Session naming** — the uuid an attempt gives its own session before the
+  call, as the fork's id when resuming and through `--session-id` otherwise. It
+  is what lets the attempt name the one session file it owns under its slug, so
+  cleanup deletes that file and never an entry it cannot account for, whether
+  the call returned or threw.
 - **Session knobs** — the CLI and environment settings shared by run and replay
   that select the workflow and Judge models and efforts and set the per-session
   spend limit.

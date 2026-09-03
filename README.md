@@ -276,11 +276,20 @@ optional `settings` and `agents` overlay passed to the provider as inline JSON,
 the `corpusFiles` it reads in corpus layout paths, and the `checks` that judge
 it. `cases/smoke/` is the smallest one.
 
+A fixture tree may hold no symlink. A recursive copy preserves one, which would
+give the session a live path out of the attempt directory the harness owns, so
+a fixture containing one is refused before any provider call, naming the entry.
+
 ### Session case check kinds
 
 A session case's judge is a deterministic check list, evaluated over the reply
 and the transcript with no provider call. The rep is successful when and only
 when every check passes.
+
+A session that terminates without producing a reply, having run out of turns or
+budget, records the outcome `NO_REPLY` with no reply and no check evaluated. It
+is not a reply of zero words, so it neither passes nor fails the checks: the
+record says the measurement did not happen rather than that it succeeded.
 
 - `word-band { min?, max? }` counts the reply's words and reports the count
   against the band.
