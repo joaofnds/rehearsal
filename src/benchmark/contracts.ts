@@ -266,6 +266,85 @@ export interface StageJudgeInput {
 	readonly harnessFailure?: string | undefined;
 }
 
+const contextFileSchema = z.object({
+	path: z.string(),
+	content: z.string(),
+});
+
+const localCheckResultSchema = z.object({
+	status: z.enum(["PASS", "FAIL"]),
+	evidence: z.array(evidenceSchema),
+});
+
+const stageTranscriptSchema = z.object({
+	stage: z.string().min(1),
+	sessionId: z.string(),
+	costUsd: z.number(),
+	providerCalls: z.array(
+		z.object({ metrics: claudeCallMetricsSchema.optional() }),
+	),
+	exchanges: z.array(
+		z.object({
+			agent: stageTurnSchema,
+			productOwnerAnswer: z.string().optional(),
+		}),
+	),
+});
+
+export const stageJudgeInputSchema = z.object({
+	stage: z.string().min(1),
+	kind: z.enum(["planning", "delivery"]),
+	task: z.string(),
+	productBrief: z.string(),
+	instructions: z.string(),
+	baselineContext: z.array(contextFileSchema),
+	taskState: z.string(),
+	transcript: stageTranscriptSchema,
+	artifact: contextFileSchema.optional(),
+	priorArtifacts: z.array(contextFileSchema),
+	diff: z.string().optional(),
+	changedPaths: z.array(z.string()).optional(),
+	commitSubjects: z.array(z.string()).optional(),
+	checkIntegrity: localCheckResultSchema.optional(),
+	localChecks: localCheckResultSchema.optional(),
+	harnessFailure: z.string().optional(),
+});
+
+const judgeAttemptSchema = z.intersection(
+	z.object({
+		payload: z.unknown(),
+		costUsd: z.number(),
+		metrics: claudeCallMetricsSchema.optional(),
+	}),
+	z.union([
+		z.object({ outcome: z.literal("ACCEPTED") }),
+		z.object({ outcome: z.literal("REJECTED"), error: z.string() }),
+	]),
+);
+
+export const judgeAttemptListSchema = z.array(judgeAttemptSchema);
+
+export const stageGradeSchema = stageJudgeOutputSchema.extend({
+	grade: stageLetterGradeSchema,
+	verdict: z.enum(["CONTINUE", "STOP"]),
+});
+
+/**
+ * The scorecard as a schema, so a command that reads one back off disk proves
+ * what it holds rather than asserting it. The interface below stays the shape
+ * the harness writes; this is the same shape, parsed.
+ */
+export const stageScorecardSchema = z.object({
+	stage: z.string().min(1),
+	rubricPath: z.string().min(1),
+	rubric: stageRubricSchema,
+	input: stageJudgeInputSchema,
+	prompt: z.string(),
+	attempts: judgeAttemptListSchema,
+	costUsd: z.number(),
+	grade: stageGradeSchema,
+});
+
 export interface StageGrade extends StageJudgeOutput {
 	readonly grade: StageLetterGrade;
 	readonly verdict: "CONTINUE" | "STOP";

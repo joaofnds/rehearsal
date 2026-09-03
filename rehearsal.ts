@@ -33,6 +33,7 @@ import {
 } from "./src/cli/commands";
 import { EXIT_CODES, exitCodeFor } from "./src/cli/exit-codes";
 import { runList } from "./src/cli/list-command";
+import { judgesFor, runCalibrate } from "./src/cli/calibrate-command";
 import { runReview } from "./src/cli/review-command";
 import { runShow } from "./src/cli/show-command";
 import { runStale } from "./src/cli/stale-command";
@@ -110,6 +111,20 @@ async function dispatch(
 					summary: flagValue(commandLine.flags, "--summary"),
 					findings: repeatedFlagValues(commandLine.flags, "--finding"),
 				},
+				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
+		case "calibrate": {
+			await runCalibrate(
+				{
+					id: commandLine.argument,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+					json: commandLine.json,
+					confirmRejudge: commandLine.flags.includes("--confirm-rejudge"),
+				},
+				judgesFor,
 				processOutput,
 			);
 

@@ -394,6 +394,7 @@ const BARE_REFUSALS: ReadonlyMap<string, { code: number; reason: string }> =
 		["run", { code: EXIT_CODES.usageError, reason: "Provide --model" }],
 		["replay", { code: EXIT_CODES.usageError, reason: "Provide --run" }],
 		["review", { code: EXIT_CODES.usageError, reason: "Provide the run" }],
+		["calibrate", { code: EXIT_CODES.usageError, reason: "Provide the run" }],
 		[
 			"compare",
 			{

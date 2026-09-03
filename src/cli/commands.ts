@@ -199,6 +199,20 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		],
 	},
 	{
+		name: "calibrate",
+		summary:
+			"Rejudge a run's frozen evidence with the current rubrics and record the result",
+		argument: "run",
+		flags: [
+			{
+				name: "--confirm-rejudge",
+				kind: "switch",
+				help: "Record a revised Judge result; required when the rejudge changed a grade",
+			},
+			jsonFlag,
+		],
+	},
+	{
 		name: "compare",
 		summary: "Report over completed confirmation evidence; runs no session",
 		argument: "comparison-manifest.json",

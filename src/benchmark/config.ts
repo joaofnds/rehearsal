@@ -137,7 +137,12 @@ export function judgeSelfPreferenceWarning(config: {
 	return `Self-preference warning: Judge model ${config.judgeModel} and workflow model ${config.model} are both in the ${workflowFamily} family; grades may favor the workflow output.`;
 }
 
-const SWITCH_FLAGS = new Set(["--confirm", "--yes", "--pause"]);
+const SWITCH_FLAGS = new Set([
+	"--confirm",
+	"--yes",
+	"--pause",
+	"--confirm-rejudge",
+]);
 
 function flagValues(args: readonly string[]): ParsedFlags {
 	const values = new Map<string, string>();
