@@ -1,9 +1,13 @@
 import type { StaleCliConfig } from "#benchmark/config";
 import { CorpusFileError } from "#benchmark/corpus-file";
-import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
+import type {
+	CorpusSourceDependencies,
+	ResolvedCorpusSource,
+} from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
 	defaultCorpusSourceDependencies,
+	discardRender,
 	resolveCorpusSource,
 } from "#benchmark/corpus-source";
 import type { StaleRecord } from "#benchmark/staleness-report";
@@ -58,7 +62,9 @@ function line(record: StaleRecord): string {
  * Reports what an edit invalidated and delivers nothing, so unlike run and
  * replay it accepts `--corpus` for a stage's skills: the refusal those two
  * make exists because a project-level skill cannot shadow a user-level one,
- * and hashing a skill needs no install at all.
+ * and hashing a skill needs no install at all. A chezmoi render is the whole
+ * home layout, so this command discards it the way a session attempt's
+ * snapshot does rather than leaving one copy per invocation behind.
  */
 export async function runStale(
 	request: StaleRequest,
@@ -70,6 +76,21 @@ export async function runStale(
 			dependencies.corpusSource ?? defaultCorpusSourceDependencies(),
 		),
 	);
+
+	try {
+		await report(request, source, dependencies.output);
+	} finally {
+		if (source.kind === "chezmoi") {
+			await discardRender(source);
+		}
+	}
+}
+
+async function report(
+	request: StaleRequest,
+	source: ResolvedCorpusSource,
+	output: CommandOutput,
+): Promise<void> {
 	const cases = await staleCases(request.runsDirectory, source);
 	const stale = [
 		...(await refusingCorpusFailures(() =>
@@ -79,9 +100,9 @@ export async function runStale(
 	];
 
 	for (const { id, reason } of cases.unreadable) {
-		dependencies.output.stderr(`${id}: ${reason}\n`);
+		output.stderr(`${id}: ${reason}\n`);
 	}
 	for (const record of stale) {
-		dependencies.output.stdout(line(record));
+		output.stdout(line(record));
 	}
 }

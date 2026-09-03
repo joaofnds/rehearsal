@@ -215,6 +215,20 @@ async function renderChezmoi(
 }
 
 /**
+ * A render is the whole home layout, of which four kinds are read, so keeping
+ * it would leave a copy of the home tree in the temporary directory after every
+ * command that resolved one. It lives beside the render because this is the
+ * module that created both directories, and every caller that renders one owes
+ * this call.
+ */
+export async function discardRender(
+	source: ChezmoiCorpusSource,
+): Promise<void> {
+	await rm(source.root, { force: true, recursive: true });
+	await rm(source.sourceDirectory, { force: true, recursive: true });
+}
+
+/**
  * One corpus file or skill directory a source holds, named by where it lands in
  * corpus layout and where its bytes are read from. The snapshot copies these,
  * so nothing after it reads the source tree again.

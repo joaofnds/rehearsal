@@ -1,12 +1,8 @@
-import { cp, lstat, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
-import type {
-	ChezmoiCorpusSource,
-	CorpusLayoutEntry,
-	ResolvedCorpusSource,
-} from "./corpus-source";
-import { corpusLayoutEntries } from "./corpus-source";
+import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
+import { corpusLayoutEntries, discardRender } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
 
 export class SessionCorpusError extends Error {
@@ -192,16 +188,6 @@ function declares(
 		(declared) =>
 			declared === layoutPath || declared.startsWith(`${layoutPath}/`),
 	);
-}
-
-/**
- * A render is the whole home layout, of which four kinds are read, so keeping
- * it would leave a copy of the home tree in the temporary directory after every
- * run. The snapshot holds every byte anything reads afterwards.
- */
-async function discardRender(source: ChezmoiCorpusSource): Promise<void> {
-	await rm(source.root, { force: true, recursive: true });
-	await rm(source.sourceDirectory, { force: true, recursive: true });
 }
 
 /**

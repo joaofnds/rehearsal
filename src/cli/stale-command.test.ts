@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
+import { pathExists } from "#benchmark/file-presence";
 import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
@@ -29,6 +30,40 @@ function refusingRunner(): RecordedRunner {
 				commands.push(command);
 
 				return Promise.reject(new Error("stale ran a command"));
+			},
+			dotfilesDirectory: "/nowhere",
+		},
+	};
+}
+
+interface RenderingRunner {
+	readonly dependencies: CorpusSourceDependencies;
+	readonly rendered: readonly string[];
+}
+
+/**
+ * A chezmoi render without chezmoi: `git rev-parse` answers a commit and the
+ * archive and apply do nothing, which leaves the two scratch directories
+ * `renderChezmoi` created exactly as a real render would.
+ */
+function renderingRunner(): RenderingRunner {
+	const rendered: string[] = [];
+
+	return {
+		rendered,
+		dependencies: {
+			runCommand: (command, cwd) => {
+				if (command[0] === "git") {
+					return Promise.resolve(`${"0".repeat(40)}\n`);
+				}
+				if (command[0] === "chezmoi") {
+					rendered.push(
+						command[command.indexOf("--source") + 1] ?? "",
+						command[command.indexOf("--destination") + 1] ?? "",
+					);
+				}
+
+				return Promise.resolve(cwd === "" ? "" : "");
 			},
 			dotfilesDirectory: "/nowhere",
 		},
@@ -287,6 +322,32 @@ describe(runStale.name, () => {
 				expect(failure.message).toContain("CLAUDE.md");
 				expect(recorder.stdout).toEqual([]);
 			});
+		});
+	});
+
+	describe("when --corpus names a chezmoi ref", () => {
+		it("leaves neither scratch directory behind", async () => {
+			const root = await temporaryDirectory("rehearsal-stale-chezmoi-");
+			const fixture = new RecordedRunsFixture(root);
+			await fixture.writeAttemptReading(
+				await corpusDirectory("build skill\n"),
+				"smoke",
+				["output-styles/brief.md"],
+			);
+			const scratch = renderingRunner();
+
+			await runStale(
+				{ corpus: "chezmoi:HEAD", runsDirectory: root },
+				{
+					output: recordOutput().output,
+					corpusSource: scratch.dependencies,
+				},
+			);
+
+			expect(scratch.rendered).toHaveLength(2);
+			for (const directory of scratch.rendered) {
+				expect(await pathExists(directory)).toBe(false);
+			}
 		});
 	});
 

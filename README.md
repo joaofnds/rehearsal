@@ -553,7 +553,10 @@ The preliminary artifact is written after a valid original Judge result and befo
 ## Reading the Records
 
 `list`, `show`, and `stale` read what is on disk. None of them starts a
-provider session or a worktree, and none of them writes anything.
+provider session or a worktree, and none of them writes into `.benchmark-runs`.
+`stale --corpus chezmoi:<ref>` is the one exception to writing nothing at all:
+rendering that ref needs two scratch directories under the system temporary
+directory, and the command removes both before it returns.
 
 ```sh
 bun run rehearsal list <cases|runs|checkpoints|attempts|groups|comparisons>
