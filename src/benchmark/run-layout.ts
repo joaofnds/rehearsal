@@ -60,6 +60,23 @@ export function runNameFromCheckpointsEntry(entry: string): string | undefined {
 	return entry.slice(0, -CHECKPOINTS_SUFFIX.length);
 }
 
+/**
+ * A replay record is filed under the lineage it consumed rather than under the
+ * run that produced it, so it is reachable without naming a run.
+ */
+export function replayRecordFile(
+	runsDirectory: string,
+	lineage: string,
+	timestamp: string,
+): string {
+	return join(
+		runsDirectory,
+		"replays",
+		lineage,
+		`${runNameFromTimestamp(timestamp)}.json`,
+	);
+}
+
 export function benchmarkRunPaths(
 	runsDirectory: string,
 	name: string,
@@ -82,11 +99,7 @@ export function benchmarkRunPaths(
 		checkpointDirectory: (stage) => join(checkpointsDirectory, stage),
 		replayDirectory: (lineage) => join(replaysDirectory, lineage),
 		replayRecordFile: (lineage, timestamp) =>
-			join(
-				replaysDirectory,
-				lineage,
-				`${runNameFromTimestamp(timestamp)}.json`,
-			),
+			replayRecordFile(runsDirectory, lineage, timestamp),
 	};
 }
 

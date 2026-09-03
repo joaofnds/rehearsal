@@ -6,6 +6,7 @@ import { unhandled } from "#benchmark/contracts";
 import { parseComparisonReport } from "#benchmark/comparison-record";
 import { parseConfirmationGroupRecord } from "#benchmark/confirmation-record";
 import { parseRunSummaryRecord } from "#benchmark/record-summary";
+import { readReplayRecord } from "#benchmark/replay";
 import {
 	benchmarkRunPaths,
 	comparisonDigests,
@@ -13,6 +14,8 @@ import {
 	confirmationGroupIds,
 	confirmationGroupPaths,
 	recordedRunNames,
+	replayAttemptIds,
+	replayRecordFile,
 	sessionAttemptIds,
 } from "#benchmark/run-layout";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
@@ -20,6 +23,8 @@ import { UsageError } from "#cli/commands";
 import type { CommandOutput } from "#cli/output";
 import type { RecordId } from "#cli/record-id";
 import { formatRecordId } from "#cli/record-id";
+
+const ATTEMPT_FILE = "attempt.json";
 
 export const LIST_KINDS = [
 	"cases",
@@ -213,22 +218,46 @@ async function listComparisons(runsDirectory: string): Promise<RecordListing> {
 	);
 }
 
+/**
+ * Both kinds the glossary's Attempt entry names: one session of a session case,
+ * and one stage replayed from a checkpoint. They are one listing because a
+ * session choosing what to re-run wants every prior measurement, and the id's
+ * kind is what keeps the two apart.
+ */
 async function listAttempts(runsDirectory: string): Promise<RecordListing> {
-	const attempts = await sessionAttemptIds(runsDirectory);
-
-	return collect(
-		attempts,
+	const sessions = await collect(
+		await sessionAttemptIds(runsDirectory),
 		({ caseId, uuid }) => ({ kind: "attempt:session", caseId, uuid }),
 		async ({ caseId, uuid }) => {
 			const record = parseSessionAttemptRecord(
 				await Bun.file(
-					join(runsDirectory, "sessions", caseId, uuid, "attempt.json"),
+					join(runsDirectory, "sessions", caseId, uuid, ATTEMPT_FILE),
 				).text(),
 			);
 
 			return [record.caseId, record.outcome, record.model];
 		},
 	);
+	const replays = await collect(
+		await replayAttemptIds(runsDirectory),
+		({ lineage, timestamp }) => ({ kind: "attempt:stage", lineage, timestamp }),
+		async ({ lineage, timestamp }) => {
+			const record = await readReplayRecord(
+				replayRecordFile(runsDirectory, lineage, timestamp),
+			);
+
+			return [
+				record.stage,
+				`${record.scorecard.grade.grade} ${record.scorecard.grade.verdict}`,
+				record.model,
+			];
+		},
+	);
+
+	return {
+		entries: [...sessions.entries, ...replays.entries],
+		unreadable: [...sessions.unreadable, ...replays.unreadable],
+	};
 }
 
 export function listRecords(

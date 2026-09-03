@@ -115,7 +115,7 @@ describe(runList.name, () => {
 		]);
 	});
 
-	it("prints one line per session attempt with its case, outcome, and model", async () => {
+	it("prints one line per attempt of both kinds with its case, outcome, and model", async () => {
 		const fixture = await writtenFixture();
 		const recorder = recordOutput();
 
@@ -126,6 +126,7 @@ describe(runList.name, () => {
 
 		expect(lines(recorder.stdout)).toEqual([
 			`attempt:session:${fixture.sessionAttempt.caseId}/${fixture.sessionAttempt.uuid}\tsmoke\tSUCCESSFUL\tsonnet`,
+			`attempt:stage:${fixture.stageAttempt.lineage}/${fixture.stageAttempt.timestamp}\tbuild\tA CONTINUE\tsonnet`,
 		]);
 	});
 

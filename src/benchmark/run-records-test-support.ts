@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import type { z } from "zod";
 import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
@@ -9,15 +10,20 @@ import { confirmationGroupRecordSchema } from "./confirmation-record";
 import type { ConfirmationGroupRecord } from "./confirmation-record";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
-import type { RunSummaryRecord } from "./record-summary";
-import { runSummarySchema } from "./record-summary";
+import type {
+	GroupReportSummaryRecord,
+	RunSummaryRecord,
+} from "./record-summary";
+import { groupReportSummarySchema, runSummarySchema } from "./record-summary";
 import type { SessionAttemptRecord } from "./session-record";
 import { sessionAttemptRecordSchema } from "./session-record";
-import type { SessionAttemptId } from "./run-layout";
+import { replayRecordSchema } from "./replay";
+import type { SessionAttemptId, StageAttemptId } from "./run-layout";
 import {
 	benchmarkRunPaths,
 	comparisonReportPaths,
 	confirmationGroupPaths,
+	replayRecordFile,
 } from "./run-layout";
 
 const CASE_ID = "audit-log";
@@ -25,10 +31,14 @@ const CHECKPOINT_FILE = "checkpoint.json";
 const CORPUS_DIGEST = "a".repeat(64);
 const COMPARISON_DIGEST = "c".repeat(64);
 
+type ParsedReplayRecord = z.infer<typeof replayRecordSchema>;
+
 type WrittenRecord =
 	| CheckpointRecord
+	| ParsedReplayRecord
 	| ConfirmationGroupRecord
 	| Omit<ConfirmationGroupRecord, "caseId">
+	| GroupReportSummaryRecord
 	| RunSummaryRecord
 	| SessionAttemptRecord;
 
@@ -131,6 +141,60 @@ function group(groupId: string): ConfirmationGroupRecord {
 	});
 }
 
+/**
+ * The reliability and resource halves of the report a group writes beside its
+ * record: `--json` prints the group record, and the summary reads this.
+ */
+function groupReport(): GroupReportSummaryRecord {
+	return groupReportSummarySchema.parse({
+		reliability: [
+			{
+				name: "build",
+				requested: 2,
+				attempted: 2,
+				notReached: 0,
+				failed: 1,
+				successful: 1,
+				successRate: 0.5,
+				standardError: 0.35355339059327373,
+				passK: 0.25,
+			},
+		],
+		resources: { total: { costUsd: [1.25, 2.75] } },
+	});
+}
+
+function replayRecord(runName: string, timestamp: string): ParsedReplayRecord {
+	return replayRecordSchema.parse({
+		replay: true,
+		timestamp,
+		runName,
+		stage: "build",
+		consumed: {
+			stage: "discuss",
+			lineage: "lineage-discuss",
+			targetSha: "2".repeat(40),
+		},
+		baseSha: "2".repeat(40),
+		lineage: "lineage-build",
+		corpusFiles: [{ path: corpusPath("build"), sha256: CORPUS_DIGEST }],
+		model: "sonnet",
+		judgeModel: "opus",
+		sessionBudgetUsd: 5,
+		controlSha: "1".repeat(40),
+		stageCostUsd: 1,
+		productOwnerCostUsd: 0.25,
+		judgeCostUsd: 0.5,
+		stale: false,
+		staleness: [],
+		scorecard: {
+			stage: "build",
+			costUsd: 1,
+			grade: { grade: "A", verdict: "CONTINUE", dimensions: [] },
+		},
+	});
+}
+
 function sessionAttempt(caseId: string): SessionAttemptRecord {
 	return sessionAttemptRecordSchema.parse({
 		schemaVersion: 1,
@@ -179,8 +243,20 @@ export class RecordedRunsFixture {
 		caseId: "smoke",
 		uuid: "0f6b6f2a-0000-4000-8000-000000000001",
 	};
+	public readonly stageAttempt: StageAttemptId = {
+		lineage: "lineage-build",
+		timestamp: "2026-09-03T01-00-00.000Z",
+	};
 
 	public constructor(public readonly runsDirectory: string) {}
+
+	public get stageAttemptFile(): string {
+		return replayRecordFile(
+			this.runsDirectory,
+			this.stageAttempt.lineage,
+			this.stageAttempt.timestamp,
+		);
+	}
 
 	public get sessionAttemptFile(): string {
 		return join(
@@ -192,12 +268,20 @@ export class RecordedRunsFixture {
 		);
 	}
 
+	public async writeGroupReport(groupId: string): Promise<void> {
+		const paths = confirmationGroupPaths(this.runsDirectory, groupId);
+		await mkdir(paths.directory, { recursive: true });
+		await Bun.write(paths.reportFile, serialize(groupReport()));
+	}
+
 	public async write(): Promise<void> {
 		await this.writeReplayableRun();
 		await this.writeUnreplayableRun();
 		await this.writeGroup();
+		await this.writeGroupReport(this.groupId);
 		await this.writeComparison();
 		await this.writeSessionAttempt();
+		await this.writeStageAttempt();
 	}
 
 	/**
@@ -292,6 +376,13 @@ export class RecordedRunsFixture {
 					baselines: [],
 				}),
 			),
+		);
+	}
+
+	private async writeStageAttempt(): Promise<void> {
+		await Bun.write(
+			this.stageAttemptFile,
+			serialize(replayRecord(this.replayableRun, this.stageAttempt.timestamp)),
 		);
 	}
 
