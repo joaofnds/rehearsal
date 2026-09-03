@@ -91,12 +91,7 @@ export async function snapshotSessionCorpus(
 	declaredPaths: readonly string[],
 ): Promise<SessionCorpusSnapshot> {
 	if (source.kind === "live") {
-		return {
-			kind: "live",
-			root: source.root,
-			origin: originOf(source),
-			declaredPaths: [...declaredPaths],
-		};
+		return snapshotOf(source, source.root, declaredPaths);
 	}
 
 	try {
@@ -108,9 +103,17 @@ export async function snapshotSessionCorpus(
 		}
 	}
 
+	return snapshotOf(source, destination, declaredPaths);
+}
+
+function snapshotOf(
+	source: ResolvedCorpusSource,
+	root: string,
+	declaredPaths: readonly string[],
+): SessionCorpusSnapshot {
 	return {
 		kind: source.kind,
-		root: destination,
+		root,
 		origin: originOf(source),
 		declaredPaths: [...declaredPaths],
 	};
