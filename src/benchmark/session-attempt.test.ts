@@ -14,12 +14,15 @@ import type { Immutable } from "#benchmark/contracts";
 import { projectSlug } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
+import { TestResources } from "#benchmark/test-support";
 import type { SessionAttemptRequest } from "#benchmark/session-attempt";
 import {
 	forkTranscript,
 	runSessionAttempt,
 	sessionCaseArgs,
 } from "#benchmark/session-attempt";
+
+const resources = TestResources.forEachTest();
 
 const SOURCE_SESSION = "11111111-1111-1111-1111-111111111111";
 const WRITTEN_SESSION = "99999999-9999-9999-9999-999999999999";
@@ -258,7 +261,7 @@ describe("the corpus overlay a session attempt installs", () => {
 		layoutPath: string,
 		contents: string,
 	): Promise<SessionCorpusSnapshot> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-attempt-corpus-"));
+		const root = await resources.createControlDirectory();
 		await Bun.write(join(root, layoutPath), contents);
 
 		return styleSnapshot(root);

@@ -149,6 +149,8 @@ describe("rendering a chezmoi corpus source", () => {
 		const fake = runner();
 
 		const source = await rendered("chezmoi:HEAD~1", fake.run);
+		resources.track(source.root);
+		resources.track(source.sourceDirectory);
 
 		const commands = fake.commands.map((recorded) => recorded.command);
 		const archive = commands.find((command) => command[0] === "sh");
@@ -175,6 +177,8 @@ describe("rendering a chezmoi corpus source", () => {
 		const fake = runner();
 
 		const source = await rendered("chezmoi:HEAD", fake.run);
+		resources.track(source.root);
+		resources.track(source.sourceDirectory);
 
 		expect(source.kind).toBe("chezmoi");
 		expect(source.ref).toBe("HEAD");

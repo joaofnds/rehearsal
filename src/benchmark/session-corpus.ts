@@ -1,7 +1,10 @@
-import { cp, mkdir, readdir, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
-import type { ResolvedCorpusSource } from "./corpus-source";
+import type {
+	ChezmoiCorpusSource,
+	ResolvedCorpusSource,
+} from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
 
 export class SessionCorpusError extends Error {
@@ -57,15 +60,21 @@ export function stageCorpusRefusal(corpus: string): SessionCorpusError {
 	);
 }
 
-function refuseSkills(layoutPaths: readonly string[]): void {
-	const skill = layoutPaths.find((layoutPath) =>
+/**
+ * A rendered source carries the whole corpus, most of which no case reads, so
+ * the refusal keys on what the case declared: a skill the case does not name is
+ * never reported, and refusing on its presence would make a chezmoi source
+ * unusable for the styles and agents that do get delivered.
+ */
+function refuseDeclaredSkills(declaredPaths: readonly string[]): void {
+	const skill = declaredPaths.find((layoutPath) =>
 		layoutPath.startsWith("skills/"),
 	);
 	if (skill === undefined) {
 		return;
 	}
 
-	throw undeliverableSkill(`Corpus source carries ${skill}`);
+	throw undeliverableSkill(`The case declares corpus file ${skill}`);
 }
 
 function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {
@@ -87,14 +96,15 @@ function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {
 export async function snapshotSessionCorpus(
 	source: ResolvedCorpusSource,
 	destination: string,
+	declaredPaths: readonly string[],
 ): Promise<SessionCorpusSnapshot> {
 	if (source.kind === "live") {
 		return { kind: "live", root: source.root, origin: originOf(source) };
 	}
 
-	const entries = await corpusLayoutEntries(source);
-	refuseSkills(entries.map((entry) => entry.layoutPath));
+	refuseDeclaredSkills(declaredPaths);
 
+	const entries = await corpusLayoutEntries(source);
 	await mkdir(destination, { recursive: true });
 	for (const entry of entries) {
 		const target = join(destination, entry.layoutPath);
@@ -104,9 +114,20 @@ export async function snapshotSessionCorpus(
 
 	if (source.kind === "chezmoi") {
 		await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
+		await discardRender(source);
 	}
 
 	return { kind: source.kind, root: destination, origin: originOf(source) };
+}
+
+/**
+ * A render is the whole home layout, of which four kinds are read, so keeping
+ * it would leave a copy of the home tree in the temporary directory after every
+ * run. The snapshot holds every byte anything reads afterwards.
+ */
+async function discardRender(source: ChezmoiCorpusSource): Promise<void> {
+	await rm(source.root, { force: true, recursive: true });
+	await rm(source.sourceDirectory, { force: true, recursive: true });
 }
 
 /**

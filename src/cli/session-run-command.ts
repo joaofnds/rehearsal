@@ -71,6 +71,7 @@ async function requireCorpus(
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(corpus),
 			snapshotDirectory,
+			sessionCase.corpusFiles,
 		);
 
 		return {

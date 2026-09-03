@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, symlink } from "node:fs/promises";
+import { mkdir, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "#benchmark/config";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
@@ -26,6 +26,10 @@ async function directoryCorpus(
 	return root;
 }
 
+async function exists(path: string): Promise<boolean> {
+	return (await stat(path).catch(() => undefined)) !== undefined;
+}
+
 function sha256Of(contents: string): string {
 	return new Bun.CryptoHasher("sha256").update(contents).digest("hex");
 }
@@ -42,6 +46,7 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
+			[],
 		);
 
 		expect(
@@ -63,6 +68,7 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
+			[],
 		);
 
 		const before = await hashCorpusFiles(snapshot, ["output-styles/brief.md"]);
@@ -91,11 +97,41 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			source,
 			join(destination, "corpus"),
+			[],
 		);
 
 		expect(await Bun.file(join(snapshot.root, "CLAUDE.md")).bytes()).toEqual(
 			await Bun.file(PROJECT_INSTRUCTIONS_PATH).bytes(),
 		);
+	});
+
+	/**
+	 * A chezmoi render is the whole home layout, so leaving one behind puts a
+	 * copy of João's home tree in $TMPDIR after every run.
+	 */
+	it("deletes the chezmoi render once its bytes are in the snapshot", async () => {
+		const rendered = await resources.createControlDirectory();
+		await Bun.write(
+			join(rendered, ".claude/output-styles/brief.md"),
+			"rendered brief\n",
+		);
+		const sourceDirectory = await resources.createControlDirectory();
+		const destination = await resources.createControlDirectory();
+
+		await snapshotSessionCorpus(
+			{
+				kind: "chezmoi",
+				ref: "HEAD",
+				commit: "abc123",
+				root: rendered,
+				sourceDirectory,
+			},
+			join(destination, "corpus"),
+			[],
+		);
+
+		expect(await exists(rendered)).toBe(false);
+		expect(await exists(sourceDirectory)).toBe(false);
 	});
 
 	it("records the chezmoi source's resolved commit on the snapshot", async () => {
@@ -115,6 +151,7 @@ describe(snapshotSessionCorpus.name, () => {
 				sourceDirectory: rendered,
 			},
 			join(destination, "corpus"),
+			[],
 		);
 
 		expect(snapshot.origin).toEqual({
@@ -124,7 +161,7 @@ describe(snapshotSessionCorpus.name, () => {
 		});
 	});
 
-	it("refuses a source whose skill bytes differ from the live install, naming the skill and ACT-28", async () => {
+	it("refuses a declared skill the harness cannot deliver, naming the skill and ACT-28", async () => {
 		const root = await directoryCorpus({
 			"skills/style/SKILL.md": "a variant skill the harness cannot deliver\n",
 		});
@@ -134,12 +171,39 @@ describe(snapshotSessionCorpus.name, () => {
 			snapshotSessionCorpus(
 				await resolveCorpusSource(root),
 				join(destination, "corpus"),
+				["skills/style/SKILL.md"],
 			),
 		);
 
 		expect(failure).toBeInstanceOf(SessionCorpusError);
-		expect(failure.message).toContain("skills/style");
+		expect(failure.message).toContain("skills/style/SKILL.md");
 		expect(failure.message).toContain("ACT-28");
+	});
+
+	/**
+	 * A rendered chezmoi tree carries every skill in the corpus, and refusing on
+	 * their presence would make chezmoi:<ref> unusable for the styles and agents
+	 * the harness can deliver. What must not happen is reporting a skill result,
+	 * and a skill the case does not declare is never reported.
+	 */
+	it("carries a skill the case does not declare without refusing, and installs none of it", async () => {
+		const root = await directoryCorpus({
+			"skills/style/SKILL.md": "a skill nothing declares\n",
+			"output-styles/brief.md": "variant brief\n",
+		});
+		const destination = await resources.createControlDirectory();
+
+		const snapshot = await snapshotSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			["output-styles/brief.md"],
+		);
+		const attemptDirectory = await resources.createControlDirectory();
+		await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+		expect(
+			await Bun.file(join(attemptDirectory, ".claude/skills")).exists(),
+		).toBe(false);
 	});
 
 	it("never reads through a .claude symlink in a rendered tree", async () => {
@@ -164,6 +228,7 @@ describe(snapshotSessionCorpus.name, () => {
 				sourceDirectory: rendered,
 			},
 			join(destination, "corpus"),
+			[],
 		);
 
 		expect(
@@ -182,6 +247,7 @@ describe(installSessionCorpusSnapshot.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
+			[],
 		);
 		const attemptDirectory = await resources.createControlDirectory();
 
@@ -204,6 +270,7 @@ describe(installSessionCorpusSnapshot.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(undefined),
 			join(destination, "corpus"),
+			[],
 		);
 		const attemptDirectory = await resources.createControlDirectory();
 

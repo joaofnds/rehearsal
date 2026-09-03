@@ -4,7 +4,7 @@
 	"title": "One-word reply with no tools, the cheapest session case",
 	"prompt": "Reply with the single word OK.",
 	"tools": [],
-	"corpusFiles": [],
+	"corpusFiles": ["output-styles/brief.md"],
 	"checks": [
 		{ "kind": "word-band", "max": 1 },
 		{ "kind": "tool-calls", "max": 0 }

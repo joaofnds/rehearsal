@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "./command";
@@ -128,27 +128,34 @@ async function renderChezmoi(
 	const sourceDirectory = await scratchDirectory("rehearsal-chezmoi-source-");
 	const root = await scratchDirectory("rehearsal-chezmoi-render-");
 
-	await run(
-		[
-			"sh",
-			"-c",
-			`git -C ${dotfilesDirectory} archive ${ref} | tar -x -C ${sourceDirectory}`,
-		],
-		tmpdir(),
-	);
-	await run(
-		[
-			"chezmoi",
-			"apply",
-			"--source",
-			sourceDirectory,
-			"--destination",
-			root,
-			"--exclude",
-			"encrypted,scripts",
-		],
-		tmpdir(),
-	);
+	try {
+		await run(
+			[
+				"sh",
+				"-c",
+				`git -C ${dotfilesDirectory} archive ${ref} | tar -x -C ${sourceDirectory}`,
+			],
+			tmpdir(),
+		);
+		await run(
+			[
+				"chezmoi",
+				"apply",
+				"--source",
+				sourceDirectory,
+				"--destination",
+				root,
+				"--exclude",
+				"encrypted,scripts",
+			],
+			tmpdir(),
+		);
+	} catch (error) {
+		await rm(sourceDirectory, { force: true, recursive: true });
+		await rm(root, { force: true, recursive: true });
+
+		throw error;
+	}
 
 	return { kind: "chezmoi", ref, commit, root, sourceDirectory };
 }
