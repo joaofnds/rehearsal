@@ -7,9 +7,11 @@ import type {
 	HumanReview,
 	JudgeGrade,
 	LocalCheckResult,
+	StageRubric,
 	StageScorecard,
 } from "./contracts";
 import { humanReviewSchema } from "./contracts";
+import type { JudgeResult } from "./judge";
 import { runJudge, validateRubricDefinition } from "./judge";
 import { parseStageRubric, runStageJudge } from "./stage-grading";
 
@@ -238,6 +240,174 @@ function stageItemFailure(
 	return undefined;
 }
 
+export interface FrozenCalibrationEvidence {
+	readonly instructions: string;
+	readonly finalRubric: string;
+	readonly finalCandidate?: FinalCandidate | undefined;
+	readonly stageScorecards: readonly StageScorecard[];
+}
+
+export interface CurrentCalibrationSources {
+	readonly instructions: string;
+	readonly finalRubric: string;
+	readonly stageRubrics: ReadonlyMap<WorkflowStage, string>;
+}
+
+export interface CalibrationJudges {
+	readonly stageJudge: (
+		scorecard: Readonly<StageScorecard>,
+		source: {
+			readonly rubricPath: string;
+			readonly content: string;
+			readonly rubric: StageRubric;
+		},
+	) => Promise<StageScorecard>;
+	readonly finalJudge?:
+		| ((
+				rubric: string,
+				candidate: Readonly<FinalCandidate>,
+		  ) => Promise<JudgeResult>)
+		| undefined;
+	readonly log?: ((message: string) => void) | undefined;
+}
+
+interface StageRejudge {
+	readonly stageRubricsChanged: readonly WorkflowStage[];
+	readonly revisedStageScorecards: readonly StageScorecard[];
+}
+
+async function rejudgeStages(
+	frozen: Readonly<FrozenCalibrationEvidence>,
+	current: Readonly<CurrentCalibrationSources>,
+	judges: Readonly<CalibrationJudges>,
+	log: (message: string) => void,
+): Promise<StageRejudge> {
+	const revisedStageScorecards: StageScorecard[] = [];
+	const stageRubricsChanged: WorkflowStage[] = [];
+
+	for (const scorecard of frozen.stageScorecards) {
+		const content = current.stageRubrics.get(scorecard.stage);
+		if (content === undefined) {
+			continue;
+		}
+
+		const updatedStageRubric = await asCalibrationInput(() =>
+			parseStageRubric(content, scorecard.input.kind),
+		);
+		if (
+			JSON.stringify(updatedStageRubric) === JSON.stringify(scorecard.rubric)
+		) {
+			continue;
+		}
+
+		stageRubricsChanged.push(scorecard.stage);
+		log(`\nRejudging the same ${scorecard.stage} stage`);
+		const revisedScorecard = await asCalibrationInput(() =>
+			judges.stageJudge(scorecard, {
+				rubricPath: scorecard.rubricPath,
+				content,
+				rubric: updatedStageRubric,
+			}),
+		);
+		revisedStageScorecards.push(revisedScorecard);
+		log(JSON.stringify(revisedScorecard.grade, null, 2));
+	}
+
+	return { stageRubricsChanged, revisedStageScorecards };
+}
+
+interface FinalRejudge {
+	readonly revisedRubricIds?: readonly string[] | undefined;
+	readonly revisedJudgePrompt?: string | undefined;
+	readonly revisedGrade?: JudgeGrade | undefined;
+}
+
+async function rejudgeFinal(
+	frozen: Readonly<FrozenCalibrationEvidence>,
+	updatedRubric: string,
+	judges: Readonly<CalibrationJudges>,
+	log: (message: string) => void,
+): Promise<FinalRejudge> {
+	const { finalCandidate: candidate } = frozen;
+	const { finalJudge } = judges;
+	if (candidate === undefined || finalJudge === undefined) {
+		return {};
+	}
+
+	const revisedRubricIds = await asCalibrationInput(() =>
+		validateRubricDefinition(updatedRubric),
+	);
+	log("\nRejudging the same candidate with the revised rubric");
+	const revised = await asCalibrationInput(() =>
+		finalJudge(updatedRubric, candidate),
+	);
+	log(JSON.stringify(revised.grade, null, 2));
+
+	return {
+		revisedRubricIds,
+		revisedJudgePrompt: revised.prompt,
+		revisedGrade: revised.grade,
+	};
+}
+
+/**
+ * The judgment a calibration is, as a value: no prompt, no file read, no
+ * clock. The interactive loop and the `calibrate` command differ in where the
+ * text and the confirmation come from, never in what the two of them decide.
+ * `confirmRejudge` is asked only when the rejudge produced a revised result,
+ * which is where the interactive flow asks for its typed yes.
+ */
+export async function calibrate(
+	frozen: Readonly<FrozenCalibrationEvidence>,
+	current: Readonly<CurrentCalibrationSources>,
+	review: Readonly<HumanReview>,
+	judges: Readonly<CalibrationJudges>,
+	confirmRejudge: () => Promise<boolean> = () => Promise.resolve(true),
+): Promise<CalibrationResult> {
+	const log = judges.log ?? (() => undefined);
+	const instructionsChanged = current.instructions !== frozen.instructions;
+	const rubricChanged = current.finalRubric !== frozen.finalRubric;
+	const { stageRubricsChanged, revisedStageScorecards } = await rejudgeStages(
+		frozen,
+		current,
+		judges,
+		log,
+	);
+	const { revisedRubricIds, revisedJudgePrompt, revisedGrade } = rubricChanged
+		? await rejudgeFinal(frozen, current.finalRubric, judges, log)
+		: {};
+
+	validateCalibration(
+		review,
+		frozen.finalCandidate?.originalGrade,
+		revisedGrade,
+		frozen.stageScorecards,
+		revisedStageScorecards,
+	);
+	const rejudged =
+		revisedGrade !== undefined || revisedStageScorecards.length > 0;
+	if (rejudged && !(await confirmRejudge())) {
+		throw new CalibrationIncompleteError(
+			"Revised Judge result was not confirmed",
+		);
+	}
+
+	return {
+		humanReview: review,
+		instructionsChanged,
+		updatedInstructions: instructionsChanged ? current.instructions : undefined,
+		rubricChanged,
+		updatedRubric: rubricChanged ? current.finalRubric : undefined,
+		revisedRubricIds,
+		revisedJudgePrompt,
+		revisedGrade,
+		rejudgeConfirmedByHuman: rejudged ? true : undefined,
+		stageRubricsChanged,
+		revisedStageScorecards:
+			revisedStageScorecards.length > 0 ? revisedStageScorecards : undefined,
+	};
+}
+
 async function writeHumanReviewTemplate(path: string): Promise<void> {
 	await Bun.write(
 		path,
@@ -253,6 +423,12 @@ async function writeHumanReviewTemplate(path: string): Promise<void> {
 	);
 }
 
+/**
+ * The interactive loop around the judgment: it prompts, reads the four
+ * sources from disk, and asks for the typed confirmation, then hands values
+ * to `calibrate`. Every rejection is caught here and re-prompted, which is
+ * what makes the flawed candidate the fixture for the new rule.
+ */
 export async function collectCalibration(
 	context: CalibrationContext,
 ): Promise<CalibrationResult> {
@@ -260,6 +436,13 @@ export async function collectCalibration(
 	const editTargets = context.finalCandidate
 		? `${PROJECT_INSTRUCTIONS_PATH}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
 		: `${PROJECT_INSTRUCTIONS_PATH} and/or the relevant file under ${context.rubricsDirectory}`;
+	const frozen: FrozenCalibrationEvidence = {
+		instructions: context.originalInstructions,
+		finalRubric: context.originalRubric,
+		finalCandidate: context.finalCandidate,
+		stageScorecards: context.stageScorecards,
+	};
+	const judges = calibrationJudges(context);
 
 	while (true) {
 		await context.rl.question(
@@ -270,123 +453,11 @@ export async function collectCalibration(
 			const humanReview = parseHumanReview(
 				await asCalibrationInput(() => Bun.file(context.reviewFile).text()),
 			);
-			const [updatedInstructions, updatedRubric] = await asCalibrationInput(
-				() =>
-					Promise.all([
-						readProjectInstructions(),
-						Bun.file(context.finalRubricPath).text(),
-					]),
+			const current = await readCurrentSources(context);
+
+			return await calibrate(frozen, current, humanReview, judges, () =>
+				askRejudgeConfirmation(context.rl),
 			);
-			const instructionsChanged =
-				updatedInstructions !== context.originalInstructions;
-			const rubricChanged = updatedRubric !== context.originalRubric;
-			const revisedStageScorecards: StageScorecard[] = [];
-			const stageRubricsChanged: WorkflowStage[] = [];
-			for (const scorecard of context.stageScorecards) {
-				const { updatedContent, updatedStageRubric } = await asCalibrationInput(
-					async () => {
-						const content = await Bun.file(scorecard.rubricPath).text();
-
-						return {
-							updatedContent: content,
-							updatedStageRubric: parseStageRubric(
-								content,
-								scorecard.input.kind,
-							),
-						};
-					},
-				);
-				if (
-					JSON.stringify(updatedStageRubric) ===
-					JSON.stringify(scorecard.rubric)
-				) {
-					continue;
-				}
-
-				stageRubricsChanged.push(scorecard.stage);
-				console.log(`\nRejudging the same ${scorecard.stage} stage`);
-				const revisedScorecard = await asCalibrationInput(() =>
-					(context.stageJudge ?? runStageJudge)(
-						context.judgeModel,
-						context.judgeEffort,
-						context.sessionBudgetUsd,
-						scorecard.input,
-						{
-							rubricPath: scorecard.rubricPath,
-							content: updatedContent,
-							rubric: updatedStageRubric,
-						},
-					),
-				);
-				revisedStageScorecards.push(revisedScorecard);
-				console.log(JSON.stringify(revisedScorecard.grade, null, 2));
-			}
-
-			let revisedRubricIds: readonly string[] | undefined;
-			let revisedJudgePrompt: string | undefined;
-			let revisedGrade: JudgeGrade | undefined;
-			if (rubricChanged && context.finalCandidate) {
-				const candidate = context.finalCandidate;
-				revisedRubricIds = await asCalibrationInput(() =>
-					validateRubricDefinition(updatedRubric),
-				);
-				console.log("\nRejudging the same candidate with the revised rubric");
-				const revisedJudge = await asCalibrationInput(() =>
-					runJudge(
-						context.judgeModel,
-						context.judgeEffort,
-						context.sessionBudgetUsd,
-						updatedRubric,
-						candidate.baselineContext,
-						candidate.diff,
-						candidate.changedPaths,
-						candidate.checkIntegrity,
-						candidate.localChecks,
-					),
-				);
-				revisedJudgePrompt = revisedJudge.prompt;
-				revisedGrade = revisedJudge.grade;
-				console.log(JSON.stringify(revisedGrade, null, 2));
-			}
-
-			validateCalibration(
-				humanReview,
-				context.finalCandidate?.originalGrade,
-				revisedGrade,
-				context.stageScorecards,
-				revisedStageScorecards,
-			);
-			let rejudgeConfirmedByHuman: boolean | undefined;
-			if (revisedGrade || revisedStageScorecards.length > 0) {
-				const confirmation = await context.rl.question(
-					"Confirm that the revised Judge result catches or corrects each finding for the right reason. Type yes to finalize, or anything else to revise the rubric: ",
-				);
-				rejudgeConfirmedByHuman = confirmation.trim().toLowerCase() === "yes";
-				if (!rejudgeConfirmedByHuman) {
-					throw new CalibrationIncompleteError(
-						"Revised Judge result was not confirmed",
-					);
-				}
-			}
-
-			return {
-				humanReview,
-				instructionsChanged,
-				updatedInstructions: instructionsChanged
-					? updatedInstructions
-					: undefined,
-				rubricChanged,
-				updatedRubric: rubricChanged ? updatedRubric : undefined,
-				revisedRubricIds,
-				revisedJudgePrompt,
-				revisedGrade,
-				rejudgeConfirmedByHuman,
-				stageRubricsChanged,
-				revisedStageScorecards:
-					revisedStageScorecards.length > 0
-						? revisedStageScorecards
-						: undefined,
-			};
 		} catch (error) {
 			if (!(error instanceof CalibrationIncompleteError)) {
 				throw error;
@@ -395,4 +466,65 @@ export async function collectCalibration(
 			console.error(`Calibration incomplete: ${error.message}`);
 		}
 	}
+}
+
+function calibrationJudges(
+	context: Readonly<CalibrationContext>,
+): CalibrationJudges {
+	return {
+		stageJudge: (scorecard, source) =>
+			(context.stageJudge ?? runStageJudge)(
+				context.judgeModel,
+				context.judgeEffort,
+				context.sessionBudgetUsd,
+				scorecard.input,
+				source,
+			),
+		finalJudge: (rubric, candidate) =>
+			runJudge(
+				context.judgeModel,
+				context.judgeEffort,
+				context.sessionBudgetUsd,
+				rubric,
+				candidate.baselineContext,
+				candidate.diff,
+				candidate.changedPaths,
+				candidate.checkIntegrity,
+				candidate.localChecks,
+			),
+		log: console.log,
+	};
+}
+
+/**
+ * The rubric a stage is rejudged against is the one the scorecard recorded the
+ * path of, not one recomputed from the case: an edit lands in the file the run
+ * graded from, and that is the file this reads back.
+ */
+async function readCurrentSources(
+	context: Readonly<CalibrationContext>,
+): Promise<CurrentCalibrationSources> {
+	const [instructions, finalRubric] = await asCalibrationInput(() =>
+		Promise.all([
+			readProjectInstructions(),
+			Bun.file(context.finalRubricPath).text(),
+		]),
+	);
+	const stageRubrics = new Map<WorkflowStage, string>();
+	for (const scorecard of context.stageScorecards) {
+		stageRubrics.set(
+			scorecard.stage,
+			await asCalibrationInput(() => Bun.file(scorecard.rubricPath).text()),
+		);
+	}
+
+	return { instructions, finalRubric, stageRubrics };
+}
+
+async function askRejudgeConfirmation(rl: Questioner): Promise<boolean> {
+	const confirmation = await rl.question(
+		"Confirm that the revised Judge result catches or corrects each finding for the right reason. Type yes to finalize, or anything else to revise the rubric: ",
+	);
+
+	return confirmation.trim().toLowerCase() === "yes";
 }

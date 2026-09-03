@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	calibrate,
 	CalibrationIncompleteError,
 	collectCalibration,
 	parseHumanReview,
@@ -246,6 +247,69 @@ describe(parseHumanReview.name, () => {
 				}),
 			),
 		).toThrow();
+	});
+});
+
+describe(calibrate.name, () => {
+	it("records a stage rubric change and its revised scorecard from values alone", async () => {
+		const original = stageScorecard("PASS");
+		const editedRubric = JSON.stringify({
+			...original.rubric,
+			requirements: [
+				{ id: "scope", description: "Scope is explicit and observable" },
+			],
+		});
+		const revised = {
+			...stageScorecard("FAIL"),
+			rubric: parseStageRubric(editedRubric),
+		};
+
+		const result = await calibrate(
+			{
+				instructions: "Instructions",
+				finalRubric: "1. `old`: Old requirement.\n",
+				stageScorecards: [original],
+			},
+			{
+				instructions: "Instructions",
+				finalRubric: "1. `old`: Old requirement.\n",
+				stageRubrics: new Map([["discuss", editedRubric]]),
+			},
+			humanReview("REJECT", "MISSED", "scope", "discuss"),
+			{ stageJudge: () => Promise.resolve(revised) },
+		);
+
+		expect(result.stageRubricsChanged).toEqual(["discuss"]);
+		expect(result.revisedStageScorecards).toEqual([revised]);
+		expect(result.instructionsChanged).toBe(false);
+		expect(result.rubricChanged).toBe(false);
+	});
+
+	it("returns the same result for the same arguments", async () => {
+		const frozen = {
+			instructions: "Instructions",
+			finalRubric: "1. `old`: Old requirement.\n",
+			stageScorecards: [stageScorecard("PASS")],
+		};
+		const current = {
+			instructions: "Edited instructions",
+			finalRubric: "1. `old`: Old requirement.\n",
+			stageRubrics: new Map<string, string>(),
+		};
+		const review = humanReview("REJECT", "NOT_PROMOTED", "scope", "discuss");
+		const judges = {
+			stageJudge: () => Promise.reject(new Error("no stage rejudge")),
+		};
+
+		const [first, second] = await Promise.all([
+			calibrate(frozen, current, review, judges),
+			calibrate(frozen, current, review, judges),
+		]);
+
+		expect(first).toEqual(second);
+		expect(first.instructionsChanged).toBe(true);
+		expect(first.updatedInstructions).toBe("Edited instructions");
+		expect(first.rejudgeConfirmedByHuman).toBeUndefined();
 	});
 });
 
