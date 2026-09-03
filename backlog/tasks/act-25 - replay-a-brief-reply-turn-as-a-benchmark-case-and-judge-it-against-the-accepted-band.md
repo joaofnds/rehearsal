@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 14:55'
-updated_date: '2026-09-03 04:48'
+updated_date: '2026-09-03 11:56'
 labels: []
 dependencies:
   - ACT-26.5
@@ -725,6 +725,8 @@ policy and can be reversed.
    behavior this dispatch shipped, and the operator who captures a prefix is the
    one who later meets a prefix that no longer matches. Splitting the section
    across two commits would have cost a reader more than it bought.
+
+Triage 2026-09-03: the three unchecked acceptance criteria (#9, #10, #11) are carried forward as ACT-35, so the obligation is on the board rather than only in this card's prose. This card stays Done; the notes above already state why the observations were not made.
 <!-- SECTION:NOTES:END -->
 
 ## Comments

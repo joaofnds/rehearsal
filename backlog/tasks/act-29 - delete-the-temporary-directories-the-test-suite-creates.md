@@ -4,6 +4,7 @@ title: delete the temporary directories the test suite creates
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:32'
+updated_date: '2026-09-03 11:54'
 labels: []
 dependencies: []
 ordinal: 31008
@@ -20,3 +21,9 @@ Most test suites make their scratch directories with mkdtemp directly and never 
 - [ ] #1 bun test leaves no rehearsal-* directory behind in $TMPDIR: a test asserts the count is unchanged across a suite run, or the suites are converted and the count is observed to be zero
 - [ ] #2 Every suite that creates a temporary directory removes it, whether the test passed or threw
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-03: the description counts over 1500 leaked directories in $TMPDIR. `ls /tmp | grep -c '^rehearsal-'` now returns 210, because /tmp was cleaned since the observation. The leak itself is unchanged and confirmed: 45 files under src/ call mkdtemp, while 24 reference TestResources.
+<!-- SECTION:NOTES:END -->

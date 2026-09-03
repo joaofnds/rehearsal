@@ -4,8 +4,10 @@ title: make runBenchmark reachable from a test with fake dependencies
 status: To Do
 assignee: []
 created_date: '2026-09-03 03:17'
+updated_date: '2026-09-03 11:55'
 labels: []
-dependencies: []
+dependencies:
+  - ACT-26.7
 ordinal: 33008
 ---
 
@@ -25,3 +27,9 @@ runGradedStages next door takes a StageDependencies record and is fully faked in
 - [ ] #2 A test asserts the no-pause run's order: the retention ref is recorded with the artifact's resultSha before teardownTarget runs
 - [ ] #3 The existing runGradedStages, finishGradedRun, and pausesOnFailure tests keep passing unchanged
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-03: depends on ACT-26.7, verified against the code rather than assumed. Eight of the fourteen `console.log` sites in src/benchmark/ sit inside run.ts's runBenchmark (lines 849-851, 947, 1016-1031, 1080), which is the function this card converts to a RunDependencies record. ACT-26.7's acceptance #5 requires every one of them to reach the caller through an injected writer, which is a parameter on that same record. Doing this card first means ACT-26.7 re-edits the record it just introduced; doing ACT-26.7 first means the writer is one more collaborator this card moves into the record with the rest.
+<!-- SECTION:NOTES:END -->

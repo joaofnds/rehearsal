@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-02 21:36'
+updated_date: '2026-09-03 11:54'
 labels: []
 dependencies: []
 parent_task_id: ACT-26
@@ -32,3 +32,9 @@ Why: an agent that pipes `--json` into a parser gets a stream with harness prose
 - [ ] #5 `grep -rn 'console.log' src/benchmark/` returns no match; every harness diagnostic reaches the caller through an injected writer
 - [ ] #6 A test spawns `rehearsal run` past its gate with a faked provider and asserts stdout holds only the record, proving the rule without a paid session
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-03: the description says 17 console.log sites in src/benchmark/. `grep -rn 'console\.log' src/benchmark/ | wc -l` returns 14, across calibration.ts, workflow.ts, target.ts, checks.ts, and run.ts. The writer's count stands as written; the current fact is 14. Acceptance #5 is stated as a grep returning no match, so it is unaffected by the count.
+<!-- SECTION:NOTES:END -->

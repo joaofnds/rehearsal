@@ -1,13 +1,14 @@
 ---
 id: ACT-28
 title: 'stage confirmation reps read the live skill, not the frozen corpus snapshot'
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 00:33'
+updated_date: '2026-09-03 11:58'
 labels:
   - defect
 dependencies: []
+priority: high
 ordinal: 30008
 ---
 
@@ -42,6 +43,10 @@ corpus the same way: `captureStageCorpus` and `snapshotStageCorpus` take a
 resolved corpus source instead of search roots, and the refusal in
 `refuseStageCorpus` becomes a snapshot and an install. Unifying them before
 then would be building for a caller that cannot exist.
+
+Triage 2026-09-03: moved To Do -> Shape. The card's own next step is a choice, not a build: its comment states that claude 2.1.258 declares no --skills flag and names --plugin-dir and --setting-sources as the two candidates, with 'Choosing between them is this card's work.' A card whose next step is a question does not belong in To Do. The premise itself is not re-probed here; it was observed twice on 2026-09-03, by the ACT-26.6 Shape session and independently by the orchestrator, and re-probing costs money.
+
+Consequence, for prioritizing: this card gates the tool's stated purpose. docs/vision.md says attribution comes from re-running a stage with frozen inputs and one skill changed. While a project-level skill does not shadow the user-level one, both arms of a comparison read the same live skill, so a stage comparison measures nothing. ACT-26.6 already refuses a corpus source that changes skill bytes rather than reporting a result it cannot deliver, so nothing lies today; the capability is simply absent.
 <!-- SECTION:NOTES:END -->
 
 ## Comments

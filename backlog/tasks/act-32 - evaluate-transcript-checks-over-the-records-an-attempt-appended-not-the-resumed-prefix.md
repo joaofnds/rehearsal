@@ -6,9 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 04:21'
+updated_date: '2026-09-03 11:58'
 labels:
   - defect
 dependencies: []
+priority: high
 ordinal: 34008
 ---
 
@@ -30,3 +32,9 @@ Until this lands, the four brief-reply cases record a FAIL on `tool-calls` that 
 - [ ] #2 files-read is evaluated over the same appended records, so a file the resumed prefix read does not count as one the attempt read
 - [ ] #3 A session case with no transcript prefix evaluates both checks exactly as it does today, proven by the smoke case's existing assertions still passing
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-03: premise re-checked. src/benchmark/session-attempt.ts passes `toolUses(transcript)` over the whole forked transcript at line 318; the card cites line 284, which moved with ACT-25's later commits. One site, unchanged in substance.
+<!-- SECTION:NOTES:END -->
