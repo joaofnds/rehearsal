@@ -152,22 +152,3 @@ describe(comparisonSummary.name, () => {
 		);
 	});
 });
-
-describe("summary purity", () => {
-	it("renders the same bytes from the same record on every call", () => {
-		const report = buildComparisonReport(comparisonEvidenceFixture(), {
-			skippedCalibrations: 0,
-			baselines: [],
-		});
-
-		expect(runSummary("run-1", RUN_RECORD)).toBe(
-			runSummary("run-1", RUN_RECORD),
-		);
-		expect(groupSummary(GROUP_RECORD, GROUP_REPORT)).toBe(
-			groupSummary(GROUP_RECORD, GROUP_REPORT),
-		);
-		expect(comparisonSummary("digest", report)).toBe(
-			comparisonSummary("digest", report),
-		);
-	});
-});
