@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
+import { runCommand } from "#benchmark/command";
 import { resolveCorpusFile } from "#benchmark/corpus-file";
 import type {
 	ChezmoiCorpusSource,
@@ -188,23 +189,72 @@ describe("rendering a chezmoi corpus source", () => {
 		expect(apply?.includes("--verbose")).toBe(false);
 	});
 
-	/**
-	 * The ref is a flag value and the archive needs a pipe, so it reaches a
-	 * shell. Unquoted, `HEAD; rm -rf ~` would run as a second command.
-	 */
-	it("quotes the ref it passes to the shell, so a ref cannot carry a second command", async () => {
+	async function archiveCommand(ref: string): Promise<string> {
 		const fake = runner();
 
-		const source = await rendered("chezmoi:HEAD; touch /tmp/pwned", fake.run);
+		const source = await rendered(`chezmoi:${ref}`, fake.run);
 		resources.track(source.root);
 		resources.track(source.sourceDirectory);
 
 		const archive = fake.commands
 			.map((recorded) => recorded.command)
 			.find((command) => command[0] === "sh");
-		expect(archive?.[2]).toBe(
-			`set -o pipefail; git -C '/dotfiles' archive 'HEAD; touch /tmp/pwned' | tar -x -C '${source.sourceDirectory}'`,
-		);
+
+		return archive?.[2] ?? "";
+	}
+
+	/**
+	 * The assertion that matters is not the string the harness builds but what a
+	 * shell does with it, so a real `sh` reads it back: a ref survives quoting
+	 * when the shell hands `printf` those exact bytes as one argument. Every
+	 * value here carries a metacharacter the escaping exists for, and the last
+	 * three carry the single quote a naive `\'${value}\'` would close.
+	 */
+	it.each([
+		"HEAD",
+		"HEAD~1",
+		"HEAD; touch /tmp/pwned",
+		"HEAD && touch /tmp/pwned",
+		"HEAD$(touch /tmp/pwned)",
+		"HEAD`touch /tmp/pwned`",
+		"HEAD'; touch /tmp/pwned; '",
+		"HEAD' | tar -x -C /tmp '",
+		String.raw`HEAD'\''`,
+	])(
+		"passes the ref %p through a real shell as those exact bytes",
+		async (ref) => {
+			const command = await archiveCommand(ref);
+			const quoted = command.slice(
+				command.indexOf("archive ") + "archive ".length,
+				command.lastIndexOf(" | tar -x -C "),
+			);
+
+			const roundTripped = await runCommand(
+				["sh", "-c", `printf %s ${quoted}`],
+				tmpdir(),
+			);
+
+			expect(roundTripped).toBe(ref);
+		},
+	);
+
+	/**
+	 * A ref carrying its own single quote is where a naive quoting breaks: it
+	 * closes the quote at that byte and the rest of the ref reaches the shell as
+	 * syntax, so the pipeline runs a command the ref chose.
+	 */
+	it("never lets a ref's own quote end the quoting and start a command", async () => {
+		const command = await archiveCommand("HEAD'; touch /tmp/pwned; '");
+
+		const outside = command
+			.slice(
+				command.indexOf("archive ") + "archive ".length,
+				command.lastIndexOf(" | tar -x -C "),
+			)
+			.replaceAll(`'\\''`, "");
+		expect(outside?.startsWith("'")).toBe(true);
+		expect(outside?.endsWith("'")).toBe(true);
+		expect(outside?.slice(1, -1)).not.toContain("'");
 	});
 
 	/**
