@@ -2,8 +2,9 @@ import { z } from "zod";
 import { effortSchema } from "./config";
 import type { Immutable } from "./contracts";
 import {
-	evidenceSchema,
+	contextFileSchema,
 	judgeGradeSchema,
+	localCheckResultSchema,
 	stageGradeSchema,
 	stageRubricSchema,
 	judgeAttemptListSchema,
@@ -28,11 +29,6 @@ const judgeKnobsSchema = z.object({
 	sessionBudgetUsd: z.number().positive().optional(),
 });
 
-const localCheckResultSchema = z.object({
-	status: z.enum(["PASS", "FAIL"]),
-	evidence: z.array(evidenceSchema),
-});
-
 export const calibratableArtifactSchema = judgeKnobsSchema
 	.extend({
 		status: z.enum(["AWAITING_HUMAN_REVIEW", "COMPLETE", "FAILED"]),
@@ -42,9 +38,7 @@ export const calibratableArtifactSchema = judgeKnobsSchema
 		instructions: z.string(),
 		rubric: z.string().min(1),
 		grade: judgeGradeSchema,
-		baselineContext: z.array(
-			z.object({ path: z.string(), content: z.string() }),
-		),
+		baselineContext: z.array(contextFileSchema),
 		diff: z.string(),
 		changedPaths: z.array(z.string()),
 		checkIntegrity: localCheckResultSchema,

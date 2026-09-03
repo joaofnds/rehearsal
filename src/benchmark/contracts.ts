@@ -266,12 +266,12 @@ export interface StageJudgeInput {
 	readonly harnessFailure?: string | undefined;
 }
 
-const contextFileSchema = z.object({
+export const contextFileSchema = z.object({
 	path: z.string(),
 	content: z.string(),
 });
 
-const localCheckResultSchema = z.object({
+export const localCheckResultSchema = z.object({
 	status: z.enum(["PASS", "FAIL"]),
 	evidence: z.array(evidenceSchema),
 });
