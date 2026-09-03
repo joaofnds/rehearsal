@@ -4,7 +4,7 @@ title: give rehearsal one CLI that agents and humans drive alike
 status: To Do
 assignee: []
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 00:37'
+updated_date: '2026-09-03 04:25'
 labels: []
 dependencies: []
 references:
@@ -37,4 +37,6 @@ Spend: 0.086929 USD after ACT-26.5
 Spend: 0.32 USD after ACT-26.6
 
 Spend: 0.45 USD after ACT-26.3 Build (0.13 USD: two sealed stage-Judge rejudge calls on frozen evidence, sonnet, observing calibrate's refusal without --confirm-rejudge and its COMPLETE artifact with it)
+
+Spend: 2.91 USD after ACT-25 Build (2.456045 USD: one debug session attempt of brief-reply-92b2e8b0, opus/high, the re-check of whether the provider honors a settings overlay on --resume; three further turns skipped on the dispatch's stop condition)
 <!-- SECTION:NOTES:END -->
