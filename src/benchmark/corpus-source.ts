@@ -7,16 +7,14 @@ export class CorpusSourceError extends Error {
 	public override name = "CorpusSourceError";
 }
 
-interface CorpusRoot {
+export interface LiveCorpusSource {
+	readonly kind: "live";
 	readonly root: string;
 }
 
-export interface LiveCorpusSource extends CorpusRoot {
-	readonly kind: "live";
-}
-
-export interface DirectoryCorpusSource extends CorpusRoot {
+export interface DirectoryCorpusSource {
 	readonly kind: "directory";
+	readonly root: string;
 }
 
 /**
@@ -24,8 +22,9 @@ export interface DirectoryCorpusSource extends CorpusRoot {
  * deleted once its bytes are snapshotted: the render is the whole home layout,
  * of which only the corpus kinds are read.
  */
-export interface ChezmoiCorpusSource extends CorpusRoot {
+export interface ChezmoiCorpusSource {
 	readonly kind: "chezmoi";
+	readonly root: string;
 	readonly ref: string;
 	readonly commit: string;
 	readonly sourceDirectory: string;

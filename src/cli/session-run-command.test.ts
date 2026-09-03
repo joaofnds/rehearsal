@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
@@ -188,5 +188,111 @@ describe(runSessionDebugAttempt.name, () => {
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toContain("no-such-style.md");
+	});
+});
+
+describe("running a session case against a corpus source", () => {
+	async function corpusDirectory(brief: string): Promise<string> {
+		const root = await temporary("rehearsal-corpus-");
+		await Bun.write(join(root, "output-styles/brief.md"), brief);
+
+		return root;
+	}
+
+	function styledCase(): SessionCase {
+		return sessionCase({
+			corpusFiles: ["output-styles/brief.md"],
+			declaration: {
+				id: "smoke",
+				kind: "session",
+				title: "Smoke",
+				prompt: "Reply with the single word OK.",
+				tools: [],
+				corpusFiles: ["output-styles/brief.md"],
+				checks: [{ kind: "word-band", max: 1 }],
+			},
+		});
+	}
+
+	async function attemptWith(
+		corpus: string | undefined,
+	): Promise<Awaited<ReturnType<typeof runSessionDebugAttempt>>> {
+		const projects = await temporary("rehearsal-projects-");
+		const runsDirectory = await temporary("rehearsal-runs-");
+
+		return runSessionDebugAttempt({
+			sessionCase: styledCase(),
+			config: corpus === undefined ? config : { ...config, corpus },
+			runsDirectory,
+			runClaude: fakeClaude(projects, "OK"),
+			projectsDirectory: projects,
+		});
+	}
+
+	it("records the corpus source's bytes rather than the live install's", async () => {
+		const outcome = await attemptWith(await corpusDirectory("marker brief\n"));
+
+		expect(outcome.record.corpusFiles[0]?.sha256).toBe(
+			new Bun.CryptoHasher("sha256").update("marker brief\n").digest("hex"),
+		);
+	});
+
+	it("changes the lineage when the source's declared bytes differ", async () => {
+		const first = await attemptWith(await corpusDirectory("one brief\n"));
+		const second = await attemptWith(await corpusDirectory("another brief\n"));
+
+		expect(second.record.lineage).not.toBe(first.record.lineage);
+	});
+
+	it("leaves the lineage unchanged when two sources resolve to identical bytes", async () => {
+		const first = await attemptWith(await corpusDirectory("same brief\n"));
+		const second = await attemptWith(await corpusDirectory("same brief\n"));
+
+		expect(second.record.lineage).toBe(first.record.lineage);
+	});
+
+	it("records the live install's bytes and their live paths when no source is named", async () => {
+		const outcome = await attemptWith(undefined);
+
+		expect(outcome.record.corpusFiles[0]?.resolvedPath).toBe(
+			join(homedir(), ".claude/output-styles/brief.md"),
+		);
+		expect(outcome.record.corpusFiles[0]?.sha256).toBe(
+			new Bun.CryptoHasher("sha256")
+				.update(
+					await Bun.file(
+						join(homedir(), ".claude/output-styles/brief.md"),
+					).bytes(),
+				)
+				.digest("hex"),
+		);
+	});
+
+	/**
+	 * Every smoke attempt recorded before --corpus existed carries this lineage.
+	 * A change to it would mean the flag silently rewrote what a run absent the
+	 * flag measures, which is the one thing this card promised it would not do.
+	 */
+	it("records the lineage the smoke case carried before --corpus existed", async () => {
+		const projects = await temporary("rehearsal-projects-");
+
+		const outcome = await runSessionDebugAttempt({
+			sessionCase: sessionCase(),
+			config,
+			runsDirectory: await temporary("rehearsal-runs-"),
+			runClaude: fakeClaude(projects, "OK"),
+			projectsDirectory: projects,
+		});
+
+		expect(outcome.record.lineage).toBe(
+			"d875e2ac2844c6af8c60bff300d74ec72b0f07b592da123276c571ce78cac2ba",
+		);
+	});
+
+	it("refuses a source that does not resolve, before any provider call", async () => {
+		const failure = await failureOf(attemptWith("/no/such/corpus"));
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("/no/such/corpus");
 	});
 });

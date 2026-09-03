@@ -13,6 +13,7 @@ import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
 import { projectSlug } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
+import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import type { SessionAttemptRequest } from "#benchmark/session-attempt";
 import {
 	forkTranscript,
@@ -242,6 +243,113 @@ describe(sessionCaseArgs.name, () => {
 			).not.toContain(flag);
 		},
 	);
+});
+
+describe("the corpus overlay a session attempt installs", () => {
+	function styleSnapshot(root: string): SessionCorpusSnapshot {
+		return {
+			kind: "directory",
+			root,
+			origin: { kind: "directory", source: root },
+		};
+	}
+
+	async function snapshotHolding(
+		layoutPath: string,
+		contents: string,
+	): Promise<SessionCorpusSnapshot> {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-attempt-corpus-"));
+		await Bun.write(join(root, layoutPath), contents);
+
+		return styleSnapshot(root);
+	}
+
+	it("places the snapshot's output style where the session reads it", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
+				corpusSnapshot: await snapshotHolding(
+					"output-styles/brief.md",
+					"marker style\n",
+				),
+			}),
+		);
+
+		expect(claude.runs[0]?.seenFiles).toContain(
+			join(".claude", "output-styles", "brief.md"),
+		);
+	});
+
+	it("selects the snapshot's output style with --settings", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
+				corpusSnapshot: await snapshotHolding(
+					"output-styles/brief.md",
+					"marker style\n",
+				),
+			}),
+		);
+
+		const command = claude.runs[0]?.command ?? [];
+		expect(
+			JSON.parse(command[command.indexOf("--settings") + 1] ?? "{}"),
+		).toEqual({ outputStyle: "brief" });
+	});
+
+	it("merges the style selection over the case's declared settings rather than replacing them", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		await runSessionAttempt(
+			request({
+				sessionCase: sessionCase({
+					settings: { permissions: { defaultMode: "plan" } },
+				}),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
+				corpusSnapshot: await snapshotHolding(
+					"output-styles/brief.md",
+					"marker style\n",
+				),
+			}),
+		);
+
+		const command = claude.runs[0]?.command ?? [];
+		expect(
+			JSON.parse(command[command.indexOf("--settings") + 1] ?? "{}"),
+		).toEqual({
+			permissions: { defaultMode: "plan" },
+			outputStyle: "brief",
+		});
+	});
+
+	it("leaves the attempt directory bare when the corpus is the live install", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
+			}),
+		);
+
+		expect(claude.runs[0]?.seenFiles).toEqual([]);
+		expect(claude.runs[0]?.command).not.toContain("--settings");
+	});
 });
 
 describe(forkTranscript.name, () => {

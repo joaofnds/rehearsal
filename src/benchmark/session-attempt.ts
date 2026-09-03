@@ -17,6 +17,11 @@ import type { ClaudeCallMetrics } from "./contracts";
 import { terminatedFileLines } from "./file-lines";
 import { projectSlug } from "./session-capture";
 import type { CheckResult } from "./session-check";
+import type { SessionCorpusSnapshot } from "./session-corpus";
+import {
+	installSessionCorpusSnapshot,
+	snapshotStyleName,
+} from "./session-corpus";
 import { evaluateChecks } from "./session-check";
 import { parseTranscriptFile, toolUses } from "./transcript";
 
@@ -31,6 +36,7 @@ export interface SessionAttemptRequest {
 	readonly projectsDirectory: string;
 	readonly recordDirectory: string;
 	readonly runClaude: ClaudeRunner;
+	readonly corpusSnapshot?: SessionCorpusSnapshot | undefined;
 }
 
 /**
@@ -77,6 +83,24 @@ export interface SessionNaming {
 }
 
 /**
+ * The overlaid style is selected rather than replacing the case's settings: a
+ * case declares its own overlay, and dropping it to name a style would silently
+ * change what the attempt measures.
+ */
+function selectedSettings(
+	sessionCase: SessionCase,
+	styleName: string | undefined,
+): string | undefined {
+	if (styleName === undefined) {
+		return sessionCase.settings === undefined
+			? undefined
+			: JSON.stringify(sessionCase.settings);
+	}
+
+	return JSON.stringify({ ...sessionCase.settings, outputStyle: styleName });
+}
+
+/**
  * The attempt names its own session so that the session file it will own is
  * known before the call rather than inferred from the directory afterwards: a
  * resumed session is named by the uuid the fork rewrote, a fresh one by
@@ -87,7 +111,10 @@ export function sessionCaseArgs(
 	sessionCase: SessionCase,
 	settings: SessionSettings,
 	session: SessionNaming,
+	styleName?: string,
 ): string[] {
+	const declaredSettings = selectedSettings(sessionCase, styleName);
+
 	return [
 		"claude",
 		"-p",
@@ -101,9 +128,7 @@ export function sessionCaseArgs(
 		"json",
 		"--tools",
 		sessionCase.tools.join(","),
-		...(sessionCase.settings === undefined
-			? []
-			: ["--settings", JSON.stringify(sessionCase.settings)]),
+		...(declaredSettings === undefined ? [] : ["--settings", declaredSettings]),
 		...(sessionCase.agents === undefined
 			? []
 			: ["--agents", JSON.stringify(sessionCase.agents)]),
@@ -166,6 +191,28 @@ async function seedFixture(
 	await cp(fixturePath, attemptDirectory, { recursive: true });
 }
 
+interface CorpusOverlay {
+	readonly styleName: string | undefined;
+}
+
+/**
+ * The corpus variant reaches the session as project-level files under the
+ * attempt directory the harness owns, which shadow the same-named user-level
+ * ones. A live corpus needs no overlay: the session already reads it.
+ */
+async function installCorpusOverlay(
+	snapshot: SessionCorpusSnapshot | undefined,
+	attemptDirectory: string,
+): Promise<CorpusOverlay> {
+	if (snapshot === undefined) {
+		return { styleName: undefined };
+	}
+
+	await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+	return { styleName: await snapshotStyleName(snapshot) };
+}
+
 export async function runSessionAttempt(
 	request: SessionAttemptRequest,
 ): Promise<SessionAttempt> {
@@ -177,13 +224,18 @@ export async function runSessionAttempt(
 		await seedFixture(sessionCase.fixturePath, attemptDirectory);
 	}
 
+	const overlay = await installCorpusOverlay(
+		request.corpusSnapshot,
+		attemptDirectory,
+	);
+
 	const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));
 	const session = await prepareSession(sessionCase, slug);
 	const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
 
 	try {
 		const output = await request.runClaude(
-			sessionCaseArgs(sessionCase, settings, session),
+			sessionCaseArgs(sessionCase, settings, session, overlay.styleName),
 			attemptDirectory,
 		);
 

@@ -1,6 +1,16 @@
 import { resolve } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
-import type { ResolvedCorpusSource } from "./corpus-source";
+
+/**
+ * What resolving a layout path needs and nothing more: the root the bytes are
+ * under, and whether that root is the live install, whose CLAUDE.md lives at
+ * the control root instead. A resolved corpus source and a corpus snapshot
+ * both satisfy it.
+ */
+export interface CorpusRoot {
+	readonly kind: "live" | "directory" | "chezmoi";
+	readonly root: string;
+}
 
 export class CorpusFileError extends Error {
 	public override name = "CorpusFileError";
@@ -35,7 +45,7 @@ export const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
  * from.
  */
 export function resolveCorpusFile(
-	source: ResolvedCorpusSource,
+	source: CorpusRoot,
 	layoutPath: string,
 ): string {
 	if (layoutPath === "CLAUDE.md") {
@@ -67,7 +77,7 @@ export interface ResolvedCorpusFile {
  * failure this ordering prevents.
  */
 export async function hashCorpusFiles(
-	source: ResolvedCorpusSource,
+	source: CorpusRoot,
 	layoutPaths: readonly string[],
 ): Promise<readonly ResolvedCorpusFile[]> {
 	const hashed: ResolvedCorpusFile[] = [];

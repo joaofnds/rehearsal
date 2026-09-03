@@ -104,6 +104,7 @@ describe("declared commands", () => {
 			"--judge-model",
 			"--judge-effort",
 			"--session-budget-usd",
+			"--corpus",
 			"--pipeline",
 			"--confirm",
 			"--reps",
@@ -219,5 +220,27 @@ describe(asUsageError.name, () => {
 
 	it("returns the parsed configuration when parsing succeeds", () => {
 		expect(asUsageError(() => "parsed")).toBe("parsed");
+	});
+});
+
+describe("the corpus source flag", () => {
+	it.each(["run", "replay"])(
+		"%s lists --corpus with its source syntax",
+		(name) => {
+			const command = COMMANDS.find((declared) => declared.name === name);
+			const help = commandHelp(command ?? exampleCommand);
+
+			expect(help).toContain("--corpus");
+			expect(help).toContain("chezmoi:<ref>");
+		},
+	);
+
+	it("declares --corpus once, as one shared definition", () => {
+		const declarations = COMMANDS.flatMap((command) =>
+			command.flags.filter((flag) => flag.name === "--corpus"),
+		);
+
+		expect(declarations).toHaveLength(2);
+		expect(new Set(declarations).size).toBe(1);
 	});
 });

@@ -9,14 +9,21 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
-import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
-import { resolveCorpusSource } from "#benchmark/corpus-source";
+import {
+	CorpusSourceError,
+	resolveCorpusSource,
+} from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
 	SessionAttempt,
 	SessionAttemptRequest,
 } from "#benchmark/session-attempt";
 import { FixtureError, runSessionAttempt } from "#benchmark/session-attempt";
+import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
+import {
+	SessionCorpusError,
+	snapshotSessionCorpus,
+} from "#benchmark/session-corpus";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type { SessionAttemptRecord } from "#benchmark/session-record";
@@ -43,19 +50,39 @@ function settingsOf(config: SessionRunConfig): SessionSettings {
 	};
 }
 
+interface AttemptCorpus {
+	readonly snapshot: SessionCorpusSnapshot;
+	readonly files: readonly ResolvedCorpusFile[];
+}
+
 /**
- * The corpus files resolve before the attempt runs, so a case naming a style
- * that is not installed is refused rather than discovered after the session
- * has been paid for.
+ * The corpus resolves, snapshots, and hashes before the attempt runs, so a
+ * source that does not exist, a style the corpus does not hold, or a skill the
+ * harness cannot deliver is refused rather than discovered after the session
+ * has been paid for. Every one of them is a declared input the command cannot
+ * satisfy, so all three exit 3.
  */
 async function requireCorpus(
 	sessionCase: SessionCase,
-	source: ResolvedCorpusSource,
-): Promise<readonly ResolvedCorpusFile[]> {
+	corpus: string | undefined,
+	snapshotDirectory: string,
+): Promise<AttemptCorpus> {
 	try {
-		return await hashCorpusFiles(source, sessionCase.corpusFiles);
+		const snapshot = await snapshotSessionCorpus(
+			await resolveCorpusSource(corpus),
+			snapshotDirectory,
+		);
+
+		return {
+			snapshot,
+			files: await hashCorpusFiles(snapshot, sessionCase.corpusFiles),
+		};
 	} catch (error) {
-		if (error instanceof CorpusFileError) {
+		if (
+			error instanceof CorpusFileError ||
+			error instanceof CorpusSourceError ||
+			error instanceof SessionCorpusError
+		) {
 			throw new RefusedPreconditionError(error.message);
 		}
 
@@ -149,16 +176,20 @@ export async function runSessionDebugAttempt(
 ): Promise<SessionRunOutcome> {
 	const { sessionCase, config } = request;
 	const settings = settingsOf(config);
-	const corpusSource = await resolveCorpusSource(config.corpus);
-	const corpusFiles = await requireCorpus(sessionCase, corpusSource);
-	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
-
 	const recordDirectory = join(
 		request.runsDirectory,
 		"sessions",
 		sessionCase.declaration.id,
 		randomUUID(),
 	);
+	const corpus = await requireCorpus(
+		sessionCase,
+		config.corpus,
+		join(recordDirectory, "corpus"),
+	);
+	const corpusFiles = corpus.files;
+	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
+
 	await mkdir(recordDirectory, { recursive: true });
 
 	const startedAt = Date.now();
@@ -168,6 +199,7 @@ export async function runSessionDebugAttempt(
 		projectsDirectory: request.projectsDirectory,
 		recordDirectory,
 		runClaude: request.runClaude,
+		corpusSnapshot: corpus.snapshot,
 	});
 
 	const record = sessionAttemptRecordSchema.parse(

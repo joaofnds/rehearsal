@@ -85,6 +85,13 @@ const sessionFlags: readonly FlagDefinition[] = [
 	},
 ];
 
+const corpusFlag: FlagDefinition = {
+	name: "--corpus",
+	kind: "value",
+	defaultValue: "the live install",
+	help: "Corpus under test: a directory in corpus layout, or chezmoi:<ref> rendered into a scratch destination",
+};
+
 const confirmationFlags: readonly FlagDefinition[] = [
 	{
 		name: "--confirm",
@@ -129,6 +136,7 @@ export const COMMANDS: readonly CommandDefinition[] = [
 				help: "Target repository the pipeline runs in; defaults to the case's declared target",
 			},
 			...sessionFlags,
+			corpusFlag,
 			{
 				name: "--pipeline",
 				kind: "value",
@@ -155,6 +163,7 @@ export const COMMANDS: readonly CommandDefinition[] = [
 				help: "Stage to replay from that run's checkpoint",
 			},
 			...sessionFlags,
+			corpusFlag,
 			...confirmationFlags,
 			jsonFlag,
 		],
