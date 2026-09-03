@@ -32,7 +32,7 @@ function confinedTo(root: string, layoutPath: string): string {
 	return absolute;
 }
 
-export const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
+const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
 	"output-styles/",
 	"agents/",
 	"skills/",
