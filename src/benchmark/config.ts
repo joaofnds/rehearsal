@@ -1,4 +1,4 @@
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 
 export const CONTROL_DIR = resolve(import.meta.dir, "../..");
@@ -19,6 +19,22 @@ export const PROJECT_INSTRUCTIONS_PATH = resolve(CONTROL_DIR, "CLAUDE.md");
 
 export function readProjectInstructions(): Promise<string> {
 	return Bun.file(PROJECT_INSTRUCTIONS_PATH).text();
+}
+
+/**
+ * How a path is named to a reader. Sessions paste this output onto cards that
+ * other people read, and an absolute path under the control root discloses the
+ * home directory for nothing: the control-relative path names the same file
+ * and is the one a reader can act on. A path outside the control root is left
+ * as it is, because relative to a root it is not under says less than the path
+ * itself.
+ */
+export function displayPath(path: string): string {
+	const controlRelative = relative(CONTROL_DIR, path);
+
+	return controlRelative.startsWith("..") || isAbsolute(controlRelative)
+		? path
+		: controlRelative;
 }
 
 export const DEFAULT_CASE_ID = "audit-log";

@@ -1,6 +1,7 @@
 import { caseDeclarationPath, casesRoot } from "#benchmark/case";
 import { parseComparisonReport } from "#benchmark/comparison-record";
 import { parseConfirmationGroupRecord } from "#benchmark/confirmation-record";
+import { displayPath } from "#benchmark/config";
 import { unhandled } from "#benchmark/contracts";
 import {
 	comparisonSummary,
@@ -57,11 +58,15 @@ function recordFileFor(id: RecordId, runsDirectory: string): string {
 /**
  * A well-formed id naming no record is a precondition the command refuses, not
  * a malformed command line: the same distinction `case show` already draws.
+ * The path is named the way a session can paste it onto a card, which is what
+ * the README tells one to do with this output.
  */
 async function recordText(id: string, file: string): Promise<string> {
 	const record = Bun.file(file);
 	if (!(await record.exists())) {
-		throw new RefusedPreconditionError(`No record ${id} at ${file}`);
+		throw new RefusedPreconditionError(
+			`No record ${id} at ${displayPath(file)}`,
+		);
 	}
 
 	return record.text();

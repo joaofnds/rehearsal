@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { listCases } from "#benchmark/case";
+import { CONTROL_DIR } from "#benchmark/config";
 import { parseCheckpointRecord } from "#benchmark/checkpoint";
 import { unhandled } from "#benchmark/contracts";
 import { parseComparisonReport } from "#benchmark/comparison-record";
@@ -82,14 +83,22 @@ async function collect<Named>(
 		try {
 			entries.push({ id, fields: await read(name) });
 		} catch (error) {
-			unreadable.push({
-				id,
-				reason: error instanceof Error ? error.message : String(error),
-			});
+			const message = error instanceof Error ? error.message : String(error);
+			unreadable.push({ id, reason: controlRelative(message) });
 		}
 	}
 
 	return { entries, unreadable };
+}
+
+/**
+ * A reason is printed for a person, and the README tells a session to paste it
+ * onto a card others read: a filesystem error names an absolute path, and
+ * under the control root that discloses the home directory while naming the
+ * same file the control-relative path names.
+ */
+function controlRelative(reason: string): string {
+	return reason.replaceAll(`${CONTROL_DIR}/`, "");
 }
 
 async function listDeclaredCases(): Promise<RecordListing> {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CaseDefaults, Effort } from "./config";
 import {
+	CONTROL_DIR,
 	DEFAULT_CASE_ID,
+	displayPath,
 	judgeSelfPreferenceWarning,
 	parseArgs,
 	parseCaseId,
@@ -681,6 +684,26 @@ describe(parseStaleArgs.name, () => {
 	it("refuses an effort the workflow does not support", () => {
 		expect(() => parseStaleArgs(["--effort", "turbo"], {})).toThrow(
 			"Unsupported effort for workflow",
+		);
+	});
+});
+
+describe(displayPath.name, () => {
+	it("names a path under the control root relative to it", () => {
+		expect(displayPath(join(CONTROL_DIR, ".benchmark-runs/absent.json"))).toBe(
+			".benchmark-runs/absent.json",
+		);
+	});
+
+	it("discloses no home directory for a path under the control root", () => {
+		expect(
+			displayPath(join(CONTROL_DIR, "cases/smoke/case.json")),
+		).not.toContain(homedir());
+	});
+
+	it("leaves a path outside the control root as it is", () => {
+		expect(displayPath("/tmp/elsewhere/record.json")).toBe(
+			"/tmp/elsewhere/record.json",
 		);
 	});
 });

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { DEFAULT_CASE_ID } from "#benchmark/config";
+import { homedir, tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
@@ -195,6 +195,29 @@ describe(runList.name, () => {
 			expect(recorder.stderr.join("")).toContain(
 				`attempt:session:smoke/${RECORDLESS_UUID}`,
 			);
+		});
+	});
+
+	describe("when a reason names a file under the control root", () => {
+		/**
+		 * The production runs directory is under the control root and the README
+		 * tells a session to paste this output onto a card other people read, so
+		 * a reason naming an absolute path there discloses the home directory
+		 * for nothing.
+		 */
+		it("names it relative to the control root", async () => {
+			const root = await mkdtemp(join(CONTROL_DIR, "rehearsal-list-test-"));
+			roots.push(root);
+			const fixture = new RecordedRunsFixture(root);
+			await fixture.write();
+			await fixture.writeEmptyAttemptDirectory("smoke", RECORDLESS_UUID);
+			const recorder = recordOutput();
+
+			await runList({ kind: "attempts", runsDirectory: root }, recorder.output);
+
+			const reasons = recorder.stderr.join("");
+			expect(reasons).toContain(`${basename(root)}/sessions/smoke`);
+			expect(reasons).not.toContain(homedir());
 		});
 	});
 

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { caseDeclarationPath, casesRoot } from "#benchmark/case";
-import { DEFAULT_CASE_ID } from "#benchmark/config";
+import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import {
 	benchmarkRunPaths,
+	benchmarkRunsDirectory,
 	comparisonReportPaths,
 	confirmationGroupPaths,
 } from "#benchmark/run-layout";
@@ -15,6 +16,32 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { LIST_KINDS, runList } from "#cli/list-command";
 import { runShow } from "#cli/show-command";
+
+describe("naming a record a session pastes onto a card", () => {
+	/**
+	 * A card is read by people who are not on this machine, and the README tells
+	 * a session to paste this output onto one. An absolute path under the
+	 * control root discloses the home directory and names the same file the
+	 * control-relative path does.
+	 */
+	it("names an absent record's path relative to the control root", async () => {
+		const recorder = recordOutput();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: "run:absent",
+					json: true,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+				},
+				recorder.output,
+			),
+		);
+
+		expect(failure.message).toContain(".benchmark-runs/absent.json");
+		expect(failure.message).not.toContain(homedir());
+	});
+});
 
 describe(runShow.name, () => {
 	const roots: string[] = [];
