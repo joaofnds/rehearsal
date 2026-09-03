@@ -1,11 +1,11 @@
 import { stat } from "node:fs/promises";
-import { join } from "node:path";
 import type { CaseDeclaration, SessionCaseDeclaration } from "./case";
 import { listCases } from "./case";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
+	corpusSkillRoots,
 	deriveStaleness,
 	INITIAL_CHECKPOINT_STAGE,
 	parseCheckpointRecord,
@@ -66,17 +66,6 @@ export interface CurrentSessionKnobs {
 	readonly effort?: Effort | undefined;
 }
 
-/**
- * Staleness needs the corpus hashed, never installed, so `stale` needs no
- * worktree, no git, and no session: `captureStageCorpus` reads the roots it is
- * given and nothing else. The skills of a resolved corpus source live under
- * its root; its CLAUDE.md is wherever the corpus-file resolver says, because
- * the live install's instructions are the control root's, not `~/.claude`'s.
- */
-function skillRootsOf(source: CorpusRoot): readonly string[] {
-	return [join(source.root, "skills")];
-}
-
 async function currentStageCorpus(
 	manifest: RunManifest,
 	chain: readonly CheckpointRecord[],
@@ -84,7 +73,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
 	const corpus = new Map<string, readonly HashedFile[]>();
-	const roots = skillRootsOf(source);
+	const roots = corpusSkillRoots(source);
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
@@ -147,6 +136,11 @@ async function projectInstructions(source: CorpusRoot): Promise<string> {
 }
 
 /**
+ * Staleness needs the corpus hashed, never installed, so `stale` needs no
+ * worktree, no git, and no session: `captureStageCorpus` reads the roots it is
+ * given and nothing else, and those roots are the ones a replay against the
+ * same corpus would search.
+ *
  * Every checkpoint of every recorded run whose recorded inputs no longer match
  * the corpus under test. A run whose manifest cannot be read contributes
  * nothing rather than failing the report: it was never replayable, so nothing

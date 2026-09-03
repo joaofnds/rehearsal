@@ -6,6 +6,7 @@ import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
+	corpusSkillRoots,
 	deriveStaleness,
 	initialCheckpointInputs,
 	installStageCorpusSnapshot,
@@ -13,8 +14,11 @@ import {
 	materializeCheckpoint,
 	recordCheckpoint,
 	rootLineage,
+	skillSearchRoots,
 	snapshotStageCorpus,
 } from "./checkpoint";
+import { CONTROL_DIR } from "./config";
+import { liveCorpusRoot } from "./corpus-source";
 import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
@@ -727,4 +731,21 @@ describe(rootLineage.name, () => {
 			variants.length + 1,
 		);
 	});
+});
+
+describe(corpusSkillRoots.name, () => {
+	it("searches project level before user level for the live install", () => {
+		expect(corpusSkillRoots({ kind: "live", root: liveCorpusRoot() })).toEqual(
+			skillSearchRoots(CONTROL_DIR),
+		);
+	});
+
+	it.each(["directory", "chezmoi"] as const)(
+		"searches only the resolved root for a %s corpus",
+		(kind) => {
+			expect(corpusSkillRoots({ kind, root: "/variants/brief" })).toEqual([
+				"/variants/brief/skills",
+			]);
+		},
+	);
 });

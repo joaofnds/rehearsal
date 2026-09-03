@@ -4,7 +4,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
-import { effortSchema } from "./config";
+import { CONTROL_DIR, effortSchema } from "./config";
+import type { CorpusRoot } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import { statIfExists } from "./file-presence";
 import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
@@ -103,6 +104,19 @@ export function skillSearchRoots(targetDir: string): string[] {
 		join(targetDir, ".claude", "skills"),
 		join(homedir(), ".claude", "skills"),
 	];
+}
+
+/**
+ * Where a stage's skills live for one corpus, so `stale` and `replay` cannot
+ * disagree about whether the same checkpoint is stale. The live install is the
+ * pair `skillSearchRoots` already searches, project level first; a resolved
+ * directory or render is the whole corpus, so nothing outside it may shadow
+ * what it holds.
+ */
+export function corpusSkillRoots(source: CorpusRoot): readonly string[] {
+	return source.kind === "live"
+		? skillSearchRoots(CONTROL_DIR)
+		: [join(source.root, "skills")];
 }
 
 export async function resolveSkillDirectory(
