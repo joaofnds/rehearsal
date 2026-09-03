@@ -303,9 +303,10 @@ describe("rehearsal", () => {
 		expect(result.stderr).toContain("No replayable run named any-name");
 	});
 
-	it("refuses to run when stdin is not a terminal, before any provider call", async () => {
+	it("refuses --pause when stdin is not a terminal, before any provider call", async () => {
 		const result = await runCli([
 			"run",
+			"--pause",
 			"--target",
 			"/nonexistent-target",
 			"--model",
@@ -316,8 +317,31 @@ describe("rehearsal", () => {
 
 		expect(result.exitCode).toBe(3);
 		expect(result.stdout).toBe("");
-		expect(result.stderr).toContain("ACT-26.3");
+		expect(result.stderr).toContain("stdin is not a terminal");
+		expect(result.stderr).toContain("--pause");
 		expect(result.stderr).not.toContain("Target:");
+	});
+
+	/**
+	 * The terminal gate belongs to `--pause` alone now, so a run without it
+	 * reaches the work and fails on the state it finds rather than on a pause it
+	 * never asked for. What the run then fails on depends on the machine, so
+	 * only the refusal it must not make is asserted.
+	 */
+	it("passes the terminal gate without --pause", async () => {
+		const result = await runCli([
+			"run",
+			"--target",
+			"/nonexistent-target",
+			"--model",
+			"sonnet",
+			"--session-budget-usd",
+			"1",
+		]);
+
+		expect(result.stdout).toBe("");
+		expect(result.stderr).not.toContain("stdin is not a terminal");
+		expect(result.exitCode).not.toBe(EXIT_CODES.refusedPrecondition);
 	});
 
 	it.each([
@@ -415,13 +439,17 @@ describe("every declared command", () => {
 describe("a paying command given every session knob", () => {
 	/**
 	 * What actually stands between the suite and a paid session once the usage
-	 * errors above are satisfied: `run` refuses because the review pause needs a
-	 * TTY, and `replay` refuses because no recorded run answers `--run`. Naming
-	 * the refusal each makes is what fails loudly if a change ever lets one of
-	 * them proceed to a provider call from a test.
+	 * errors above are satisfied: `run --pause` refuses because the pause needs
+	 * a TTY, and `replay` refuses because no recorded run answers `--run`.
+	 * Naming the refusal each makes is what fails loudly if a change ever lets
+	 * one of them proceed to a provider call from a test.
 	 */
 	it.each([
-		{ name: "run", args: [], reason: "stdin is not a terminal" },
+		{
+			name: "run",
+			args: ["--pause", "--target", "/nonexistent-target"],
+			reason: "stdin is not a terminal",
+		},
 		{
 			name: "replay",
 			args: ["--run", "absent", "--stage", "build"],

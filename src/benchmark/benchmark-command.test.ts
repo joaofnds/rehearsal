@@ -14,6 +14,7 @@ describe(executeBenchmark.name, () => {
 			judgeModel: "opus",
 			sessionBudgetUsd: 5,
 			pipelinePath: "pipelines/test.json",
+			pause: false,
 		};
 		const debugOutput: string[] = [];
 		const debug = await executeBenchmark(config, 2, {

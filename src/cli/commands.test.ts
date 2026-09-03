@@ -117,6 +117,7 @@ describe("declared commands", () => {
 			"--session-budget-usd",
 			"--corpus",
 			"--pipeline",
+			"--pause",
 			"--confirm",
 			"--reps",
 			"--yes",

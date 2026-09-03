@@ -79,6 +79,7 @@ export interface BenchmarkConfig extends SessionKnobs, CorpusSelection {
 	readonly caseId: string;
 	readonly sourceDir: string;
 	readonly pipelinePath: string;
+	readonly pause: boolean;
 	readonly confirmation?: ConfirmationConfig | undefined;
 }
 
@@ -136,7 +137,7 @@ export function judgeSelfPreferenceWarning(config: {
 	return `Self-preference warning: Judge model ${config.judgeModel} and workflow model ${config.model} are both in the ${workflowFamily} family; grades may favor the workflow output.`;
 }
 
-const SWITCH_FLAGS = new Set(["--confirm", "--yes"]);
+const SWITCH_FLAGS = new Set(["--confirm", "--yes", "--pause"]);
 
 function flagValues(args: readonly string[]): ParsedFlags {
 	const values = new Map<string, string>();
@@ -292,6 +293,7 @@ export function parseArgs(
 			{
 				caseId: caseDefaults.caseId,
 				sourceDir: resolve(sourceDir),
+				pause: flags.switches.has("--pause"),
 				...sessionKnobs,
 				pipelinePath: controlRelativePath(
 					values.get("--pipeline") ??

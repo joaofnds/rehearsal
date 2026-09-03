@@ -227,6 +227,7 @@ function artifactBaseInputs(
 			judgeModel: "sonnet",
 			sessionBudgetUsd: 5,
 			pipelinePath,
+			pause: false,
 		},
 		pipeline,
 		claudeVersion: "claude 1.0.0",

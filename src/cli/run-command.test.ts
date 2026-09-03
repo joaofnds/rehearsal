@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BenchmarkCase, SessionCase } from "#benchmark/case";
+import type { BenchmarkConfig } from "#benchmark/config";
 import { parseArgs } from "#benchmark/config";
 import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
@@ -105,12 +106,12 @@ describe(runRunCommand.name, () => {
 		);
 	});
 
-	it("refuses before the run starts when stdin is not a terminal", async () => {
+	it("refuses --pause before the run starts when stdin is not a terminal", async () => {
 		const { output, stdout, stderr } = recordOutput();
 
 		const failure = await failureOf(
 			runRunCommand(
-				{ args, json: false, stdinIsTerminal: false },
+				{ args: [...args, "--pause"], json: false, stdinIsTerminal: false },
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
@@ -121,10 +122,34 @@ describe(runRunCommand.name, () => {
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).toContain("review pause");
-		expect(failure.message).toContain("ACT-26.3");
+		expect(failure.message).toContain("terminal");
 		expect(stdout).toEqual([]);
 		expect(stderr).toEqual([]);
+	});
+
+	it("starts without --pause when stdin is not a terminal", async () => {
+		const { output } = recordOutput();
+		const executed: BenchmarkConfig[] = [];
+
+		await runRunCommand(
+			{ args, json: false, stdinIsTerminal: false },
+			{
+				output,
+				requireCase: loadsAuditLog().requireCase,
+				executeSession: neverASession,
+				execute: (config) => {
+					executed.push(config);
+
+					return Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					});
+				},
+			},
+		);
+
+		expect(executed).toHaveLength(1);
+		expect(executed[0]?.pause).toBe(false);
 	});
 
 	it("loads the case --case names, and audit-log when the flag is absent", async () => {

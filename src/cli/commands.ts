@@ -141,6 +141,11 @@ export const COMMANDS: readonly CommandDefinition[] = [
 				defaultValue: "the case's declared pipeline",
 				help: "Pipeline definition the run executes, overriding the case's",
 			},
+			{
+				name: "--pause",
+				kind: "switch",
+				help: "Stop with the candidate in the target for an interactive review; needs a terminal",
+			},
 			...confirmationFlags,
 			jsonFlag,
 		],

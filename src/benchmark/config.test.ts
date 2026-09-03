@@ -219,6 +219,7 @@ describe(parseArgs.name, () => {
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
 			pipelinePath: CASE_DEFAULTS.pipelinePath,
+			pause: false,
 		});
 	});
 

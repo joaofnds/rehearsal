@@ -70,7 +70,10 @@ import {
 } from "#cli/session-run-command";
 
 const REVIEW_PAUSE_REASON =
-	"the review pause has no flag alternative until ACT-26.3, so a run needs a TTY";
+	"--pause stops with the candidate in the target and waits for a reviewer, so it needs one; drop it and the run records its evidence, retains the candidate, and restores";
+
+const COST_APPROVAL_REASON =
+	"a confirmation group asks for its projected cost to be approved, so it needs one or --yes";
 
 export interface RunCommandRequest {
 	readonly args: readonly string[];
@@ -124,9 +127,7 @@ export async function runRunCommand(
 		}),
 	);
 	refuseStageCorpus(config.corpus);
-	if (config.confirmation === undefined || !config.confirmation.approved) {
-		requireInteractiveStdin(request.stdinIsTerminal, REVIEW_PAUSE_REASON);
-	}
+	refuseWithoutTerminal(config, request.stdinIsTerminal);
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
@@ -137,6 +138,23 @@ export async function runRunCommand(
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);
+}
+
+/**
+ * Two questions a run may ask, each refused before any paid work when nothing
+ * can answer it: the review pause, requested by `--pause`, and the projected
+ * cost of a confirmation group that `--yes` has not already approved.
+ */
+function refuseWithoutTerminal(
+	config: Readonly<BenchmarkConfig>,
+	stdinIsTerminal: boolean,
+): void {
+	if (config.pause) {
+		requireInteractiveStdin(stdinIsTerminal, REVIEW_PAUSE_REASON);
+	}
+	if (config.confirmation !== undefined && !config.confirmation.approved) {
+		requireInteractiveStdin(stdinIsTerminal, COST_APPROVAL_REASON);
+	}
 }
 
 /**
