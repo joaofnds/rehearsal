@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { runCommand } from "./command";
 import type { LocalCheckResult } from "./contracts";
 import type { TargetDefinition } from "./pipeline";
+import { removeWorktree } from "./target";
 
 export const PROJECT_ROOT = join(import.meta.dir, "../..");
 export const AUDIT_LOG_CASE_DIR = "cases/audit-log";
@@ -20,8 +21,14 @@ export interface TestRepository {
 	readonly sha: string;
 }
 
+interface TrackedWorktree {
+	readonly repositoryRoot: string;
+	readonly path: string;
+}
+
 export class TestResources {
 	private readonly directories: string[] = [];
+	private readonly worktrees: TrackedWorktree[] = [];
 
 	public static forEachTest(): TestResources {
 		const resources = new TestResources();
@@ -32,6 +39,15 @@ export class TestResources {
 
 	public track(directory: string): void {
 		this.directories.push(directory);
+	}
+
+	/**
+	 * A worktree removed only by the test's last statement leaks whenever an
+	 * earlier assertion fails, and it leaks into the repository's metadata,
+	 * which removing the directory does not undo.
+	 */
+	public trackWorktree(repositoryRoot: string, path: string): void {
+		this.worktrees.push({ repositoryRoot, path });
 	}
 
 	/**
@@ -72,6 +88,13 @@ export class TestResources {
 	}
 
 	private async cleanup(): Promise<void> {
+		await Promise.all(
+			this.worktrees
+				.splice(0)
+				.map(({ repositoryRoot, path }) =>
+					removeWorktree(repositoryRoot, path).catch(() => undefined),
+				),
+		);
 		await Promise.all(
 			this.directories
 				.splice(0)

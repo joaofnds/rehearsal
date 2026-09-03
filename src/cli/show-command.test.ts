@@ -17,7 +17,7 @@ import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { LIST_KINDS, runList } from "#cli/list-command";
 import { runShow } from "#cli/show-command";
 import { runCommand } from "#benchmark/command";
-import { recordRetentionRef, removeWorktree } from "#benchmark/target";
+import { recordRetentionRef } from "#benchmark/target";
 import { TestResources } from "#benchmark/test-support";
 import { RUN_NAME } from "#cli/calibrate-test-support";
 
@@ -433,12 +433,14 @@ describe("show --checkout", () => {
 		await recordRetentionRef(target.directory, RUN_NAME, target.sha);
 		const checkoutRoot = await mkdtemp(join(tmpdir(), "rehearsal-checkout-"));
 		resources.track(checkoutRoot);
+		const checkoutPath = join(checkoutRoot, "candidate");
+		resources.trackWorktree(target.directory, checkoutPath);
 
 		return {
 			runsDirectory,
 			targetDirectory: target.directory,
 			resultSha: target.sha,
-			checkoutPath: join(checkoutRoot, "candidate"),
+			checkoutPath,
 		};
 	}
 
@@ -463,7 +465,6 @@ describe("show --checkout", () => {
 			fixture.checkoutPath,
 		);
 		expect(head.trim()).toBe(fixture.resultSha);
-		await removeWorktree(fixture.targetDirectory, fixture.checkoutPath);
 	});
 
 	it("refuses a directory that already exists and creates no worktree", async () => {
@@ -517,6 +518,34 @@ describe("show --checkout", () => {
 		expect(failure.message).toContain(`refs/rehearsal/${RUN_NAME}`);
 	});
 
+	/**
+	 * A repository the artifact names and the command cannot read is not a run
+	 * that retained nothing: the candidate may be intact under a different
+	 * path. Saying so is the difference between going to find the repository
+	 * and re-running the benchmark.
+	 */
+	it("refuses a target repository it cannot read, naming the path", async () => {
+		const fixture = await retainedRun();
+		await rm(fixture.targetDirectory, { force: true, recursive: true });
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: `run:${RUN_NAME}`,
+					json: false,
+					runsDirectory: fixture.runsDirectory,
+					checkout: fixture.checkoutPath,
+				},
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain(fixture.targetDirectory);
+		expect(failure.message).not.toContain("retained no candidate");
+	});
+
 	it("refuses --checkout on an id that is not a run", async () => {
 		const fixture = await retainedRun();
 		const { output } = recordOutput();
@@ -553,6 +582,5 @@ describe("show --checkout", () => {
 		);
 
 		expect(stdout).toEqual([`${fixture.checkoutPath}\n`]);
-		await removeWorktree(fixture.targetDirectory, fixture.checkoutPath);
 	});
 });
