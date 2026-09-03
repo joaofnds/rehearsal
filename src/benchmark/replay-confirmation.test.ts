@@ -89,8 +89,11 @@ describe(runReplayConfirmation.name, () => {
 		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
+			await Bun.write(
+				join(corpusRoot, "skills", skill, "SKILL.md"),
+				`${skill}\n`,
+			);
 		}
 		const config = parseReplayArgs(
 			[
@@ -146,8 +149,11 @@ describe(runReplayConfirmation.name, () => {
 		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "build", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
+			await Bun.write(
+				join(corpusRoot, "skills", skill, "SKILL.md"),
+				`${skill}\n`,
+			);
 		}
 
 		await fake.runConfirmation(
@@ -236,14 +242,14 @@ describe(runReplayConfirmation.name, () => {
 		};
 		await writeRunManifest(paths.manifestFile, manifest);
 		const corpusRoot = join(parent, "corpus");
-		await mkdir(join(corpusRoot, "discuss"), { recursive: true });
-		await mkdir(join(corpusRoot, "doctrine"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "doctrine"), { recursive: true });
 		await Bun.write(
-			join(corpusRoot, "discuss", "SKILL.md"),
+			join(corpusRoot, "skills", "discuss", "SKILL.md"),
 			"frozen discuss\n",
 		);
 		await Bun.write(
-			join(corpusRoot, "doctrine", "SKILL.md"),
+			join(corpusRoot, "skills", "doctrine", "SKILL.md"),
 			"frozen doctrine\n",
 		);
 		const instructions = "Frozen instructions\n";
@@ -509,8 +515,11 @@ describe(runReplayConfirmation.name, () => {
 		const corpusRoot = await mkdtemp(join(tmpdir(), "replay-po-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
+			await Bun.write(
+				join(corpusRoot, "skills", skill, "SKILL.md"),
+				`${skill}\n`,
+			);
 		}
 
 		const outcome = await fake.runConfirmation(
@@ -578,8 +587,11 @@ describe(runReplayConfirmation.name, () => {
 		const corpusRoot = await mkdtemp(join(tmpdir(), "replay-judge-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill}\n`);
+			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
+			await Bun.write(
+				join(corpusRoot, "skills", skill, "SKILL.md"),
+				`${skill}\n`,
+			);
 		}
 
 		const outcome = await fake.runConfirmation(
@@ -692,14 +704,14 @@ describe(runReplayConfirmation.name, () => {
 			},
 		});
 		const corpusRoot = join(parent, "corpus");
-		await mkdir(join(corpusRoot, "discuss"), { recursive: true });
-		await mkdir(join(corpusRoot, "doctrine"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "doctrine"), { recursive: true });
 		await Bun.write(
-			join(corpusRoot, "discuss", "SKILL.md"),
+			join(corpusRoot, "skills", "discuss", "SKILL.md"),
 			"frozen discuss\n",
 		);
 		await Bun.write(
-			join(corpusRoot, "doctrine", "SKILL.md"),
+			join(corpusRoot, "skills", "doctrine", "SKILL.md"),
 			"frozen doctrine\n",
 		);
 		const metric: ClaudeCallMetrics = {
@@ -931,14 +943,14 @@ describe(runReplayConfirmation.name, () => {
 			},
 		});
 		const corpusRoot = join(parent, "corpus");
-		await mkdir(join(corpusRoot, "discuss"), { recursive: true });
-		await mkdir(join(corpusRoot, "doctrine"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
+		await mkdir(join(corpusRoot, "skills", "doctrine"), { recursive: true });
 		await Bun.write(
-			join(corpusRoot, "discuss", "SKILL.md"),
+			join(corpusRoot, "skills", "discuss", "SKILL.md"),
 			"frozen discuss\n",
 		);
 		await Bun.write(
-			join(corpusRoot, "doctrine", "SKILL.md"),
+			join(corpusRoot, "skills", "doctrine", "SKILL.md"),
 			"frozen doctrine\n",
 		);
 		const metric: ClaudeCallMetrics = {

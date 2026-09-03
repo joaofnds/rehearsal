@@ -149,6 +149,81 @@ describe("workflow provider metrics", () => {
 		]);
 	});
 
+	it("restricts a stage session to project-level settings when asked", async () => {
+		const commands: string[][] = [];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+
+		await runWorkflowStage(
+			{
+				targetDir: "/target",
+				model: "sonnet",
+				effort: undefined,
+				sessionBudgetUsd: 5,
+				productOwner,
+				taskId: "ACT-28",
+				stage: "shape",
+				skill: "shape",
+				settingSources: "project",
+			},
+			(command) => {
+				commands.push([...command]);
+
+				return Promise.resolve(
+					JSON.stringify({
+						session_id: "worker-session",
+						structured_output: { status: "COMPLETE", message: "Shaped" },
+					}),
+				);
+			},
+		);
+
+		expect(commands[0]).toContain("--setting-sources");
+	});
+
+	it("leaves a stage session unrestricted by default", async () => {
+		const commands: string[][] = [];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+
+		await runWorkflowStage(
+			{
+				targetDir: "/target",
+				model: "sonnet",
+				effort: undefined,
+				sessionBudgetUsd: 5,
+				productOwner,
+				taskId: "ACT-28",
+				stage: "shape",
+				skill: "shape",
+			},
+			(command) => {
+				commands.push([...command]);
+
+				return Promise.resolve(
+					JSON.stringify({
+						session_id: "worker-session",
+						structured_output: { status: "COMPLETE", message: "Shaped" },
+					}),
+				);
+			},
+		);
+
+		expect(commands[0]).not.toContain("--setting-sources");
+	});
+
 	it.each([
 		{
 			boundary: "invocation",

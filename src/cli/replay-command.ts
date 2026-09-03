@@ -13,7 +13,7 @@ import {
 import {
 	captureStageCorpus,
 	materializeCheckpoint,
-	skillSearchRoots,
+	corpusLayoutRoots,
 } from "#benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -242,7 +242,7 @@ export async function executeReplay(
 			runConfirmed: (confirmationRequest) =>
 				runReplayConfirmation(replayDependencies, confirmationRequest),
 			groupId: randomUUID,
-			corpusRoots: skillSearchRoots(CONTROL_DIR),
+			corpusRoots: corpusLayoutRoots(CONTROL_DIR),
 		});
 	} finally {
 		questioner.close();

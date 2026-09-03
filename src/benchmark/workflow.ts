@@ -50,6 +50,7 @@ export interface WorkflowStageRequest {
 	readonly taskId: string;
 	readonly stage: WorkflowStage;
 	readonly skill: string;
+	readonly settingSources?: "project" | undefined;
 }
 
 export class WorkflowExecutionError extends Error {
@@ -160,6 +161,7 @@ export async function runWorkflowStage(
 		taskId,
 		stage,
 		skill,
+		settingSources,
 	} = request;
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
@@ -183,6 +185,7 @@ export async function runWorkflowStage(
 						schema: stageTurnSchema,
 						access: "unrestricted",
 						session: { id: sessionId, resume: turn > 0 },
+						settingSources,
 					}),
 					prompt,
 				],

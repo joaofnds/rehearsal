@@ -12,7 +12,7 @@ import {
 	lineageKey,
 	materializeCheckpoint,
 	recordCheckpoint,
-	skillSearchRoots,
+	corpusLayoutRoots,
 } from "./checkpoint";
 import { captureBaselineContext, captureFileHashes } from "./checks";
 import { runCommand } from "./command";
@@ -587,7 +587,7 @@ describe(runReplay.name, () => {
 			({ skill }) => skill === "discuss",
 		);
 		expect(upstream?.instructions).toBe("Current instructions");
-		expect(upstream?.roots).toEqual(skillSearchRoots(worktree));
+		expect(upstream?.roots).toEqual(corpusLayoutRoots(worktree));
 	});
 
 	it("records the replay stale and names the changed upstream file", async () => {

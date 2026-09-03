@@ -20,7 +20,7 @@ import {
 	initialCheckpointInputs,
 	recordCheckpoint,
 	resolveSkillDirectory,
-	skillSearchRoots,
+	corpusLayoutRoots,
 } from "./checkpoint";
 import {
 	captureBaselineContext,
@@ -504,7 +504,8 @@ export interface StageSessionEnvironment {
 	readonly taskSha: string;
 	readonly baselineSha: string;
 	readonly commitSubjectPattern?: string | undefined;
-	readonly skillRoots: readonly string[];
+	readonly corpusRoots: readonly string[];
+	readonly settingSources?: "project" | undefined;
 	readonly log: (message: string) => void;
 }
 
@@ -533,7 +534,7 @@ export async function executeStageSession(
 	const corpusFiles = await dependencies.captureStageCorpus(
 		definition.skill,
 		environment.instructions,
-		environment.skillRoots,
+		environment.corpusRoots,
 	);
 	environment.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 	const transcript = await dependencies.runWorkflowStage({
@@ -545,6 +546,7 @@ export async function executeStageSession(
 		taskId: environment.taskId,
 		stage,
 		skill: definition.skill,
+		settingSources: environment.settingSources,
 	});
 
 	const currentTaskOutput = await dependencies.readTaskOutput(
@@ -660,12 +662,12 @@ export async function runGradedStages(
 	// resolved too, because every stage's corpus hashes them. Hashing waits
 	// for each stage's start: the lineage must record the corpus that fed the
 	// stage, and a skill can change while earlier stages run.
-	const skillRoots = skillSearchRoots(context.targetDir);
+	const corpusRoots = corpusLayoutRoots(context.targetDir);
 	for (const skill of [
 		...GLOBAL_SKILLS,
 		...context.pipeline.stages.map(({ skill: name }) => name),
 	]) {
-		await dependencies.resolveSkillDirectory(skill, skillRoots);
+		await dependencies.resolveSkillDirectory(skill, corpusRoots);
 	}
 	let upstream = context.initialLineage;
 	let baselineSha = context.taskSha;
@@ -677,7 +679,7 @@ export async function runGradedStages(
 			{
 				...context,
 				target: context.pipeline.target,
-				skillRoots,
+				corpusRoots,
 				baselineSha,
 				commitSubjectPattern: context.pipeline.commitSubjectPattern,
 			},

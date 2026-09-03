@@ -5,7 +5,7 @@ import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
-	corpusSkillRoots,
+	stageCorpusRoots,
 	deriveStaleness,
 	INITIAL_CHECKPOINT_STAGE,
 	parseCheckpointRecord,
@@ -75,7 +75,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
 	const corpus = new Map<string, readonly HashedFile[]>();
-	const roots = corpusSkillRoots(source);
+	const roots = stageCorpusRoots(source);
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {

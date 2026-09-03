@@ -183,12 +183,16 @@ describe(runStale.name, () => {
 			{ output: recorder.output, corpusSource: refusingRunner().dependencies },
 		);
 
+		// An output style joins every stage's corpus, the same as a global
+		// skill: editing it stales the discuss checkpoint too, not only build's.
 		const printed = recorder.stdout.join("").trimEnd().split("\n");
 		expect(printed.map((line) => line.split("\t")[0])).toEqual([
+			`checkpoint:${fixture.replayableRun}/discuss`,
 			`checkpoint:${fixture.replayableRun}/build`,
 			"case:smoke",
 		]);
-		expect(printed.at(1)).toContain("output-styles/brief.md changed");
+		expect(printed.at(0)).toContain("output-styles/brief.md changed");
+		expect(printed.at(2)).toContain("output-styles/brief.md changed");
 	});
 
 	it("starts no session, runs no command, and writes no file", async () => {

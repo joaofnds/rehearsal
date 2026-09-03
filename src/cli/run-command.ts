@@ -11,7 +11,7 @@ import {
 	installStageCorpusSnapshot,
 	materializeCheckpoint,
 	recordCheckpoint,
-	skillSearchRoots,
+	corpusLayoutRoots,
 } from "#benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -280,7 +280,7 @@ export function buildConfirmationRequest(
 		instructions: inputs.instructions,
 		finalRubric: benchmarkCase.finalRubric,
 		stageRubrics: benchmarkCase.stageRubrics,
-		corpusRoots: skillSearchRoots(CONTROL_DIR),
+		corpusRoots: corpusLayoutRoots(CONTROL_DIR),
 		model: config.model,
 		effort: config.effort,
 		judgeModel: config.judgeModel,

@@ -125,8 +125,11 @@ export class PipelineConfirmationHarness {
 		resources.track(runsDirectory);
 		const corpusRoot = join(runsDirectory, "corpus");
 		for (const skill of ["discuss", "build", "doctrine"]) {
-			await mkdir(join(corpusRoot, skill), { recursive: true });
-			await Bun.write(join(corpusRoot, skill, "SKILL.md"), `${skill} corpus\n`);
+			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
+			await Bun.write(
+				join(corpusRoot, "skills", skill, "SKILL.md"),
+				`${skill} corpus\n`,
+			);
 		}
 
 		return new PipelineConfirmationHarness({

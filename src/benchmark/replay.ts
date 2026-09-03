@@ -15,7 +15,7 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 	lineageKey,
 	readCheckpointRecord,
-	skillSearchRoots,
+	corpusLayoutRoots,
 } from "./checkpoint";
 import type { captureBaselineContext, captureFileHashes } from "./checks";
 import type { Effort } from "./config";
@@ -381,7 +381,7 @@ export async function runReplay(
 				plan,
 				manifest,
 				request.instructions,
-				skillSearchRoots(worktreeDir),
+				corpusLayoutRoots(worktreeDir),
 				dependencies.stageSession.captureStageCorpus,
 			),
 			{ model: request.model, effort: request.effort },
@@ -425,7 +425,7 @@ export async function runReplay(
 				taskSha: baseSha,
 				baselineSha: baseSha,
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
-				skillRoots: skillSearchRoots(worktreeDir),
+				corpusRoots: corpusLayoutRoots(worktreeDir),
 				log: dependencies.log,
 			},
 			plan.definition,

@@ -99,24 +99,28 @@ export async function hashDirectory(
 	return files;
 }
 
-export function skillSearchRoots(targetDir: string): string[] {
-	return [
-		join(targetDir, ".claude", "skills"),
-		join(homedir(), ".claude", "skills"),
-	];
+/**
+ * A layout root holds `skills/`, `agents/`, and `output-styles/` as siblings,
+ * the shape a `.claude` directory has whether it belongs to a project or a
+ * user. Project level is searched before user level, so a stage session
+ * reads the frozen bytes a worktree's project-level `.claude` carries before
+ * falling back to whatever is live at user level.
+ */
+export function corpusLayoutRoots(targetDir: string): string[] {
+	return [join(targetDir, ".claude"), join(homedir(), ".claude")];
 }
 
 /**
- * Where a stage's skills live for one corpus, so `stale` and `replay` cannot
- * disagree about whether the same checkpoint is stale. The live install is the
- * pair `skillSearchRoots` already searches, project level first; a resolved
- * directory or render is the whole corpus, so nothing outside it may shadow
- * what it holds.
+ * Where a stage's corpus lives for one corpus source, so `stale` and `replay`
+ * cannot disagree about whether the same checkpoint is stale. The live
+ * install is the pair `corpusLayoutRoots` already searches, project level
+ * first; a resolved directory or render is the whole corpus, so nothing
+ * outside it may shadow what it holds.
  */
-export function corpusSkillRoots(source: CorpusRoot): readonly string[] {
+export function stageCorpusRoots(source: CorpusRoot): readonly string[] {
 	return source.kind === "live"
-		? skillSearchRoots(CONTROL_DIR)
-		: [join(source.root, "skills")];
+		? corpusLayoutRoots(CONTROL_DIR)
+		: [source.root];
 }
 
 export async function resolveSkillDirectory(
@@ -124,7 +128,7 @@ export async function resolveSkillDirectory(
 	roots: readonly string[],
 ): Promise<string> {
 	for (const root of roots) {
-		const directory = join(root, skill);
+		const directory = join(root, "skills", skill);
 		const directoryStats = await statIfExists(directory);
 		if (directoryStats?.isDirectory() === true) {
 			return directory;
@@ -137,6 +141,27 @@ export async function resolveSkillDirectory(
 }
 
 /**
+ * The first root, project then user, that holds a whole `agents/` or
+ * `output-styles/` directory. Neither kind is resolved by name the way a
+ * skill is: the whole directory is either frozen corpus or it is live, never
+ * merged file by file across roots.
+ */
+async function resolveLayoutDirectory(
+	kind: string,
+	roots: readonly string[],
+): Promise<string | undefined> {
+	for (const root of roots) {
+		const directory = join(root, kind);
+		const directoryStats = await statIfExists(directory);
+		if (directoryStats?.isDirectory() === true) {
+			return directory;
+		}
+	}
+
+	return undefined;
+}
+
+/**
  * Skills every stage reads regardless of which skill it invokes, so an edit
  * to one changes every stage's corpus. A declared list: adding another global
  * skill later is one entry here.
@@ -144,10 +169,20 @@ export async function resolveSkillDirectory(
 export const GLOBAL_SKILLS: readonly string[] = ["doctrine"];
 
 /**
+ * The whole-directory corpus kinds a stage's corpus carries beside its skills:
+ * every agent and every output style, whichever root supplies them, because a
+ * stage session can invoke either and both must be frozen the same way a
+ * skill is.
+ */
+const LAYOUT_DIRECTORY_KINDS: readonly string[] = ["agents", "output-styles"];
+
+/**
  * Corpus file paths are recorded relative to the corpus, not the machine, so
  * the same skill bytes produce the same lineage wherever they are installed.
  * The global skills join every stage's corpus beside the installed
- * instructions, because every stage reads them.
+ * instructions, because every stage reads them. Agents and output styles join
+ * it too, whole, from the first root that has them: a stage session's skill
+ * can invoke either, and both must be frozen along with the skill it invokes.
  */
 export async function captureStageCorpus(
 	skill: string,
@@ -157,6 +192,13 @@ export async function captureStageCorpus(
 	const files: HashedFile[] = [
 		{ path: "CLAUDE.md", sha256: sha256(instructions) },
 	];
+
+	for (const kind of LAYOUT_DIRECTORY_KINDS) {
+		const directory = await resolveLayoutDirectory(kind, roots);
+		if (directory !== undefined) {
+			files.push(...(await hashDirectory(directory, kind)));
+		}
+	}
 
 	// The stage's own skill is hashed once even when it is a global one:
 	// hashing it twice would say nothing more and would make the corpus
@@ -200,18 +242,33 @@ export async function snapshotStageCorpus(
 		);
 	}
 
-	return captureStageCorpus(skill, instructions, [skillsDirectory]);
+	for (const kind of LAYOUT_DIRECTORY_KINDS) {
+		const directory = await resolveLayoutDirectory(kind, roots);
+		if (directory !== undefined) {
+			await cp(directory, join(destination, kind), { recursive: true });
+		}
+	}
+
+	return captureStageCorpus(skill, instructions, [destination]);
 }
 
 export async function installStageCorpusSnapshot(
 	snapshotDirectory: string,
 	targetDirectory: string,
 ): Promise<void> {
-	const targetSkills = join(targetDirectory, ".claude", "skills");
-	await mkdir(join(targetDirectory, ".claude"), { recursive: true });
-	await cp(join(snapshotDirectory, "skills"), targetSkills, {
+	const targetLayout = join(targetDirectory, ".claude");
+	await mkdir(targetLayout, { recursive: true });
+	await cp(join(snapshotDirectory, "skills"), join(targetLayout, "skills"), {
 		recursive: true,
 	});
+
+	for (const kind of LAYOUT_DIRECTORY_KINDS) {
+		const source = join(snapshotDirectory, kind);
+		const sourceStats = await statIfExists(source);
+		if (sourceStats?.isDirectory() === true) {
+			await cp(source, join(targetLayout, kind), { recursive: true });
+		}
+	}
 }
 
 /**

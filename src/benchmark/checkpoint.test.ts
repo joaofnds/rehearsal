@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
-	corpusSkillRoots,
+	corpusLayoutRoots,
 	deriveStaleness,
 	initialCheckpointInputs,
 	installStageCorpusSnapshot,
@@ -14,8 +14,8 @@ import {
 	materializeCheckpoint,
 	recordCheckpoint,
 	rootLineage,
-	skillSearchRoots,
 	snapshotStageCorpus,
+	stageCorpusRoots,
 } from "./checkpoint";
 import { CONTROL_DIR } from "./config";
 import { liveCorpusRoot } from "./corpus-source";
@@ -90,10 +90,28 @@ describe(captureStageCorpus.name, () => {
 		skill: string,
 		body: string,
 	): Promise<void> {
-		const directory = join(root, skill, "references");
+		const directory = join(root, "skills", skill, "references");
 		await mkdir(directory, { recursive: true });
-		await Bun.write(join(root, skill, "SKILL.md"), body);
+		await Bun.write(join(root, "skills", skill, "SKILL.md"), body);
 		await Bun.write(join(directory, "notes.md"), `${body} notes`);
+	}
+
+	async function installAgent(
+		root: string,
+		agent: string,
+		body: string,
+	): Promise<void> {
+		await mkdir(join(root, "agents"), { recursive: true });
+		await Bun.write(join(root, "agents", `${agent}.md`), body);
+	}
+
+	async function installOutputStyle(
+		root: string,
+		style: string,
+		body: string,
+	): Promise<void> {
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await Bun.write(join(root, "output-styles", `${style}.md`), body);
 	}
 
 	it("hashes the installed instructions and every skill file", async () => {
@@ -150,17 +168,20 @@ describe(captureStageCorpus.name, () => {
 			snapshotDirectory,
 		);
 
-		await Bun.write(join(roots[1], "discuss", "SKILL.md"), "changed skill");
+		await Bun.write(
+			join(roots[1], "skills", "discuss", "SKILL.md"),
+			"changed skill",
+		);
 		await Promise.all([
 			installStageCorpusSnapshot(snapshotDirectory, firstWorktree),
 			installStageCorpusSnapshot(snapshotDirectory, secondWorktree),
 		]);
 
 		const first = await captureStageCorpus("discuss", "instructions", [
-			join(firstWorktree, ".claude", "skills"),
+			join(firstWorktree, ".claude"),
 		]);
 		const second = await captureStageCorpus("discuss", "instructions", [
-			join(secondWorktree, ".claude", "skills"),
+			join(secondWorktree, ".claude"),
 		]);
 		expect(first).toEqual(frozen);
 		expect(second).toEqual(frozen);
@@ -242,6 +263,53 @@ describe(captureStageCorpus.name, () => {
 		expect(
 			captureStageCorpus("discuss", "instructions", roots),
 		).rejects.toThrow(/doctrine.*not installed/u);
+	});
+
+	it("hashes every agent and output style file, project root first", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+		await installAgent(roots[1], "reviewer", "reviewer agent");
+		await installOutputStyle(roots[1], "brief", "brief style");
+
+		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+
+		expect(corpus.map(({ path }) => path)).toEqual([
+			"CLAUDE.md",
+			"agents/reviewer.md",
+			"output-styles/brief.md",
+			"skills/doctrine/SKILL.md",
+			"skills/doctrine/references/notes.md",
+			"skills/discuss/SKILL.md",
+			"skills/discuss/references/notes.md",
+		]);
+	});
+
+	it("prefers the project root's whole agents directory over the user's", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+		await installAgent(roots[0], "reviewer", "project reviewer");
+		await installAgent(roots[1], "reviewer", "user reviewer");
+		await installAgent(roots[1], "other", "user-only agent");
+
+		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+
+		const agentFiles = corpus.filter(({ path }) => path.startsWith("agents/"));
+		expect(agentFiles.map(({ path }) => path)).toEqual(["agents/reviewer.md"]);
+	});
+
+	it("captures no agents or output styles when neither root has them", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+
+		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+
+		expect(corpus.some(({ path }) => path.startsWith("agents/"))).toBe(false);
+		expect(corpus.some(({ path }) => path.startsWith("output-styles/"))).toBe(
+			false,
+		);
 	});
 });
 
@@ -733,18 +801,27 @@ describe(rootLineage.name, () => {
 	});
 });
 
-describe(corpusSkillRoots.name, () => {
+describe(corpusLayoutRoots.name, () => {
+	it("searches the project layout root before the user's", () => {
+		expect(corpusLayoutRoots("/target")).toEqual([
+			"/target/.claude",
+			join(homedir(), ".claude"),
+		]);
+	});
+});
+
+describe(stageCorpusRoots.name, () => {
 	it("searches project level before user level for the live install", () => {
-		expect(corpusSkillRoots({ kind: "live", root: liveCorpusRoot() })).toEqual(
-			skillSearchRoots(CONTROL_DIR),
+		expect(stageCorpusRoots({ kind: "live", root: liveCorpusRoot() })).toEqual(
+			corpusLayoutRoots(CONTROL_DIR),
 		);
 	});
 
 	it.each(["directory", "chezmoi"] as const)(
 		"searches only the resolved root for a %s corpus",
 		(kind) => {
-			expect(corpusSkillRoots({ kind, root: "/variants/brief" })).toEqual([
-				"/variants/brief/skills",
+			expect(stageCorpusRoots({ kind, root: "/variants/brief" })).toEqual([
+				"/variants/brief",
 			]);
 		},
 	);

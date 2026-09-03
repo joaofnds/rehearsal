@@ -4,7 +4,7 @@ import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
 import type { CheckpointRecord } from "./checkpoint";
-import { captureStageCorpus, corpusSkillRoots } from "./checkpoint";
+import { captureStageCorpus, stageCorpusRoots } from "./checkpoint";
 import type { CorpusRoot } from "./corpus-file";
 import { hashCorpusFiles, resolveCorpusFile } from "./corpus-file";
 import type { Immutable } from "./contracts";
@@ -307,7 +307,7 @@ export class RecordedRunsFixture {
 		const instructions = await Bun.file(
 			resolveCorpusFile(source, "CLAUDE.md"),
 		).text();
-		const roots = corpusSkillRoots(source);
+		const roots = stageCorpusRoots(source);
 
 		for (const stage of this.stages) {
 			const corpusFiles = await captureStageCorpus(stage, instructions, roots);
