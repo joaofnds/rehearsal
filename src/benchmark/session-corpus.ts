@@ -111,23 +111,13 @@ export async function snapshotSessionCorpus(
 		};
 	}
 
-	refuseDeclaredSkills(declaredPaths);
-
-	const entries = await corpusLayoutEntries(source);
-	await mkdir(destination, { recursive: true });
-	for (const entry of entries.filter((candidate) =>
-		declares(declaredPaths, candidate.layoutPath),
-	)) {
-		const target = join(destination, entry.layoutPath);
-		await mkdir(dirname(target), { recursive: true });
-		await cp(entry.sourcePath, target, { recursive: true });
-	}
-
-	if (source.kind === "chezmoi") {
-		if (declaredPaths.includes("CLAUDE.md")) {
-			await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
+	try {
+		refuseDeclaredSkills(declaredPaths);
+		await copyDeclared(source, destination, declaredPaths);
+	} finally {
+		if (source.kind === "chezmoi") {
+			await discardRender(source);
 		}
-		await discardRender(source);
 	}
 
 	return {
@@ -136,6 +126,27 @@ export async function snapshotSessionCorpus(
 		origin: originOf(source),
 		declaredPaths: [...declaredPaths],
 	};
+}
+
+async function copyDeclared(
+	source: ResolvedCorpusSource,
+	destination: string,
+	declaredPaths: readonly string[],
+): Promise<void> {
+	const entries = await corpusLayoutEntries(source);
+	await mkdir(destination, { recursive: true });
+
+	for (const entry of entries.filter((candidate) =>
+		declares(declaredPaths, candidate.layoutPath),
+	)) {
+		const target = join(destination, entry.layoutPath);
+		await mkdir(dirname(target), { recursive: true });
+		await cp(entry.sourcePath, target, { recursive: true });
+	}
+
+	if (source.kind === "chezmoi" && declaredPaths.includes("CLAUDE.md")) {
+		await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
+	}
 }
 
 /**

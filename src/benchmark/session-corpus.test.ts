@@ -133,6 +133,38 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(await pathExists(sourceDirectory)).toBe(false);
 	});
 
+	/**
+	 * A render is the whole home layout, so a refusal that keeps it leaves a copy
+	 * of the home tree in the temporary directory after every refused run.
+	 */
+	it("deletes the chezmoi render even when the snapshot is refused", async () => {
+		const rendered = await resources.createControlDirectory();
+		await Bun.write(
+			join(rendered, ".agents/skills/style/SKILL.md"),
+			"a variant skill the harness cannot deliver\n",
+		);
+		const sourceDirectory = await resources.createControlDirectory();
+		const destination = await resources.createControlDirectory();
+
+		const failure = await failureOf(
+			snapshotSessionCorpus(
+				{
+					kind: "chezmoi",
+					ref: "HEAD",
+					commit: "abc123",
+					root: rendered,
+					sourceDirectory,
+				},
+				join(destination, "corpus"),
+				["skills/style/SKILL.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(await pathExists(rendered)).toBe(false);
+		expect(await pathExists(sourceDirectory)).toBe(false);
+	});
+
 	it("records the chezmoi source's resolved commit on the snapshot", async () => {
 		const rendered = await resources.createControlDirectory();
 		await Bun.write(
