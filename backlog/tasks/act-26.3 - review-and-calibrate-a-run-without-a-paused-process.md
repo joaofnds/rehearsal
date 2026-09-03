@@ -1,11 +1,11 @@
 ---
 id: ACT-26.3
 title: review and calibrate a run without a paused process
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 02:45'
+updated_date: '2026-09-03 03:20'
 labels: []
 dependencies: []
 references:
@@ -25,32 +25,32 @@ Calibration already rejudges frozen evidence, not the live target, so nothing is
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `rehearsal run` without `--pause` and with stdin not a TTY passes the terminal gate: over a fake harness a test asserts no RefusedPreconditionError is raised and the run proceeds to its first step, and `echo | bun run rehearsal run --target <nonexistent>` fails on the target instead of exiting 3 with the ACT-26.3 message
-- [ ] #2 `rehearsal run --pause` with stdin not a TTY exits 3 before any provider call, printing nothing on stdout and one stderr line saying the pause needs a terminal
-- [ ] #3 `rehearsal run --help` lists `--pause` with its help line, generated from the COMMANDS table, and `rehearsal --help` lists `review` and `calibrate` with one summary line each
+- [x] #1 `rehearsal run` without `--pause` and with stdin not a TTY passes the terminal gate: over a fake harness a test asserts no RefusedPreconditionError is raised and the run proceeds to its first step, and `echo | bun run rehearsal run --target <nonexistent>` fails on the target instead of exiting 3 with the ACT-26.3 message
+- [x] #2 `rehearsal run --pause` with stdin not a TTY exits 3 before any provider call, printing nothing on stdout and one stderr line saying the pause needs a terminal
+- [x] #3 `rehearsal run --help` lists `--pause` with its help line, generated from the COMMANDS table, and `rehearsal --help` lists `review` and `calibrate` with one summary line each
 - [ ] #4 A run without `--pause` writes the artifact with status AWAITING_HUMAN_REVIEW, calls recordRetentionRef with the final candidate's resultSha before the target is restored, restores the target, prompts nothing, and returns the run paths: a test with fake dependencies asserts the recorded ref name is refs/rehearsal/<run>, that the questioner was never asked, and that the ref was recorded before the restore
-- [ ] #5 A run without `--pause` whose stage Judge returns STOP records the stage file and exits without prompting; the questioner is never asked and the stage record carries no calibration
-- [ ] #6 A run failure without `--pause` restores the target without asking anything: the failure pause is skipped rather than degraded, and a test asserts the questioner received no question
-- [ ] #7 `rehearsal review <run> --verdict REJECT --summary <text> --finding <json>` exits 0, writes <run>.review.json, and the bytes it wrote parse under humanReviewSchema with the given verdict, summary, and one finding; repeating `--finding` records each one in order
-- [ ] #8 `rehearsal review <run> --file <review.json>` exits 0 and writes the parsed review to <run>.review.json; a file whose contents humanReviewSchema rejects exits 2 with the schema's own message on stderr and leaves any existing review file unchanged
-- [ ] #9 `rehearsal review` with both `--file` and any of `--verdict`, `--summary`, or `--finding` exits 2 naming the conflict; with neither exits 2 naming what it needs
-- [ ] #10 `rehearsal review <run>` for a run with no artifact exits 3 naming the run and writes no file
-- [ ] #11 `rehearsal review <run> --json` prints the review record's own bytes on stdout and nothing else, and JSON.parse of the whole stdout equals the bytes of the file it wrote
-- [ ] #12 `calibrate(frozen, current, review, judges)` is a pure function of its arguments: it reads no file, prompts nothing, and returns a CalibrationResult or throws CalibrationIncompleteError; a test calls it twice with the same arguments and a fake judge and gets the same result, and a test asserts it makes no file read by passing rubric and instruction text rather than paths
-- [ ] #13 `collectCalibration` keeps today's read-edit-retry behavior by calling that function inside its loop: the existing calibration.test.ts tests pass unchanged, including the re-prompt after invalid review JSON and the stage-rubric rejudge that retains Judge attempts
-- [ ] #14 `rehearsal calibrate <run>` over a run artifact whose stage rubric changed since the run, without `--confirm-rejudge`, exits 3, prints the revised stage grades on stderr, leaves the artifact's status AWAITING_HUMAN_REVIEW, and writes nothing into the artifact file
-- [ ] #15 `rehearsal calibrate <run> --confirm-rejudge` over that same run exits 0 and rewrites the artifact with status COMPLETE, a calibration whose rejudgeConfirmedByHuman is true and whose stageRubricsChanged names the edited stage, and a judgeAgreement produced by loadJudgeAgreementReport
-- [ ] #16 `rehearsal calibrate <run>` where no rubric and no instructions changed since the run exits 0 without `--confirm-rejudge`, makes no provider call, and completes the artifact with a calibration carrying no revised grade
-- [ ] #17 `rehearsal calibrate <run>` whose review is inconsistent with the grades exits 3 with the CalibrationIncompleteError message on stderr and leaves the artifact at AWAITING_HUMAN_REVIEW
-- [ ] #18 `rehearsal calibrate <run>` for a run with no review file exits 3 naming the review file and making no provider call; for a run already COMPLETE it exits 3 saying so and does not rejudge
-- [ ] #19 `rehearsal calibrate <run>` over a run stopped at a stage completes that stage's record instead of the artifact: the stage file gains its calibration and judgeAgreement, and the same command handles both cases without a flag naming which
-- [ ] #20 `rehearsal show run:<name> --checkout <dir>` adds a detached worktree of refs/rehearsal/<name> in the run's recorded sourceRoot at <dir>, prints only that path on stdout, and exits 0; the worktree's HEAD is the artifact's resultSha
-- [ ] #21 `show run:<name> --checkout <dir>` where <dir> already exists, or where the target holds no refs/rehearsal/<name>, exits 3 naming what is missing and creates no worktree
-- [ ] #22 `--checkout` on any id other than a run exits 2 saying `--checkout` takes a run id
-- [ ] #23 `rehearsal review`, `rehearsal calibrate`, and `show --checkout` each accept the run under both `run:<name>` and a bare `<name>`, and a run id naming a path outside the runs directory exits 2 with the record-id refusal
-- [ ] #24 An artifact written before this card, carrying no retention ref and status AWAITING_HUMAN_REVIEW, is still readable by `review` and `calibrate`, and one written by this card is still readable by `show run:<name>` and by loadJudgeAgreementReport: a test parses a pre-card artifact fixture and a post-card one through the same reader
-- [ ] #25 README's Human Calibration and Tuning Loop sections describe both paths: the no-pause run followed by `review` and `calibrate`, and `--pause` as today's interactive loop, and name what `--confirm-rejudge` stands in for
-- [ ] #26 The whole suite runs offline and free: every test for review, calibrate, and --checkout builds its run artifact in a temporary runs directory and injects a fake judge, no test invokes claude, and no test writes into the repository's .benchmark-runs
+- [x] #5 A run without `--pause` whose stage Judge returns STOP records the stage file and exits without prompting; the questioner is never asked and the stage record carries no calibration
+- [x] #6 A run failure without `--pause` restores the target without asking anything: the failure pause is skipped rather than degraded, and a test asserts the questioner received no question
+- [x] #7 `rehearsal review <run> --verdict REJECT --summary <text> --finding <json>` exits 0, writes <run>.review.json, and the bytes it wrote parse under humanReviewSchema with the given verdict, summary, and one finding; repeating `--finding` records each one in order
+- [x] #8 `rehearsal review <run> --file <review.json>` exits 0 and writes the parsed review to <run>.review.json; a file whose contents humanReviewSchema rejects exits 2 with the schema's own message on stderr and leaves any existing review file unchanged
+- [x] #9 `rehearsal review` with both `--file` and any of `--verdict`, `--summary`, or `--finding` exits 2 naming the conflict; with neither exits 2 naming what it needs
+- [x] #10 `rehearsal review <run>` for a run with no artifact exits 3 naming the run and writes no file
+- [x] #11 `rehearsal review <run> --json` prints the review record's own bytes on stdout and nothing else, and JSON.parse of the whole stdout equals the bytes of the file it wrote
+- [x] #12 `calibrate(frozen, current, review, judges)` is a pure function of its arguments: it reads no file, prompts nothing, and returns a CalibrationResult or throws CalibrationIncompleteError; a test calls it twice with the same arguments and a fake judge and gets the same result, and a test asserts it makes no file read by passing rubric and instruction text rather than paths
+- [x] #13 `collectCalibration` keeps today's read-edit-retry behavior by calling that function inside its loop: the existing calibration.test.ts tests pass unchanged, including the re-prompt after invalid review JSON and the stage-rubric rejudge that retains Judge attempts
+- [x] #14 `rehearsal calibrate <run>` over a run artifact whose stage rubric changed since the run, without `--confirm-rejudge`, exits 3, prints the revised stage grades on stderr, leaves the artifact's status AWAITING_HUMAN_REVIEW, and writes nothing into the artifact file
+- [x] #15 `rehearsal calibrate <run> --confirm-rejudge` over that same run exits 0 and rewrites the artifact with status COMPLETE, a calibration whose rejudgeConfirmedByHuman is true and whose stageRubricsChanged names the edited stage, and a judgeAgreement produced by loadJudgeAgreementReport
+- [x] #16 `rehearsal calibrate <run>` where no rubric and no instructions changed since the run exits 0 without `--confirm-rejudge`, makes no provider call, and completes the artifact with a calibration carrying no revised grade
+- [x] #17 `rehearsal calibrate <run>` whose review is inconsistent with the grades exits 3 with the CalibrationIncompleteError message on stderr and leaves the artifact at AWAITING_HUMAN_REVIEW
+- [x] #18 `rehearsal calibrate <run>` for a run with no review file exits 3 naming the review file and making no provider call; for a run already COMPLETE it exits 3 saying so and does not rejudge
+- [x] #19 `rehearsal calibrate <run>` over a run stopped at a stage completes that stage's record instead of the artifact: the stage file gains its calibration and judgeAgreement, and the same command handles both cases without a flag naming which
+- [x] #20 `rehearsal show run:<name> --checkout <dir>` adds a detached worktree of refs/rehearsal/<name> in the run's recorded sourceRoot at <dir>, prints only that path on stdout, and exits 0; the worktree's HEAD is the artifact's resultSha
+- [x] #21 `show run:<name> --checkout <dir>` where <dir> already exists, or where the target holds no refs/rehearsal/<name>, exits 3 naming what is missing and creates no worktree
+- [x] #22 `--checkout` on any id other than a run exits 2 saying `--checkout` takes a run id
+- [x] #23 `rehearsal review`, `rehearsal calibrate`, and `show --checkout` each accept the run under both `run:<name>` and a bare `<name>`, and a run id naming a path outside the runs directory exits 2 with the record-id refusal
+- [x] #24 An artifact written before this card, carrying no retention ref and status AWAITING_HUMAN_REVIEW, is still readable by `review` and `calibrate`, and one written by this card is still readable by `show run:<name>` and by loadJudgeAgreementReport: a test parses a pre-card artifact fixture and a post-card one through the same reader
+- [x] #25 README's Human Calibration and Tuning Loop sections describe both paths: the no-pause run followed by `review` and `calibrate`, and `--pause` as today's interactive loop, and name what `--confirm-rejudge` stands in for
+- [x] #26 The whole suite runs offline and free: every test for review, calibrate, and --checkout builds its run artifact in a temporary runs directory and injects a fake judge, no test invokes claude, and no test writes into the repository's .benchmark-runs
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -318,3 +318,201 @@ is its caller's problem.
 The second test is `run --pause` without a TTY exits 3 while plain `run` does
 not, which forces the flag through the parser, the table, and the gate together.
 <!-- SECTION:NOTES:END -->
+
+## Build handoff
+
+### What changed
+
+Six commits, each independently revertable.
+
+1. `1f84dc6 refactor(calibration): make the judgment a pure function of its evidence`
+   `calibrate(frozen, current, review, judges, confirmRejudge?)` in
+   `src/benchmark/calibration.ts`: no prompt, no file read, no clock. The
+   confirmation is a callback rather than a boolean, so it is asked only when a
+   rejudge actually revised something, which is where the loop asked it.
+   `collectCalibration` keeps the loop, the four reads, and both questions, and
+   its existing tests passed unchanged.
+2. `03c2386 feat(run): make the review pause a flag rather than the only path`
+   `--pause` in `SWITCH_FLAGS`, the COMMANDS table, and `BenchmarkConfig.pause`
+   (required, not optional). The terminal gate moved onto it.
+3. `44730b9 feat(run): retain the candidate and restore when no pause was asked for`
+   `finishGradedRun` and `pausesOnFailure` in `run.ts`; `calibrateStageFailure`
+   now returns `CalibrationResult | undefined` and the STOP branch skips
+   completion when it is undefined.
+4. `2a30302 feat(cli): record a run's human review from a file or from flags`
+   `src/cli/review-command.ts`, plus `parseRunRecordId` in `record-id.ts`.
+5. `1b56509 feat(cli): calibrate a recorded run without a process holding it`
+   `src/cli/calibrate-command.ts` and `src/benchmark/calibration-record.ts`.
+   `stageScorecardSchema` and its parts are now in `contracts.ts`, so an
+   artifact read back off disk is *parsed*, not asserted.
+6. `e4263e0 feat(cli): materialize a run's retained candidate as a worktree`
+   `--checkout` on `show`, and `refExists` in `target.ts`.
+
+Then `42cc3be docs: describe both calibration paths` and
+`a80db29 refactor(calibration): state once where a stage's current rubric is read from`.
+
+### The one gate change the card did not name
+
+`run`'s terminal refusal was one condition covering two questions. Moving it
+onto `--pause` alone would have let a confirmation group reach its cost-approval
+prompt with no terminal, which `benchmark-command.test.ts` catches. The gate is
+now two named conditions in `refuseWithoutTerminal` (`run-command.ts`):
+`--pause` needs a terminal, and so does a `--confirm` group without `--yes`.
+Second condition is unchanged behavior with a reason of its own.
+
+### What I observed directly
+
+Live, in a fresh clone at `42cc3be` with a fixture artifact in its own
+`.benchmark-runs`, never this repository's:
+
+- **The paid observation.** `rehearsal review <run> --verdict REJECT --summary
+  ... --finding '{...MISSED unknowns-resolved...}'` exited 0 and wrote the
+  review file. I edited the temporary copy of the shape rubric the scorecard's
+  `rubricPath` pointed at so the finding became catchable, then:
+  - `rehearsal calibrate <run>` **exit 3**, revised grades on stderr (grade F,
+    verdict STOP, catching `unknowns-resolved`), **nothing on stdout**, artifact
+    still `AWAITING_HUMAN_REVIEW` with no `calibration` and no `judgeAgreement`
+    key. Criterion 14.
+  - `rehearsal calibrate <run> --confirm-rejudge` **exit 0**, artifact rewritten
+    `COMPLETE`, `rejudgeConfirmedByHuman: true`, `stageRubricsChanged:
+    ["shape"]`, `judgeAgreement` with 2 baselines and `skippedCalibrations: 0`.
+    Criterion 15.
+  Two real sealed Judge calls on frozen stage evidence, sonnet, session budget 1.
+  **Cost: USD 0.0651 recorded in the artifact for the confirmed call; the refused
+  call ran the same rejudge and wrote nothing, so USD 0.13 total, estimated.**
+- **`show --checkout`**, free: exit 0 with only the directory on stdout, and
+  `git rev-parse HEAD` in it equalled the artifact's `resultSha`; an existing
+  directory refused at exit 3; `case:audit-log --checkout` refused at exit 2
+  saying `--checkout` takes a run id. The worktree was removed afterwards and no
+  worktree was left in any repository.
+- **The gate**, in this working tree: `echo | bun run rehearsal run --pause
+  --target /nonexistent-target ...` exits 3, stdout empty, one stderr line
+  naming the terminal; the same command without `--pause` passes the gate and
+  fails later instead.
+- **The git question Shape left open.** `git worktree add --detach <path>
+  refs/rehearsal/<name>` **accepts a ref name**; the worktree's HEAD is the ref's
+  sha, and a missing ref fails `fatal: invalid reference`. `addWorktree` needed
+  no change. Observed over a scratch repository built by `TestResources`.
+- **The fresh-clone suite.** Cloned to a temporary directory, `bun install
+  --frozen-lockfile`, `bun test`: **969 pass, 5 fail, 974 total.** The five are
+  exactly the ones the dispatch named and none of them mine: four `compare`
+  tests dying on a missing `.benchmark-runs` (ACT-30) and `loadCase > resolves
+  the declared target to a directory that exists` (ACT-26.4's, depending on a
+  repository outside this one). A second run in the same clone shows **1 fail**,
+  because the first run creates the directory the four needed. **No sixth
+  failure was added.**
+
+### What I did not verify
+
+- **Criterion 4 is the one I left unchecked.** `finishGradedRun`'s test proves
+  the ref name is `refs/rehearsal/<run>` with the artifact's `resultSha`, and
+  that nothing else is called without a pause. It does *not* prove the ref is
+  recorded *before the restore*: that ordering is `runBenchmark`'s try/finally,
+  and `runBenchmark` constructs every collaborator it uses, so no test can reach
+  it. Filed as **ACT-31**, which carries this criterion as its second one.
+- **No end-to-end run.** No `run` has ever produced an artifact on this machine;
+  a real one costs a full pipeline, far past this dispatch's cap. So the
+  no-pause `run` path (`--pause` absent → grade → retain → restore → exit 0) is
+  **verified by the suite only, not observed live.** A `--case smoke --model
+  haiku` run is the cheapest probe and is still a session case, not the stage
+  graph; the audit-log pipeline is five paid stages plus two Judges, which at
+  the card's own `--session-budget-usd 10` projects **well past USD 50** and is
+  what stopped the live observation.
+- **`--pause`'s interactive loop was not re-driven end to end.** It needs a TTY
+  and this dispatch had none. Its unit tests in `calibration.test.ts` are
+  unchanged and pass, which is the pin the extraction was made against.
+- **`review --file` against a real reviewer-authored document.** Only fixtures.
+
+### What became possible but is not wired up
+
+- **Nothing calls `calibrate` with a `finalJudge` from the paused loop's own
+  path in a test.** `collectCalibration` passes the real `runJudge`; only the
+  stage judge is injectable there, as before this card. A final-rubric rejudge
+  in the loop is still provider-only.
+- **`--checkout` never removes the worktree it made.** The caller owns the
+  directory; `removeWorktree` exists for whoever wants it. Trigger for a change:
+  a checkout the harness itself creates.
+- **No command enumerates retention refs.** `--checkout` names the ref from the
+  run, so nothing needs a listing yet. Refs accumulate one per run and nothing
+  prunes them.
+- **`calibrate` reads the current final rubric through `readCaseDeclaration`,
+  not `loadCase`.** Deliberate: `loadCase` resolves the declared target, and a
+  calibration must work when that repository has moved. A run whose case is gone
+  calibrates against the rubric it froze, which reads as unchanged.
+
+### Decided autonomously
+
+Nobody was available. Each follows the dispatch's decision policy.
+
+1. **The terminal gate became two conditions, not one moved.** Reason: moving it
+   wholesale onto `--pause` would let `--confirm` without `--yes` reach a cost
+   prompt with no terminal, which is settled behavior three tests assert. The
+   card's criterion 1 speaks only of the review pause. Smallest coherent scope
+   (policy 2) is to name both questions rather than merge or drop one.
+2. **`BenchmarkConfig.pause` is required, not optional.** Reason: the parser
+   always knows the answer, and "don't defend against your own code" makes an
+   optional flag with a default a second silent path. Cost: five test fixtures
+   gained one line.
+3. **`calibrate`'s confirmation is `() => Promise<boolean>`, not `boolean`.**
+   Reason: the loop must ask *only* when a rejudge happened, which the caller
+   cannot know before calling. A boolean would force the loop to prompt first
+   and discard the answer.
+4. **The failure pause's `catch` around the prompt is gone, not kept.** Reason:
+   it existed to survive a closed stdin, which the gate now prevents under
+   `--pause` and which cannot arise without it. It was an accident that looked
+   like a policy.
+5. **`stageScorecardSchema` and its parts moved into `contracts.ts`.** Reason:
+   the first attempt at reading an artifact back needed `as unknown as
+   StageScorecard`, which the style skill forbids outright. Fixing the upstream
+   type means the parse proves what it returns. `StageJudgeInput`,
+   `StageTranscript`, `JudgeAttempt`, and `StageGrade` are now schemas as well
+   as interfaces.
+6. **`parseRunRecordId` lives in `record-id.ts`, not its own module.** Reason:
+   a single-export module tripped `prefer-default-export`, and a suppression is
+   a design decision under the style skill. The parser's own module is where a
+   record-id form belongs.
+7. **`--checkout` refuses a prefixed non-run id, and treats a bare string as a
+   run.** Reason: `case:audit-log` has no `/` so it would otherwise parse as a
+   run *named* `case:audit-log` and fail later with a missing ref. An id that
+   names its kind is answered about that kind.
+8. **`calibrate`'s judges are built from the record's own knobs, after the
+   record is read.** Reason: an agreement baseline is keyed on the exact Judge
+   model, so a rejudge under a different one starts a new baseline instead of
+   adding to the run's. `runCalibrate` takes a judge *factory*, not judges.
+9. **The current final rubric comes from `readCaseDeclaration`, not `loadCase`.**
+   Reason above, under "not wired up".
+10. **A run whose stage stopped without `--pause` writes its record uncalibrated
+    and the run ends.** Reason: the STOP branch's whole body was the calibration
+    pause. `calibrate <run>` completes it afterwards, which is criterion 19.
+11. **The refactor pass extracted `readStageRubrics`, and filed ACT-31 rather
+    than restructuring `runBenchmark`.** Reason: the first is behavior-preserving
+    and finishable now; the second is a 292-line procedure whose dependency
+    inversion is a card, and "never leave a restructuring half-done in the tree".
+12. **`rehearsal-cli.test.ts`'s "what stands between the suite and a paid
+    session" case now names `run --pause`.** Reason: plain `run` no longer
+    refuses at the gate, so the sentence that guard asserts had to change with
+    the behavior. The guard still fails loudly if either command reaches a
+    provider.
+
+### Not built, and why
+
+Unchanged from the shape record: no agent-side review helper beyond the flags,
+no multi-run calibration, no full zod schema for the whole run artifact (the
+boundary schema reads the fields these commands use and is `.loose()` elsewhere,
+which is what criterion 24 observes), no listing or pruning of retention refs,
+no `--pause` on the confirmation path, and no `--checkout` that cleans up after
+itself.
+
+### Independent review is due
+
+Yes. This card adds two commands and a flag to the public CLI, changes when a
+run stops and when it does not, and touches the terminal gate that stands
+between the suite and a paid session. `review`'s triggers apply on the CLI
+surface and on the security-adjacent path (`--checkout` interpolates a run name
+into a git ref and a worktree path; the refusal is `record-id.ts`'s, and
+criterion 23's test covers it).
+
+### Running cost
+
+This dispatch's paid work: **USD 0.13**, two sealed Judge calls, against the
+USD 2.00 observation cap.

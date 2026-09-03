@@ -35,4 +35,6 @@ João decided 2026-09-02: a case run sees a copy of the live config with only th
 Spend: 0.086929 USD after ACT-26.5
 
 Spend: 0.32 USD after ACT-26.6
+
+Spend: 0.45 USD after ACT-26.3 Build (0.13 USD: two sealed stage-Judge rejudge calls on frozen evidence, sonnet, observing calibrate's refusal without --confirm-rejudge and its COMPLETE artifact with it)
 <!-- SECTION:NOTES:END -->
