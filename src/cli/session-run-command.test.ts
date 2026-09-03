@@ -9,6 +9,7 @@ import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { projectSlug } from "#benchmark/session-capture";
 import type { ClaudeRunner } from "#benchmark/session-attempt";
 import { failureOf } from "#cli/cli-test-support";
+import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runSessionDebugAttempt } from "#cli/session-run-command";
 
@@ -289,10 +290,18 @@ describe("running a session case against a corpus source", () => {
 		);
 	});
 
-	it("refuses a source that does not resolve, before any provider call", async () => {
-		const failure = await failureOf(attemptWith("/no/such/corpus"));
+	/**
+	 * A source string the parser cannot turn into a corpus is an unparseable
+	 * value, which the exit codes call a usage error; a corpus that resolves but
+	 * cannot be delivered is the refused precondition.
+	 */
+	it.each(["/no/such/corpus", "chezmoi:"])(
+		"reports %s as a usage error, before any provider call",
+		async (corpus) => {
+			const failure = await failureOf(attemptWith(corpus));
 
-		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).toContain("/no/such/corpus");
-	});
+			expect(failure).toBeInstanceOf(UsageError);
+			expect(failure.message).toContain(corpus);
+		},
+	);
 });

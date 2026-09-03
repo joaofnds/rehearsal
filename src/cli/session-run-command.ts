@@ -9,10 +9,7 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
-import {
-	CorpusSourceError,
-	resolveCorpusSource,
-} from "#benchmark/corpus-source";
+import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
 	SessionAttempt,
@@ -28,6 +25,7 @@ import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type { SessionAttemptRecord } from "#benchmark/session-record";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
+import { asUsageErrorAsync } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 
@@ -56,20 +54,22 @@ interface AttemptCorpus {
 }
 
 /**
- * The corpus resolves, snapshots, and hashes before the attempt runs, so a
- * source that does not exist, a style the corpus does not hold, or a skill the
- * harness cannot deliver is refused rather than discovered after the session
- * has been paid for. Every one of them is a declared input the command cannot
- * satisfy, so all three exit 3.
+ * A `--corpus` string the parser cannot turn into a corpus is an unparseable
+ * flag value, which is a usage error; a corpus that resolves but holds no
+ * declared file, or holds one the harness cannot deliver, is a declared input
+ * the command cannot satisfy, which is a refused precondition. Both come before
+ * the attempt runs, so neither is discovered after the session is paid for.
  */
 async function requireCorpus(
 	sessionCase: SessionCase,
 	corpus: string | undefined,
 	snapshotDirectory: string,
 ): Promise<AttemptCorpus> {
+	const source = await asUsageErrorAsync(() => resolveCorpusSource(corpus));
+
 	try {
 		const snapshot = await snapshotSessionCorpus(
-			await resolveCorpusSource(corpus),
+			source,
 			snapshotDirectory,
 			sessionCase.corpusFiles,
 		);
@@ -81,7 +81,6 @@ async function requireCorpus(
 	} catch (error) {
 		if (
 			error instanceof CorpusFileError ||
-			error instanceof CorpusSourceError ||
 			error instanceof SessionCorpusError
 		) {
 			throw new RefusedPreconditionError(error.message);
