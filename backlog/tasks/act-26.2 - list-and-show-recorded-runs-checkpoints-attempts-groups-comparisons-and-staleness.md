@@ -3,11 +3,11 @@ id: ACT-26.2
 title: >-
   list and show recorded runs, checkpoints, attempts, groups, comparisons, and
   staleness
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 01:14'
+updated_date: '2026-09-03 01:43'
 labels: []
 dependencies: []
 references:
@@ -27,30 +27,30 @@ Why: jobs 4 and 5 in doc-1; the bespoke harnesses kept results in markdown becau
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `bun run rehearsal list cases` exits 0 and prints one line per declared case as `case:<id>` followed by its title, including case:audit-log and case:smoke
-- [ ] #2 Every id `list` prints, for each of the six kinds, is accepted back by `show`: one test enumerates the ids a listing produced over a built fixture and asserts `show <id> --json` exits 0 for each
-- [ ] #3 `list runs` prints one line per recorded run as `run:<name>` with the case, the artifact's status, and whether the run is replayable (a manifest exists); a fixture with one manifested run and one pre-manifest run directory shows both lines, the second marked not replayable
-- [ ] #4 `list checkpoints` prints one line per checkpoint of every recorded run as `checkpoint:<run>/<stage>` with its stage and lineage
-- [ ] #5 `list groups` prints one line per confirmation group under .benchmark-runs/confirmations as `group:<group-id>` with its case, mode, and rep count
-- [ ] #6 `list comparisons` prints one line per comparison report under .benchmark-runs/comparisons as `comparison:<manifest-digest>` with its case count and rep count
-- [ ] #7 One unparseable record does not hide the valid ones: with a group directory holding invalid JSON beside two valid groups, `list groups` exits 0, prints the two valid lines on stdout, and prints one stderr line naming the unreadable id and the reason, following the `case list` precedent
-- [ ] #8 `list <kind>` over an empty or absent .benchmark-runs directory exits 0 and prints nothing on stdout
-- [ ] #9 `list bogus` exits 2 and names the accepted kinds on stderr, printing nothing on stdout
-- [ ] #10 `show run:<name> --json` exits 0 and prints exactly the bytes of the run's artifact.json on stdout, which JSON.parse accepts; the same holds for `show checkpoint:<run>/<stage>`, `show group:<id>`, `show comparison:<digest>`, `show case:<id>`, and both attempt forms, each printing the bytes of the one record file it names
-- [ ] #11 `show <id>` without --json prints a markdown summary on stdout and no JSON: for a run, one row per stage with its grade and verdict plus the final verdict and total cost; for a group, the reliability summary with success rate, standard error, and pass^k, and the group's cost; for a comparison, one row per contrast with the paired mean delta and standard error beside the control arm
-- [ ] #12 Each summary is a pure function from a parsed record to a string: three tests assert the markdown for a fixture record equals a committed expected string byte for byte, with no file read and no clock in the function
-- [ ] #13 `show` with no argument exits 2 naming the id forms; `show nonsense` exits 2 naming the unknown prefix; `show run:absent` exits 3 naming the record that does not exist, printing nothing on stdout
-- [ ] #14 A malformed id whose prefix is known but whose body is wrong (`show checkpoint:only-one-part`) exits 2 and names the form that prefix takes
-- [ ] #15 `show group:<id>` over a group record written without caseId exits 0 and its summary names the case as audit-log, showing the legacy default the parser already applies reaches the summary
-- [ ] #16 `bun run rehearsal stale` exits 0 and prints one line per stale checkpoint as `checkpoint:<run>/<stage>` followed by its causes, over a fixture whose recorded corpus digest for one stage no longer matches the corpus; a fresh checkpoint prints no line
-- [ ] #17 `stale` prints one line per stale session case as `case:<id>` naming each declared corpus file whose digest differs from the one its most recent attempt recorded; a case whose attempts all match the current corpus prints no line, and a case with no attempt prints no line
-- [ ] #18 `stale --corpus <directory>` reads that source through resolveCorpusSource instead of the live install: over one fixture, the same checkpoint is stale against a directory whose skill bytes differ and fresh against a directory holding the recorded bytes
-- [ ] #19 `stale --corpus <nonexistent>` exits 3 with the CorpusSourceError message on stderr and prints nothing on stdout
-- [ ] #20 `stale` starts no session and creates no worktree: it makes no provider call, adds no git worktree, and writes no file under .benchmark-runs; a test with a fake command runner asserts no command was run
-- [ ] #21 `list` and `show` are read-only: over a fixture .benchmark-runs, a directory listing and the digest of every file taken before and after every list kind and every show form are identical
-- [ ] #22 `bun run rehearsal --help` lists list, show, and stale with one summary line each, and `list --help`, `show --help`, and `stale --help` each exit 0 and print one line per declared flag with its default, generated from the same COMMANDS table
-- [ ] #23 `bun run rehearsal list attempts` run against the repository's own .benchmark-runs exits 0, prints one `attempt:session:<case-id>/<uuid>` line per attempt record with its case, outcome, and model for the eight records that exist, and names the three record-less attempt directories on stderr
-- [ ] #24 The suite runs offline and free: every test that needs a run, checkpoint, group, or comparison builds it in a temporary directory rather than reading the repository's .benchmark-runs, no test writes into the repository's .benchmark-runs, and no test invokes claude
+- [x] #1 `bun run rehearsal list cases` exits 0 and prints one line per declared case as `case:<id>` followed by its title, including case:audit-log and case:smoke
+- [x] #2 Every id `list` prints, for each of the six kinds, is accepted back by `show`: one test enumerates the ids a listing produced over a built fixture and asserts `show <id> --json` exits 0 for each
+- [x] #3 `list runs` prints one line per recorded run as `run:<name>` with the case, the artifact's status, and whether the run is replayable (a manifest exists); a fixture with one manifested run and one pre-manifest run directory shows both lines, the second marked not replayable
+- [x] #4 `list checkpoints` prints one line per checkpoint of every recorded run as `checkpoint:<run>/<stage>` with its stage and lineage
+- [x] #5 `list groups` prints one line per confirmation group under .benchmark-runs/confirmations as `group:<group-id>` with its case, mode, and rep count
+- [x] #6 `list comparisons` prints one line per comparison report under .benchmark-runs/comparisons as `comparison:<manifest-digest>` with its case count and rep count
+- [x] #7 One unparseable record does not hide the valid ones: with a group directory holding invalid JSON beside two valid groups, `list groups` exits 0, prints the two valid lines on stdout, and prints one stderr line naming the unreadable id and the reason, following the `case list` precedent
+- [x] #8 `list <kind>` over an empty or absent .benchmark-runs directory exits 0 and prints nothing on stdout
+- [x] #9 `list bogus` exits 2 and names the accepted kinds on stderr, printing nothing on stdout
+- [x] #10 `show run:<name> --json` exits 0 and prints exactly the bytes of the run's artifact.json on stdout, which JSON.parse accepts; the same holds for `show checkpoint:<run>/<stage>`, `show group:<id>`, `show comparison:<digest>`, `show case:<id>`, and both attempt forms, each printing the bytes of the one record file it names
+- [x] #11 `show <id>` without --json prints a markdown summary on stdout and no JSON: for a run, one row per stage with its grade and verdict plus the final verdict and total cost; for a group, the reliability summary with success rate, standard error, and pass^k, and the group's cost; for a comparison, one row per contrast with the paired mean delta and standard error beside the control arm
+- [x] #12 Each summary is a pure function from a parsed record to a string: three tests assert the markdown for a fixture record equals a committed expected string byte for byte, with no file read and no clock in the function
+- [x] #13 `show` with no argument exits 2 naming the id forms; `show nonsense` exits 2 naming the unknown prefix; `show run:absent` exits 3 naming the record that does not exist, printing nothing on stdout
+- [x] #14 A malformed id whose prefix is known but whose body is wrong (`show checkpoint:only-one-part`) exits 2 and names the form that prefix takes
+- [x] #15 `show group:<id>` over a group record written without caseId exits 0 and its summary names the case as audit-log, showing the legacy default the parser already applies reaches the summary
+- [x] #16 `bun run rehearsal stale` exits 0 and prints one line per stale checkpoint as `checkpoint:<run>/<stage>` followed by its causes, over a fixture whose recorded corpus digest for one stage no longer matches the corpus; a fresh checkpoint prints no line
+- [x] #17 `stale` prints one line per stale session case as `case:<id>` naming each declared corpus file whose digest differs from the one its most recent attempt recorded; a case whose attempts all match the current corpus prints no line, and a case with no attempt prints no line
+- [x] #18 `stale --corpus <directory>` reads that source through resolveCorpusSource instead of the live install: over one fixture, the same checkpoint is stale against a directory whose skill bytes differ and fresh against a directory holding the recorded bytes
+- [x] #19 `stale --corpus <nonexistent>` exits 3 with the CorpusSourceError message on stderr and prints nothing on stdout
+- [x] #20 `stale` starts no session and creates no worktree: it makes no provider call, adds no git worktree, and writes no file under .benchmark-runs; a test with a fake command runner asserts no command was run
+- [x] #21 `list` and `show` are read-only: over a fixture .benchmark-runs, a directory listing and the digest of every file taken before and after every list kind and every show form are identical
+- [x] #22 `bun run rehearsal --help` lists list, show, and stale with one summary line each, and `list --help`, `show --help`, and `stale --help` each exit 0 and print one line per declared flag with its default, generated from the same COMMANDS table
+- [x] #23 `bun run rehearsal list attempts` run against the repository's own .benchmark-runs exits 0, prints one `attempt:session:<case-id>/<uuid>` line per attempt record with its case, outcome, and model for the eight records that exist, and names the three record-less attempt directories on stderr
+- [x] #24 The suite runs offline and free: every test that needs a run, checkpoint, group, or comparison builds it in a temporary directory rather than reading the repository's .benchmark-runs, no test writes into the repository's .benchmark-runs, and no test invokes claude
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -370,4 +370,201 @@ Run in this dispatch, after the glossary edit and before the commit:
 `bun test` reported 779 pass, 0 fail across 56 files. `bun run rehearsal case
 show missing` exited 3 with an empty stdout, confirming the exit-code precedent
 decision 8 leans on. No paid provider call was made; spend $0.00.
+
+## Build handoff
+
+Thirteen commits, `bb8c0e4` through `d9d08be`. All 24 acceptance criteria are
+checked; every one has either a test in this dispatch or a CLI run recorded
+below. `bun run typecheck`, `bun run lint`, and `bun run fmt:check` each exited
+0; `bun test` reported 894 pass, 0 fail across 63 files. `git status` is clean.
+No provider call was made; spend $0.00.
+
+### What changed
+
+- `src/cli/record-id.ts` — the `RecordId` discriminated union, `parseRecordId`,
+  and its inverse `formatRecordId`. Seven forms, including both attempt kinds.
+- `src/benchmark/run-layout.ts` — `recordedRunNames`, `confirmationGroupIds`,
+  `comparisonDigests`, `sessionAttemptIds`, `replayAttemptIds`, plus
+  `replayRecordFile`, `sessionAttemptPaths`, and `checkpointRecordFile`.
+  `resolveRunDirectory` dropped its own copy of the run listing.
+- `src/benchmark/record-summary.ts` — `runSummary`, `groupSummary`,
+  `comparisonSummary`, pure, with the narrow schemas the run artifact and the
+  group's `report.json` are parsed through.
+- `src/cli/list-command.ts`, `src/cli/show-command.ts`,
+  `src/benchmark/staleness-report.ts`, `src/cli/stale-command.ts` — the three
+  commands and the staleness derivation behind `stale`.
+- `src/benchmark/run-records-test-support.ts` — `RecordedRunsFixture`, writing
+  a manifest, checkpoints, two run artifacts, a group with its report, a real
+  comparison report, and both attempt kinds at the real `run-layout` paths.
+- Three entries in `COMMANDS`, three dispatch cases in `rehearsal.ts`, a
+  README "Reading the Records" section, and the glossary's Command and
+  Command record entries.
+
+### What I observed directly, and the command that showed it
+
+Every line below is a CLI run in this dispatch, not a test result.
+
+- `bun run rehearsal list attempts` — eight `attempt:session:smoke/<uuid>`
+  lines on stdout with case, outcome, and model; the three record-less
+  directories (`smoke/94eee86e…` and both `zz-symlink-probe` entries) named on
+  stderr with their ENOENT reason; exit 0. This is criterion 23 against the
+  repository's own `.benchmark-runs`, and the one place the
+  does-not-die-on-a-bad-record behavior is observable against files that
+  already existed.
+- `bun run rehearsal show attempt:session:smoke/fa239c6c-… --json` — printed
+  that record's own bytes, an id `list` had just printed. `show case:smoke
+  --json` likewise.
+- `bun run rehearsal stale` — printed `case:smoke  output-styles/brief.md
+  changed`, exit 0, against this machine's live corpus. I checked this against
+  the files: the most recent attempt by mtime (`7df02690…`, 1788395926)
+  recorded `600426af…` while `~/.claude/output-styles/brief.md` now hashes
+  `9f1ffb5e…`. Real staleness, not a fixture.
+- `bun run rehearsal list runs|checkpoints|groups|comparisons` — each exit 0
+  with empty stdout, because none of those has ever been recorded here
+  (criterion 8).
+- Exit codes: `list bogus` 2, `show nonsense` 2, `show
+  checkpoint:only-one-part` 2, `show run:absent` 3, `stale --corpus /nope` 3.
+- `rehearsal --help`, `list --help`, `show --help`, `stale --help` — all exit
+  0, all generated from `COMMANDS`.
+- The suite leaves `.benchmark-runs` byte-for-byte identical: I hashed every
+  file under it before and after `bun test`, and the digests match. All 138
+  entries remain.
+
+### What I did not verify
+
+- **Legacy-record tolerance against a legacy file.** No record written before
+  `caseId` existed exists on this machine. Criterion 15 is observed against a
+  fixture group written without the field (`writeGroupWithoutCaseId`), where
+  the parser's `LEGACY_CASE_ID` default reaches the summary. That is a real
+  observation of the code path, and it is not an observation of a legacy file.
+- **`show` and `list` over a real pipeline run, checkpoint, group, or
+  comparison.** None exists here. Every such observation is against
+  `RecordedRunsFixture`, which writes at the real `run-layout` paths — so it
+  exercises the layout the harness writes, but the records themselves are
+  built, not produced by a run.
+- **`attempt:stage:` against a real replay record.** No replay has been
+  recorded here either; the stage-attempt path is covered by fixture only.
+- **`--corpus chezmoi:<ref>`.** `stale` reaches `resolveCorpusSource`, which
+  ACT-26.6 already covers for the chezmoi branch; I exercised only the
+  directory and live branches, and the absent-directory refusal.
+
+### Decided autonomously
+
+Nobody was available during this dispatch. The Shape record's ten decisions
+stood; these are the ones Build had to add, each reversible by João.
+
+1. **`list attempts` lists both attempt kinds, not only session attempts.**
+   The glossary's Attempt entry names both, the id union carries both, and a
+   session choosing what to re-run wants every prior measurement. The kind in
+   the id is what keeps them apart. Cost: one extra `readReplayRecord` call
+   per replay.
+2. **"Most recent attempt" for a session case's staleness is decided by the
+   record file's mtime.** The attempt record carries no timestamp (Shape's
+   unknown 1 established this) and a uuid gives no order, so mtime is the only
+   ordering on disk. It is filesystem state rather than record state, which is
+   the weakness; the alternative — treating a case as fresh when *any* attempt
+   matches — reads criterion 17's "most recent" out of the card. Trigger to
+   revisit: adding a timestamp to the session attempt record, which would make
+   this deterministic from the record alone.
+3. **A declared corpus file the source no longer holds is a staleness cause,
+   not a thrown error.** `hashCorpusFiles` throws `CorpusFileError` for a
+   missing file, which would have made one case's missing style hide every
+   other case's answer. It invalidates the measurement as surely as an edit
+   does — the case cannot run against that corpus at all — so it is reported
+   as a cause. This follows the card's own does-not-die-on-a-bad-record rule.
+   Found by a test, not by reading.
+4. **`list` declares no flags.** The six kinds differ only in what they read;
+   `--json` on a listing is not in the card and nothing needs it today
+   (`list … | grep` is the idiom, per the card's own "not built"). Trigger: a
+   caller that must parse a listing rather than read it.
+5. **A record kind with no summary prints its own bytes without `--json`.**
+   The card names summaries for run, group, and comparison only. A case
+   declaration or a checkpoint has no summary that would show more than the
+   record, so inventing one would render less than what it replaced.
+6. **The group summary reads the group's `report.json` beside its
+   `group.json`.** Criterion 10 says `--json` prints the record file the id
+   names (`group.json`), and criterion 11 wants success rate, standard error,
+   pass^k, and cost, which live only in the report the group writes beside it.
+   Both are satisfied by reading two files for the summary and one for `--json`.
+7. **`staleCheckpoints` skips a run whose manifest is absent rather than
+   failing.** A run with no manifest was never replayable, so nothing about it
+   can go stale; failing the whole report over it would hide every other run's
+   answer.
+
+### Defects met on the way, fixed in their own commits
+
+- `d9d08be` — **a path traversal in `show`.** I probed it before handing the
+  question to a reviewer, and it was real:
+  `rehearsal show 'group:../../../../../../etc/passwd'` resolved to
+  `/etc/passwd/group.json`, and `run:<traversal>` reached any `*.json` on the
+  filesystem. Every id segment was interpolated into a path with nothing
+  checking where it landed. Fixed in the parser rather than in the seven path
+  builders: a segment that is `.`, `..`, or contains `/` is refused, so no
+  caller can hold an id that escapes. Every real segment is one path
+  component, so nothing legitimate is refused — re-verified after the fix that
+  `list attempts` still prints eight lines, `show` still prints both records,
+  and `stale` still reports `case:smoke`. Nine new tests cover the refusal.
+- `8c7efff` — `list` is the first flagless command, and the help printed a
+  `Flags:` heading with nothing under it plus a `[flags]` usage suffix that
+  accepts nothing. An agent reads the help instead of the docs, so this is a
+  wrong answer rather than a cosmetic one.
+- `99eb29e` — the shared `--json` help said "the record this command wrote",
+  which is false for `show`, the first command that prints a record it did not
+  write.
+
+### The refactor pass
+
+`5c416a5`. Reading the records exposed that five modules — including
+`session-run-command.ts`, which *writes* the record — each spelled out
+`sessions/<case>/<uuid>/attempt.json` and `checkpoint.json` as their own
+`join` of string literals. A layout change would have moved the writer and
+left every reader on the old shape, silently, because nothing types a join of
+four strings. `sessionAttemptPaths` and `checkpointRecordFile` now live in
+`run-layout.ts` beside the paths that module already owned, and every caller
+goes through them. Tests green before and after; the CLI re-observed after.
+
+Also folded in as it arose, not as separate work: `resolveRunDirectory` lost
+its inline run listing to `recordedRunNames` (`4f12bed`), and
+`benchmarkRunPaths.replayRecordFile` now delegates to the standalone
+`replayRecordFile` so a replay record is reachable without naming a run.
+
+### What became possible but is not wired up
+
+- **`list` and `show` accept any runs directory**, but `rehearsal.ts` always
+  passes `benchmarkRunsDirectory(CONTROL_DIR)`. There is no flag to point them
+  elsewhere; the parameter exists so the suite can build fixtures. If a
+  `--runs` flag is ever wanted, the plumbing is already there.
+- **`replayAttemptIds` and the `attempt:stage:` id** work end to end but have
+  never met a real replay record, because none has been recorded here.
+- **`recordIdForms()`** is exported and used only by `show`'s usage message.
+  A future `rehearsal show --help` could print the table; today the README
+  carries it.
+
+### Still on the old path
+
+Nothing. No existing caller changed behavior: `resolveRunDirectory` and
+`runSessionDebugAttempt` were pointed at the new helpers with their behavior
+preserved, and their existing tests pass unchanged.
+
+### Independent review is due
+
+The `review` skill's triggers apply: the change is outward-facing (a CLI that
+agents and João run, whose help text and exit codes are its contract) and it
+parses untrusted input at two boundaries (a record id from the command line,
+and every record read off disk). Worth a reviewer's attention in particular:
+
+- **Decision 2**, mtime as the recency signal for a session case's staleness.
+  It is the weakest thing in this change: filesystem state standing in for
+  record state, because the record carries no timestamp.
+- **The traversal fix in `d9d08be`.** I found and fixed one escape; a second
+  reader should check the refusal is complete. It refuses `.`, `..`, and any
+  `/` in a segment. Not refused, and I judged them harmless because they are
+  path components that stay under the root: a leading `-`, a NUL-free control
+  character, a very long segment, a Windows `\` separator (this harness is
+  macOS-only and `join` does not treat `\` as a separator there). A reviewer
+  who disagrees about `\` should say so.
+- **`show`'s exit-3 message names the resolved absolute path** (`No record
+  run:x at /Users/.../x.json`). That is useful to an agent and it discloses
+  the control repository's location on stderr. I left it because every other
+  command in this CLI already prints absolute record paths on stdout.
 <!-- SECTION:NOTES:END -->
