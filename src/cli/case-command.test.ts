@@ -252,6 +252,32 @@ describe(runCaseCapture.name, () => {
 		expect(written).toContain('\n\t"id": "capture-probe"');
 	});
 
+	it("tells the operator to run the formatter, which a capture cannot leave green on its own", async () => {
+		const cases = await probeCase();
+		const projects = await probeProjects(SESSION_ID);
+
+		const recorder = await capture(
+			{ session: SESSION_ID, cut: "2", json: false },
+			projects,
+			cases,
+		);
+
+		expect(recorder.stderr.join("")).toContain("bun run fmt");
+	});
+
+	it("says nothing about the formatter on the record --json prints", async () => {
+		const cases = await probeCase();
+		const projects = await probeProjects(SESSION_ID);
+
+		const recorder = await capture(
+			{ session: SESSION_ID, cut: "3", json: true },
+			projects,
+			cases,
+		);
+
+		expect(recorder.stdout.join("")).not.toContain("bun run fmt");
+	});
+
 	it("records the transcript in the committed declaration on disk", async () => {
 		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);

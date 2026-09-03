@@ -511,6 +511,18 @@ declaration, and prints the updated declaration. `--session` takes a session id
 or a unique prefix of one, and the source is read as a stream rather than held
 in memory, because transcripts run to several megabytes.
 
+Run `bun run fmt` after a capture, before committing. The command writes the
+declaration with the repository's tab indent, but oxfmt also collapses a short
+array such as `"corpusFiles": ["output-styles/brief.md"]` onto one line, which
+no serializer option reproduces, so a real declaration leaves `fmt:check` red
+until the formatter runs. The command prints this reminder on stderr, which
+leaves the record `--json` writes to stdout unchanged.
+
+An attempt hashes a case's transcript prefix before resuming it and refuses,
+exit 3, when the bytes do not match the digest the declaration carries, so a
+prefix recaptured at a different cut or edited after the fact cannot be paid
+for as if it were the frozen one.
+
 The case supplies the task, product brief, final rubric, stage rubrics,
 pipeline, and the target repository it was written against; `--target` and
 `BENCHMARK_TARGET_DIR` override that declared target, and `--pipeline` overrides

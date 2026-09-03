@@ -57,13 +57,18 @@ function serialize(
 }
 
 /**
- * A case declaration is committed and formatted, so a capture that rewrote it
- * with the two-space indent every run-directory record uses would leave the
- * repository's own formatter failing after each capture.
+ * A case declaration is committed, and the repository formats committed JSON
+ * with a tab, not the two spaces every run-directory record takes. The indent
+ * is as far as `JSON.stringify` reaches: oxfmt also collapses a short array
+ * onto one line, which no `stringify` option produces, so a real declaration
+ * still needs the formatter run over it. That is what FORMAT_NOTE says.
  */
 function serializeCommitted(declaration: CaseDeclaration): string {
 	return `${JSON.stringify(declaration, null, "\t")}\n`;
 }
+
+const FORMAT_NOTE =
+	"Run `bun run fmt` before committing: a captured declaration is written with the repository's tab indent, but only the formatter collapses its short arrays.\n";
 
 export interface CaseListRequest {
 	readonly json: boolean;
@@ -226,4 +231,5 @@ export async function runCaseCapture(
 	dependencies.output.stdout(
 		request.json ? serialize(updated) : `${declarationFile(caseId, root)}\n`,
 	);
+	dependencies.output.stderr(FORMAT_NOTE);
 }
