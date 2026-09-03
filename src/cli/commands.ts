@@ -34,20 +34,17 @@ export function commandHelp(command: CommandDefinition): string {
 		"rehearsal",
 		command.name,
 		command.argument === undefined ? undefined : `<${command.argument}>`,
-		"[flags]",
+		command.flags.length === 0 ? undefined : "[flags]",
 	]
 		.filter((part) => part !== undefined)
 		.join(" ");
 
-	return [
-		`Usage: ${usage}`,
-		"",
-		command.summary,
-		"",
-		"Flags:",
-		...command.flags.map((flag) => flagLine(flag)),
-		"",
-	].join("\n");
+	const flags =
+		command.flags.length === 0
+			? []
+			: ["", "Flags:", ...command.flags.map((flag) => flagLine(flag))];
+
+	return [`Usage: ${usage}`, "", command.summary, ...flags, ""].join("\n");
 }
 
 const sessionFlags: readonly FlagDefinition[] = [

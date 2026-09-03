@@ -92,6 +92,18 @@ describe("declared commands", () => {
 		},
 	);
 
+	it("omits the flags heading for a command that declares none", () => {
+		const help = commandHelp({
+			name: "list",
+			summary: "List the records",
+			argument: "kind",
+			flags: [],
+		});
+
+		expect(help).not.toContain("Flags:");
+		expect(help).toBe("Usage: rehearsal list <kind>\n\nList the records\n");
+	});
+
 	it("declares the run flags the card names", () => {
 		const run = COMMANDS.find((command) => command.name === "run");
 
