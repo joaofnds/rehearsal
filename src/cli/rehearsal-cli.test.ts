@@ -360,20 +360,25 @@ describe("every declared command", () => {
 });
 
 describe("reading the records", () => {
-	it("prints one line per attempt this repository recorded, ids show accepts back", async () => {
-		const result = await runCli(["list", "attempts"]);
+	/**
+	 * The one listing a fresh checkout can answer, because `cases/` is committed
+	 * and `.benchmark-runs` is git-ignored. Every other kind is observed over a
+	 * fixture the test builds, so the suite is green on any machine rather than
+	 * only on one whose runs directory happens to hold the records.
+	 */
+	it("prints one line per declared case, ids show accepts back", async () => {
+		const result = await runCli(["list", "cases"]);
 
 		expect(result.exitCode).toBe(0);
 		const printed = result.stdout.trimEnd().split("\n");
-		expect(printed).toHaveLength(8);
+		expect(printed.map((line) => line.split("\t")[0])).toContain("case:smoke");
 		for (const line of printed) {
-			expect(line.startsWith("attempt:session:")).toBe(true);
+			expect(line.startsWith("case:")).toBe(true);
 		}
-		expect(result.stderr.trimEnd().split("\n")).toHaveLength(3);
 	});
 
-	it("shows an attempt list prints, exactly as the record on disk", async () => {
-		const listed = await runCli(["list", "attempts"]);
+	it("shows a case list prints, exactly as the declaration on disk", async () => {
+		const listed = await runCli(["list", "cases"]);
 		const id = listed.stdout.split("\t")[0] ?? "";
 
 		const result = await runCli(["show", id, "--json"]);

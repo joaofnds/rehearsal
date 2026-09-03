@@ -357,6 +357,20 @@ export class RecordedRunsFixture {
 		);
 	}
 
+	/**
+	 * An attempt directory a run created and died before writing anything into,
+	 * which is what three of this repository's own session directories are.
+	 */
+	public async writeEmptyAttemptDirectory(
+		caseId: string,
+		uuid: string,
+	): Promise<void> {
+		await mkdir(
+			sessionAttemptPaths(this.runsDirectory, { caseId, uuid }).directory,
+			{ recursive: true },
+		);
+	}
+
 	public async writeUnreadableGroup(groupId: string): Promise<void> {
 		const paths = confirmationGroupPaths(this.runsDirectory, groupId);
 		await mkdir(paths.directory, { recursive: true });

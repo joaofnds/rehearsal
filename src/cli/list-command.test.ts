@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
-import { benchmarkRunsDirectory } from "#benchmark/run-layout";
+import { DEFAULT_CASE_ID } from "#benchmark/config";
 import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
 import { LIST_KINDS, runList } from "#cli/list-command";
 import { parseRecordId } from "#cli/record-id";
 import { runShow } from "#cli/show-command";
+
+const RECORDLESS_UUID = "0f6b6f2a-0000-4000-8000-0000000000ff";
 
 function lines(stdout: readonly string[]): readonly string[] {
 	const text = stdout.join("");
@@ -176,6 +177,27 @@ describe(runList.name, () => {
 		});
 	});
 
+	describe("when an attempt directory holds no record", () => {
+		it("still prints the recorded attempts and names it on stderr", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeEmptyAttemptDirectory("smoke", RECORDLESS_UUID);
+			const recorder = recordOutput();
+
+			await runList(
+				{ kind: "attempts", runsDirectory: fixture.runsDirectory },
+				recorder.output,
+			);
+
+			expect(ids(recorder.stdout)).toEqual([
+				`attempt:session:${fixture.sessionAttempt.caseId}/${fixture.sessionAttempt.uuid}`,
+				`attempt:stage:${fixture.stageAttempt.lineage}/${fixture.stageAttempt.timestamp}`,
+			]);
+			expect(recorder.stderr.join("")).toContain(
+				`attempt:session:smoke/${RECORDLESS_UUID}`,
+			);
+		});
+	});
+
 	describe("when nothing has been recorded", () => {
 		it.each([
 			"runs",
@@ -211,25 +233,5 @@ describe(runList.name, () => {
 			expect(failure.message).toContain("comparisons");
 			expect(recorder.stdout).toEqual([]);
 		});
-	});
-});
-
-describe("list attempts over the repository's own runs directory", () => {
-	it("prints the eight recorded attempts and names the three without a record", async () => {
-		const recorder = recordOutput();
-
-		await runList(
-			{
-				kind: "attempts",
-				runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
-			},
-			recorder.output,
-		);
-
-		expect(lines(recorder.stdout)).toHaveLength(8);
-		expect(recorder.stderr).toHaveLength(3);
-		for (const id of ids(recorder.stdout)) {
-			expect(parseRecordId(id).kind).toBe("attempt:session");
-		}
 	});
 });
