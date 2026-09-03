@@ -1,11 +1,11 @@
 ---
 id: ACT-28
 title: 'stage confirmation reps read the live skill, not the frozen corpus snapshot'
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 23:10'
+updated_date: '2026-09-03 23:34'
 labels:
   - defect
 milestone: m-0
@@ -66,8 +66,8 @@ Findings, worst first:
    against the pre-fix code, then fixed. Full suite 1026 pass (was 1025;
    +1 new test), typecheck/lint/format clean, committed at 4c746b8.
 
-2. [escalated to João] `--setting-sources project` silently drops hooks,
-   MCP config, and settings.json for every confirmation/replay stage
+2. [tracked as a task, ACT-37] `--setting-sources project` silently drops
+   hooks, MCP config, and settings.json for every confirmation/replay stage
    session, and this is a live consequence, not a hypothetical: this
    machine's ~/.claude carries a populated hooks/ directory and a
    settings.json with dozens of behavior flags (effort level, skill shell
@@ -85,9 +85,13 @@ Findings, worst first:
    in ways outside the frozen corpus under test (no hooks fire; settings.json
    flags like effort level or disabled features differ), which can change
    what a stage rep measures for reasons unrelated to what the corpus
-   snapshot records. Not fixed in this pass: the fix depends on João's
-   decision on the open question already on the card (DOT-36) about how much
-   of the live settings surface a rep is allowed to diverge from.
+   snapshot records. Escalated to João on DOT-36; his answer, recorded there:
+   a harness-owned settings file, declared as data in the case and installed
+   at project level, carrying only the permissions deny list, effort, output
+   style, and feature switches, no hooks. Filed as ACT-37 with that scope.
+   Not fixed in this pass: ACT-28's own diff neither introduces nor worsens
+   this gap beyond what the runner already flagged and disclosed before the
+   build, so it does not block this diff's own correctness.
 
 3. [note] Duplicated domain knowledge: checkpoint.ts's LAYOUT_DIRECTORY_KINDS
    (["agents", "output-styles"]) and session-corpus.ts's OVERLAID_KINDS
@@ -126,12 +130,13 @@ compiler-enforced guarantee that a plain run or replay cannot set
 settingSources, not merely convention. Load-bearing; preserve this
 separation in any future refactor that touches StageContext.
 
-Verdict: proceed. One should-fix found and fixed in this pass (cross-stage
-staleness on agents/output-styles). One item needs João's decision before
-this fully closes the risk the card was filed to close (finding 2); it does
-not block this diff's own correctness, since the diff neither introduces nor
-worsens the gap between corpus freezing and settings freezing beyond what
-the runner already flagged and disclosed before the build.
+Verdict: proceed. Every finding disposed: one should-fix found and fixed in
+this pass (cross-stage staleness on agents/output-styles), one tracked as
+ACT-37 per João's decision (a harness-owned settings file, no hooks), one
+note fixed alongside the should-fix (stale identifier in a comment), two
+notes left as observations with no reported occurrence. Nothing blocks this
+diff's own correctness: ACT-37's gap predates and is disclosed independently
+of this diff, which neither introduces nor worsens it.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -157,5 +162,17 @@ author: @claude
 created: 2026-09-03 22:44
 ---
 Runner, 2026-09-04, after build's first session: stopped on its question (redefine root as a corpus directory vs parallel functions; fix the project-then-home asymmetry for the global file, agents, and output styles or leave it). Relayed to João on DOT-36 with the recommendation to redefine the root and fix the asymmetry in the same change, since the new root definition is that fix.
+---
+
+author: @claude
+created: 2026-09-03 23:11
+---
+Runner, 2026-09-04, after review: one escalated question relayed to João on DOT-36 (accept that reps run without user-level hooks and settings, or freeze them too). The review's verdict waits on it.
+---
+
+author: @joaofnds
+created: 2026-09-03 23:33
+---
+João, 2026-09-04, on the harness's direction: 'I wanted things to run locally so we wouldn't have to deal with each person's machine setup, dotfile links, and other individual configuration differences. You convinced me to go your route, and now we keep running into that same complexity around understanding everyone's setup. And it doesn't stop here, because we're only dealing with Claude Code right now. Later we'll need to support other LLM providers like Gemini and others, and that will make it much worse.' Input for the reflect step and the next triage.
 ---
 <!-- COMMENTS:END -->
