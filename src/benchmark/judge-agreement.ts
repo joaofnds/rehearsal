@@ -11,8 +11,7 @@ import type {
 import {
 	humanReviewSchema,
 	judgeGradeSchema,
-	stageJudgeOutputSchema,
-	stageLetterGradeSchema,
+	stageGradeSchema,
 	stageRubricSchema,
 } from "./contracts";
 
@@ -95,10 +94,6 @@ export interface JudgeAgreementCalibration {
 	readonly final?: CalibratedFinal | undefined;
 }
 
-const stageGradeSchema = stageJudgeOutputSchema.extend({
-	grade: stageLetterGradeSchema,
-	verdict: z.enum(["CONTINUE", "STOP"]),
-});
 const calibrationSchema = z.object({ humanReview: humanReviewSchema }).loose();
 const calibratedStageArtifactSchema = z
 	.object({
@@ -109,7 +104,14 @@ const calibratedStageArtifactSchema = z
 		calibration: calibrationSchema,
 	})
 	.loose();
-const stageScorecardSchema = calibratedStageArtifactSchema.omit({
+/**
+ * What the agreement baseline reads out of a stage's record: the stage it
+ * graded, the rubric it graded against, and the grade. Deliberately not the
+ * `stageScorecardSchema` a scorecard is parsed by, which is strict and holds
+ * five more fields: this reads records other cards may have added fields to,
+ * and it needs none of them.
+ */
+const gradedStageSchema = calibratedStageArtifactSchema.omit({
 	judgeModel: true,
 	calibration: true,
 });
@@ -119,7 +121,7 @@ const calibratedFinalArtifactSchema = z
 		judgeModel: z.string().min(1),
 		rubric: z.string().min(1),
 		grade: judgeGradeSchema,
-		stageScorecards: z.array(stageScorecardSchema),
+		stageScorecards: z.array(gradedStageSchema),
 		calibration: calibrationSchema,
 	})
 	.loose();
@@ -297,9 +299,9 @@ async function readCalibrationArtifact(
 
 async function readStageScorecard(
 	path: string,
-): Promise<z.infer<typeof stageScorecardSchema> | undefined> {
+): Promise<z.infer<typeof gradedStageSchema> | undefined> {
 	try {
-		return stageScorecardSchema.parse(JSON.parse(await Bun.file(path).text()));
+		return gradedStageSchema.parse(JSON.parse(await Bun.file(path).text()));
 	} catch {
 		return undefined;
 	}
