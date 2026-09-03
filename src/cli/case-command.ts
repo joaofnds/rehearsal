@@ -56,6 +56,15 @@ function serialize(
 	return `${JSON.stringify(record, null, 2)}\n`;
 }
 
+/**
+ * A case declaration is committed and formatted, so a capture that rewrote it
+ * with the two-space indent every run-directory record uses would leave the
+ * repository's own formatter failing after each capture.
+ */
+function serializeCommitted(declaration: CaseDeclaration): string {
+	return `${JSON.stringify(declaration, null, "\t")}\n`;
+}
+
 export interface CaseListRequest {
 	readonly json: boolean;
 }
@@ -212,7 +221,7 @@ export async function runCaseCapture(
 			cut,
 		},
 	};
-	await Bun.write(declarationFile(caseId, root), serialize(updated));
+	await Bun.write(declarationFile(caseId, root), serializeCommitted(updated));
 
 	dependencies.output.stdout(
 		request.json ? serialize(updated) : `${declarationFile(caseId, root)}\n`,

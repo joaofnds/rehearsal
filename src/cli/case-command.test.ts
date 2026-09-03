@@ -232,6 +232,22 @@ describe(runCaseCapture.name, () => {
 		expect(written.trimEnd().split("\n")).toHaveLength(3);
 	});
 
+	it("writes the committed declaration with the tab indent the repository formats to", async () => {
+		const cases = await probeCase();
+		const projects = await probeProjects(SESSION_ID);
+
+		await capture(
+			{ session: SESSION_ID, cut: "2", json: false },
+			projects,
+			cases,
+		);
+
+		const written = await Bun.file(
+			join(cases, CAPTURE_CASE_ID, "case.json"),
+		).text();
+		expect(written).toContain('\n\t"id": "capture-probe"');
+	});
+
 	it("records the transcript in the committed declaration on disk", async () => {
 		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
