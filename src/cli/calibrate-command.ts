@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import type { z } from "zod";
 import {
 	calibrate,
 	CalibrationIncompleteError,
@@ -77,9 +78,15 @@ async function loadRecord(
 ): Promise<CalibratableRecord> {
 	const paths = benchmarkRunPaths(runsDirectory, run);
 	if (await Bun.file(paths.artifactFile).exists()) {
-		const record = calibratableArtifactSchema.parse(
-			JSON.parse(await Bun.file(paths.artifactFile).text()),
+		const parsed = await readRecord(
+			paths.artifactFile,
+			calibratableArtifactSchema,
 		);
+		if (!parsed.success) {
+			throw new UsageError(parsed.error.message);
+		}
+
+		const record = parsed.data;
 		if (record.status !== "AWAITING_HUMAN_REVIEW") {
 			throw new RefusedPreconditionError(
 				`Run ${run} is ${record.status}; only a run awaiting human review is calibrated`,
@@ -104,9 +111,7 @@ async function loadStoppedStage(
 	const paths = benchmarkRunPaths(runsDirectory, run);
 	for (const stage of await stageNamesOf(runsDirectory, run)) {
 		const file = paths.stageFile(stage);
-		const parsed = calibratableStageRecordSchema.safeParse(
-			JSON.parse(await Bun.file(file).text()),
-		);
+		const parsed = await readRecord(file, calibratableStageRecordSchema);
 		if (
 			parsed.success &&
 			parsed.data.grade.verdict === "STOP" &&
@@ -146,14 +151,33 @@ async function readReview(reviewFile: string): Promise<HumanReview> {
 		);
 	}
 
-	const parsed = humanReviewSchema.safeParse(
-		JSON.parse(await Bun.file(reviewFile).text()),
-	);
+	const parsed = await readRecord(reviewFile, humanReviewSchema);
 	if (!parsed.success) {
 		throw new UsageError(parsed.error.message);
 	}
 
 	return parsed.data;
+}
+
+/**
+ * Every record this command reads is a file someone may have hand-edited, and
+ * the review file is one `--pause` invites a reviewer to edit. A bare parser
+ * message names neither the file nor the command's own boundary, so a trailing
+ * comma arrived as an execution failure with nothing to act on. Reading and
+ * parsing are one step, so no caller holds the untyped value in between.
+ */
+async function readRecord<Schema extends z.ZodType>(
+	file: string,
+	schema: Schema,
+): Promise<z.ZodSafeParseResult<z.infer<Schema>>> {
+	const text = await Bun.file(file).text();
+	try {
+		return schema.safeParse(JSON.parse(text));
+	} catch (error) {
+		throw new UsageError(
+			`${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }
 
 function frozenEvidence(

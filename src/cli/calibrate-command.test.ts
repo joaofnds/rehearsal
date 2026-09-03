@@ -8,6 +8,7 @@ import { calibratableArtifactSchema } from "#benchmark/calibration-record";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
 import type { CurrentControlSources, JudgeKnobs } from "#cli/calibrate-command";
 import { readControlSources, runCalibrate } from "#cli/calibrate-command";
+import type { RunFixture } from "#cli/calibrate-test-support";
 import {
 	FINAL_RUBRIC,
 	RUN_NAME,
@@ -537,6 +538,87 @@ describe(runCalibrate.name, () => {
 			JSON.parse(await Bun.file(fixture.artifactFile).text()),
 		);
 		expect(artifact.status).toBe("AWAITING_HUMAN_REVIEW");
+	});
+
+	/**
+	 * The review file is the one a human hand-edits under `--pause`, so a
+	 * trailing comma in it must say which file and what is wrong rather than
+	 * a bare parser message at exit 1. The schema-invalid case is already a
+	 * usage error; only the JSON layer was unguarded.
+	 */
+	it.each([
+		[
+			"artifact",
+			writeRunFixture,
+			(fixture: RunFixture): string => fixture.artifactFile,
+		],
+		[
+			"review",
+			writeRunFixture,
+			(fixture: RunFixture): string => fixture.reviewFile,
+		],
+		[
+			"stage",
+			writeStoppedStageFixture,
+			(fixture: RunFixture): string => fixture.stageFile,
+		],
+	] as const)(
+		"names the %s file it could not parse as JSON",
+		async (_kind, writeFixture, fileOf) => {
+			const fixture = await writeFixture();
+			directories.push(fixture.runsDirectory);
+			await writeReview(fixture.reviewFile, []);
+			const file = fileOf(fixture);
+			await Bun.write(file, '{ "verdict": "ACCEPT",, }');
+			const { output } = recordOutput();
+
+			const failure = await failureOf(
+				runCalibrate(
+					{
+						id: RUN_NAME,
+						runsDirectory: fixture.runsDirectory,
+						json: false,
+						confirmRejudge: false,
+						readCurrentSources: unchangedControlSources,
+					},
+					() => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+				),
+			);
+
+			expect(failure).toBeInstanceOf(UsageError);
+			expect(failure?.message).toContain(file);
+		},
+	);
+
+	it("names an empty review file rather than failing on its bytes", async () => {
+		const fixture = await writeRunFixture();
+		directories.push(fixture.runsDirectory);
+		await Bun.write(fixture.reviewFile, "");
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runCalibrate(
+				{
+					id: RUN_NAME,
+					runsDirectory: fixture.runsDirectory,
+					json: false,
+					confirmRejudge: false,
+					readCurrentSources: unchangedControlSources,
+				},
+				() => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(UsageError);
+		expect(failure?.message).toContain(fixture.reviewFile);
 	});
 
 	/**
