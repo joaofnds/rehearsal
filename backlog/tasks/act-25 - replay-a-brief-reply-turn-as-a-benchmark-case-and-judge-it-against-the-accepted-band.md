@@ -3,11 +3,11 @@ id: ACT-25
 title: >-
   replay a brief-reply turn as a benchmark case and judge it against the
   accepted band
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 14:55'
-updated_date: '2026-09-03 04:26'
+updated_date: '2026-09-03 04:48'
 labels: []
 dependencies:
   - ACT-26.5
@@ -745,4 +745,41 @@ The control case was temporary, run from cases/zz-control-nostyle, and deleted a
 
 The three unrun turns stay unobserved, projected about 7 USD cold against the remaining cap.
 ---
+
+author: @claude
+created: 2026-09-03 04:48
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 1016 pass, 0 fail across 65 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, fixed.
+
+4. A declared transcript path escaped the store and its digest was never verified. transcriptPrefixPath joined the case id and the declared file with no containment check, unlike caseRelative, which exists for exactly this. The orchestrator reproduced it: a declared file of ../../../../../../etc/passwd resolved to /Users/etc/passwd. The reviewer went further and showed the bytes are actually read, writing a file outside the store, pointing a declaration at it, and watching forkTranscript copy its contents into the fork. So a case.json from a pull request or any untrusted source could name a private key, and prepareSession would fork those bytes into the session file, carrying them to the provider. Separately, sha256 was in the schema and verified nowhere: the reviewer pointed one case's file and digest at another case's prefix and the suite stayed green, and nothing at attempt time objected.
+
+This lived in case.ts, outside the diff, and the reviewer correctly said the fix was not this card's to make. It was directed anyway, because this card commits the first declarations carrying a transcript.file, which is what makes the hole reachable; shipping them without the guard would have landed the reachable form knowingly. Fixed in d75b615 and 3685140: the containment rule now lives in one helper both caseRelative and transcriptPrefixPath call, and the digest is verified in prepareSession before the bytes are used, refusing by name with both digests. Verified by the orchestrator: the traversal is refused naming the case, and the digest check sits before the provider call. Observed end to end by the worker: one byte appended to a real prefix makes the run exit 3 with the mismatch and no attempt record. The worker corrected one of the reviewer's escape examples, since ../smoke/x.jsonl resolves back into the same directory and does not escape.
+
+SHOULD-FIX, all fixed.
+
+1. Three of the four cases were unpinned on prompt, settings, and corpusFiles. Criterion 2 says all four declare the same way and criterion 1 enumerates those fields, but only the standalone test asserted them and only for 92b2e8b0. The reviewer deleted settings, emptied corpusFiles, and set an arbitrary prompt across the other three and the suite stayed green, so three cases could silently lose the output-style overlay this benchmark exists to measure and the corpus file that drives staleness. Fixed in b7173ae by extending the TURNS table, which the reviewer identified as load-bearing: mutating a title's word count fails the suite, so a transposed cut and accepted-word pair cannot read as a pass against the wrong turn. The redundant standalone test is folded in.
+2. The indent fix did not leave the formatter green and its comment implied it did. The reviewer serialized all four declarations as the code produces them and oxfmt reported issues on all four, because it collapses short arrays that JSON.stringify cannot. The reasoning against shelling out to a formatter stands; what was wrong was a comment that let a reader conclude the problem was solved, and a manual step named nowhere an operator meets it. Fixed in e3deff3, naming the step in both the command's stderr and the README, because two readers meet the problem at two moments.
+3. The capture test asserted the indent character rather than the requirement, and could not detect finding 2 because its probe fixture had empty arrays that happen to satisfy the formatter. Fixed in 84150f3 by making the probe resemble a real declaration, so the test now shows the residue rather than hiding it.
+6. 92b2e8b0 placed transcript after prompt while the other three placed it last. Cosmetic and stable, but criterion 2 says all four declare the same way. Aligned in f1bccf5.
+
+RECORDED, not fixed.
+5. A missing transcript prefix fails with a raw ENOENT at exit 1 rather than a refused precondition at exit 3, and the prefixes are gitignored, so a fresh clone has four committed cases whose transcript files do not exist. The reviewer confirmed this costs no money, since prepareSession runs before the provider call. Filed as ACT-33. The worker noted ACT-30 is the same shape and may deserve one shared refusal.
+7. The standalone 92b2e8b0 test was a superset of the table's coverage; folded in with finding 1.
+
+The reviewer verified independently, and these stand as this card's evidence: all four cut boundaries, with the record at each cut being the fired reply at 195, 294, 333, and 313 words and the accepted rewrite sitting in a later record at exactly 76, 145, 136, and 108 words; all four declared digests matching the captured prefixes; that only the 92b2e8b0 accepted reply contains a backtick and none of the four contains an em dash, confirming the dropped backtick check; ACT-32's count, with 211 tool_use records in the attempt transcript and zero after the cut; and that run --confirm on a session case prints the projection then exits 3 without writing an attempt record.
+
+Paid observations on this card: one attempt of brief-reply-92b2e8b0 at 2.456045 USD, and the orchestrator's control at 2.455190 USD. Run total after this card: about 5.37 USD against the 50 USD ceiling.
+
+The control settles the question Build could not: the settings overlay is honored on resume. With outputStyle brief the reply opens with its conclusion in plain words; with settings removed the same case opens discursively, different text and different shape. So the 196-word reply against João's accepted 76 is a real style failure, which is the regression signal these cases exist to produce, not a harness misconfiguration.
+
+Not observed: the three other turns, projected about 7 USD cold, left unrun after Build stopped on the inconclusive first attempt as its dispatch directed. Criteria 9 and 11 stay unchecked for that reason. No session confirmation group, which ACT-26.5 did not build and which refuses rather than pretending.
+---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Four brief-reply turns are declared as session cases: cases/brief-reply-<prefix>/ for e3dea673, 02f0f204, 40878d26, and 92b2e8b0, each resuming a real transcript truncated just before the reply João fired /brief on, with the brief style declared as the corpus under test and three deterministic checks over the reply. Transcript bytes stay git-ignored; only the declarations are committed, with their digests. Two premises of the card were false and are corrected on the record: the brief-agent hand-off it describes was reverted from dotfiles the day the card was filed, so the agent-dispatch and sent-equals-return checks have no referent and are not built; and the backtick check the planning document specified would have failed João's own accepted reply, since the live style forbids only the em dash. One paid attempt ran, on the cheapest turn: 196 words against the 76 accepted, so the word band failed. A control run with the style removed proves that is a real style failure and not a harness misconfiguration, because the styled and unstyled replies differ in text and in shape. Review found one blocking defect, fixed here though it predated the card: a declared transcript path escaped its directory and its digest was never verified, so an untrusted case declaration could have fed any file on disk into a session sent to the provider. Four should-fix defects fixed, including three cases whose corpus and settings nothing pinned. Three turns remain unrun, projected about 7 USD. Two harness defects this card exposed are carded: ACT-32, the tool-call check counting the inherited prefix, and ACT-33, a missing prefix failing with a raw error.
+<!-- SECTION:FINAL_SUMMARY:END -->
