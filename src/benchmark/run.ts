@@ -8,7 +8,7 @@ import {
 	readTaskCard,
 	readTaskOutput,
 } from "./backlog";
-import type { Questioner } from "./calibration";
+import type { FinalCandidate, Questioner } from "./calibration";
 import { collectCalibration } from "./calibration";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
@@ -292,6 +292,86 @@ export async function runFinalJudge(
 	}
 }
 
+export interface FinalCalibrationInput {
+	readonly originalInstructions: string;
+	readonly originalRubric: string;
+	readonly finalRubricPath: string;
+	readonly rubricsDirectory: string;
+	readonly finalCandidate?: FinalCandidate | undefined;
+	readonly stageScorecards: readonly StageScorecard[];
+}
+
+export interface FinishGradedRunRequest {
+	readonly pause: boolean;
+	readonly runName: string;
+	readonly targetDir: string;
+	readonly resultSha: string;
+	readonly artifact: GradedRunArtifact;
+	readonly calibrationInput: FinalCalibrationInput;
+}
+
+export interface FinishGradedRunDependencies {
+	readonly recordRetentionRef: typeof recordRetentionRef;
+	readonly collectCalibration: (
+		input: FinalCalibrationInput,
+	) => Promise<CalibrationResult>;
+	readonly collectJudgeAgreement: (
+		calibration: Readonly<CalibrationResult>,
+	) => Promise<JudgeAgreementReport>;
+	readonly completeArtifact: (artifact: GradedRunArtifact) => Promise<void>;
+	readonly log: (message: string) => void;
+}
+
+/**
+ * Whether a failed run stops for the reviewer before restoring. Only a paused
+ * run may, and only when the stage-failure calibration has not already held
+ * the target for the same purpose. A run without `--pause` skips the stop
+ * rather than reaching it and recovering from a closed stdin, so nothing asks
+ * a question nobody is there to answer.
+ */
+export function pausesOnFailure(
+	pause: boolean,
+	stageFailureCalibrated: boolean,
+): boolean {
+	return pause && !stageFailureCalibrated;
+}
+
+/**
+ * What a run does once the final Judge has spoken, and the one place the two
+ * paths differ. With `--pause` the reviewer is still holding the target, so
+ * the run calibrates and completes the artifact. Without it the artifact stays
+ * at AWAITING_HUMAN_REVIEW and the candidate is pinned under the run's
+ * retention ref before the caller restores, because restoring makes the commit
+ * unreachable and only the ref keeps gc from pruning it. `review` and
+ * `calibrate` finish the record afterwards, from the frozen evidence.
+ */
+export async function finishGradedRun(
+	request: Readonly<FinishGradedRunRequest>,
+	dependencies: Readonly<FinishGradedRunDependencies>,
+): Promise<void> {
+	if (!request.pause) {
+		await dependencies.recordRetentionRef(
+			request.targetDir,
+			request.runName,
+			request.resultSha,
+		);
+		dependencies.log(
+			`Candidate retained at refs/rehearsal/${request.runName}; restoring the target. Record a review with \`rehearsal review ${request.runName}\`, then \`rehearsal calibrate ${request.runName}\`.`,
+		);
+
+		return;
+	}
+
+	const calibration = await dependencies.collectCalibration(
+		request.calibrationInput,
+	);
+	const judgeAgreement = await dependencies.collectJudgeAgreement(calibration);
+	await dependencies.completeArtifact(
+		completeRunArtifact(request.artifact, calibration, judgeAgreement),
+	);
+	dependencies.log("Calibration recorded; restoring the target.");
+}
+
 /**
  * Records the checkpoint and then pins its commit under refs/rehearsal, in
  * that order: an unpinned checkpoint is a gc race, a stray ref without a
@@ -353,7 +433,7 @@ export interface StageContext {
 	readonly completeStage: (record: StageJudgeRecord) => Promise<void>;
 	readonly calibrateStageFailure: (
 		stageScorecards: readonly StageScorecard[],
-	) => Promise<CalibrationResult>;
+	) => Promise<CalibrationResult | undefined>;
 	readonly collectJudgeAgreement: (
 		currentCalibrations: readonly JudgeAgreementCalibration[],
 	) => Promise<JudgeAgreementReport>;
@@ -614,18 +694,20 @@ export async function runGradedStages(
 		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			const calibration = await context.calibrateStageFailure(stageScorecards);
-			const judgeAgreement = await context.collectJudgeAgreement([
-				{
-					judgeModel: context.judgeModel,
-					humanReview: calibration.humanReview,
-					stages: stageScorecards,
-				},
-			]);
-			await context.completeStage({
-				...stageRecord,
-				calibration,
-				judgeAgreement,
-			});
+			if (calibration !== undefined) {
+				const judgeAgreement = await context.collectJudgeAgreement([
+					{
+						judgeModel: context.judgeModel,
+						humanReview: calibration.humanReview,
+						stages: stageScorecards,
+					},
+				]);
+				await context.completeStage({
+					...stageRecord,
+					calibration,
+					judgeAgreement,
+				});
+			}
 		}
 		assertStageGradePassed(scorecard);
 
@@ -824,6 +906,10 @@ export async function runBenchmark(
 					writeStageProgress: abort.writeStageProgress,
 					completeStage: abort.completeStage,
 					calibrateStageFailure: async (scorecards) => {
+						if (!config.pause) {
+							return undefined;
+						}
+
 						const calibration = await collectCalibration({
 							rl,
 							reviewFile: runFiles.reviewFile,
@@ -899,56 +985,64 @@ export async function runBenchmark(
 		console.log(`Run artifact: ${runFiles.artifactFile}`);
 		console.log(`Human review: ${runFiles.reviewFile}`);
 
-		const calibration = await collectCalibration({
-			rl,
-			reviewFile: runFiles.reviewFile,
-			targetDir: source.root,
-			originalInstructions: instructions,
-			originalRubric: rubric,
-			finalRubricPath: benchmarkCase.finalRubricPath,
-			rubricsDirectory: benchmarkCase.rubricsDirectory,
-			finalCandidate: {
-				originalGrade: grade,
-				baselineContext,
-				diff: evidence.diff,
-				changedPaths: evidence.changedPaths,
-				checkIntegrity: evidence.checkIntegrity,
-				localChecks: evidence.localChecks,
-			},
-			stageScorecards,
-			judgeModel: config.judgeModel,
-			judgeEffort: config.judgeEffort,
-			sessionBudgetUsd: config.sessionBudgetUsd,
-		});
-		const judgeAgreement = await loadJudgeAgreementReport(
-			runFiles.runsDirectory,
-			[
-				{
-					judgeModel: config.judgeModel,
-					humanReview: calibration.humanReview,
-					stages: stageScorecards,
-					final: { rubric, grade },
+		await finishGradedRun(
+			{
+				pause: config.pause,
+				runName: runFiles.name,
+				targetDir: source.root,
+				resultSha: evidence.resultSha,
+				artifact,
+				calibrationInput: {
+					originalInstructions: instructions,
+					originalRubric: rubric,
+					finalRubricPath: benchmarkCase.finalRubricPath,
+					rubricsDirectory: benchmarkCase.rubricsDirectory,
+					finalCandidate: {
+						originalGrade: grade,
+						baselineContext,
+						diff: evidence.diff,
+						changedPaths: evidence.changedPaths,
+						checkIntegrity: evidence.checkIntegrity,
+						localChecks: evidence.localChecks,
+					},
+					stageScorecards,
 				},
-			],
+			},
+			{
+				recordRetentionRef,
+				collectCalibration: (input) =>
+					collectCalibration({
+						...input,
+						rl,
+						reviewFile: runFiles.reviewFile,
+						targetDir: source.root,
+						judgeModel: config.judgeModel,
+						judgeEffort: config.judgeEffort,
+						sessionBudgetUsd: config.sessionBudgetUsd,
+					}),
+				collectJudgeAgreement: (calibration) =>
+					loadJudgeAgreementReport(runFiles.runsDirectory, [
+						{
+							judgeModel: config.judgeModel,
+							humanReview: calibration.humanReview,
+							stages: stageScorecards,
+							final: { rubric, grade },
+						},
+					]),
+				completeArtifact: abort.completeArtifact,
+				log: console.log,
+			},
 		);
-		await abort.completeArtifact(
-			completeRunArtifact(artifact, calibration, judgeAgreement),
-		);
-		console.log("Calibration recorded; restoring the target.");
 
 		return runFiles;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		console.error(message);
 		await abort.markAborted(message);
-		if (!stageFailureCalibrated) {
-			try {
-				await rl.question(
-					`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
-				);
-			} catch {
-				console.error("No interactive stdin; restoring the target now.");
-			}
+		if (pausesOnFailure(config.pause, stageFailureCalibrated)) {
+			await rl.question(
+				`The run failed. Inspect ${source.root} if useful, then press Enter to restore the target.`,
+			);
 		}
 		throw error;
 	} finally {

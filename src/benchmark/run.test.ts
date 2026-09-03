@@ -9,6 +9,7 @@ import { runCommand } from "./command";
 import { parseArgs } from "./config";
 import type {
 	CalibrationResult,
+	GradedRunArtifact,
 	JudgeGrade,
 	StageJudgeInput,
 	StageJudgeOutput,
@@ -25,6 +26,8 @@ import { JudgeOutputValidationError } from "./judge-attempt";
 import type { PipelineDefinition, PlanningStageDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type {
+	FinishGradedRunDependencies,
+	FinishGradedRunRequest,
 	RunArtifactBaseInputs,
 	RunArtifactInputs,
 	StageContext,
@@ -32,6 +35,8 @@ import type {
 } from "./run";
 import {
 	buildFailedJudgeRunArtifact,
+	finishGradedRun,
+	pausesOnFailure,
 	buildRunManifest,
 	buildRunArtifact,
 	captureRunBaseline,
@@ -1341,6 +1346,42 @@ describe(runGradedStages.name, () => {
 		});
 	});
 
+	it("writes an uncalibrated stopped stage when no pause collects a review", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const asked: string[] = [];
+		const context = {
+			...(await stageContext()),
+			calibrateStageFailure: () => {
+				asked.push("calibrate");
+
+				return Promise.resolve(undefined);
+			},
+			collectJudgeAgreement: () =>
+				Promise.reject(new Error("no agreement without a calibration")),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		const outcome = runGradedStages(failing, context);
+
+		expect(outcome).rejects.toThrow("minimum grade is B");
+		await outcome.catch(() => undefined);
+		expect(asked).toEqual(["calibrate"]);
+		const stageRecord: unknown = JSON.parse(
+			await Bun.file(context.stageFile("shape")).text(),
+		);
+		expect(stageRecord).toMatchObject({ stage: "shape" });
+		expect(stageRecord).not.toHaveProperty("calibration");
+		expect(stageRecord).not.toHaveProperty("judgeAgreement");
+	});
+
 	it("retains commit subjects when calibrating a stopped delivery", async () => {
 		const { dependencies, scorecardFor } = fakeStageDependencies();
 		const context = {
@@ -1769,6 +1810,138 @@ describe(buildRunArtifact.name, () => {
 			AUDIT_LOG_PIPELINE_PATH,
 			AUDIT_LOG_PIPELINE_PATH,
 		]);
+	});
+});
+
+describe(pausesOnFailure.name, () => {
+	it.each([
+		{ pause: false, stageFailureCalibrated: false, stops: false },
+		{ pause: false, stageFailureCalibrated: true, stops: false },
+		{ pause: true, stageFailureCalibrated: false, stops: true },
+		{ pause: true, stageFailureCalibrated: true, stops: false },
+	])(
+		"stops for the reviewer: $stops when pause is $pause and the stage was calibrated $stageFailureCalibrated",
+		({ pause, stageFailureCalibrated, stops }) => {
+			expect(pausesOnFailure(pause, stageFailureCalibrated)).toBe(stops);
+		},
+	);
+});
+
+describe(finishGradedRun.name, () => {
+	interface FinishHarness {
+		readonly order: string[];
+		readonly dependencies: FinishGradedRunDependencies;
+	}
+
+	function fakeFinish(): FinishHarness {
+		const order: string[] = [];
+
+		return {
+			order,
+			dependencies: {
+				recordRetentionRef: (_targetDir, runName, sha) => {
+					order.push(`retain:${runName}:${sha}`);
+
+					return Promise.resolve();
+				},
+				collectCalibration: () => {
+					order.push("calibrate");
+
+					return Promise.reject(new Error("no calibration without a pause"));
+				},
+				collectJudgeAgreement: () => {
+					order.push("agreement");
+
+					return Promise.reject(new Error("no agreement without a pause"));
+				},
+				completeArtifact: () => {
+					order.push("complete");
+
+					return Promise.resolve();
+				},
+				log: () => undefined,
+			},
+		};
+	}
+
+	const request: FinishGradedRunRequest = {
+		pause: false,
+		runName: "2026-09-03T00-00-00.000Z",
+		targetDir: "/tmp/target",
+		resultSha: "candidate-sha",
+		artifact: buildRunArtifact(
+			artifactInputs(
+				{
+					statuses: ["To Do", "Done"],
+					target: TEST_TARGET,
+					stages: [],
+				},
+				"pipelines/default.json",
+			),
+		),
+		calibrationInput: {
+			originalInstructions: "Instructions",
+			originalRubric: "Rubric",
+			finalRubricPath: "/control/rubric.md",
+			rubricsDirectory: "/control/rubrics",
+			stageScorecards: [],
+		},
+	};
+
+	it("pins the candidate under refs/rehearsal and asks nothing without a pause", async () => {
+		const { order, dependencies } = fakeFinish();
+
+		await finishGradedRun(request, dependencies);
+
+		expect(order).toEqual([`retain:${request.runName}:${request.resultSha}`]);
+	});
+
+	it("calibrates and completes the artifact with a pause", async () => {
+		const { order } = fakeFinish();
+		const calibration: CalibrationResult = {
+			humanReview: { verdict: "REJECT", summary: "failed", findings: [] },
+			instructionsChanged: false,
+			rubricChanged: false,
+			stageRubricsChanged: [],
+		};
+		const judgeAgreement: JudgeAgreementReport = {
+			skippedCalibrations: 0,
+			baselines: [],
+		};
+		const completed: GradedRunArtifact[] = [];
+
+		await finishGradedRun(
+			{ ...request, pause: true },
+			{
+				recordRetentionRef: () => {
+					order.push("retain");
+
+					return Promise.resolve();
+				},
+				collectCalibration: () => {
+					order.push("calibrate");
+
+					return Promise.resolve(calibration);
+				},
+				collectJudgeAgreement: () => {
+					order.push("agreement");
+
+					return Promise.resolve(judgeAgreement);
+				},
+				completeArtifact: (artifact) => {
+					order.push("complete");
+					completed.push(artifact);
+
+					return Promise.resolve();
+				},
+				log: () => undefined,
+			},
+		);
+
+		expect(order).toEqual(["calibrate", "agreement", "complete"]);
+		expect(completed[0]?.status).toBe("COMPLETE");
+		expect(completed[0]?.calibration).toBe(calibration);
+		expect(completed[0]?.judgeAgreement).toBe(judgeAgreement);
 	});
 });
 
