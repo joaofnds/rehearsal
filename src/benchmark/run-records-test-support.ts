@@ -36,11 +36,18 @@ const COMPARISON_DIGEST = "c".repeat(64);
 
 type ParsedReplayRecord = z.infer<typeof replayRecordSchema>;
 
+type LegacyGroupRecord = Omit<ConfirmationGroupRecord, "caseId">;
+
+/**
+ * Every shape this fixture writes: the parsed records, and the group record as
+ * it was written before it named a case, which the parser still reads by
+ * filling that field with the legacy default.
+ */
 type WrittenRecord =
 	| CheckpointRecord
 	| ParsedReplayRecord
 	| ConfirmationGroupRecord
-	| Omit<ConfirmationGroupRecord, "caseId">
+	| LegacyGroupRecord
 	| GroupReportSummaryRecord
 	| RunSummaryRecord
 	| SessionAttemptRecord;
@@ -115,10 +122,15 @@ function checkpoint(stage: string, layoutPath: string): CheckpointRecord {
 	};
 }
 
-function group(groupId: string): ConfirmationGroupRecord {
-	return confirmationGroupRecordSchema.parse({
+/**
+ * Every field a group record carries except the case it names. The legacy
+ * shape written before that field existed is this literal, so it is built by
+ * never adding the field rather than by adding it and taking it back off, and
+ * the parsed record is this literal plus the field.
+ */
+function groupFieldsWithoutCaseId(groupId: string): LegacyGroupRecord {
+	return {
 		schemaVersion: 1,
-		caseId: CASE_ID,
 		groupId,
 		mode: "stage",
 		reps: 2,
@@ -150,6 +162,13 @@ function group(groupId: string): ConfirmationGroupRecord {
 		})),
 		reportFile: "report.json",
 		makespanMs: 200,
+	};
+}
+
+function group(groupId: string): ConfirmationGroupRecord {
+	return confirmationGroupRecordSchema.parse({
+		...groupFieldsWithoutCaseId(groupId),
+		caseId: CASE_ID,
 	});
 }
 
@@ -372,11 +391,12 @@ export class RecordedRunsFixture {
 	 * this machine having been written before the field existed.
 	 */
 	public async writeGroupWithoutCaseId(groupId: string): Promise<void> {
-		const { caseId, ...withoutCaseId } = group(groupId);
-		void caseId;
 		const paths = confirmationGroupPaths(this.runsDirectory, groupId);
 		await mkdir(paths.directory, { recursive: true });
-		await Bun.write(paths.groupFile, serialize(withoutCaseId));
+		await Bun.write(
+			paths.groupFile,
+			serialize(groupFieldsWithoutCaseId(groupId)),
+		);
 	}
 
 	/**
