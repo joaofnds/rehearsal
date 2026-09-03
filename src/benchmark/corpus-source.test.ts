@@ -192,6 +192,54 @@ describe("rendering a chezmoi corpus source", () => {
 		);
 	});
 
+	/**
+	 * `git archive` parses its ref as an option, so a ref opening with a dash
+	 * reaches argv as `--output=<path>` and truncates that file before failing.
+	 * `git rev-parse` echoes such a string back and exits 0, so resolving it
+	 * first does not catch it.
+	 */
+	it.each([
+		"--output=/tmp/rehearsal-victim.txt",
+		"--add-file=/etc/passwd",
+		"--add-virtual-file=x:y",
+		"-o/tmp/rehearsal-victim.txt",
+	])("refuses the ref %s, which git would read as an option", async (ref) => {
+		const fake = runner();
+
+		const failure = await failureOf(
+			resolveCorpusSource(`chezmoi:${ref}`, {
+				runCommand: fake.run,
+				dotfilesDirectory: "/dotfiles",
+			}),
+		);
+
+		expect(failure).toBeInstanceOf(CorpusSourceError);
+		expect(failure.message).toContain(ref);
+		expect(fake.commands).toEqual([]);
+	});
+
+	it("resolves the ref to a commit, so a ref naming no commit is refused", async () => {
+		const fake = runner();
+
+		const source = await rendered("chezmoi:HEAD", fake.run);
+		resources.track(source.root);
+		resources.track(source.sourceDirectory);
+
+		expect(
+			fake.commands
+				.map((recorded) => recorded.command)
+				.find((command) => command[0] === "git"),
+		).toEqual([
+			"git",
+			"-C",
+			"/dotfiles",
+			"rev-parse",
+			"--verify",
+			"--end-of-options",
+			"HEAD^{commit}",
+		]);
+	});
+
 	it("records the ref's resolved commit rather than the ref string", async () => {
 		const fake = runner();
 
@@ -202,11 +250,6 @@ describe("rendering a chezmoi corpus source", () => {
 		expect(source.kind).toBe("chezmoi");
 		expect(source.ref).toBe("HEAD");
 		expect(source.commit).toBe("abc123def456");
-		expect(
-			fake.commands.some((recorded) =>
-				recorded.command.join(" ").includes("rev-parse HEAD"),
-			),
-		).toBe(true);
 	});
 });
 

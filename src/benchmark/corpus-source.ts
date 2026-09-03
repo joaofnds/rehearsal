@@ -103,6 +103,23 @@ async function directorySource(source: string): Promise<DirectoryCorpusSource> {
 }
 
 /**
+ * `git archive` reads its ref positionally but still parses it as an option
+ * first, so `--output=<path>` truncates that path before failing, and
+ * `git rev-parse` echoes the same string back and exits 0 rather than catching
+ * it. Refusing a leading dash before either command runs is what closes the
+ * argv layer; quoting only ever closed the shell layer.
+ */
+function optionRefRefusal(ref: string): CorpusSourceError | undefined {
+	if (!ref.startsWith("-")) {
+		return undefined;
+	}
+
+	return new CorpusSourceError(
+		`Corpus source chezmoi:${ref} names a ref opening with a dash, which git reads as an option rather than a ref`,
+	);
+}
+
+/**
  * The archive needs a pipe, so it goes through a shell, and the ref is a flag
  * value: unquoted, `HEAD; rm -rf ~` would run as a second command. Single
  * quotes make a POSIX shell take every byte literally, and the only byte that
@@ -128,7 +145,15 @@ async function renderChezmoi(
 ): Promise<ChezmoiCorpusSource> {
 	const { runCommand: run, dotfilesDirectory } = dependencies;
 	const revParse = await run(
-		["git", "-C", dotfilesDirectory, "rev-parse", ref],
+		[
+			"git",
+			"-C",
+			dotfilesDirectory,
+			"rev-parse",
+			"--verify",
+			"--end-of-options",
+			`${ref}^{commit}`,
+		],
 		tmpdir(),
 	);
 	const commit = revParse.trim();
@@ -255,6 +280,11 @@ export function resolveCorpusSource(
 					`Corpus source ${source} names no chezmoi ref: use chezmoi:<ref>`,
 				),
 			);
+		}
+
+		const refusal = optionRefRefusal(ref);
+		if (refusal !== undefined) {
+			return Promise.reject(refusal);
 		}
 
 		return renderChezmoi(ref, dependencies);
