@@ -3,11 +3,11 @@ id: ACT-26.2
 title: >-
   list and show recorded runs, checkpoints, attempts, groups, comparisons, and
   staleness
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 01:43'
+updated_date: '2026-09-03 02:39'
 labels: []
 dependencies: []
 references:
@@ -791,3 +791,56 @@ policy and is reversible by João.
 `references: dotfiles:DOT-18` addition). It belongs to no work here and was
 left untouched and uncommitted.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 02:39
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 931 pass, 0 fail across 63 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, all three fixed.
+
+1. stale died on one unreadable attempt record, hiding every other answer. The reviewer wrote a runs directory holding one attempt.json containing "{ not json" and called staleCases: it threw, which maps to execution failure, so the CLI exited 1 printing nothing on stdout, losing every stale checkpoint and every other case. This is the rule the change states about itself: list-command.ts says one unreadable record must not hide the valid ones, criterion 7 makes it a criterion, and the README says an unreadable record is named on stderr while the rest still print. The state is reachable, since a run that dies during the write leaves a truncated record, which is how the three record-less directories on disk came to exist. Fixed in d864e52 following the case list precedent. Removing the catch fails both new tests.
+
+2. stale could never report model or effort staleness. Confirmed by the orchestrator reading both sites: stale passed the manifest's own model and effort into deriveStaleness, comparing them against the checkpoints that same manifest produced, so the comparison was tautologically equal for any normally written record, while replay passes the model the user is about to replay with. Record a run at sonnet, set BENCHMARK_MODEL=opus, and stale reported the checkpoints fresh while replay logged every stage stale. The glossary defines a stale checkpoint by corpus files, model, effort, or upstream checkpoint; two of the four were unreachable, and stale declared no flag to supply them. Fixed in 0e0d7cf: stale now declares --model and --effort, defaulting to what each run recorded so an unnamed knob asserts nothing. Verified by the orchestrator in help output, and by the worker observing "model sonnet is now opus" and "effort none is now high" against a fixture. Reverting the request fails all three new tests.
+
+3. Three tests failed on any machine but this one, so trunk was not releasable. The orchestrator cloned the repository and ran the suite: it failed. The tests asserted exact counts against .benchmark-runs, which .gitignore excludes, so a clone has none of it, and the next smoke run would have broken the suite here too. Fixed in db0e90c: tolerance stays pinned by fixtures, and criterion 23 is recorded as a CLI observation rather than a permanent assertion. Verified by the orchestrator on a fresh clone: this card's three failures are gone.
+
+Five failures remain on a fresh clone and none belong to this card. The orchestrator checked out the shape commit 3798639, before any of this card's code, in a separate clone and saw the identical five. Four are compare dying with a raw ENOENT when .benchmark-runs does not exist, filed as ACT-30 with a reproduction. The fifth is ACT-26.4's loadCase target test, which depends on a repository outside this one and cannot pass elsewhere by design.
+
+SHOULD-FIX, all fixed.
+
+4. stale --corpus crashed on a valid corpus with no CLAUDE.md, reading it unconditionally before enumerating any run, though resolveCorpusSource accepts a directory holding any one of the four kinds. A corpus holding only the output style the smoke case declares gave a raw ENOENT at exit 1 instead of the answer the case half could give. Fixed in 10436b7: the read is lazy and the failure is translated as a refused precondition while the case half still answers.
+5. stale --corpus chezmoi:<ref> leaked two temp directories per invocation, each a full home-layout copy, because renderChezmoi cleans up only when the render itself throws and runStale never called discardRender. This also made the README's claim that these commands write nothing false. Fixed in e6115ae; observed against a real render, the temp directory count went 26 to 28 without the fix and 26 to 26 with it.
+6. stale silently discarded unreadable case declarations, consuming only the parsed half of listCases while both other callers print the unreadable half. A mistyped corpusFiles entry gave exit 0 with no line and no warning, indistinguishable from fresh. Fixed in d135bf9.
+7. stale's skill roots diverged from what replay hashes: a single root under the corpus root versus project-level then user-level. Latent, since the control repository has no .claude directory, but the two commands would silently disagree about the same checkpoint. Fixed in f122d90; the two now print the identical array.
+8. The default live-corpus branch, what a bare rehearsal stale takes, was never tested, though it differs meaningfully in which CLAUDE.md it resolves. Covered in 394f642.
+9. Most recent attempt by mtime, the decision flagged for the reviewer, was pinned by no test: writeAttemptReading reused one uuid, so no test ever put two attempts for one case on disk, and reversing the comparison or taking the first found left the suite green. The reviewer agreed with the reasoning and named the fragility: mtime is rewritten by cp -r, rsync without -t, tar without -p, and restore-from-backup, and .benchmark-runs is gitignored so moving it between machines requires one of those. Pinned in 0663073 with explicit utimes; both mutations now fail. Persisting the attempt's start time stays the recorded trigger, because it changes a record schema this card only reads.
+10. The dispatch test spawned run, replay, and compare asserting only a non-1 exit, so the sole guard against a paid provider call was a refusal in production code this card did not touch. Fixed in 51ec20d to assert each command's specific refusal.
+14. The summary purity test called each pure function twice and asserted equality, which no mutation keeping them functions could fail. Deleted in 7026fda; the byte-for-byte tests are what satisfy criterion 12.
+13, 15, 19, 20, 22: a refused two-segment id reported an id the user never typed; show case:<id> bypassed the case id schema that case show enforces for the same mistake; absolute home paths reached stderr and error messages the README tells sessions to paste onto shared cards; a lint escape hatch stood in for a builder that never sets the field; and a missing report.json was reported as a missing group. All fixed.
+
+NOTES.
+11. The traversal fix is correct on POSIX and confinement holds for every caller within this change. One caller outside it, resolveRunDirectory in replay-command.ts, passes the raw --run argument into the path builder without going through the parser; pre-existing and out of scope. confined is byte-oriented and assumes POSIX separators.
+12. Two of the eight traversal test cases are rejected by the arity check before reaching confinement, so deleting the confinement calls would leave them green. Only the two attempt: cases exercise it for two-segment ids.
+16, 17, 18, 21: list cases and show case: read the control repository rather than the runs directory, so the read-only test does not cover the case: form; markdown cells are not escaped, reachable only through operator-written fixtures; stale and list join fields with tabs while one joined field is an error message that could contain one; and latestAttemptRecord re-walks the sessions tree once per case, which is nothing at eleven attempts.
+A corpus file's absolute path still reaches stderr through CorpusFileError, which is shared with run and replay, so widening finding 19's fix there was out of scope.
+One flaky test was seen once and passed on four subsequent runs: runReplayConfirmation cleaning completed Judge outcomes while preserving a pre-evidence failure. Untouched by this work; recorded so a later reader does not read one red as a regression.
+
+The reviewer named two load-bearing strengths the fixes preserved: confinement living in the id parser rather than in seven path builders, with formatRecordId as its true inverse, which makes "every id list prints is one show accepts" a property rather than seven assertions; and the summaries as pure functions tested against committed byte-for-byte literals.
+
+Observed live by the orchestrator: list attempts prints eight attempts on stdout and names the three record-less directories on stderr at exit 0; stale reports case:smoke invalidated by output-styles/brief.md changing, checked against the real digests; show accepts back ids list printed; a crafted traversal id is refused; list bogus and a malformed id exit 2 and an absent record exits 3.
+
+Not observed: the attempt:stage: id against a real replay record, and legacy-record tolerance against a file actually written before caseId existed. Neither exists on this machine; both are fixture-covered and the card says so.
+
+Spend on this card: 0.00 USD. No provider call, by Shape, Build, or the fixes.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+rehearsal list <kind>, show <id>, and stale read the records the harness wrote, without starting a session or a worktree. Record ids are typed and parsed once at the boundary into a discriminated union, with confinement in the parser rather than in seven path builders, so every id list prints is one show accepts back and none can name a path outside the runs directory. show prints the record's own bytes with --json and a pasteable markdown summary otherwise, from pure functions tested against committed byte-for-byte literals. stale reports what a corpus edit invalidated, and now also what a model or effort change would, through its own --model and --effort. One unreadable record is named on stderr while the rest still print at exit 0. Review found three blocking defects, all fixed: stale died on a single bad record and lost every other answer, stale compared the recorded model against itself so it could never report a model or effort change, and three tests asserted counts against a gitignored directory so trunk did not build anywhere but this machine. Ten should-fix defects fixed, including a chezmoi render leaking a home-layout copy per invocation and a path traversal in the id parser found during Build. Five failures remain on a fresh clone, all pre-existing and verified present at the commit before this card: four are ACT-30, one is ACT-26.4's target test which depends on a repository outside this one. Spend: zero, no provider call at any stage.
+<!-- SECTION:FINAL_SUMMARY:END -->
