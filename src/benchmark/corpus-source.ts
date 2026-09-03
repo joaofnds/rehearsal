@@ -1,8 +1,34 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { mkdtemp, readdir, stat } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { runCommand } from "./command";
 
 export class CorpusSourceError extends Error {
 	public override name = "CorpusSourceError";
+}
+
+interface CorpusRoot {
+	readonly root: string;
+}
+
+export interface LiveCorpusSource extends CorpusRoot {
+	readonly kind: "live";
+}
+
+export interface DirectoryCorpusSource extends CorpusRoot {
+	readonly kind: "directory";
+}
+
+/**
+ * A rendered chezmoi source keeps its scratch directories so the render can be
+ * deleted once its bytes are snapshotted: the render is the whole home layout,
+ * of which only the corpus kinds are read.
+ */
+export interface ChezmoiCorpusSource extends CorpusRoot {
+	readonly kind: "chezmoi";
+	readonly ref: string;
+	readonly commit: string;
+	readonly sourceDirectory: string;
 }
 
 /**
@@ -10,21 +36,216 @@ export class CorpusSourceError extends Error {
  * learns whether they were rendered, copied, or read from the live install:
  * `root` is the only thing hashing and installing ever see.
  */
-export interface ResolvedCorpusSource {
-	readonly kind: "live" | "directory";
-	readonly root: string;
+export type ResolvedCorpusSource =
+	| LiveCorpusSource
+	| DirectoryCorpusSource
+	| ChezmoiCorpusSource;
+
+export type CommandRunner = (
+	command: readonly string[],
+	cwd: string,
+) => Promise<string>;
+
+export interface CorpusSourceDependencies {
+	readonly runCommand: CommandRunner;
+	readonly dotfilesDirectory: string;
 }
 
 export function liveCorpusRoot(): string {
 	return join(homedir(), ".claude");
 }
 
+export function defaultCorpusSourceDependencies(): CorpusSourceDependencies {
+	return {
+		runCommand: (command, cwd) => runCommand(command, cwd),
+		dotfilesDirectory: join(homedir(), "code", "dotfiles"),
+	};
+}
+
+const CHEZMOI_SCHEME = "chezmoi:";
+
+/**
+ * The entries a directory must hold at least one of to be a corpus. Without
+ * this a mistyped path resolves to an empty corpus, and every declared file
+ * then fails one at a time instead of the source failing once.
+ */
+const CORPUS_LAYOUT_ENTRIES: readonly string[] = [
+	"CLAUDE.md",
+	"skills",
+	"output-styles",
+	"agents",
+];
+
+async function exists(path: string): Promise<boolean> {
+	return (await stat(path).catch(() => undefined)) !== undefined;
+}
+
+async function holdsCorpusLayout(root: string): Promise<boolean> {
+	for (const entry of CORPUS_LAYOUT_ENTRIES) {
+		if (await exists(join(root, entry))) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+async function directorySource(source: string): Promise<DirectoryCorpusSource> {
+	const root = resolve(source);
+	if (!(await exists(root))) {
+		throw new CorpusSourceError(
+			`Corpus source ${root} is neither an existing directory nor a chezmoi:<ref> source`,
+		);
+	}
+	if (!(await holdsCorpusLayout(root))) {
+		throw new CorpusSourceError(
+			`Corpus source ${root} holds no corpus layout entry: expected one of ${CORPUS_LAYOUT_ENTRIES.join(", ")}`,
+		);
+	}
+
+	return { kind: "directory", root };
+}
+
+function scratchDirectory(prefix: string): Promise<string> {
+	return mkdtemp(join(tmpdir(), prefix));
+}
+
+/**
+ * `--verbose` stalls chezmoi 2.72.0 through a pipe and the gpg-encrypted file
+ * blocks on a passphrase without `--exclude encrypted`, so neither the flag nor
+ * the exclusions are a preference: without them the render hangs an autonomous
+ * run.
+ */
+async function renderChezmoi(
+	ref: string,
+	dependencies: CorpusSourceDependencies,
+): Promise<ChezmoiCorpusSource> {
+	const { runCommand: run, dotfilesDirectory } = dependencies;
+	const revParse = await run(
+		["git", "-C", dotfilesDirectory, "rev-parse", ref],
+		tmpdir(),
+	);
+	const commit = revParse.trim();
+	const sourceDirectory = await scratchDirectory("rehearsal-chezmoi-source-");
+	const root = await scratchDirectory("rehearsal-chezmoi-render-");
+
+	await run(
+		[
+			"sh",
+			"-c",
+			`git -C ${dotfilesDirectory} archive ${ref} | tar -x -C ${sourceDirectory}`,
+		],
+		tmpdir(),
+	);
+	await run(
+		[
+			"chezmoi",
+			"apply",
+			"--source",
+			sourceDirectory,
+			"--destination",
+			root,
+			"--exclude",
+			"encrypted,scripts",
+		],
+		tmpdir(),
+	);
+
+	return { kind: "chezmoi", ref, commit, root, sourceDirectory };
+}
+
+/**
+ * One corpus file or skill directory a source holds, named by where it lands in
+ * corpus layout and where its bytes are read from. The snapshot copies these,
+ * so nothing after it reads the source tree again.
+ */
+export interface CorpusLayoutEntry {
+	readonly layoutPath: string;
+	readonly sourcePath: string;
+}
+
+async function entriesUnder(
+	directory: string,
+	layoutPrefix: string,
+): Promise<CorpusLayoutEntry[]> {
+	const names = await readdir(directory).catch(() => []);
+
+	return names
+		.toSorted((left, right) => left.localeCompare(right))
+		.map((name) => ({
+			layoutPath: `${layoutPrefix}/${name}`,
+			sourcePath: join(directory, name),
+		}));
+}
+
+/**
+ * A chezmoi render is the whole home layout, and its `.claude/skills`,
+ * `.claude/agents`, and `.claude/CLAUDE.md` are symlinks into the live
+ * `~/.agents`: following one would hash and install the live corpus while
+ * claiming to have rendered a ref, so the real files under `.agents` are read
+ * instead. The render carries no project CLAUDE.md.
+ */
+const CHEZMOI_LAYOUT: readonly (readonly [string, string])[] = [
+	[".agents/skills", "skills"],
+	[".agents/agents", "agents"],
+	[".claude/output-styles", "output-styles"],
+];
+
+const INSTALLED_LAYOUT: readonly (readonly [string, string])[] = [
+	["skills", "skills"],
+	["agents", "agents"],
+	["output-styles", "output-styles"],
+];
+
+/**
+ * Every corpus file a source holds, in corpus layout. This is where a source's
+ * shape stops mattering: the snapshot copies these entries and nothing after it
+ * knows whether they were rendered or read from an install.
+ */
+export async function corpusLayoutEntries(
+	source: ResolvedCorpusSource,
+): Promise<readonly CorpusLayoutEntry[]> {
+	const layout = source.kind === "chezmoi" ? CHEZMOI_LAYOUT : INSTALLED_LAYOUT;
+	const entries: CorpusLayoutEntry[] = [];
+
+	for (const [sourceRelative, layoutPrefix] of layout) {
+		entries.push(
+			...(await entriesUnder(join(source.root, sourceRelative), layoutPrefix)),
+		);
+	}
+
+	const instructions = join(source.root, "CLAUDE.md");
+	if (source.kind !== "chezmoi" && (await exists(instructions))) {
+		entries.unshift({ layoutPath: "CLAUDE.md", sourcePath: instructions });
+	}
+
+	return entries;
+}
+
+/**
+ * The source string is parsed once here, at the boundary, so a caller that
+ * holds a resolved source cannot be holding a directory that does not exist or
+ * a chezmoi ref that was never named.
+ */
 export function resolveCorpusSource(
 	source: string | undefined,
+	dependencies: CorpusSourceDependencies = defaultCorpusSourceDependencies(),
 ): Promise<ResolvedCorpusSource> {
 	if (source === undefined) {
 		return Promise.resolve({ kind: "live", root: liveCorpusRoot() });
 	}
+	if (source.startsWith(CHEZMOI_SCHEME)) {
+		const ref = source.slice(CHEZMOI_SCHEME.length);
+		if (ref === "") {
+			return Promise.reject(
+				new CorpusSourceError(
+					`Corpus source ${source} names no chezmoi ref: use chezmoi:<ref>`,
+				),
+			);
+		}
 
-	return Promise.resolve({ kind: "directory", root: source });
+		return renderChezmoi(ref, dependencies);
+	}
+
+	return directorySource(source);
 }
