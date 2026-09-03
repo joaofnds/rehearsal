@@ -128,6 +128,25 @@ async function checkpointChain(
 }
 
 /**
+ * A corpus needs a CLAUDE.md only to answer for a checkpoint, and
+ * `resolveCorpusSource` accepts a directory holding any one corpus kind, so a
+ * corpus of styles alone is valid. Reading it lazily lets the case half answer
+ * for such a corpus, and the failure arrives in the caller's terms rather than
+ * as a raw ENOENT.
+ */
+async function projectInstructions(source: CorpusRoot): Promise<string> {
+	const path = resolveCorpusFile(source, "CLAUDE.md");
+	const file = Bun.file(path);
+	if (!(await file.exists())) {
+		throw new CorpusFileError(
+			`Corpus file CLAUDE.md does not exist at ${path}`,
+		);
+	}
+
+	return file.text();
+}
+
+/**
  * Every checkpoint of every recorded run whose recorded inputs no longer match
  * the corpus under test. A run whose manifest cannot be read contributes
  * nothing rather than failing the report: it was never replayable, so nothing
@@ -138,9 +157,6 @@ export async function staleCheckpoints(
 	source: CorpusRoot,
 	knobs: CurrentSessionKnobs = {},
 ): Promise<readonly StaleRecord[]> {
-	const instructions = await Bun.file(
-		resolveCorpusFile(source, "CLAUDE.md"),
-	).text();
 	const stale: StaleRecord[] = [];
 
 	for (const run of await recordedRunNames(runsDirectory)) {
@@ -151,6 +167,7 @@ export async function staleCheckpoints(
 		}
 
 		const manifest = await loadRunManifest(paths.manifestFile);
+		const instructions = await projectInstructions(source);
 		const chain = await checkpointChain(
 			runsDirectory,
 			run,

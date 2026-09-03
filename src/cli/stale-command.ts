@@ -1,4 +1,5 @@
 import type { StaleCliConfig } from "#benchmark/config";
+import { CorpusFileError } from "#benchmark/corpus-file";
 import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
@@ -26,19 +27,22 @@ export interface StaleDependencies {
 }
 
 /**
- * A corpus source that does not resolve is a precondition the command refuses,
- * not a malformed command line: `--corpus /absent` is well formed and names a
+ * A corpus that does not resolve, or that lacks a file a recorded checkpoint
+ * has to be compared against, is a precondition the command refuses rather
+ * than a malformed command line: `--corpus /absent` is well formed and names a
  * directory that is not there, which is the same shape as a case id naming no
  * case.
  */
-async function resolved(
-	corpus: string | undefined,
-	dependencies: CorpusSourceDependencies,
-): Promise<Awaited<ReturnType<typeof resolveCorpusSource>>> {
+async function refusingCorpusFailures<Answer>(
+	work: () => Promise<Answer>,
+): Promise<Answer> {
 	try {
-		return await resolveCorpusSource(corpus, dependencies);
+		return await work();
 	} catch (error) {
-		if (error instanceof CorpusSourceError) {
+		if (
+			error instanceof CorpusSourceError ||
+			error instanceof CorpusFileError
+		) {
 			throw new RefusedPreconditionError(error.message);
 		}
 
@@ -60,13 +64,17 @@ export async function runStale(
 	request: StaleRequest,
 	dependencies: StaleDependencies,
 ): Promise<void> {
-	const source = await resolved(
-		request.corpus,
-		dependencies.corpusSource ?? defaultCorpusSourceDependencies(),
+	const source = await refusingCorpusFailures(() =>
+		resolveCorpusSource(
+			request.corpus,
+			dependencies.corpusSource ?? defaultCorpusSourceDependencies(),
+		),
 	);
 	const cases = await staleCases(request.runsDirectory, source);
 	const stale = [
-		...(await staleCheckpoints(request.runsDirectory, source, request)),
+		...(await refusingCorpusFailures(() =>
+			staleCheckpoints(request.runsDirectory, source, request),
+		)),
 		...cases.records,
 	];
 

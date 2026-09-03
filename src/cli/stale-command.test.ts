@@ -233,6 +233,63 @@ describe(runStale.name, () => {
 		});
 	});
 
+	describe("when the corpus holds no CLAUDE.md", () => {
+		it("answers for the session cases when no run recorded a checkpoint", async () => {
+			const root = await temporaryDirectory("rehearsal-stale-cases-only-");
+			const fixture = new RecordedRunsFixture(root);
+			await fixture.writeAttemptReading(
+				await corpusDirectory("build skill\n"),
+				"smoke",
+				["output-styles/brief.md"],
+			);
+			const styles = await temporaryDirectory("rehearsal-stale-styles-");
+			await Bun.write(
+				join(styles, "output-styles", "brief.md"),
+				"brief style, edited\n",
+			);
+			const recorder = recordOutput();
+
+			await runStale(
+				{ corpus: styles, runsDirectory: root },
+				{
+					output: recorder.output,
+					corpusSource: refusingRunner().dependencies,
+				},
+			);
+
+			expect(recorder.stdout.join("").trimEnd().split("\n")).toEqual([
+				"case:smoke\toutput-styles/brief.md changed",
+			]);
+		});
+
+		describe("and a run recorded a checkpoint", () => {
+			it("refuses the precondition naming the file the corpus lacks", async () => {
+				const corpus = await corpusDirectory("build skill\n");
+				const fixture = await fixtureRecordedAgainst(corpus);
+				const styles = await temporaryDirectory("rehearsal-stale-styles-only-");
+				await Bun.write(
+					join(styles, "output-styles", "brief.md"),
+					"brief style\n",
+				);
+				const recorder = recordOutput();
+
+				const failure = await failureOf(
+					runStale(
+						{ corpus: styles, runsDirectory: fixture.runsDirectory },
+						{
+							output: recorder.output,
+							corpusSource: refusingRunner().dependencies,
+						},
+					),
+				);
+
+				expect(failure).toBeInstanceOf(RefusedPreconditionError);
+				expect(failure.message).toContain("CLAUDE.md");
+				expect(recorder.stdout).toEqual([]);
+			});
+		});
+	});
+
 	describe("when --corpus names a directory that does not exist", () => {
 		it("refuses the precondition and prints nothing on stdout", async () => {
 			const fixture = await fixtureRecordedAgainst(

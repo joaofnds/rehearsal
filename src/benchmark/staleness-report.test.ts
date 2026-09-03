@@ -79,6 +79,21 @@ describe(staleCheckpoints.name, () => {
 		expect(stale).toEqual([]);
 	});
 
+	describe("when the corpus holds no CLAUDE.md", () => {
+		it("answers for the runs it can read without reading instructions", async () => {
+			const root = await temporaryDirectory("rehearsal-stale-styles-");
+			await Bun.write(join(root, "output-styles", "brief.md"), "brief style\n");
+			const runsDirectory = await temporaryDirectory("rehearsal-stale-empty-");
+
+			const stale = await staleCheckpoints(runsDirectory, {
+				kind: "directory",
+				root,
+			});
+
+			expect(stale).toEqual([]);
+		});
+	});
+
 	describe("when the session about to replay names another model", () => {
 		it("names every checkpoint the recorded model no longer matches", async () => {
 			const fixture = await writtenFixture();
