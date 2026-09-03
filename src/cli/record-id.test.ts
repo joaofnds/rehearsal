@@ -58,6 +58,27 @@ describe(parseRecordId.name, () => {
 		});
 	});
 
+	describe("when a segment would name a path outside the runs directory", () => {
+		it.each([
+			"run:../../../etc/passwd",
+			"group:../../../../etc/passwd",
+			"case:../audit-log",
+			"comparison:..",
+			"checkpoint:../run/build",
+			"checkpoint:run/../build",
+			"attempt:session:../smoke/uuid",
+			"attempt:stage:lineage/..",
+		])("refuses %s as a usage error", (text) => {
+			expect(() => parseRecordId(text)).toThrow(UsageError);
+		});
+
+		it("names the segment it refused", () => {
+			expect(() => parseRecordId("run:../../etc/passwd")).toThrow(
+				/names a path outside/u,
+			);
+		});
+	});
+
 	describe("when a known prefix carries the wrong body", () => {
 		it("names the form that prefix takes", () => {
 			expect(() => parseRecordId("checkpoint:only-one-part")).toThrow(

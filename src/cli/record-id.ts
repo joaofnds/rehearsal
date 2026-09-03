@@ -68,12 +68,29 @@ export function recordIdForms(): readonly string[] {
 	return ID_FORMS;
 }
 
+/**
+ * A segment is interpolated into a path under the runs directory, so a value
+ * satisfying the id's shape can still name a destination outside it: `run:..`
+ * reads a sibling of `.benchmark-runs`, and `group:../../../../etc/passwd`
+ * leaves the repository entirely. Shape is not destination, and refusing the
+ * segment here means no caller can hold an id that escapes.
+ */
+function confined(prefix: string, text: string): string {
+	if (text === "." || text === ".." || text.includes("/")) {
+		throw new UsageError(
+			`Record id ${prefix}:${text} names a path outside the runs directory`,
+		);
+	}
+
+	return text;
+}
+
 function segment(prefix: string, form: string, text: string): string {
 	if (text === "") {
 		throw new UsageError(`Record id ${prefix}: takes the form ${form}`);
 	}
 
-	return text;
+	return confined(prefix, text);
 }
 
 function twoSegments(
@@ -93,7 +110,7 @@ function twoSegments(
 		throw new UsageError(`Record id ${prefix}:${text} takes the form ${form}`);
 	}
 
-	return [first, second];
+	return [confined(prefix, first), confined(prefix, second)];
 }
 
 function parseAttemptId(body: string): RecordId {
