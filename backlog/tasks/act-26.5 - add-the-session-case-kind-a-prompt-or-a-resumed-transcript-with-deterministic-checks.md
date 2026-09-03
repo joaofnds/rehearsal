@@ -3,11 +3,11 @@ id: ACT-26.5
 title: >-
   add the session case kind: a prompt or a resumed transcript with deterministic
   checks
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-02 23:24'
+updated_date: '2026-09-03 00:04'
 labels: []
 dependencies:
   - ACT-26.4
@@ -741,3 +741,61 @@ Nothing from this pass. The session-naming change is the one that wants a paid
 observation before the card leaves Review; every other fix is proven by a test
 that fails against the behavior it replaced.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 00:04
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 691 pass, 0 fail across 53 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, both reproduced by the orchestrator, both fixed and re-observed.
+
+1. Cleanup deleted a file the attempt did not create, and recorded its bytes as the attempt's evidence. session-attempt.ts took the first entry of a sorted listing diff as the provider's transcript, then copied it into the record and deleted it. Any unrelated session file appearing in the slug directory mid-run and sorting first was destroyed and misrecorded. This is João's real transcript data, and the doc comment above the function named this exact hazard. The guarding test passed only by accident: the fixture was named joao-was-here.jsonl against a provider file starting with 9, and renaming it to 0oao-was-here.jsonl made the test fail, so its outcome depended on filename ordering rather than on the subject. Fixed in 8679d32: the attempt now names its own session and owns exactly one file, so cleanup deletes only what it can account for. An entry it cannot attribute is left alone, and the surviving slug directory is the signal, since the rmdir only succeeds when empty. New tests bracket the provider's file with entries sorting both before and after it, and restoring the sort-order pick fails both. Verified by the orchestrator with a real paid run: nothing was left in the projects directory.
+
+2. A thrown runClaude leaked the provider's transcript into ~/.claude/projects permanently. The after-listing was taken inside the try and after the provider call, so an ordinary failure (non-zero exit, timeout kill, budget exhaustion) skipped it entirely and the finally removed only the fork. The comment above the cleanup function asserted the opposite, claiming the list was built as files appeared so a failure after the provider wrote still removed it. The existing test returned a bad envelope string rather than throwing, so it never covered this. Fixed in the same commit and pinned by a test with a runner that writes a transcript then throws; moving cleanup off the failure path fails it.
+
+SHOULD-FIX, all fixed.
+
+3. resolveCorpusFile followed .. out of ~/.claude. Reproduced by the orchestrator: "skills/../../../../etc/passwd" resolved to /etc/passwd and "agents/../../.ssh/id_rsa" to the private key path. A declaration naming such a path would hash those bytes into lineage and print the resolved path in the attempt record, an existence oracle plus a digest of an arbitrary file in a durable artifact. caseRelative already confined paths correctly; this was the one path in the change that did not. Fixed in 2e1153c and verified: both now refuse, naming the path.
+
+4. An empty reply passed the checks and recorded SUCCESSFUL. The envelope's result is optional and readClaudeEnvelope throws only when is_error is true, so a max-turns or budget-exhausted termination yielded a reply of empty string, which word-band max 1 passes as "0 words within at most 1". The harness reported a successful measurement of a session that produced no reply. Fixed in 276dc37 at the boundary: a missing result is its own outcome, distinguishable from a failed check.
+
+5. parseTranscript held a multi-megabyte transcript as one string while session-capture, in the same change, streamed for the documented reason that transcripts run to several megabytes. ACT-25's resumed cases are the stated next user. Fixed in 68cd91f.
+
+6. The streaming test could not catch a non-streaming implementation: the observed width started at 0 and only rose inside the observer, so a subject reading the file as one string left it at 0 and the assertion passed. Measured against a non-streaming subject: widest 0 against sourceBytes 1649490, passing. Fixed in 383c6cf with an absolute bound and an observation count.
+
+7. The lineage test asserted something unfalsifiable, writing a neighbour file into the shared temp root outside the fixture, where hashDirectory structurally cannot see it, and leaking that file on every suite run. It also did not test what acceptance criterion 21 names, which is a change beside a corpus file. Fixed in cf41d51.
+
+8. The case-command tests created a live case directory inside the repository's cases/, which listCases walks, so a failure between creation and cleanup would leave it visible to every later case list. The zz- prefix was what kept assertions from noticing. Fixed in 6dfbcb1 with an injected case root.
+
+11. The recorded check kind was an open string, so a result with a misspelled kind parsed, while the four kinds are a closed set everywhere else. Closed in 4f601d7.
+15. A fixture tree was copied preserving symlinks, so a fixture holding a symlink to an absolute path would give a session with tools a live path out of the attempt directory. Latent, since no committed case declares a fixture. Fixed in 26321b6 and observed through the executable: a probe case exited 3 naming the symlink, with no provider call.
+10. The unhandled helper had been inserted between the Immutable doc comment and Immutable itself. Fixed in 9368c6c.
+
+NOTES, recorded without code change.
+
+12. SessionRunConfig carries judgeModel and judgeEffort, which a session case has no judge for, inconsistent with the card's own decision 2 reasoning. No behavioral defect.
+13. run --help still describes only the pipeline case and lists --target and --pipeline without saying a session case refuses them. The refusal itself works, exit 2.
+14. rehearsal.ts reads case capture's two flags with a hand-written scan rather than through parseCommandLine, a second home for flag spellings the glossary says has one. Safe today because undeclared flags are rejected first.
+16. The reviewer called two session run-command tests near-duplicates. The worker disagreed with evidence: the second reads the record back off disk and parses it, which is the only coverage of the write path. Recorded as not a defect.
+17. The confirmation record change is correct for every record on disk, and the rewritten success rule is logically identical for stage and pipeline. Caveat recorded: a record written now with mode session at schemaVersion 1 would fail a reader built before this change, so readable in both directions holds for records on disk but not for older readers. Costs nothing today with one local executable.
+
+A trap in the card was wrong and the worker corrected it: a resumed headless session on claude 2.1.258 keeps the id it resumed and appends to that file rather than being assigned a new one. The design was adapted rather than retuned, and GLOSSARY.md records the observed behavior.
+
+Pre-existing defect found and fixed during Build (e462089): the claude envelope schema was loose but its nested usage object was strict, so the seven fields claude 2.1.258 reports made every run throw after paying for the session. No test pinned it. This affected the stage path too.
+
+Paid spend on this card: 0.086929 USD by the worker across six haiku calls, plus two verification runs by the orchestrator at 0.016883 USD each. Run total after this card: about 0.12 USD against the 50 USD ceiling.
+
+Observed live by the orchestrator, twice: rehearsal run --case smoke on haiku exits 0, the reply is OK, both checks PASS, the outcome is SUCCESSFUL, and the record carries the reply, a ten-line transcript copy, metrics, and lineage. The second run confirmed the one risk the worker introduced and could not close: the provider honors --session-id for a fresh session in -p mode, the transcript is read back non-empty, and nothing is left behind in the projects directory.
+
+Still not observed: --settings with outputStyle honored on --resume (no declared case needs a settings overlay; ACT-25's style variants are the trigger), the files-read check against a real transcript, and a session confirmation group, which is not built and refuses with exit 3 rather than pretending.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The session case kind measures one Claude session instead of a pipeline. A session case declares a prompt, an optional fixture tree, an optional transcript prefix to resume, tool and settings overlays, the corpus files it reads, and a list of deterministic checks: word band, forbidden text, tool calls, and files read, each its own module over the reply and the transcript. rehearsal case capture streams a session file's prefix into the case's transcript store and records its digest; the bytes stay git-ignored and only the declaration is committed. An attempt runs in a temporary directory the harness owns, names its own session so cleanup can account for exactly the files it created, and refuses a fixture holding a symlink. cases/smoke is the committed walking skeleton. Observed live twice on haiku: exit 0, reply OK, both checks PASS, a ten-line transcript read back, and nothing left in the projects directory. Review found two blocking defects, both fixed: cleanup deleted an unrelated session file by sort order and recorded it as evidence, and a thrown provider call leaked the transcript permanently while a comment claimed otherwise. Nine should-fix defects fixed, including a corpus path that escaped to /etc/passwd and an empty reply that recorded SUCCESSFUL. A pre-existing envelope schema defect that failed every run after paying for the session was also fixed. Not observed: a settings overlay honored on resume, files-read against a real transcript, and a session confirmation group, which is not built.
+<!-- SECTION:FINAL_SUMMARY:END -->
