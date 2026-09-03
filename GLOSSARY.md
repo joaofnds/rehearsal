@@ -1,5 +1,11 @@
 # Glossary
 
+- **Accepted band** — the word range João's own accepted rewrites occupied on
+  the turns a case replays, measured from his real sessions rather than chosen:
+  51 to 154 across the population, 108 to 145 on these four turns. A case
+  declares its ceiling as a `word-band` check, never its floor, because a reply
+  shorter than the one he accepted is not a failure. The band is a property of
+  what he kept, so it moves only when new accepted replies are measured.
 - **Artifact** — durable output of a stage: a spec or plan document, a backlog
   card update, or commits.
 - **Attempt** — one execution of a case's unit of work: a stage at a checkpoint
@@ -133,6 +139,11 @@
   precondition (a needed approval whose flag is absent while stdin is not a
   TTY, a run that cannot be replayed); `1` an execution failure. A failing grade
   is evidence, not an error.
+- **Fired reply** — the end-of-turn reply João answered with `/brief`. It is the
+  reply the style produced and he rejected, not the one he wanted; the rewrite
+  he accepted comes later in the same session. A cut is the fired reply's own
+  index, so the prefix keeps everything that produced it and drops the reply
+  itself, and the attempt writes its own reply in that place.
 - **Fork** — copying a transcript prefix into the attempt directory's project
   slug under a fresh uuid, with every occurrence of the source session id
   rewritten, so a session can be resumed from it without its original working
