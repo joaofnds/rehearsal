@@ -291,7 +291,7 @@ const stageTranscriptSchema = z.object({
 	),
 });
 
-export const stageJudgeInputSchema = z.object({
+export const stageJudgeInputSchema = z.looseObject({
 	stage: z.string().min(1),
 	kind: z.enum(["planning", "delivery"]),
 	task: z.string(),
@@ -311,39 +311,48 @@ export const stageJudgeInputSchema = z.object({
 });
 
 const judgeAttemptSchema = z.intersection(
-	z.object({
+	z.looseObject({
 		payload: z.unknown(),
 		costUsd: z.number(),
 		metrics: claudeCallMetricsSchema.optional(),
 	}),
 	z.union([
-		z.object({ outcome: z.literal("ACCEPTED") }),
-		z.object({ outcome: z.literal("REJECTED"), error: z.string() }),
+		z.looseObject({ outcome: z.literal("ACCEPTED") }),
+		z.looseObject({ outcome: z.literal("REJECTED"), error: z.string() }),
 	]),
 );
 
 export const judgeAttemptListSchema = z.array(judgeAttemptSchema);
 
-export const stageGradeSchema = stageJudgeOutputSchema.extend({
-	grade: stageLetterGradeSchema,
-	verdict: z.enum(["CONTINUE", "STOP"]),
-});
+export const stageGradeSchema = stageJudgeOutputSchema
+	.extend({
+		grade: stageLetterGradeSchema,
+		verdict: z.enum(["CONTINUE", "STOP"]),
+	})
+	.loose();
 
 /**
  * The scorecard as a schema, so a command that reads one back off disk proves
  * what it holds rather than asserting it. The interface below stays the shape
  * the harness writes; this is the same shape, parsed.
+ *
+ * Loose, like every shape `calibrate` parses, because `calibrate` writes back
+ * what it parsed: a schema that strips deletes the field it does not know
+ * about from every artifact it completes, and the first field a later card
+ * adds here would go silently.
  */
-export const stageScorecardSchema = z.object({
-	stage: z.string().min(1),
-	rubricPath: z.string().min(1),
-	rubric: stageRubricSchema,
-	input: stageJudgeInputSchema,
-	prompt: z.string(),
-	attempts: judgeAttemptListSchema,
-	costUsd: z.number(),
-	grade: stageGradeSchema,
-});
+export const stageScorecardSchema = z
+	.object({
+		stage: z.string().min(1),
+		rubricPath: z.string().min(1),
+		rubric: stageRubricSchema,
+		input: stageJudgeInputSchema,
+		prompt: z.string(),
+		attempts: judgeAttemptListSchema,
+		costUsd: z.number(),
+		grade: stageGradeSchema,
+	})
+	.loose();
 
 export interface StageGrade extends StageJudgeOutput {
 	readonly grade: StageLetterGrade;

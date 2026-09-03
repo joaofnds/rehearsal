@@ -656,6 +656,59 @@ describe(runCalibrate.name, () => {
 		expect(artifact.status).toBe("AWAITING_HUMAN_REVIEW");
 	});
 
+	/**
+	 * `runCalibrate` writes back the value it parsed, so any schema that strips
+	 * deletes the stripped field from every artifact it completes. The top
+	 * level is loose for that reason and the nested shapes must be too: the
+	 * loss is latent until the first field is added to one of them, and then
+	 * it is silent.
+	 */
+	it("keeps a field it does not know about when it completes the artifact", async () => {
+		const fixture = await writeRunFixture();
+		directories.push(fixture.runsDirectory);
+		const original = z
+			.looseObject({ stageScorecards: z.tuple([z.looseObject({})]) })
+			.parse(JSON.parse(await Bun.file(fixture.artifactFile).text()));
+		await Bun.write(
+			fixture.artifactFile,
+			JSON.stringify({
+				...original,
+				laterCardTopLevel: "kept",
+				stageScorecards: [
+					{ ...original.stageScorecards[0], laterCardNested: "kept" },
+				],
+			}),
+		);
+		await writeReview(fixture.reviewFile, []);
+		const { output } = recordOutput();
+
+		await runCalibrate(
+			{
+				id: RUN_NAME,
+				runsDirectory: fixture.runsDirectory,
+				json: false,
+				confirmRejudge: false,
+				readCurrentSources: unchangedControlSources,
+			},
+			() => ({
+				stageJudge: () => Promise.reject(new Error("no provider call")),
+				finalJudge: () => Promise.reject(new Error("no provider call")),
+			}),
+			output,
+		);
+
+		const completed = z
+			.looseObject({
+				stageScorecards: z.array(
+					z.looseObject({ laterCardNested: z.string() }),
+				),
+				laterCardTopLevel: z.string(),
+			})
+			.parse(JSON.parse(await Bun.file(fixture.artifactFile).text()));
+		expect(completed.laterCardTopLevel).toBe("kept");
+		expect(completed.stageScorecards[0]?.laterCardNested).toBe("kept");
+	});
+
 	it("accepts the run as run:<name> and refuses one naming a path outside", async () => {
 		const fixture = await writeRunFixture();
 		directories.push(fixture.runsDirectory);
