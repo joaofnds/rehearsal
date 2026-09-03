@@ -343,6 +343,20 @@ export class RecordedRunsFixture {
 		await Bun.write(paths.groupFile, serialize(withoutCaseId));
 	}
 
+	/**
+	 * An attempt directory whose record is half-written, which is how a run that
+	 * died mid-write leaves one behind.
+	 */
+	public async writeUnreadableAttempt(
+		caseId: string,
+		uuid: string,
+	): Promise<void> {
+		await Bun.write(
+			sessionAttemptPaths(this.runsDirectory, { caseId, uuid }).recordFile,
+			"{ not json\n",
+		);
+	}
+
 	public async writeUnreadableGroup(groupId: string): Promise<void> {
 		const paths = confirmationGroupPaths(this.runsDirectory, groupId);
 		await mkdir(paths.directory, { recursive: true });

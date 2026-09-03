@@ -8,6 +8,8 @@ import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runStale } from "#cli/stale-command";
 
+const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
+
 interface RecordedRunner {
 	readonly dependencies: CorpusSourceDependencies;
 	readonly commands: readonly (readonly string[])[];
@@ -160,6 +162,38 @@ describe(runStale.name, () => {
 
 		expect(runner.commands).toEqual([]);
 		expect(await treeOf(fixture.runsDirectory)).toEqual(before);
+	});
+
+	describe("when one attempt record cannot be read", () => {
+		it("still prints the stale checkpoints and names it on stderr", async () => {
+			const fixture = await fixtureRecordedAgainst(
+				await corpusDirectory("build skill\n"),
+			);
+			await fixture.writeUnreadableAttempt("smoke", HALF_WRITTEN_UUID);
+			const recorder = recordOutput();
+
+			await runStale(
+				{
+					corpus: await corpusDirectory("build skill, edited\n"),
+					runsDirectory: fixture.runsDirectory,
+				},
+				{
+					output: recorder.output,
+					corpusSource: refusingRunner().dependencies,
+				},
+			);
+
+			expect(
+				recorder.stdout
+					.join("")
+					.trimEnd()
+					.split("\n")
+					.map((printed) => printed.split("\t")[0]),
+			).toEqual([`checkpoint:${fixture.replayableRun}/build`]);
+			expect(recorder.stderr.join("")).toContain(
+				`attempt:session:smoke/${HALF_WRITTEN_UUID}`,
+			);
+		});
 	});
 
 	describe("when --corpus names a directory that does not exist", () => {

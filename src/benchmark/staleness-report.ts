@@ -37,6 +37,22 @@ export interface StaleRecord {
 }
 
 /**
+ * A record the report could not read, named by the id `show` accepts back and
+ * by the reason. One half-written attempt must not hide every other answer, so
+ * it is collected here rather than thrown: the `case list` precedent, which
+ * `list` already follows for every kind it reads.
+ */
+export interface UnreadableStaleRecord {
+	readonly id: string;
+	readonly reason: string;
+}
+
+export interface StalenessReport {
+	readonly records: readonly StaleRecord[];
+	readonly unreadable: readonly UnreadableStaleRecord[];
+}
+
+/**
  * Staleness needs the corpus hashed, never installed, so `stale` needs no
  * worktree, no git, and no session: `captureStageCorpus` reads the roots it is
  * given and nothing else. The skills of a resolved corpus source live under
@@ -154,33 +170,58 @@ const CASE_STALENESS_WORDING = {
 	missingFromLeft: (path: string) => `${path} added`,
 };
 
+interface LatestAttempt {
+	readonly recorded: readonly HashedFile[] | undefined;
+	readonly unreadable: readonly UnreadableStaleRecord[];
+}
+
+/**
+ * The most recent attempt whose record parses, with every record that did not
+ * named beside it. A record read fails on the whole file, so an unreadable one
+ * cannot be the answer for its case; taking the newest readable record keeps
+ * the case's answer available while the reader still hears about the file that
+ * was lost.
+ */
 async function latestAttemptRecord(
 	runsDirectory: string,
 	caseId: string,
-): Promise<readonly HashedFile[] | undefined> {
-	const attempts = await sessionAttemptIds(runsDirectory);
-	let latest: { readonly at: number; readonly file: string } | undefined;
-
-	for (const attempt of attempts.filter(
+): Promise<LatestAttempt> {
+	const everyAttempt = await sessionAttemptIds(runsDirectory);
+	const attempts = everyAttempt.filter(
 		(candidate) => candidate.caseId === caseId,
-	)) {
+	);
+	const unreadable: UnreadableStaleRecord[] = [];
+	let latest:
+		| { readonly at: number; readonly record: readonly HashedFile[] }
+		| undefined;
+
+	for (const attempt of attempts) {
 		const { recordFile: file } = sessionAttemptPaths(runsDirectory, attempt);
 		const stats = await stat(file).catch(() => undefined);
-		if (
-			stats !== undefined &&
-			(latest === undefined || stats.mtimeMs > latest.at)
-		) {
-			latest = { at: stats.mtimeMs, file };
+		if (stats === undefined) {
+			continue;
+		}
+
+		try {
+			const record = parseSessionAttemptRecord(await Bun.file(file).text());
+			if (latest === undefined || stats.mtimeMs > latest.at) {
+				latest = {
+					at: stats.mtimeMs,
+					record: record.corpusFiles.map(({ path, sha256 }) => ({
+						path,
+						sha256,
+					})),
+				};
+			}
+		} catch (error) {
+			unreadable.push({
+				id: `attempt:session:${caseId}/${attempt.uuid}`,
+				reason: error instanceof Error ? error.message : String(error),
+			});
 		}
 	}
 
-	if (latest === undefined) {
-		return undefined;
-	}
-
-	const record = parseSessionAttemptRecord(await Bun.file(latest.file).text());
-
-	return record.corpusFiles.map(({ path, sha256 }) => ({ path, sha256 }));
+	return { recorded: latest?.record, unreadable };
 }
 
 function sessionCases(
@@ -229,21 +270,23 @@ async function caseStaleness(
 export async function staleCases(
 	runsDirectory: string,
 	source: CorpusRoot,
-): Promise<readonly StaleRecord[]> {
+): Promise<StalenessReport> {
 	const listing = await listCases();
-	const stale: StaleRecord[] = [];
+	const records: StaleRecord[] = [];
+	const unreadable: UnreadableStaleRecord[] = [];
 
 	for (const declaration of sessionCases(listing.declarations)) {
-		const recorded = await latestAttemptRecord(runsDirectory, declaration.id);
-		if (recorded === undefined) {
+		const latest = await latestAttemptRecord(runsDirectory, declaration.id);
+		unreadable.push(...latest.unreadable);
+		if (latest.recorded === undefined) {
 			continue;
 		}
 
-		const causes = await caseStaleness(declaration, recorded, source);
+		const causes = await caseStaleness(declaration, latest.recorded, source);
 		if (causes.length > 0) {
-			stale.push({ id: `case:${declaration.id}`, causes });
+			records.push({ id: `case:${declaration.id}`, causes });
 		}
 	}
 
-	return stale;
+	return { records, unreadable };
 }

@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { RecordedRunsFixture } from "./run-records-test-support";
 import { staleCases, staleCheckpoints } from "./staleness-report";
 
+const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
+
 describe(staleCheckpoints.name, () => {
 	const roots: string[] = [];
 
@@ -112,25 +114,46 @@ describe(staleCases.name, () => {
 			await styleCorpus("the brief style\n"),
 		);
 
-		const stale = await staleCases(runsDirectory, {
+		const report = await staleCases(runsDirectory, {
 			kind: "directory",
 			root: await styleCorpus("the brief style, edited\n"),
 		});
 
-		expect(stale.map(({ id }) => id)).toEqual(["case:smoke"]);
-		expect(stale.at(0)?.causes).toEqual(["output-styles/brief.md changed"]);
+		expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
+		expect(report.records.at(0)?.causes).toEqual([
+			"output-styles/brief.md changed",
+		]);
 	});
 
 	it("names no case when the corpus still holds the recorded bytes", async () => {
 		const corpus = await styleCorpus("the brief style\n");
 		const runsDirectory = await runsWithSmokeAttempt(corpus);
 
-		const stale = await staleCases(runsDirectory, {
+		const report = await staleCases(runsDirectory, {
 			kind: "directory",
 			root: corpus,
 		});
 
-		expect(stale).toEqual([]);
+		expect(report.records).toEqual([]);
+	});
+
+	describe("when one attempt record cannot be read", () => {
+		it("names it as unreadable and still answers for the case", async () => {
+			const corpus = await styleCorpus("the brief style\n");
+			const runsDirectory = await runsWithSmokeAttempt(corpus);
+			const fixture = new RecordedRunsFixture(runsDirectory);
+			await fixture.writeUnreadableAttempt("smoke", HALF_WRITTEN_UUID);
+
+			const report = await staleCases(runsDirectory, {
+				kind: "directory",
+				root: await styleCorpus("the brief style, edited\n"),
+			});
+
+			expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
+			expect(report.unreadable.map(({ id }) => id)).toEqual([
+				`attempt:session:smoke/${HALF_WRITTEN_UUID}`,
+			]);
+		});
 	});
 
 	describe("when a case has no recorded attempt", () => {
@@ -138,12 +161,12 @@ describe(staleCases.name, () => {
 			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-none-"));
 			roots.push(root);
 
-			const stale = await staleCases(root, {
+			const report = await staleCases(root, {
 				kind: "directory",
 				root: await styleCorpus("the brief style\n"),
 			});
 
-			expect(stale).toEqual([]);
+			expect(report.records).toEqual([]);
 		});
 	});
 });

@@ -58,11 +58,15 @@ export async function runStale(
 		request.corpus,
 		dependencies.corpusSource ?? defaultCorpusSourceDependencies(),
 	);
+	const cases = await staleCases(request.runsDirectory, source);
 	const stale = [
 		...(await staleCheckpoints(request.runsDirectory, source)),
-		...(await staleCases(request.runsDirectory, source)),
+		...cases.records,
 	];
 
+	for (const { id, reason } of cases.unreadable) {
+		dependencies.output.stderr(`${id}: ${reason}\n`);
+	}
 	for (const record of stale) {
 		dependencies.output.stdout(line(record));
 	}
