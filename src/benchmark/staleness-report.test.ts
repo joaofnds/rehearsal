@@ -98,7 +98,7 @@ describe(staleCheckpoints.name, () => {
 		 * control repository's own CLAUDE.md rather than from a file under the
 		 * corpus root, because that is where the live install's project
 		 * instructions are. The skills the live branch searches are pinned by
-		 * `corpusSkillRoots`, which cannot be asserted here without depending on
+		 * `stageCorpusRoots`, which cannot be asserted here without depending on
 		 * which skills this machine happens to have installed.
 		 */
 		it("reads the instructions from the control repository, not the corpus root", async () => {

@@ -192,6 +192,34 @@ describe(captureStageCorpus.name, () => {
 		).toBe("discuss skill");
 	});
 
+	it("removes a prior stage's agents and output styles the next stage's snapshot does not carry", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+		await installSkill(roots[1], "build", "build skill");
+		await installAgent(roots[1], "reviewer", "reviewer agent");
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		testResources.track(parent);
+		const worktree = join(parent, "worktree");
+		await mkdir(worktree, { recursive: true });
+
+		const firstSnapshot = join(parent, "first-snapshot");
+		await snapshotStageCorpus("discuss", "instructions", roots, firstSnapshot);
+		await installStageCorpusSnapshot(firstSnapshot, worktree);
+		expect(
+			await stat(join(worktree, ".claude", "agents", "reviewer.md")),
+		).toBeDefined();
+
+		await rm(join(roots[1], "agents"), { recursive: true });
+		const secondSnapshot = join(parent, "second-snapshot");
+		await snapshotStageCorpus("build", "instructions", roots, secondSnapshot);
+		await installStageCorpusSnapshot(secondSnapshot, worktree);
+
+		expect(
+			stat(join(worktree, ".claude", "agents", "reviewer.md")),
+		).rejects.toThrow();
+	});
+
 	it("prefers the first root that has the skill", async () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "doctrine", "doctrine skill");

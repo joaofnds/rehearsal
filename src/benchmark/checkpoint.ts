@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readdir, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -252,22 +252,39 @@ export async function snapshotStageCorpus(
 	return captureStageCorpus(skill, instructions, [destination]);
 }
 
+/**
+ * A worktree is reused across every stage of a rep, so a kind a prior stage's
+ * snapshot carried but this one doesn't must be cleared, not left behind: a
+ * plain `cp` only overwrites same-named files and would leave the prior
+ * stage's agents or output styles readable by a session whose recorded corpus
+ * says it never had them.
+ */
+async function replaceLayoutDirectory(
+	source: string,
+	target: string,
+): Promise<void> {
+	await rm(target, { recursive: true, force: true });
+	await cp(source, target, { recursive: true });
+}
+
 export async function installStageCorpusSnapshot(
 	snapshotDirectory: string,
 	targetDirectory: string,
 ): Promise<void> {
 	const targetLayout = join(targetDirectory, ".claude");
 	await mkdir(targetLayout, { recursive: true });
-	await cp(join(snapshotDirectory, "skills"), join(targetLayout, "skills"), {
-		recursive: true,
-	});
+	await replaceLayoutDirectory(
+		join(snapshotDirectory, "skills"),
+		join(targetLayout, "skills"),
+	);
 
 	for (const kind of LAYOUT_DIRECTORY_KINDS) {
 		const source = join(snapshotDirectory, kind);
+		const target = join(targetLayout, kind);
 		const sourceStats = await statIfExists(source);
-		if (sourceStats?.isDirectory() === true) {
-			await cp(source, join(targetLayout, kind), { recursive: true });
-		}
+		await (sourceStats?.isDirectory() === true
+			? replaceLayoutDirectory(source, target)
+			: rm(target, { recursive: true, force: true }));
 	}
 }
 
