@@ -298,6 +298,10 @@ async function caseStaleness(
  * the corpus no longer matches. A case with no attempt is not stale: staleness
  * claims a prior measurement no longer describes the corpus, and with no
  * measurement there is nothing to invalidate.
+ *
+ * A declaration that does not read is reported rather than dropped: silence
+ * there is indistinguishable from fresh, and a mistyped `corpusFiles` entry
+ * would then read as an answer.
  */
 export async function staleCases(
 	runsDirectory: string,
@@ -305,7 +309,9 @@ export async function staleCases(
 ): Promise<StalenessReport> {
 	const listing = await listCases();
 	const records: StaleRecord[] = [];
-	const unreadable: UnreadableStaleRecord[] = [];
+	const unreadable: UnreadableStaleRecord[] = listing.unreadable.map(
+		({ id, reason }) => ({ id: `case:${id}`, reason }),
+	);
 
 	for (const declaration of sessionCases(listing.declarations)) {
 		const latest = await latestAttemptRecord(runsDirectory, declaration.id);

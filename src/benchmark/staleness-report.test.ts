@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CASES_DIRECTORY } from "./case";
+import { CONTROL_DIR } from "./config";
 import { RecordedRunsFixture } from "./run-records-test-support";
+import { TestResources } from "./test-support";
 import { staleCases, staleCheckpoints } from "./staleness-report";
 
 const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
@@ -203,6 +206,27 @@ describe(staleCases.name, () => {
 			expect(report.records.map(({ id }) => id)).toEqual(["case:smoke"]);
 			expect(report.unreadable.map(({ id }) => id)).toEqual([
 				`attempt:session:smoke/${HALF_WRITTEN_UUID}`,
+			]);
+		});
+	});
+
+	describe("when a case declaration cannot be read", () => {
+		const resources = TestResources.forEachTest();
+
+		it("names it as unreadable rather than reading as fresh", async () => {
+			const stray = join(CONTROL_DIR, CASES_DIRECTORY, "zz-stale-probe");
+			resources.track(stray);
+			await mkdir(stray, { recursive: true });
+			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-unread-"));
+			roots.push(root);
+
+			const report = await staleCases(root, {
+				kind: "directory",
+				root: await styleCorpus("the brief style\n"),
+			});
+
+			expect(report.unreadable.map(({ id }) => id)).toEqual([
+				"case:zz-stale-probe",
 			]);
 		});
 	});
