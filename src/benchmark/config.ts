@@ -366,6 +366,35 @@ export function parseReplayArgs(
 	);
 }
 
+export interface StaleCliConfig extends CorpusSelection {
+	readonly model?: string | undefined;
+	readonly effort?: Effort | undefined;
+}
+
+/**
+ * `stale` reads the model and effort a replay would use, with the same flags
+ * and environment fallbacks `run` and `replay` read them by, because those are
+ * what a recorded checkpoint is compared against. Unlike those two it requires
+ * neither: it pays for nothing, so a knob it was not given asserts nothing
+ * rather than refusing the command.
+ */
+export function parseStaleArgs(
+	args: readonly string[],
+	env: Readonly<Record<string, string | undefined>> = Bun.env,
+): StaleCliConfig {
+	const { values } = flagValues(args);
+	const named = values.get("--model") ?? env["BENCHMARK_MODEL"];
+	const effort = parseEffort(
+		values.get("--effort") ?? env["BENCHMARK_EFFORT"],
+		"workflow",
+	);
+	const corpus = withCorpus({}, values.get("--corpus"));
+	const withModel =
+		named === undefined || named === "" ? corpus : { ...corpus, model: named };
+
+	return effort === undefined ? withModel : { ...withModel, effort };
+}
+
 /**
  * A run artifact records the pipeline path so two runs can be compared, which
  * only works when the same pipeline yields the same string on every machine.

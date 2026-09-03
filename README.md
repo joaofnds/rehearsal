@@ -558,7 +558,7 @@ provider session or a worktree, and none of them writes anything.
 ```sh
 bun run rehearsal list <cases|runs|checkpoints|attempts|groups|comparisons>
 bun run rehearsal show <record-id> [--json]
-bun run rehearsal stale [--corpus <source>]
+bun run rehearsal stale [--corpus <source>] [--model <model>] [--effort <effort>]
 ```
 
 Every id `list` prints is one `show` accepts back as an argument:
@@ -600,6 +600,14 @@ why it accepts `--corpus` where `run` and `replay` refuse one. A session case
 with no recorded attempt is not stale: staleness claims a prior measurement no
 longer describes the corpus, and with no measurement there is nothing to
 invalidate.
+
+A checkpoint also goes stale on the model and the effort, so `stale` reads
+`--model` and `--effort` with the same environment fallbacks `replay` reads
+them by: they name what a replay would use, and every recorded checkpoint is
+compared against them. Naming neither asserts neither, and the answer covers
+the corpus half alone — a checkpoint compared against the manifest that
+produced it can never differ. `BENCHMARK_MODEL=opus rehearsal stale` reports
+what `replay --model opus` would log as stale.
 
 Exit codes follow the table in `rehearsal --help`: `2` for an unknown list kind
 or a malformed id, `3` for a well-formed id naming no record and for a

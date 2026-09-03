@@ -8,6 +8,7 @@ import {
 	parseCaseId,
 	parseReplayArgs,
 	parseSessionArgs,
+	parseStaleArgs,
 } from "./config";
 
 const CASE_DEFAULTS: CaseDefaults = {
@@ -647,5 +648,39 @@ describe("the corpus source flag", () => {
 	it("leaves the corpus absent when --corpus is not given, which is the live install", () => {
 		expect(parseArgs(knobs, {}, CASE_DEFAULTS).corpus).toBeUndefined();
 		expect(parseSessionArgs(knobs, {}, "smoke").corpus).toBeUndefined();
+	});
+});
+
+describe(parseStaleArgs.name, () => {
+	it("reads the model a replay would use from the environment", () => {
+		const config = parseStaleArgs([], { BENCHMARK_MODEL: "opus" });
+
+		expect(config.model).toBe("opus");
+	});
+
+	it("takes --model over the environment", () => {
+		const config = parseStaleArgs(["--model", "haiku"], {
+			BENCHMARK_MODEL: "opus",
+		});
+
+		expect(config.model).toBe("haiku");
+	});
+
+	it("reads the effort a replay would use", () => {
+		const config = parseStaleArgs(["--effort", "high"], {});
+
+		expect(config.effort).toBe("high");
+	});
+
+	it("asserts no model and no effort when neither is named", () => {
+		const config = parseStaleArgs([], {});
+
+		expect(config).toEqual({});
+	});
+
+	it("refuses an effort the workflow does not support", () => {
+		expect(() => parseStaleArgs(["--effort", "turbo"], {})).toThrow(
+			"Unsupported effort for workflow",
+		);
 	});
 });

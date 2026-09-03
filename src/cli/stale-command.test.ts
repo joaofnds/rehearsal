@@ -116,7 +116,10 @@ describe(runStale.name, () => {
 		const recorder = recordOutput();
 
 		await runStale(
-			{ corpus, runsDirectory: fixture.runsDirectory },
+			{
+				corpus,
+				runsDirectory: fixture.runsDirectory,
+			},
 			{ output: recorder.output, corpusSource: refusingRunner().dependencies },
 		);
 
@@ -135,7 +138,10 @@ describe(runStale.name, () => {
 		const recorder = recordOutput();
 
 		await runStale(
-			{ corpus: edited, runsDirectory: fixture.runsDirectory },
+			{
+				corpus: edited,
+				runsDirectory: fixture.runsDirectory,
+			},
 			{ output: recorder.output, corpusSource: refusingRunner().dependencies },
 		);
 
@@ -156,12 +162,43 @@ describe(runStale.name, () => {
 		const before = await treeOf(fixture.runsDirectory);
 
 		await runStale(
-			{ corpus, runsDirectory: fixture.runsDirectory },
+			{
+				corpus,
+				runsDirectory: fixture.runsDirectory,
+			},
 			{ output: recordOutput().output, corpusSource: runner.dependencies },
 		);
 
 		expect(runner.commands).toEqual([]);
 		expect(await treeOf(fixture.runsDirectory)).toEqual(before);
+	});
+
+	describe("when the session names a model the run was not recorded at", () => {
+		it("names every checkpoint stale on the model, corpus unchanged", async () => {
+			const corpus = await corpusDirectory("build skill\n");
+			const fixture = await fixtureRecordedAgainst(corpus);
+			const recorder = recordOutput();
+
+			await runStale(
+				{
+					corpus,
+					model: "opus",
+					effort: undefined,
+					runsDirectory: fixture.runsDirectory,
+				},
+				{
+					output: recorder.output,
+					corpusSource: refusingRunner().dependencies,
+				},
+			);
+
+			const printed = recorder.stdout.join("").trimEnd().split("\n");
+			expect(printed.map((line) => line.split("\t")[0])).toEqual([
+				`checkpoint:${fixture.replayableRun}/discuss`,
+				`checkpoint:${fixture.replayableRun}/build`,
+			]);
+			expect(printed.at(0)).toContain("model sonnet is now opus");
+		});
 	});
 
 	describe("when one attempt record cannot be read", () => {
@@ -207,6 +244,8 @@ describe(runStale.name, () => {
 				runStale(
 					{
 						corpus: join(await temporaryDirectory("rehearsal-absent-"), "gone"),
+						model: undefined,
+						effort: undefined,
 						runsDirectory: fixture.runsDirectory,
 					},
 					{

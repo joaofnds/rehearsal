@@ -78,6 +78,42 @@ describe(staleCheckpoints.name, () => {
 
 		expect(stale).toEqual([]);
 	});
+
+	describe("when the session about to replay names another model", () => {
+		it("names every checkpoint the recorded model no longer matches", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(corpus);
+
+			const stale = await staleCheckpoints(
+				fixture.runsDirectory,
+				{ kind: "directory", root: corpus },
+				{ model: "opus" },
+			);
+
+			expect(stale.map(({ id }) => id)).toEqual([
+				`checkpoint:${fixture.replayableRun}/discuss`,
+				`checkpoint:${fixture.replayableRun}/build`,
+			]);
+			expect(stale.at(0)?.causes).toContain("model sonnet is now opus");
+		});
+	});
+
+	describe("when the session about to replay names another effort", () => {
+		it("names every checkpoint the recorded effort no longer matches", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(corpus);
+
+			const stale = await staleCheckpoints(
+				fixture.runsDirectory,
+				{ kind: "directory", root: corpus },
+				{ effort: "high" },
+			);
+
+			expect(stale.at(0)?.causes).toContain("effort none is now high");
+		});
+	});
 });
 
 describe(staleCases.name, () => {

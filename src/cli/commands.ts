@@ -187,7 +187,23 @@ export const COMMANDS: readonly CommandDefinition[] = [
 	{
 		name: "stale",
 		summary: "List the checkpoints and session cases a corpus edit invalidated",
-		flags: [corpusFlag],
+		flags: [
+			corpusFlag,
+			{
+				name: "--model",
+				kind: "value",
+				envVar: "BENCHMARK_MODEL",
+				defaultValue: "the model each run recorded, asserting nothing",
+				help: "Model a replay would use, compared against every recorded checkpoint",
+			},
+			{
+				name: "--effort",
+				kind: "value",
+				envVar: "BENCHMARK_EFFORT",
+				defaultValue: "the effort each run recorded, asserting nothing",
+				help: "Reasoning effort a replay would use: low, medium, high, xhigh, or max",
+			},
+		],
 	},
 	{
 		name: "case list",

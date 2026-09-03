@@ -10,6 +10,7 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 	parseCheckpointRecord,
 } from "./checkpoint";
+import type { Effort } from "./config";
 import type { CorpusRoot } from "./corpus-file";
 import {
 	CorpusFileError,
@@ -50,6 +51,19 @@ export interface UnreadableStaleRecord {
 export interface StalenessReport {
 	readonly records: readonly StaleRecord[];
 	readonly unreadable: readonly UnreadableStaleRecord[];
+}
+
+/**
+ * The model and effort the session is about to replay with, which is what a
+ * recorded checkpoint is compared against. Comparing a checkpoint to the
+ * manifest that produced it answers the question tautologically, so a knob the
+ * caller did not name asserts nothing: the run's own value stands in and that
+ * half of the comparison stays silent, while a named one reports exactly what
+ * `replay` would report for the same flags.
+ */
+export interface CurrentSessionKnobs {
+	readonly model?: string | undefined;
+	readonly effort?: Effort | undefined;
 }
 
 /**
@@ -122,6 +136,7 @@ async function checkpointChain(
 export async function staleCheckpoints(
 	runsDirectory: string,
 	source: CorpusRoot,
+	knobs: CurrentSessionKnobs = {},
 ): Promise<readonly StaleRecord[]> {
 	const instructions = await Bun.file(
 		resolveCorpusFile(source, "CLAUDE.md"),
@@ -149,8 +164,8 @@ export async function staleCheckpoints(
 		);
 
 		for (const staleness of deriveStaleness(chain, current, {
-			model: manifest.model,
-			effort: manifest.effort,
+			model: knobs.model ?? manifest.model,
+			effort: knobs.effort ?? manifest.effort,
 		})) {
 			if (staleness.stale) {
 				stale.push({

@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
-import { CONTROL_DIR, REQUIRED_BUN_VERSION } from "./src/benchmark/config";
+import {
+	CONTROL_DIR,
+	parseStaleArgs,
+	REQUIRED_BUN_VERSION,
+} from "./src/benchmark/config";
 import {
 	requireCase,
 	runCaseCapture,
@@ -21,6 +25,7 @@ import {
 } from "./src/cli/run-command";
 import type { CommandLine } from "./src/cli/commands";
 import {
+	asUsageError,
 	commandHelp,
 	findCommand,
 	parseCommandLine,
@@ -141,7 +146,7 @@ async function dispatch(
 		case "stale": {
 			await runStale(
 				{
-					corpus: flagValue(commandLine.flags, "--corpus"),
+					...asUsageError(() => parseStaleArgs(commandLine.flags)),
 					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
 				},
 				{ output: processOutput },

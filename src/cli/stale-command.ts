@@ -1,3 +1,4 @@
+import type { StaleCliConfig } from "#benchmark/config";
 import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
@@ -9,8 +10,13 @@ import { staleCases, staleCheckpoints } from "#benchmark/staleness-report";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 
-export interface StaleRequest {
-	readonly corpus: string | undefined;
+/**
+ * The knobs a session is about to replay with, not the ones a run was recorded
+ * with: comparing a checkpoint against its own manifest is tautologically equal,
+ * so the model and effort come from the flags and the environment the way
+ * `replay` reads them.
+ */
+export interface StaleRequest extends StaleCliConfig {
 	readonly runsDirectory: string;
 }
 
@@ -60,7 +66,7 @@ export async function runStale(
 	);
 	const cases = await staleCases(request.runsDirectory, source);
 	const stale = [
-		...(await staleCheckpoints(request.runsDirectory, source)),
+		...(await staleCheckpoints(request.runsDirectory, source, request)),
 		...cases.records,
 	];
 
