@@ -112,6 +112,7 @@ export interface RunFixtureOptions {
 	readonly instructions?: string | undefined;
 	readonly stageScopeStatus?: "PASS" | "FAIL" | undefined;
 	readonly status?: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | undefined;
+	readonly caseId?: string | undefined;
 }
 
 /**
@@ -135,7 +136,7 @@ export async function writeRunFixture(
 		paths.artifactFile,
 		JSON.stringify({
 			status: options.status ?? "AWAITING_HUMAN_REVIEW",
-			caseId: "audit-log",
+			caseId: options.caseId ?? "audit-log",
 			timestamp: "2026-09-03T00:00:00.000Z",
 			sourceRoot: "/tmp/target",
 			sourceSha: "source-sha",

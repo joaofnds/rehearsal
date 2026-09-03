@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import { CalibrationIncompleteError } from "#benchmark/calibration";
+import { CONTROL_DIR } from "#benchmark/config";
 import { calibratableArtifactSchema } from "#benchmark/calibration-record";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
 import type { CurrentControlSources, JudgeKnobs } from "#cli/calibrate-command";
-import { runCalibrate } from "#cli/calibrate-command";
+import { readControlSources, runCalibrate } from "#cli/calibrate-command";
 import {
 	FINAL_RUBRIC,
 	RUN_NAME,
@@ -84,6 +86,45 @@ function rejudgingStage(): Parameters<typeof runCalibrate>[1] {
 			Promise.reject(new Error("no final rejudge in this test")),
 	});
 }
+
+describe(readControlSources.name, () => {
+	it("reads the final rubric the case declares", async () => {
+		const sources = await readControlSources("audit-log", "the frozen rubric");
+
+		expect(sources.finalRubric).toBe(
+			await Bun.file(join(CONTROL_DIR, "cases/audit-log/rubric.md")).text(),
+		);
+	});
+
+	it("reads the frozen rubric for a run that recorded no case", async () => {
+		const sources = await readControlSources(undefined, "the frozen rubric");
+
+		expect(sources.finalRubric).toBe("the frozen rubric");
+	});
+
+	/**
+	 * An unreadable case is refused rather than answered with the frozen
+	 * rubric, which by construction reads as "the rubric did not change" and
+	 * would discard the reviewer's edit with no rejudge and exit 0.
+	 */
+	it("refuses a case that is not there", async () => {
+		const failure = await failureOf(
+			readControlSources("no-such-case", "the frozen rubric"),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure?.message).toContain("no-such-case");
+	});
+
+	it("refuses a case that declares no final rubric", async () => {
+		const failure = await failureOf(
+			readControlSources("smoke", "the frozen rubric"),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure?.message).toContain("smoke");
+	});
+});
 
 describe(runCalibrate.name, () => {
 	it("refuses a rejudge without --confirm-rejudge and writes nothing", async () => {
@@ -458,6 +499,41 @@ describe(runCalibrate.name, () => {
 		expect(postCard.resultSha).toBe(preCard.resultSha);
 		const agreement = await loadJudgeAgreementReport(fixture.runsDirectory);
 		expect(agreement.skippedCalibrations).toBe(0);
+	});
+
+	/**
+	 * Through the production reader, not the seam: an artifact naming a case
+	 * that is not there is refused, rather than recorded COMPLETE with the
+	 * reviewer's rubric edit discarded as "unchanged".
+	 */
+	it("refuses a run whose case cannot be read", async () => {
+		const fixture = await writeRunFixture({ caseId: "no-such-case" });
+		directories.push(fixture.runsDirectory);
+		await writeReview(fixture.reviewFile, []);
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runCalibrate(
+				{
+					id: RUN_NAME,
+					runsDirectory: fixture.runsDirectory,
+					json: false,
+					confirmRejudge: false,
+				},
+				() => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure?.message).toContain("no-such-case");
+		const artifact = artifactSchema.parse(
+			JSON.parse(await Bun.file(fixture.artifactFile).text()),
+		);
+		expect(artifact.status).toBe("AWAITING_HUMAN_REVIEW");
 	});
 
 	it("accepts the run as run:<name> and refuses one naming a path outside", async () => {

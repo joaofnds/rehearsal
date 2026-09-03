@@ -227,10 +227,16 @@ async function currentSources(
  * The final rubric a run is rejudged against is the one its case declares, read
  * through the case id the artifact recorded. Only the declaration is read, not
  * the loaded case: calibration touches no target repository, and a case whose
- * target has moved must still calibrate. A run whose case is gone is rejudged
- * against the rubric it froze, which is a rubric that did not change.
+ * target has moved must still calibrate. A run that recorded no case is
+ * rejudged against the rubric it froze, because there is no other rubric to
+ * compare it with.
+ *
+ * A case the artifact names but the reader cannot read is refused. Answering
+ * it with the frozen rubric reads as "the rubric did not change", which
+ * discards the reviewer's edit, skips the final rejudge, and records the run
+ * COMPLETE, all at exit 0 and with nothing said.
  */
-async function readControlSources(
+export async function readControlSources(
 	caseId: string | undefined,
 	frozenRubric: string,
 ): Promise<CurrentControlSources> {
@@ -239,20 +245,30 @@ async function readControlSources(
 		return { instructions, finalRubric: frozenRubric };
 	}
 
-	const finalRubric = await readCaseFinalRubric(caseId).catch(
-		() => frozenRubric,
-	);
-
-	return { instructions, finalRubric };
+	return { instructions, finalRubric: await readCaseFinalRubric(caseId) };
 }
 
 async function readCaseFinalRubric(caseId: string): Promise<string> {
-	const declaration = await readCaseDeclaration(caseId);
+	const declaration = await refusing(caseId, () => readCaseDeclaration(caseId));
 	if (declaration.kind !== "pipeline") {
-		throw new Error(`Case ${caseId} declares no final rubric`);
+		throw new RefusedPreconditionError(
+			`Cannot compare case ${caseId} with the rubric this run froze: it declares no final rubric`,
+		);
 	}
 
-	return Bun.file(caseRelative(declaration, declaration.finalRubric)).text();
+	return refusing(caseId, () =>
+		Bun.file(caseRelative(declaration, declaration.finalRubric)).text(),
+	);
+}
+
+async function refusing<T>(caseId: string, read: () => Promise<T>): Promise<T> {
+	try {
+		return await read();
+	} catch (error) {
+		throw new RefusedPreconditionError(
+			`Cannot compare case ${caseId} with the rubric this run froze: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }
 
 function rejudged(calibration: Readonly<CalibrationResult>): boolean {
