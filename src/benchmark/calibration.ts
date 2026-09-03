@@ -351,6 +351,29 @@ async function rejudgeFinal(
 }
 
 /**
+ * Which file holds a stage's current rubric: the path its scorecard recorded,
+ * never one recomputed from the case. An edit lands in the file the run graded
+ * from, so that is the file a rejudge reads back, and this is the one place
+ * that is stated. The caller decides what a rubric it cannot read means: the
+ * interactive loop treats it as an incomplete calibration and re-prompts, the
+ * command treats it as a rubric that did not change.
+ */
+export async function readStageRubrics(
+	stageScorecards: readonly Readonly<StageScorecard>[],
+	readText: (path: string) => Promise<string | undefined>,
+): Promise<ReadonlyMap<WorkflowStage, string>> {
+	const stageRubrics = new Map<WorkflowStage, string>();
+	for (const scorecard of stageScorecards) {
+		const text = await readText(scorecard.rubricPath);
+		if (text !== undefined) {
+			stageRubrics.set(scorecard.stage, text);
+		}
+	}
+
+	return stageRubrics;
+}
+
+/**
  * The judgment a calibration is, as a value: no prompt, no file read, no
  * clock. The interactive loop and the `calibrate` command differ in where the
  * text and the confirmation come from, never in what the two of them decide.
@@ -496,11 +519,6 @@ function calibrationJudges(
 	};
 }
 
-/**
- * The rubric a stage is rejudged against is the one the scorecard recorded the
- * path of, not one recomputed from the case: an edit lands in the file the run
- * graded from, and that is the file this reads back.
- */
 async function readCurrentSources(
 	context: Readonly<CalibrationContext>,
 ): Promise<CurrentCalibrationSources> {
@@ -510,13 +528,9 @@ async function readCurrentSources(
 			Bun.file(context.finalRubricPath).text(),
 		]),
 	);
-	const stageRubrics = new Map<WorkflowStage, string>();
-	for (const scorecard of context.stageScorecards) {
-		stageRubrics.set(
-			scorecard.stage,
-			await asCalibrationInput(() => Bun.file(scorecard.rubricPath).text()),
-		);
-	}
+	const stageRubrics = await readStageRubrics(context.stageScorecards, (path) =>
+		asCalibrationInput(() => Bun.file(path).text()),
+	);
 
 	return { instructions, finalRubric, stageRubrics };
 }

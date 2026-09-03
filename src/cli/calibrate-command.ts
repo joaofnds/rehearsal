@@ -1,5 +1,9 @@
 import { readdir } from "node:fs/promises";
-import { calibrate, CalibrationIncompleteError } from "#benchmark/calibration";
+import {
+	calibrate,
+	CalibrationIncompleteError,
+	readStageRubrics,
+} from "#benchmark/calibration";
 import type {
 	CalibrationJudges,
 	CurrentCalibrationSources,
@@ -15,7 +19,7 @@ import {
 } from "#benchmark/calibration-record";
 import { caseRelative, readCaseDeclaration } from "#benchmark/case";
 import { displayPath, readProjectInstructions } from "#benchmark/config";
-import type { Effort, WorkflowStage } from "#benchmark/config";
+import type { Effort } from "#benchmark/config";
 import type {
 	CalibrationResult,
 	HumanReview,
@@ -210,15 +214,11 @@ async function currentSources(
 		request.readCurrentSources ??
 		((id: string | undefined) => readControlSources(id, frozen.finalRubric));
 	const { instructions, finalRubric } = await read(caseId);
-	const stageRubrics = new Map<WorkflowStage, string>();
-	for (const scorecard of frozen.stageScorecards) {
-		const text = await Bun.file(scorecard.rubricPath)
+	const stageRubrics = await readStageRubrics(frozen.stageScorecards, (path) =>
+		Bun.file(path)
 			.text()
-			.catch(() => undefined);
-		if (text !== undefined) {
-			stageRubrics.set(scorecard.stage, text);
-		}
-	}
+			.catch(() => undefined),
+	);
 
 	return { instructions, finalRubric, stageRubrics };
 }
