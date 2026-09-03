@@ -14,6 +14,7 @@ import type { StaleRecord } from "#benchmark/staleness-report";
 import { staleCases, staleCheckpoints } from "#benchmark/staleness-report";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
+import { writeUnreadable } from "#cli/output";
 
 /**
  * The knobs a session is about to replay with, not the ones a run was recorded
@@ -99,9 +100,7 @@ async function report(
 		...cases.records,
 	];
 
-	for (const { id, reason } of cases.unreadable) {
-		output.stderr(`${id}: ${reason}\n`);
-	}
+	writeUnreadable(output, cases.unreadable);
 	for (const record of stale) {
 		output.stdout(line(record));
 	}

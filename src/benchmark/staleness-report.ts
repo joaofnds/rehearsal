@@ -41,7 +41,9 @@ export interface StaleRecord {
  * A record the report could not read, named by the id `show` accepts back and
  * by the reason. One half-written attempt must not hide every other answer, so
  * it is collected here rather than thrown: the `case list` precedent, which
- * `list` already follows for every kind it reads.
+ * `list` already follows for every kind it reads. It is declared here rather
+ * than imported from the CLI's `UnreadableRecord`, which prints it, because
+ * this module is what the CLI points inward at.
  */
 export interface UnreadableStaleRecord {
 	readonly id: string;

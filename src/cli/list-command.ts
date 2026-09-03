@@ -22,7 +22,8 @@ import {
 } from "#benchmark/run-layout";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { UsageError } from "#cli/commands";
-import type { CommandOutput } from "#cli/output";
+import type { CommandOutput, UnreadableRecord } from "#cli/output";
+import { writeUnreadable } from "#cli/output";
 import type { RecordId } from "#cli/record-id";
 import { formatRecordId } from "#cli/record-id";
 
@@ -40,11 +41,6 @@ export type ListKind = (typeof LIST_KINDS)[number];
 export interface ListedRecord {
 	readonly id: string;
 	readonly fields: readonly string[];
-}
-
-export interface UnreadableRecord {
-	readonly id: string;
-	readonly reason: string;
 }
 
 export interface RecordListing {
@@ -311,9 +307,7 @@ export async function runList(
 		request.runsDirectory,
 	);
 
-	for (const { id, reason } of listing.unreadable) {
-		output.stderr(`${id}: ${reason}\n`);
-	}
+	writeUnreadable(output, listing.unreadable);
 	for (const { id, fields } of listing.entries) {
 		output.stdout(`${[id, ...fields].join("\t")}\n`);
 	}
