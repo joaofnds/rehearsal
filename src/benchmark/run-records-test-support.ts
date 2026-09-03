@@ -5,6 +5,8 @@ import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
 import type { CheckpointRecord } from "./checkpoint";
+import { captureStageCorpus } from "./checkpoint";
+import { hashCorpusFiles } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import { confirmationGroupRecordSchema } from "./confirmation-record";
 import type { ConfirmationGroupRecord } from "./confirmation-record";
@@ -27,6 +29,7 @@ import {
 } from "./run-layout";
 
 const CASE_ID = "audit-log";
+const ATTEMPT_FILE = "attempt.json";
 const CHECKPOINT_FILE = "checkpoint.json";
 const CORPUS_DIGEST = "a".repeat(64);
 const COMPARISON_DIGEST = "c".repeat(64);
@@ -264,7 +267,55 @@ export class RecordedRunsFixture {
 			"sessions",
 			this.sessionAttempt.caseId,
 			this.sessionAttempt.uuid,
-			"attempt.json",
+			ATTEMPT_FILE,
+		);
+	}
+
+	/**
+	 * Re-records every checkpoint's corpus files by hashing a real corpus
+	 * directory through `captureStageCorpus`, so a staleness observation
+	 * compares what the harness records against what it would record today
+	 * rather than against a digest this fixture made up.
+	 */
+	public async recordCorpusFrom(corpusRoot: string): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+		const instructions = await Bun.file(join(corpusRoot, "CLAUDE.md")).text();
+
+		for (const stage of this.stages) {
+			const corpusFiles = await captureStageCorpus(stage, instructions, [
+				join(corpusRoot, "skills"),
+			]);
+			const directory = paths.checkpointDirectory(stage);
+			await Bun.write(
+				join(directory, CHECKPOINT_FILE),
+				serialize({ ...checkpoint(stage, corpusPath(stage)), corpusFiles }),
+			);
+		}
+	}
+
+	/**
+	 * One session attempt for a case, recording the digests a corpus directory
+	 * holds right now, so a later comparison against an edited corpus is a
+	 * comparison of real bytes rather than of a digest this fixture invented.
+	 */
+	public async writeAttemptReading(
+		corpusRoot: string,
+		caseId: string,
+		layoutPaths: readonly string[],
+	): Promise<void> {
+		const corpusFiles = await hashCorpusFiles(
+			{ kind: "directory", root: corpusRoot },
+			layoutPaths,
+		);
+		const { uuid } = this.sessionAttempt;
+		await Bun.write(
+			join(this.runsDirectory, "sessions", caseId, uuid, ATTEMPT_FILE),
+			serialize(
+				sessionAttemptRecordSchema.parse({
+					...sessionAttempt(caseId),
+					corpusFiles,
+				}),
+			),
 		);
 	}
 

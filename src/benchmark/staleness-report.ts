@@ -1,0 +1,256 @@
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import type { CaseDeclaration, SessionCaseDeclaration } from "./case";
+import { listCases } from "./case";
+import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import {
+	captureStageCorpus,
+	corpusDifferences,
+	deriveStaleness,
+	INITIAL_CHECKPOINT_STAGE,
+	parseCheckpointRecord,
+} from "./checkpoint";
+import type { CorpusRoot } from "./corpus-file";
+import {
+	CorpusFileError,
+	hashCorpusFiles,
+	resolveCorpusFile,
+} from "./corpus-file";
+import { loadRunManifest } from "./manifest";
+import type { RunManifest } from "./manifest";
+import {
+	benchmarkRunPaths,
+	recordedRunNames,
+	sessionAttemptIds,
+} from "./run-layout";
+import { parseSessionAttemptRecord } from "./session-record";
+
+const CHECKPOINT_FILE = "checkpoint.json";
+const ATTEMPT_FILE = "attempt.json";
+
+/**
+ * One record an edit invalidated, named by the id `show` accepts back and by
+ * every reason it went stale. A caller prints these; nothing here formats.
+ */
+export interface StaleRecord {
+	readonly id: string;
+	readonly causes: readonly string[];
+}
+
+/**
+ * Staleness needs the corpus hashed, never installed, so `stale` needs no
+ * worktree, no git, and no session: `captureStageCorpus` reads the roots it is
+ * given and nothing else. The skills of a resolved corpus source live under
+ * its root; its CLAUDE.md is wherever the corpus-file resolver says, because
+ * the live install's instructions are the control root's, not `~/.claude`'s.
+ */
+function skillRootsOf(source: CorpusRoot): readonly string[] {
+	return [join(source.root, "skills")];
+}
+
+async function currentStageCorpus(
+	manifest: RunManifest,
+	chain: readonly CheckpointRecord[],
+	source: CorpusRoot,
+	instructions: string,
+): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
+	const corpus = new Map<string, readonly HashedFile[]>();
+	const roots = skillRootsOf(source);
+
+	for (const record of chain) {
+		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
+			continue;
+		}
+
+		const definition = manifest.pipeline.stages.find(
+			({ name }) => name === record.stage,
+		);
+		if (definition === undefined) {
+			continue;
+		}
+
+		corpus.set(
+			record.stage,
+			await captureStageCorpus(definition.skill, instructions, roots),
+		);
+	}
+
+	return corpus;
+}
+
+async function checkpointChain(
+	runsDirectory: string,
+	run: string,
+	stages: readonly string[],
+): Promise<readonly CheckpointRecord[]> {
+	const paths = benchmarkRunPaths(runsDirectory, run);
+	const chain: CheckpointRecord[] = [];
+
+	for (const stage of stages) {
+		const file = Bun.file(
+			join(paths.checkpointDirectory(stage), CHECKPOINT_FILE),
+		);
+		if (await file.exists()) {
+			chain.push(parseCheckpointRecord(await file.text()));
+		}
+	}
+
+	return chain;
+}
+
+/**
+ * Every checkpoint of every recorded run whose recorded inputs no longer match
+ * the corpus under test. A run whose manifest cannot be read contributes
+ * nothing rather than failing the report: it was never replayable, so nothing
+ * about it can go stale.
+ */
+export async function staleCheckpoints(
+	runsDirectory: string,
+	source: CorpusRoot,
+): Promise<readonly StaleRecord[]> {
+	const instructions = await Bun.file(
+		resolveCorpusFile(source, "CLAUDE.md"),
+	).text();
+	const stale: StaleRecord[] = [];
+
+	for (const run of await recordedRunNames(runsDirectory)) {
+		const paths = benchmarkRunPaths(runsDirectory, run);
+		const manifestFile = Bun.file(paths.manifestFile);
+		if (!(await manifestFile.exists())) {
+			continue;
+		}
+
+		const manifest = await loadRunManifest(paths.manifestFile);
+		const chain = await checkpointChain(
+			runsDirectory,
+			run,
+			manifest.pipeline.stages.map(({ name }) => name),
+		);
+		const current = await currentStageCorpus(
+			manifest,
+			chain,
+			source,
+			instructions,
+		);
+
+		for (const staleness of deriveStaleness(chain, current, {
+			model: manifest.model,
+			effort: manifest.effort,
+		})) {
+			if (staleness.stale) {
+				stale.push({
+					id: `checkpoint:${run}/${staleness.stage}`,
+					causes: staleness.causes,
+				});
+			}
+		}
+	}
+
+	return stale;
+}
+
+const CASE_STALENESS_WORDING = {
+	modified: (path: string) => `${path} changed`,
+	missingFromRight: (path: string) => `${path} removed`,
+	missingFromLeft: (path: string) => `${path} added`,
+};
+
+async function latestAttemptRecord(
+	runsDirectory: string,
+	caseId: string,
+): Promise<readonly HashedFile[] | undefined> {
+	const attempts = await sessionAttemptIds(runsDirectory);
+	let latest: { readonly at: number; readonly file: string } | undefined;
+
+	for (const attempt of attempts.filter(
+		(candidate) => candidate.caseId === caseId,
+	)) {
+		const file = join(
+			runsDirectory,
+			"sessions",
+			caseId,
+			attempt.uuid,
+			ATTEMPT_FILE,
+		);
+		const stats = await stat(file).catch(() => undefined);
+		if (
+			stats !== undefined &&
+			(latest === undefined || stats.mtimeMs > latest.at)
+		) {
+			latest = { at: stats.mtimeMs, file };
+		}
+	}
+
+	if (latest === undefined) {
+		return undefined;
+	}
+
+	const record = parseSessionAttemptRecord(await Bun.file(latest.file).text());
+
+	return record.corpusFiles.map(({ path, sha256 }) => ({ path, sha256 }));
+}
+
+function sessionCases(
+	declarations: readonly CaseDeclaration[],
+): readonly SessionCaseDeclaration[] {
+	return declarations.filter(
+		(declaration): declaration is SessionCaseDeclaration =>
+			declaration.kind === "session",
+	);
+}
+
+/**
+ * A declared corpus file the corpus under test no longer holds invalidates the
+ * measurement as surely as an edit does — the case cannot even run against
+ * this corpus — so it is a cause rather than a failure that hides every other
+ * case's answer.
+ */
+async function caseStaleness(
+	declaration: SessionCaseDeclaration,
+	recorded: readonly HashedFile[],
+	source: CorpusRoot,
+): Promise<readonly string[]> {
+	try {
+		const current = await hashCorpusFiles(source, declaration.corpusFiles);
+
+		return corpusDifferences(
+			recorded,
+			current.map(({ path, sha256 }) => ({ path, sha256 })),
+			CASE_STALENESS_WORDING,
+		);
+	} catch (error) {
+		if (error instanceof CorpusFileError) {
+			return [error.message];
+		}
+
+		throw error;
+	}
+}
+
+/**
+ * A session case is stale when its most recent attempt recorded corpus digests
+ * the corpus no longer matches. A case with no attempt is not stale: staleness
+ * claims a prior measurement no longer describes the corpus, and with no
+ * measurement there is nothing to invalidate.
+ */
+export async function staleCases(
+	runsDirectory: string,
+	source: CorpusRoot,
+): Promise<readonly StaleRecord[]> {
+	const listing = await listCases();
+	const stale: StaleRecord[] = [];
+
+	for (const declaration of sessionCases(listing.declarations)) {
+		const recorded = await latestAttemptRecord(runsDirectory, declaration.id);
+		if (recorded === undefined) {
+			continue;
+		}
+
+		const causes = await caseStaleness(declaration, recorded, source);
+		if (causes.length > 0) {
+			stale.push({ id: `case:${declaration.id}`, causes });
+		}
+	}
+
+	return stale;
+}
