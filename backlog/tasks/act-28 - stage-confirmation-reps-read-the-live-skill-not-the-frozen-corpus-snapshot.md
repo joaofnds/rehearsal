@@ -1,10 +1,11 @@
 ---
 id: ACT-28
 title: 'stage confirmation reps read the live skill, not the frozen corpus snapshot'
-status: Shape
-assignee: []
+status: Review
+assignee:
+  - '@claude'
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 13:07'
+updated_date: '2026-09-03 23:10'
 labels:
   - defect
 milestone: m-0
@@ -21,33 +22,116 @@ installStageCorpusSnapshot (src/benchmark/checkpoint.ts) copies the frozen skill
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stage session run with a corpus snapshot whose skill bytes carry a marker not present in the live install reports that marker, observed once directly
-- [ ] #2 The mechanism that delivers frozen skill bytes to a stage session is recorded on the card with the observation that shows it works
+- [x] #1 A stage session run with a corpus snapshot whose skill bytes carry a marker not present in the live install reports that marker, observed once directly
+- [x] #2 The mechanism that delivers frozen skill bytes to a stage session is recorded on the card with the observation that shows it works
+- [x] #3 A stage session run with --setting-sources project (skill installed only at project level, no user-level copy) invokes the Skill tool and returns the frozen marker text, not the live user-level skill's content
+- [x] #4 A stage session run under the snapshot reports a marker planted in the frozen global instruction file and a marker planted in a frozen agent definition, neither present in the live install, observed once directly
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## The stage corpus path, once skills can be delivered (from ACT-26.6)
+## Independent review, 2026-09-04
 
-ACT-26.6 gave the session path a resolved corpus source: `resolveCorpusSource`
-parses `--corpus` once into a root, `snapshotSessionCorpus` copies the four
-kinds into one snapshot directory, and `hashCorpusFiles` reads only that
-directory. The stage path did not move: `captureStageCorpus` and
-`snapshotStageCorpus` still take skill search roots, because a stage's corpus
-is its skills and those cannot be delivered until this card lands. `run` and
-`replay` refuse `--corpus` naming this card (`refuseStageCorpus` in
-`src/cli/interactive-stdin.ts`).
+Trigger: change to the harness's provider-invocation surface and lineage
+lookup, both outward-facing since every recorded score depends on them, per
+the card's own recommendation.
 
-When this card settles the delivery mechanism, the two paths should read a
-corpus the same way: `captureStageCorpus` and `snapshotStageCorpus` take a
-resolved corpus source instead of search roots, and the refusal in
-`refuseStageCorpus` becomes a snapshot and an install. Unifying them before
-then would be building for a caller that cannot exist.
+Suite before review: 1025 pass, 0 fail, typecheck/lint/format clean.
+Diff reviewed: d886588~1..ad63fb0 (feat(claude): support --setting-sources
+project; fix(checkpoint): freeze the whole corpus for a stage session,
+project level first). One reviewer, all axes (style, architecture, security,
+spec, testing, refactoring).
 
-Triage 2026-09-03: moved To Do -> Shape. The card's own next step is a choice, not a build: its comment states that claude 2.1.258 declares no --skills flag and names --plugin-dir and --setting-sources as the two candidates, with 'Choosing between them is this card's work.' A card whose next step is a question does not belong in To Do. The premise itself is not re-probed here; it was observed twice on 2026-09-03, by the ACT-26.6 Shape session and independently by the orchestrator, and re-probing costs money.
+Findings, worst first:
 
-Consequence, for prioritizing: this card gates the tool's stated purpose. docs/vision.md says attribution comes from re-running a stage with frozen inputs and one skill changed. While a project-level skill does not shadow the user-level one, both arms of a comparison read the same live skill, so a stage comparison measures nothing. ACT-26.6 already refuses a corpus source that changes skill bytes rather than reporting a result it cannot deliver, so nothing lies today; the capability is simply absent.
+1. [should-fix, fixed] Cross-stage staleness: installStageCorpusSnapshot
+   copied each layout kind (skills, agents, output-styles) into the worktree's
+   .claude with a plain cp, which only overwrites same-named files and never
+   removes a file present at the destination but absent from the source. A
+   pipeline rep reuses one worktree across every stage
+   (pipeline-confirmation.ts:384-392), installing a fresh snapshot each
+   iteration. Verified directly: a stage whose snapshot carries no agents/ or
+   output-styles/ directory left the prior stage's frozen copy of that kind
+   sitting in the worktree, readable and invokable by a session whose own
+   recorded lineage says it never had that corpus. This is the same defect
+   class the card exists to close, now on the two directory kinds this diff
+   adds. skills/ had the same merge gap before this diff (pre-existing), but
+   agents/output-styles is new surface this diff created, so it's this
+   change's to fix. Fixed: installStageCorpusSnapshot now clears each kind's
+   target directory before installing, or removes it outright when the
+   current snapshot doesn't carry that kind. Reproduced first with a failing
+   test (checkpoint.test.ts, "removes a prior stage's agents and output
+   styles the next stage's snapshot does not carry"), confirmed it failed
+   against the pre-fix code, then fixed. Full suite 1026 pass (was 1025;
+   +1 new test), typecheck/lint/format clean, committed at 4c746b8.
+
+2. [escalated to João] `--setting-sources project` silently drops hooks,
+   MCP config, and settings.json for every confirmation/replay stage
+   session, and this is a live consequence, not a hypothetical: this
+   machine's ~/.claude carries a populated hooks/ directory and a
+   settings.json with dozens of behavior flags (effort level, skill shell
+   execution, auto-compact, etc.), none of which are frozen, overlaid, or
+   otherwise compensated for by this diff. The runner's own probe, recorded
+   on this card one day before the build (2026-09-03 22:35), already found
+   exactly this and called it "a decision for João": the project-only source
+   drops the user-level CLAUDE.md, agents, and skills unless the snapshot
+   supplies them at project level too (which this diff now does), but says
+   nothing about hooks or settings.json, which the snapshot mechanism has no
+   concept of freezing. The implementation notes for this build (2026-09-04)
+   cover CLAUDE.md/skills/agents/output-styles but never mention hooks or
+   settings.json, so the decision the runner flagged was never made. A stage
+   session under confirmation/replay now behaves differently from a live run
+   in ways outside the frozen corpus under test (no hooks fire; settings.json
+   flags like effort level or disabled features differ), which can change
+   what a stage rep measures for reasons unrelated to what the corpus
+   snapshot records. Not fixed in this pass: the fix depends on João's
+   decision on the open question already on the card (DOT-36) about how much
+   of the live settings surface a rep is allowed to diverge from.
+
+3. [note] Duplicated domain knowledge: checkpoint.ts's LAYOUT_DIRECTORY_KINDS
+   (["agents", "output-styles"]) and session-corpus.ts's OVERLAID_KINDS
+   (["output-styles/", "agents/"]) encode the same fact in two modules, with
+   different ordering and string format (trailing slash in one, not the
+   other). Nothing keeps them in sync. Not unified: the two serve genuinely
+   different corpus mechanisms (stage corpus vs. session corpus), which the
+   card's own "What did not change" section already treats as deliberately
+   distinct paths, so a shared abstraction isn't a clear win. Left as a note.
+
+4. [note, fixed] Stale comment in staleness-report.test.ts (outside the
+   diff's changed-file list) still named the pre-rename identifier
+   `corpusSkillRoots`, which this diff renamed to `stageCorpusRoots`
+   everywhere else. Fixed in the same commit as finding 1.
+
+5. [note] resolveLayoutDirectory treats a present-but-empty project-level
+   agents/ or output-styles/ directory as the final answer and does not fall
+   through to a populated user-level one. Matches the documented "whole
+   directory, never merged across roots" semantics, but the empty-directory
+   corner isn't tested or called out. No reported occurrence; left as a note.
+
+Spec conformance: AC1, AC3, AC4 ask for a marker observed directly against a
+live claude invocation. The automated suite added in this diff tests wiring
+only (claudeArgs, captureStageCorpus, runWorkflowStage) via fakes, never a
+real claude subprocess; the direct observation is the card's own "Built and
+observed, 2026-09-04" note, which the reviewer did not re-run. That note's
+claim stands as the author's direct observation, not independently
+re-verified this review.
+
+Security: no findings, no untrusted external input newly parsed or handled.
+
+Architecture: StageContext (the live run/replay path) has no settingSources
+field; only StageSessionEnvironment does, populated solely by the two
+confirmation call sites. Verified by reading run.ts: this is a structural,
+compiler-enforced guarantee that a plain run or replay cannot set
+settingSources, not merely convention. Load-bearing; preserve this
+separation in any future refactor that touches StageContext.
+
+Verdict: proceed. One should-fix found and fixed in this pass (cross-stage
+staleness on agents/output-styles). One item needs João's decision before
+this fully closes the risk the card was filed to close (finding 2); it does
+not block this diff's own correctness, since the diff neither introduces nor
+worsens the gap between corpus freezing and settings freezing beyond what
+the runner already flagged and disclosed before the build.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -61,5 +145,17 @@ Confirmed independently by the orchestrator on 2026-09-03, with a probe run sepa
 What this means for evidence already recorded: every confirmation rep and every replay that installed a corpus snapshot ran its stage against whatever skills were live at that moment, while lineage recorded the frozen bytes. Any score attributed to a frozen corpus was produced by the live one, and a chezmoi apply mid-run would silently change a rep without invalidating its checkpoint. Comparisons between corpus versions are the feature this breaks, because both arms may have read the same live skill.
 
 claude --help on 2.1.258 declares no --skills flag. The candidates named in the help text are --plugin-dir, which loads a directory as a plugin carrying skills, and --setting-sources, which controls which setting sources contribute CLAUDE.md, skills, plugins, hooks, and MCP. Choosing between them is this card's work. Output styles and agent definitions do shadow correctly, so the fix is likely a per-session flag for skills rather than an on-disk overlay.
+---
+
+author: @claude
+created: 2026-09-03 22:35
+---
+Runner, 2026-09-04, before build: a probe in an empty directory (claude --setting-sources project -p /context, against the default) shows the project-only source drops the user-level CLAUDE.md, the custom agents, and the user skills. So a stage session under this mechanism runs without the global instruction file, the reviewer agent, and the output style unless the stage snapshot installs those at project level too, as the session path already does for its four kinds. That changes what a stage rep measures and is a decision for João. Question on DOT-36.
+---
+
+author: @claude
+created: 2026-09-03 22:44
+---
+Runner, 2026-09-04, after build's first session: stopped on its question (redefine root as a corpus directory vs parallel functions; fix the project-then-home asymmetry for the global file, agents, and output styles or leave it). Relayed to João on DOT-36 with the recommendation to redefine the root and fix the asymmetry in the same change, since the new root definition is that fix.
 ---
 <!-- COMMENTS:END -->
