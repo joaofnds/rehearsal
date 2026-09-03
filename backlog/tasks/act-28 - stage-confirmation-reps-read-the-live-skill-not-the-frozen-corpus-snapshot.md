@@ -4,7 +4,7 @@ title: 'stage confirmation reps read the live skill, not the frozen corpus snaps
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 00:14'
+updated_date: '2026-09-03 00:33'
 labels:
   - defect
 dependencies: []
@@ -22,6 +22,27 @@ installStageCorpusSnapshot (src/benchmark/checkpoint.ts) copies the frozen skill
 - [ ] #1 A stage session run with a corpus snapshot whose skill bytes carry a marker not present in the live install reports that marker, observed once directly
 - [ ] #2 The mechanism that delivers frozen skill bytes to a stage session is recorded on the card with the observation that shows it works
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## The stage corpus path, once skills can be delivered (from ACT-26.6)
+
+ACT-26.6 gave the session path a resolved corpus source: `resolveCorpusSource`
+parses `--corpus` once into a root, `snapshotSessionCorpus` copies the four
+kinds into one snapshot directory, and `hashCorpusFiles` reads only that
+directory. The stage path did not move: `captureStageCorpus` and
+`snapshotStageCorpus` still take skill search roots, because a stage's corpus
+is its skills and those cannot be delivered until this card lands. `run` and
+`replay` refuse `--corpus` naming this card (`refuseStageCorpus` in
+`src/cli/interactive-stdin.ts`).
+
+When this card settles the delivery mechanism, the two paths should read a
+corpus the same way: `captureStageCorpus` and `snapshotStageCorpus` take a
+resolved corpus source instead of search roots, and the refusal in
+`refuseStageCorpus` becomes a snapshot and an install. Unifying them before
+then would be building for a caller that cannot exist.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 

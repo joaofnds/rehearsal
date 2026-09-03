@@ -1,0 +1,22 @@
+---
+id: ACT-29
+title: delete the temporary directories the test suite creates
+status: To Do
+assignee: []
+created_date: '2026-09-03 00:32'
+labels: []
+dependencies: []
+ordinal: 31008
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Most test suites make their scratch directories with mkdtemp directly and never remove them, so every `bun test` run leaves hundreds behind in $TMPDIR. Observed 2026-09-03 during ACT-26.6: 817 rehearsal-attempt-record, 817 rehearsal-attempt-projects, 676 rehearsal-projects, 670 rehearsal-confirmation-failures, and more, over 1500 in total. TestResources.forEachTest() already exists and cleans up; the suites that predate it do not use it. The fix is mechanical, per file: take the directory from resources.createControlDirectory() or track() what mkdtemp returned. Found by ACT-26.6, whose own new leak (the chezmoi render, a copy of the home tree) it fixed in place.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 bun test leaves no rehearsal-* directory behind in $TMPDIR: a test asserts the count is unchanged across a suite run, or the suites are converted and the count is observed to be zero
+- [ ] #2 Every suite that creates a temporary directory removes it, whether the test passed or threw
+<!-- AC:END -->

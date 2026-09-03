@@ -1,11 +1,11 @@
 ---
 id: ACT-26.6
 title: run against a corpus variant from a source without installing it live
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 00:12'
+updated_date: '2026-09-03 00:37'
 labels: []
 dependencies: []
 references:
@@ -25,24 +25,24 @@ Gap 3 in doc-1. The config question is settled: João's intent stands, and Shape
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 resolveCorpusSource(undefined) returns the live install layout and resolveCorpusSource("<dir>") returns that directory, both as a resolved corpus source carrying its kind and its root: one test asserts both without touching the network or the provider
-- [ ] #2 A directory corpus source whose root does not exist, or which holds none of the four corpus layout entries, is refused naming the root before any provider call
-- [ ] #3 resolveCorpusFile resolves a corpus layout path against a resolved corpus source rather than the live install: given a directory source, "output-styles/brief.md" resolves under that directory, and a path with a .. segment is still refused naming the path
-- [ ] #4 hashCorpusFiles over a directory source returns the digests of that directory's bytes, and a test asserts those digests differ from the live install's for the same layout paths when the directory's bytes differ
-- [ ] #5 A chezmoi corpus source parses from "chezmoi:<ref>" into a value carrying that ref, and "chezmoi:" with no ref, or a source string naming neither an existing directory nor the chezmoi scheme, exits 2 naming the source
-- [ ] #6 Rendering a chezmoi source runs git -C <dotfiles> archive <ref> piped to tar -x into a scratch source directory, then chezmoi apply --source <that> --destination <scratch> --exclude encrypted,scripts with no --verbose: a test with a fake command runner asserts that exact argument sequence, including both exclusions
-- [ ] #7 A rendered chezmoi tree maps onto corpus layout by reading .agents/skills/<name>/ as skills/<name>/, .claude/output-styles/<name>.md as output-styles/<name>.md, and .agents/agents/<name>.md as agents/<name>.md: a test over a fixture tree asserts the mapping and asserts that a .claude/skills symlink in that fixture is never followed
-- [ ] #8 A chezmoi corpus source records the ref's resolved commit sha in the snapshot, so two runs at the same ref are comparable and a moved ref is visible
-- [ ] #9 A chezmoi corpus source carries no project CLAUDE.md: the snapshot's CLAUDE.md is the control root's, and a test asserts that byte identity
-- [ ] #10 The snapshot directory is the single place corpus bytes are read from for hashing and installing: snapshotSessionCorpus copies the resolved source's four kinds into it and hashCorpusFiles then reads only that directory, asserted by a test that mutates the source after the snapshot and sees the digests unchanged
-- [ ] #11 Installing a session corpus snapshot into an attempt directory writes <attempt>/.claude/output-styles/<name>.md and <attempt>/.claude/agents/<name>.md from the snapshot, and a test asserts the bytes match the snapshot's
-- [ ] #12 A session attempt whose corpus declares an output style runs with --settings carrying {"outputStyle":"<name>"} merged over the case's declared settings, and a test asserts the case's own settings keys survive the merge
-- [ ] #13 Skills are delivered by the mechanism ACT-28 settles, not by the attempt-directory overlay: until ACT-28 lands, a corpus source that changes skill bytes is refused naming the skill and ACT-28, so no run reports a skill result the harness cannot deliver
-- [ ] #14 rehearsal run --help and rehearsal replay --help each list --corpus with its source syntax, and the flag is declared once in the commands table
-- [ ] #15 The lineage of a session attempt changes when --corpus names a source whose declared corpus bytes differ, and is unchanged when two different sources resolve to identical bytes: one test asserts both
-- [ ] #16 Absent --corpus, a session attempt's recorded corpusFiles and lineage are byte-identical to what the same case recorded before this card: a test asserts the lineage string is unchanged
-- [ ] #17 rehearsal run --case smoke --corpus <dir> --model haiku --effort low --session-budget-usd 0.2 exits 0 and records a corpus snapshot whose output-styles/brief.md digest equals the marker file's, while chezmoi diff stays empty and the live ~/.claude/output-styles/brief.md digest is unchanged before and after (the paid observation, capped at USD 1)
-- [ ] #18 rehearsal run --case smoke --corpus chezmoi:HEAD on that same case records a corpus snapshot whose output-styles/brief.md digest equals the live style's, taken in the same paid observation
+- [x] #1 resolveCorpusSource(undefined) returns the live install layout and resolveCorpusSource("<dir>") returns that directory, both as a resolved corpus source carrying its kind and its root: one test asserts both without touching the network or the provider
+- [x] #2 A directory corpus source whose root does not exist, or which holds none of the four corpus layout entries, is refused naming the root before any provider call
+- [x] #3 resolveCorpusFile resolves a corpus layout path against a resolved corpus source rather than the live install: given a directory source, "output-styles/brief.md" resolves under that directory, and a path with a .. segment is still refused naming the path
+- [x] #4 hashCorpusFiles over a directory source returns the digests of that directory's bytes, and a test asserts those digests differ from the live install's for the same layout paths when the directory's bytes differ
+- [x] #5 A chezmoi corpus source parses from "chezmoi:<ref>" into a value carrying that ref, and "chezmoi:" with no ref, or a source string naming neither an existing directory nor the chezmoi scheme, exits 2 naming the source
+- [x] #6 Rendering a chezmoi source runs git -C <dotfiles> archive <ref> piped to tar -x into a scratch source directory, then chezmoi apply --source <that> --destination <scratch> --exclude encrypted,scripts with no --verbose: a test with a fake command runner asserts that exact argument sequence, including both exclusions
+- [x] #7 A rendered chezmoi tree maps onto corpus layout by reading .agents/skills/<name>/ as skills/<name>/, .claude/output-styles/<name>.md as output-styles/<name>.md, and .agents/agents/<name>.md as agents/<name>.md: a test over a fixture tree asserts the mapping and asserts that a .claude/skills symlink in that fixture is never followed
+- [x] #8 A chezmoi corpus source records the ref's resolved commit sha in the snapshot, so two runs at the same ref are comparable and a moved ref is visible
+- [x] #9 A chezmoi corpus source carries no project CLAUDE.md: the snapshot's CLAUDE.md is the control root's, and a test asserts that byte identity
+- [x] #10 The snapshot directory is the single place corpus bytes are read from for hashing and installing: snapshotSessionCorpus copies the resolved source's four kinds into it and hashCorpusFiles then reads only that directory, asserted by a test that mutates the source after the snapshot and sees the digests unchanged
+- [x] #11 Installing a session corpus snapshot into an attempt directory writes <attempt>/.claude/output-styles/<name>.md and <attempt>/.claude/agents/<name>.md from the snapshot, and a test asserts the bytes match the snapshot's
+- [x] #12 A session attempt whose corpus declares an output style runs with --settings carrying {"outputStyle":"<name>"} merged over the case's declared settings, and a test asserts the case's own settings keys survive the merge
+- [x] #13 Skills are delivered by the mechanism ACT-28 settles, not by the attempt-directory overlay: until ACT-28 lands, a corpus source that changes skill bytes is refused naming the skill and ACT-28, so no run reports a skill result the harness cannot deliver
+- [x] #14 rehearsal run --help and rehearsal replay --help each list --corpus with its source syntax, and the flag is declared once in the commands table
+- [x] #15 The lineage of a session attempt changes when --corpus names a source whose declared corpus bytes differ, and is unchanged when two different sources resolve to identical bytes: one test asserts both
+- [x] #16 Absent --corpus, a session attempt's recorded corpusFiles and lineage are byte-identical to what the same case recorded before this card: a test asserts the lineage string is unchanged
+- [x] #17 rehearsal run --case smoke --corpus <dir> --model haiku --effort low --session-budget-usd 0.2 exits 0 and records a corpus snapshot whose output-styles/brief.md digest equals the marker file's, while chezmoi diff stays empty and the live ~/.claude/output-styles/brief.md digest is unchanged before and after (the paid observation, capped at USD 1)
+- [x] #18 rehearsal run --case smoke --corpus chezmoi:HEAD on that same case records a corpus snapshot whose output-styles/brief.md digest equals the live style's, taken in the same paid observation
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -247,4 +247,150 @@ rooted there, and `resolveCorpusFile` against it returns that file's path, while
 the same layout path against the live source still returns
 `~/.claude/output-styles/brief.md`. It fails now because `resolveCorpusFile`
 takes no source, and it is the smallest step that moves the seam ACT-26.5 left.
+
+## Build handoff
+
+### What changed
+
+- **`src/benchmark/corpus-source.ts`, new.** Parses `--corpus` once at the
+  boundary into a `ResolvedCorpusSource` discriminated on kind (`live`,
+  `directory`, `chezmoi`), each carrying the root a layout path lands under.
+  The chezmoi render takes an injected command runner, so its argument sequence
+  is asserted with a fake and no test runs chezmoi. `corpusLayoutEntries` maps a
+  source tree onto corpus layout and is where a source stops mattering.
+- **`src/benchmark/session-corpus.ts`, new.** `snapshotSessionCorpus` copies the
+  resolved source into one snapshot directory under the attempt record;
+  `installSessionCorpusSnapshot` writes its `output-styles/` and `agents/` into
+  `<attempt>/.claude/`; `snapshotStyleName` names the style the attempt selects.
+- **`corpus-file.ts` takes a `CorpusRoot`** rather than knowing the install. Both
+  a resolved source and a snapshot satisfy it. The confinement check is
+  unchanged; only the root it confines to moved.
+- **`session-attempt.ts`** installs the overlay into the attempt directory it
+  already owns and merges `{"outputStyle":"<name>"}` over the case declared
+  settings rather than replacing them.
+- **CLI.** `--corpus` declared once in `COMMANDS` and shared by `run` and
+  `replay`; threaded through `parseArgs`, `parseSessionArgs`, `parseReplayArgs`.
+- **`file-presence.ts`, new (refactor pass).** One `statIfExists`/`pathExists`,
+  taken from `checkpoint.ts`, where only ENOENT reads as absent.
+- **`cases/smoke/case.json`** declares `output-styles/brief.md`, so a corpus
+  variant has something to change.
+
+### What became possible but is not wired up
+
+- **`stale --corpus` (ACT-26.2)** reads `resolveCorpusSource` as its own module,
+  as planned. Nothing calls it from there yet.
+- **The pipeline and stage-replay paths are unchanged.** `captureStageCorpus` and
+  `snapshotStageCorpus` still take skill search roots; the card planned to give
+  them a resolved source, but a stage corpus is entirely skills and those cannot
+  be delivered until ACT-28, so unifying now would build for a caller that
+  cannot exist. `run` and `replay` refuse `--corpus` naming ACT-28
+  (`refuseStageCorpus`, `src/cli/interactive-stdin.ts`). Recorded on ACT-28 with
+  the target shape.
+- **Callers still on the old path:** every pipeline stage. There is no session
+  confirmation group yet (ACT-26.5 left that refused), so `--corpus --confirm`
+  on a session case still hits that refusal.
+
+### What was observed, and how
+
+Three paid runs, total **USD 0.052625**, all with `--model haiku --effort low
+--session-budget-usd 0.2`.
+
+| what | command | result | cost USD |
+|---|---|---|---|
+| AC 17, directory corpus | `rehearsal run --case smoke --corpus <marker dir> --json` | exit 0; snapshot digest `ec8ec541...` = the marker file exactly; both checks PASS | 0.017865 |
+| AC 18, chezmoi corpus | `rehearsal run --case smoke --corpus chezmoi:HEAD --json` | exit 0; snapshot digest `9f1ffb5e...` = the live style exactly; lineage `7d089f40...` differs from the directory run`s `3ae70b78...` | 0.017837 |
+| AC 17 re-verified after the last two commits | same as row 1 | digest and lineage identical to row 1 | 0.016923 |
+
+**The overlay reaches the session, which Shape had not verified inside an
+attempt directory.** The attempt transcript records
+`{"type": "output_style", "style": "brief"}` with
+`cwd: /private/var/.../rehearsal-attempt-juGgUg`, so the session ran in the
+attempt directory holding the overlay and was given the style the snapshot
+delivered.
+
+**Nothing live moved.** `~/.claude/output-styles/brief.md` hashed
+`9f1ffb5e30fbe4cdbe0535af8b1338719b59cb6911d4de9cd526271b55b2d24c` before the
+first run and after the last; `chezmoi diff --exclude encrypted,scripts` was
+empty before and after every one. The marker corpus directory and every scratch
+render were deleted; `$TMPDIR` holds no `rehearsal-chezmoi-*` entry.
+
+Also observed directly: `run --help` and `replay --help` both print the
+`--corpus` line (AC 14); `chezmoi:` with no ref exits **2**, a directory that
+does not exist exits **2**, and `--corpus` on the audit-log pipeline case exits
+**3** naming ACT-28.
+
+Full check, exit codes captured with `; echo $?`: `bun run typecheck` 0,
+`bun run lint` 0, `bun run fmt:check` 0, `bun test` 741 pass 0 fail.
+
+### What was not verified
+
+- **A chezmoi ref other than HEAD end to end.** Only `chezmoi:HEAD` was run
+  paid. Shape verified `HEAD~1` renders and selects real content, and the ref is
+  a passthrough argument, but no attempt was recorded at a non-HEAD ref.
+- **An agent definition delivered through the overlay.** No case declares one,
+  so the install path for `agents/` is covered by unit test only.
+- **`--corpus` on `replay` beyond the refusal.** Since it always refuses, only
+  the refusal was observed.
+- **A corpus source over 20 entries or a large skill tree.** The snapshot copy is
+  unbounded; no case is near that size.
+
+### Defects met on the way
+
+- **The chezmoi render leaked.** Two renders, seventeen entries of João`s home
+  tree each, were left in `$TMPDIR`. The card`s autonomous decision 4 required
+  deleting them. Fixed in `4b604c1`, with a test, and on a failed apply too.
+- **The declared-skill refusal was too broad.** Keyed on every skill the source
+  carried, it made `chezmoi:<ref>` permanently unusable: the first AC 18 run
+  exited 3 on `skills/absorb`, which no case reads. Refusing on what the *case
+  declares* is what decision 1 actually protects, since only a declared file is
+  reported. Fixed in `4b604c1`.
+- **Unparseable `--corpus` exited 3.** The exit codes reserve 3 for a refused
+  precondition and 2 for an unparseable value. Fixed in `2ee8a23`.
+- **Filed, not fixed: ACT-29.** The test suite leaks over 1500 temporary
+  directories per run (817 `rehearsal-attempt-record`, 817
+  `rehearsal-attempt-projects`, 676 `rehearsal-projects`, and more). Pre-existing
+  and far outside this card; `TestResources` already exists to fix it. My own new
+  leak was fixed in place.
+
+### Independent review is due
+
+Yes. The change moves a security-relevant boundary (`resolveCorpusFile`'s
+confinement now confines to a caller-supplied root), runs shell commands built
+by string interpolation (`renderChezmoi`'s `sh -c`), and deletes directories it
+computed (`discardRender`). Each deserves a second reader.
+
+### One more defect, found in the refactor pass: shell injection
+
+Writing the handoff's "independent review is due" line surfaced it: the chezmoi
+render interpolated `dotfilesDirectory`, `ref`, and `sourceDirectory` into an
+`sh -c` string unquoted, and `ref` is a `--corpus` flag value. A red test
+confirmed it: `--corpus "chezmoi:HEAD; touch /tmp/pwned"` produced
+`git -C /dotfiles archive HEAD; touch /tmp/pwned | tar -x -C ...`, which runs
+`touch` as a second command. AC 6 requires the pipe, so the shell stays; every
+interpolated value is now single-quoted.
+
+Verified against a real `sh`, not by reading the code: seven values carrying
+`;`, `&&`, `$()`, backticks, and embedded single quotes each round-tripped
+through `sh -c "printf %s <quoted>"` to their exact original bytes, and the
+probe's `touch` never ran. Fixed in `7d67447`. `chezmoi:HEAD` re-run after the
+change: exit 0, digest `9f1ffb5e...` and lineage `7d089f40...` unchanged from
+the earlier chezmoi run, live corpus untouched.
+
+### Paid spend on this card
+
+Four runs, **USD 0.069510** total, against the USD 1.00 cap:
+
+- 0.017865 AC 17, directory corpus
+- 0.017837 AC 18, chezmoi corpus
+- 0.016923 AC 17 re-verified after the declared-skill and render-cleanup fixes
+- 0.016885 AC 18 re-verified after the shell-quoting fix
+
+Live corpus hashed `9f1ffb5e30fbe4cdbe0535af8b1338719b59cb6911d4de9cd526271b55b2d24c`
+before the first and after the last, and `chezmoi diff --exclude
+encrypted,scripts` was empty at every check.
+
+### Final check
+
+`bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
+`bun test` 742 pass 0 fail. Exit codes captured with `; echo $?`.
 <!-- SECTION:NOTES:END -->
