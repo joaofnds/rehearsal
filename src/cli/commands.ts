@@ -171,6 +171,34 @@ export const COMMANDS: readonly CommandDefinition[] = [
 		],
 	},
 	{
+		name: "review",
+		summary: "Record the human or agent review of a run's Judge result",
+		argument: "run",
+		flags: [
+			{
+				name: "--file",
+				kind: "value",
+				help: "Path to a review JSON file, instead of describing one with the flags below",
+			},
+			{
+				name: "--verdict",
+				kind: "value",
+				help: "ACCEPT or REJECT",
+			},
+			{
+				name: "--summary",
+				kind: "value",
+				help: "One-line summary of the review",
+			},
+			{
+				name: "--finding",
+				kind: "value",
+				help: "One finding as a JSON object; repeat the flag for each finding, in order",
+			},
+			jsonFlag,
+		],
+	},
+	{
 		name: "compare",
 		summary: "Report over completed confirmation evidence; runs no session",
 		argument: "comparison-manifest.json",

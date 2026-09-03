@@ -33,6 +33,7 @@ import {
 } from "./src/cli/commands";
 import { EXIT_CODES, exitCodeFor } from "./src/cli/exit-codes";
 import { runList } from "./src/cli/list-command";
+import { runReview } from "./src/cli/review-command";
 import { runShow } from "./src/cli/show-command";
 import { runStale } from "./src/cli/stale-command";
 import { processOutput } from "./src/cli/output";
@@ -74,11 +75,46 @@ function flagValue(flags: readonly string[], name: string): string | undefined {
 	return index === -1 ? undefined : flags[index + 1];
 }
 
+/**
+ * A flag the caller may repeat, in the order they gave it: `--finding` names
+ * one finding each time, and a review records them in that order.
+ */
+function repeatedFlagValues(
+	flags: readonly string[],
+	name: string,
+): readonly string[] {
+	const values: string[] = [];
+	for (const [index, flag] of flags.entries()) {
+		const value = flags[index + 1];
+		if (flag === name && value !== undefined) {
+			values.push(value);
+		}
+	}
+
+	return values;
+}
+
 async function dispatch(
 	name: string,
 	commandLine: CommandLine,
 ): Promise<number> {
 	switch (name) {
+		case "review": {
+			await runReview(
+				{
+					id: commandLine.argument,
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+					json: commandLine.json,
+					file: flagValue(commandLine.flags, "--file"),
+					verdict: flagValue(commandLine.flags, "--verdict"),
+					summary: flagValue(commandLine.flags, "--summary"),
+					findings: repeatedFlagValues(commandLine.flags, "--finding"),
+				},
+				processOutput,
+			);
+
+			return EXIT_CODES.completed;
+		}
 		case "compare": {
 			await runCompare(
 				{

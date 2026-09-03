@@ -62,6 +62,7 @@ describe("declared commands", () => {
 		expect(COMMANDS.map((command) => command.name)).toEqual([
 			"run",
 			"replay",
+			"review",
 			"compare",
 			"list",
 			"show",

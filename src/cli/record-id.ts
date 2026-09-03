@@ -49,6 +49,8 @@ export type RecordId =
 	| GroupRecordId
 	| ComparisonRecordId;
 
+const RUN_PREFIX = "run:";
+
 /**
  * Both attempt kinds name two segments, so the kind is spelled in the prefix
  * rather than sniffed from the first segment's shape: a session attempt is a
@@ -229,6 +231,23 @@ export function parseRecordId(text: string): RecordId {
 			);
 		}
 	}
+}
+
+/**
+ * `review`, `calibrate`, and `show --checkout` take a run and nothing else, so
+ * the `run:` prefix carries no information the command lacks and a bare name
+ * is accepted too. Both forms go through the parser above, which is what
+ * refuses a segment naming a path outside the runs directory.
+ */
+export function parseRunRecordId(id: string): RunRecordId {
+	const parsed = parseRecordId(
+		id.startsWith(RUN_PREFIX) ? id : `${RUN_PREFIX}${id}`,
+	);
+	if (parsed.kind !== "run") {
+		throw new UsageError(`Record id ${id} names no run`);
+	}
+
+	return parsed;
 }
 
 export function formatRecordId(id: RecordId): string {
