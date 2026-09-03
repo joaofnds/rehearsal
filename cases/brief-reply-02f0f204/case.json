@@ -1,0 +1,31 @@
+{
+	"id": "brief-reply-02f0f204",
+	"kind": "session",
+	"title": "Trunk turn reporting three shipping defects; the brief he accepted ran 136 words",
+	"prompt": "Tools are unavailable now. Write your reply to João for this turn.",
+	"tools": [],
+	"settings": {
+		"outputStyle": "brief"
+	},
+	"corpusFiles": ["output-styles/brief.md"],
+	"checks": [
+		{
+			"kind": "word-band",
+			"max": 154
+		},
+		{
+			"kind": "forbidden-text",
+			"strings": ["—"]
+		},
+		{
+			"kind": "tool-calls",
+			"max": 0
+		}
+	],
+	"transcript": {
+		"file": "02f0f204-613d-49d2-8999-67ba79fedbb1-cut-1270.jsonl",
+		"sha256": "0503096d1d80737e5b2a8f9bba421ea6bf0e29e6f578343734776bf25655adcf",
+		"sourceSession": "02f0f204-613d-49d2-8999-67ba79fedbb1",
+		"cut": 1270
+	}
+}

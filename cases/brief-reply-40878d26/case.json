@@ -1,0 +1,31 @@
+{
+	"id": "brief-reply-40878d26",
+	"kind": "session",
+	"title": "Trunk turn closing a review of TRUNK-94; the brief he accepted ran 108 words",
+	"prompt": "Tools are unavailable now. Write your reply to João for this turn.",
+	"tools": [],
+	"settings": {
+		"outputStyle": "brief"
+	},
+	"corpusFiles": ["output-styles/brief.md"],
+	"checks": [
+		{
+			"kind": "word-band",
+			"max": 154
+		},
+		{
+			"kind": "forbidden-text",
+			"strings": ["—"]
+		},
+		{
+			"kind": "tool-calls",
+			"max": 0
+		}
+	],
+	"transcript": {
+		"file": "40878d26-3572-4a08-a668-4e4c275e462e-cut-491.jsonl",
+		"sha256": "39f452f1f34e676bd45584afaa29bc00f17aa55db1589b495df36062c9bee0d9",
+		"sourceSession": "40878d26-3572-4a08-a668-4e4c275e462e",
+		"cut": 491
+	}
+}
