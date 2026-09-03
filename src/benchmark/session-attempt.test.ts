@@ -249,14 +249,6 @@ describe(sessionCaseArgs.name, () => {
 });
 
 describe("the corpus overlay a session attempt installs", () => {
-	function styleSnapshot(root: string): SessionCorpusSnapshot {
-		return {
-			kind: "directory",
-			root,
-			origin: { kind: "directory", source: root },
-		};
-	}
-
 	async function snapshotHolding(
 		layoutPath: string,
 		contents: string,
@@ -264,7 +256,12 @@ describe("the corpus overlay a session attempt installs", () => {
 		const root = await resources.createControlDirectory();
 		await Bun.write(join(root, layoutPath), contents);
 
-		return styleSnapshot(root);
+		return {
+			kind: "directory",
+			root,
+			origin: { kind: "directory", source: root },
+			declaredPaths: [layoutPath],
+		};
 	}
 
 	it("places the snapshot's output style where the session reads it", async () => {
@@ -336,6 +333,44 @@ describe("the corpus overlay a session attempt installs", () => {
 			permissions: { defaultMode: "plan" },
 			outputStyle: "brief",
 		});
+	});
+
+	/**
+	 * A corpus holds files no case declared, and the whole point of `--corpus` is
+	 * a second style: selecting the first one found would run the attempt against
+	 * a style the case never named while recording the declared one in lineage.
+	 */
+	it("selects and installs only the style the case declared, never a second one the corpus holds", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "output-styles/aardvark.md"), "undeclared\n");
+		await Bun.write(join(root, "output-styles/brief.md"), "declared\n");
+
+		await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
+				corpusSnapshot: {
+					kind: "directory",
+					root,
+					origin: { kind: "directory", source: root },
+					declaredPaths: ["output-styles/brief.md"],
+				},
+			}),
+		);
+
+		const command = claude.runs[0]?.command ?? [];
+		expect(
+			JSON.parse(command[command.indexOf("--settings") + 1] ?? "{}"),
+		).toEqual({ outputStyle: "brief" });
+		expect(claude.runs[0]?.seenFiles).toContain(
+			join(".claude", "output-styles", "brief.md"),
+		);
+		expect(claude.runs[0]?.seenFiles).not.toContain(
+			join(".claude", "output-styles", "aardvark.md"),
+		);
 	});
 
 	it("leaves the attempt directory bare when the corpus is the live install", async () => {

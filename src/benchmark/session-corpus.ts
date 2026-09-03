@@ -1,7 +1,6 @@
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
-import { pathExists } from "./file-presence";
 import type {
 	ChezmoiCorpusSource,
 	ResolvedCorpusSource,
@@ -30,11 +29,15 @@ export type CorpusSnapshotOrigin =
  * The one directory a session attempt's corpus bytes are read from, for
  * hashing and for installing alike. Its shape is corpus layout, so a reader
  * cannot tell whether the bytes were rendered, copied, or already installed.
+ * It carries the paths the case declared because a source holds files no case
+ * named, and installing or selecting one of those would run the attempt
+ * against a corpus it never declared.
  */
 export interface SessionCorpusSnapshot {
 	readonly kind: ResolvedCorpusSource["kind"];
 	readonly root: string;
 	readonly origin: CorpusSnapshotOrigin;
+	readonly declaredPaths: readonly string[];
 }
 
 /**
@@ -100,25 +103,54 @@ export async function snapshotSessionCorpus(
 	declaredPaths: readonly string[],
 ): Promise<SessionCorpusSnapshot> {
 	if (source.kind === "live") {
-		return { kind: "live", root: source.root, origin: originOf(source) };
+		return {
+			kind: "live",
+			root: source.root,
+			origin: originOf(source),
+			declaredPaths: [...declaredPaths],
+		};
 	}
 
 	refuseDeclaredSkills(declaredPaths);
 
 	const entries = await corpusLayoutEntries(source);
 	await mkdir(destination, { recursive: true });
-	for (const entry of entries) {
+	for (const entry of entries.filter((candidate) =>
+		declares(declaredPaths, candidate.layoutPath),
+	)) {
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });
 		await cp(entry.sourcePath, target, { recursive: true });
 	}
 
 	if (source.kind === "chezmoi") {
-		await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
+		if (declaredPaths.includes("CLAUDE.md")) {
+			await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
+		}
 		await discardRender(source);
 	}
 
-	return { kind: source.kind, root: destination, origin: originOf(source) };
+	return {
+		kind: source.kind,
+		root: destination,
+		origin: originOf(source),
+		declaredPaths: [...declaredPaths],
+	};
+}
+
+/**
+ * A skill is declared as `skills/<name>/<file>` but snapshotted as the whole
+ * `skills/<name>` directory, so a declared path matches the entry that carries
+ * it as well as the entry it names exactly.
+ */
+function declares(
+	declaredPaths: readonly string[],
+	layoutPath: string,
+): boolean {
+	return declaredPaths.some(
+		(declared) =>
+			declared === layoutPath || declared.startsWith(`${layoutPath}/`),
+	);
 }
 
 /**
@@ -145,33 +177,32 @@ export async function installSessionCorpusSnapshot(
 		return;
 	}
 
-	for (const kind of ["output-styles", "agents"]) {
-		const installed = join(snapshot.root, kind);
-		if (!(await pathExists(installed))) {
-			continue;
-		}
-
-		await mkdir(join(attemptDirectory, ".claude"), { recursive: true });
-		await cp(installed, join(attemptDirectory, ".claude", kind), {
-			recursive: true,
-		});
+	for (const layoutPath of snapshot.declaredPaths.filter(isOverlaid)) {
+		const target = join(attemptDirectory, ".claude", layoutPath);
+		await mkdir(dirname(target), { recursive: true });
+		await cp(join(snapshot.root, layoutPath), target);
 	}
 }
 
+const OVERLAID_KINDS: readonly string[] = ["output-styles/", "agents/"];
+
+function isOverlaid(layoutPath: string): boolean {
+	return OVERLAID_KINDS.some((kind) => layoutPath.startsWith(kind));
+}
+
 /**
- * Which output style the snapshot delivers, so the attempt can select it: a
- * project-level style shadows the user-level one only when it is named, and
- * nothing else can name it because the snapshot is where the bytes are.
+ * Which output style the snapshot delivers, so the attempt can select it. It is
+ * the one the case declared: a corpus holds styles no case named, and reading
+ * the snapshot directory instead would select one of those while recording the
+ * declared style's digest in lineage.
  */
-export async function snapshotStyleName(
+export function snapshotStyleName(
 	snapshot: SessionCorpusSnapshot,
-): Promise<string | undefined> {
-	const names = await readdir(join(snapshot.root, "output-styles")).catch(
-		() => [],
+): string | undefined {
+	const style = snapshot.declaredPaths.find(
+		(layoutPath) =>
+			layoutPath.startsWith("output-styles/") && extname(layoutPath) === ".md",
 	);
-	const style = names
-		.toSorted((left, right) => left.localeCompare(right))
-		.find((name) => extname(name) === ".md");
 
 	return style === undefined ? undefined : basename(style, ".md");
 }

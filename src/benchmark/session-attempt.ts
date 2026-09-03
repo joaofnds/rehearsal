@@ -210,7 +210,7 @@ async function installCorpusOverlay(
 
 	await installSessionCorpusSnapshot(snapshot, attemptDirectory);
 
-	return { styleName: await snapshotStyleName(snapshot) };
+	return { styleName: snapshotStyleName(snapshot) };
 }
 
 export async function runSessionAttempt(

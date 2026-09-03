@@ -6,10 +6,12 @@ import { hashCorpusFiles } from "#benchmark/corpus-file";
 import { pathExists } from "#benchmark/file-presence";
 import type { ChezmoiCorpusSource } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
+import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
 	SessionCorpusError,
 	installSessionCorpusSnapshot,
 	snapshotSessionCorpus,
+	snapshotStyleName,
 } from "#benchmark/session-corpus";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
@@ -43,7 +45,7 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
-			[],
+			["output-styles/brief.md", "agents/reviewer.md", "CLAUDE.md"],
 		);
 
 		expect(
@@ -65,7 +67,7 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
-			[],
+			["output-styles/brief.md"],
 		);
 
 		const before = await hashCorpusFiles(snapshot, ["output-styles/brief.md"]);
@@ -94,7 +96,7 @@ describe(snapshotSessionCorpus.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			source,
 			join(destination, "corpus"),
-			[],
+			["CLAUDE.md"],
 		);
 
 		expect(await Bun.file(join(snapshot.root, "CLAUDE.md")).bytes()).toEqual(
@@ -234,6 +236,137 @@ describe(snapshotSessionCorpus.name, () => {
 	});
 });
 
+describe("selecting the style and scoping the overlay to what the case declared", () => {
+	async function twoStyleSnapshot(
+		declaredPaths: readonly string[],
+	): Promise<SessionCorpusSnapshot> {
+		const root = await directoryCorpus({
+			"output-styles/aardvark.md": "an undeclared style\n",
+			"output-styles/brief.md": "the declared style\n",
+			"agents/rogue.md": "an undeclared agent\n",
+		});
+		const destination = await resources.createControlDirectory();
+
+		return snapshotSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			declaredPaths,
+		);
+	}
+
+	/**
+	 * Alphabetical order picked the style before, so a corpus holding a second
+	 * style ran the attempt against one the case never named while recording the
+	 * declared one's digest in lineage.
+	 */
+	it("selects the style the case declared, not the first one in the snapshot", async () => {
+		const snapshot = await twoStyleSnapshot(["output-styles/brief.md"]);
+
+		expect(snapshotStyleName(snapshot)).toBe("brief");
+	});
+
+	it("selects no style when the case declares none", async () => {
+		const snapshot = await twoStyleSnapshot(["agents/reviewer.md"]);
+
+		expect(snapshotStyleName(snapshot)).toBeUndefined();
+	});
+
+	/**
+	 * The selection rule has to hold on the snapshot alone: a snapshot can carry
+	 * a style the case did not declare, and alphabetical order would pick that
+	 * one while lineage recorded the declared style's digest.
+	 */
+	it("selects the declared style from a snapshot holding one that sorts before it", async () => {
+		const root = await directoryCorpus({
+			"output-styles/aardvark.md": "an undeclared style\n",
+			"output-styles/brief.md": "the declared style\n",
+		});
+
+		expect(
+			snapshotStyleName({
+				kind: "directory",
+				root,
+				origin: { kind: "directory", source: root },
+				declaredPaths: ["output-styles/brief.md"],
+			}),
+		).toBe("brief");
+	});
+
+	it("installs only the files the case declared", async () => {
+		const snapshot = await twoStyleSnapshot(["output-styles/brief.md"]);
+		const attemptDirectory = await resources.createControlDirectory();
+
+		await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/output-styles/brief.md"),
+			).text(),
+		).toBe("the declared style\n");
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/output-styles/aardvark.md"),
+			).exists(),
+		).toBe(false);
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/agents/rogue.md"),
+			).exists(),
+		).toBe(false);
+	});
+
+	/**
+	 * The overlay's scope has to hold on the snapshot alone: what reaches the
+	 * session is what the case declared, not everything the snapshot directory
+	 * happens to carry.
+	 */
+	it("installs the declared file from a snapshot carrying an undeclared one", async () => {
+		const root = await directoryCorpus({
+			"output-styles/aardvark.md": "an undeclared style\n",
+			"output-styles/brief.md": "the declared style\n",
+			"agents/rogue.md": "an undeclared agent\n",
+		});
+		const attemptDirectory = await resources.createControlDirectory();
+
+		await installSessionCorpusSnapshot(
+			{
+				kind: "directory",
+				root,
+				origin: { kind: "directory", source: root },
+				declaredPaths: ["output-styles/brief.md"],
+			},
+			attemptDirectory,
+		);
+
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/output-styles/brief.md"),
+			).text(),
+		).toBe("the declared style\n");
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/output-styles/aardvark.md"),
+			).exists(),
+		).toBe(false);
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/agents/rogue.md"),
+			).exists(),
+		).toBe(false);
+	});
+
+	it("snapshots only the files the case declared", async () => {
+		const snapshot = await twoStyleSnapshot(["output-styles/brief.md"]);
+
+		expect(
+			await Bun.file(join(snapshot.root, "output-styles/aardvark.md")).exists(),
+		).toBe(false);
+		expect(
+			await Bun.file(join(snapshot.root, "agents/rogue.md")).exists(),
+		).toBe(false);
+	});
+});
+
 describe(installSessionCorpusSnapshot.name, () => {
 	it("writes the snapshot's output styles and agents under the attempt's .claude", async () => {
 		const root = await directoryCorpus({
@@ -244,7 +377,7 @@ describe(installSessionCorpusSnapshot.name, () => {
 		const snapshot = await snapshotSessionCorpus(
 			await resolveCorpusSource(root),
 			join(destination, "corpus"),
-			[],
+			["output-styles/brief.md", "agents/reviewer.md"],
 		);
 		const attemptDirectory = await resources.createControlDirectory();
 
