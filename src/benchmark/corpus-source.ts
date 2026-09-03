@@ -241,9 +241,10 @@ async function entriesUnder(
 /**
  * A chezmoi render is the whole home layout, and its `.claude/skills`,
  * `.claude/agents`, and `.claude/CLAUDE.md` are symlinks into the live
- * `~/.agents`: following one would hash and install the live corpus while
- * claiming to have rendered a ref, so the real files under `.agents` are read
- * instead. The render carries no project CLAUDE.md.
+ * `~/.agents`, so the real files under `.agents` are read instead. This is a
+ * mapping, not a defense: a link the dotfiles gain tomorrow lands under a path
+ * this list reads, and refusing a symlinked entry at the snapshot is what
+ * stops it.
  */
 const CHEZMOI_LAYOUT: readonly (readonly [string, string])[] = [
 	[".agents/skills", "skills"],

@@ -237,6 +237,60 @@ describe(snapshotSessionCorpus.name, () => {
 		).toBe(false);
 	});
 
+	/**
+	 * A recursive copy dereferences, so a symlinked corpus entry pulls in bytes
+	 * from outside the source: the harness would hash and install whatever the
+	 * link points at while the record says it snapshotted a source. Refusing is
+	 * the precedent ACT-26.5 set for a fixture holding a symlink.
+	 */
+	it("refuses a symlinked corpus entry, naming the entry", async () => {
+		const outside = await directoryCorpus({
+			"output-styles/brief.md": "the live style\n",
+		});
+		const root = await resources.createControlDirectory();
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await symlink(
+			join(outside, "output-styles/brief.md"),
+			join(root, "output-styles/evil.md"),
+		);
+		const destination = await resources.createControlDirectory();
+
+		const failure = await failureOf(
+			snapshotSessionCorpus(
+				await resolveCorpusSource(root),
+				join(destination, "corpus"),
+				["output-styles/evil.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("output-styles/evil.md");
+	});
+
+	it("refuses a symlink inside a declared skill directory", async () => {
+		const outside = await directoryCorpus({ "secret.md": "outside bytes\n" });
+		const root = await resources.createControlDirectory();
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await Bun.write(join(root, "agents/reviewer.md"), "an agent\n");
+		await mkdir(join(root, "output-styles/nested"), { recursive: true });
+		await symlink(
+			join(outside, "secret.md"),
+			join(root, "output-styles/nested/leak.md"),
+		);
+		const destination = await resources.createControlDirectory();
+
+		const failure = await failureOf(
+			snapshotSessionCorpus(
+				await resolveCorpusSource(root),
+				join(destination, "corpus"),
+				["output-styles/nested"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("leak.md");
+	});
+
 	it("never reads through a .claude symlink in a rendered tree", async () => {
 		const rendered = await resources.createControlDirectory();
 		const live = await directoryCorpus({

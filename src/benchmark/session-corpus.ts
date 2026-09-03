@@ -1,8 +1,9 @@
-import { cp, mkdir, rm } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { cp, lstat, mkdir, readdir, rm } from "node:fs/promises";
+import { basename, dirname, extname, join, relative } from "node:path";
 import { PROJECT_INSTRUCTIONS_PATH } from "./config";
 import type {
 	ChezmoiCorpusSource,
+	CorpusLayoutEntry,
 	ResolvedCorpusSource,
 } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
@@ -128,6 +129,43 @@ export async function snapshotSessionCorpus(
 	};
 }
 
+/**
+ * A recursive copy dereferences, so a symlinked entry copies bytes from outside
+ * the source: the harness would hash and install whatever the link points at
+ * while the record says it snapshotted a source. A skill entry is a directory,
+ * so the links inside it are refused too.
+ */
+async function refuseSymlinks(entry: CorpusLayoutEntry): Promise<void> {
+	const stats = await lstat(entry.sourcePath);
+	if (stats.isSymbolicLink()) {
+		throw symlinkedCorpusEntry(entry.layoutPath);
+	}
+	if (!stats.isDirectory()) {
+		return;
+	}
+
+	for (const nested of await readdir(entry.sourcePath, {
+		recursive: true,
+		withFileTypes: true,
+	})) {
+		if (nested.isSymbolicLink()) {
+			throw symlinkedCorpusEntry(
+				join(
+					entry.layoutPath,
+					relative(entry.sourcePath, nested.parentPath),
+					nested.name,
+				),
+			);
+		}
+	}
+}
+
+function symlinkedCorpusEntry(layoutPath: string): SessionCorpusError {
+	return new SessionCorpusError(
+		`Corpus entry ${layoutPath} is a symlink, which would snapshot bytes from outside the corpus source`,
+	);
+}
+
 async function copyDeclared(
 	source: ResolvedCorpusSource,
 	destination: string,
@@ -139,6 +177,8 @@ async function copyDeclared(
 	for (const entry of entries.filter((candidate) =>
 		declares(declaredPaths, candidate.layoutPath),
 	)) {
+		await refuseSymlinks(entry);
+
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });
 		await cp(entry.sourcePath, target, { recursive: true });
