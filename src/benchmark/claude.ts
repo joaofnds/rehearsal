@@ -21,10 +21,12 @@ export interface ClaudeInvocation {
 	readonly session?:
 		| { readonly id: string; readonly resume: boolean }
 		| undefined;
+	readonly settingSources?: "project" | undefined;
 }
 
 export function claudeArgs(invocation: ClaudeInvocation): string[] {
-	const { settings, schema, access, systemPrompt, session } = invocation;
+	const { settings, schema, access, systemPrompt, session, settingSources } =
+		invocation;
 
 	return [
 		"claude",
@@ -48,6 +50,9 @@ export function claudeArgs(invocation: ClaudeInvocation): string[] {
 		...(session
 			? [session.resume ? "--resume" : "--session-id", session.id]
 			: ["--no-session-persistence"]),
+		...(settingSources === undefined
+			? []
+			: ["--setting-sources", settingSources]),
 	];
 }
 

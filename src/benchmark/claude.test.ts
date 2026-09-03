@@ -208,4 +208,28 @@ describe(claudeArgs.name, () => {
 		expect(command).toContain("--resume");
 		expect(command).not.toContain("--session-id");
 	});
+
+	it("restricts a stage session to project-level settings", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+			settingSources: "project",
+		});
+
+		expect(command).toContain("--setting-sources");
+		expect(command[command.indexOf("--setting-sources") + 1]).toBe("project");
+	});
+
+	it("omits --setting-sources when the invocation does not restrict sources", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
+
+		expect(command).not.toContain("--setting-sources");
+	});
 });
