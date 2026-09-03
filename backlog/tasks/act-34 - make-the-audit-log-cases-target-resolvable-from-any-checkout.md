@@ -1,10 +1,10 @@
 ---
 id: ACT-34
 title: make the audit-log case's target resolvable from any checkout
-status: Shape
+status: To Do
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-03 13:07'
+updated_date: '2026-09-03 23:20'
 labels: []
 dependencies: []
 references:
@@ -38,4 +38,6 @@ The decision this needs: whether a case may declare a target outside the reposit
 Decided by Joao, 2026-09-03 (triage question 5): a pipeline case may declare a target repository outside this one, and the test asserting the target exists skips rather than fails when it is absent. So this card does not relocate or vendor the NestJS template; it makes absence a skip.
 
 What that leaves for Shape: a skipped test reports nothing, so a checkout that has the target and a checkout that does not now pass identically, and a genuinely broken declaration (a typo in the path) becomes invisible. The mechanism has to tell 'this machine does not have the sibling repository', which is expected, from 'this declaration is wrong', which is not. That distinction is the design work.
+
+2026-09-04, runner: moved back to To Do. Its question was answered 2026-09-03 and no session is shaping it, so Shape read as work in progress beside ACT-28. Shape is for a card a session is shaping.
 <!-- SECTION:NOTES:END -->
