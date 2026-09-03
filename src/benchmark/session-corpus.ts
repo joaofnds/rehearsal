@@ -7,24 +7,11 @@ import type {
 	ResolvedCorpusSource,
 } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
+import type { CorpusSnapshotOrigin } from "./session-record";
 
 export class SessionCorpusError extends Error {
 	public override name = "SessionCorpusError";
 }
-
-/**
- * How a snapshot's bytes were selected, recorded so two runs at the same
- * chezmoi ref are comparable and a ref that moved between them is visible. A
- * ref names different bytes on different days; its resolved commit does not.
- */
-export type CorpusSnapshotOrigin =
-	| { readonly kind: "live" }
-	| { readonly kind: "directory"; readonly source: string }
-	| {
-			readonly kind: "chezmoi";
-			readonly ref: string;
-			readonly commit: string;
-	  };
 
 /**
  * The one directory a session attempt's corpus bytes are read from, for

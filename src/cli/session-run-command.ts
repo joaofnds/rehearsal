@@ -23,7 +23,10 @@ import {
 } from "#benchmark/session-corpus";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { sessionLineage } from "#benchmark/session-lineage";
-import type { SessionAttemptRecord } from "#benchmark/session-record";
+import type {
+	CorpusSnapshotOrigin,
+	SessionAttemptRecord,
+} from "#benchmark/session-record";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
 import { asUsageErrorAsync } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
@@ -114,6 +117,7 @@ interface AttemptRecordInputs {
 	readonly settings: SessionSettings;
 	readonly lineage: string;
 	readonly corpusFiles: readonly ResolvedCorpusFile[];
+	readonly corpusOrigin: CorpusSnapshotOrigin;
 	readonly attempt: SessionAttempt;
 	readonly elapsedMs: number;
 }
@@ -146,6 +150,7 @@ function buildAttemptRecord(
 		model: settings.model,
 		sessionBudgetUsd: settings.budgetUsd,
 		corpusFiles: inputs.corpusFiles.map((file) => ({ ...file })),
+		corpusOrigin: inputs.corpusOrigin,
 		prompt: sessionCase.prompt,
 		transcriptFile: attempt.transcriptFile,
 		outcome: attempt.outcome,
@@ -208,6 +213,7 @@ export async function runSessionDebugAttempt(
 			settings,
 			lineage,
 			corpusFiles,
+			corpusOrigin: corpus.snapshot.origin,
 			attempt,
 			elapsedMs: Date.now() - startedAt,
 		}),

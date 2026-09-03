@@ -3,6 +3,29 @@ import { effortSchema } from "./config";
 import { claudeCallMetricsSchema } from "./contracts";
 import { checkResultSchema } from "./session-check";
 
+/**
+ * How the attempt's corpus bytes were selected, recorded beside the digests so
+ * the ref and the commit it resolved to survive the run: two runs at one ref
+ * are comparable only if the record says which commit each read. A record
+ * written before this field existed carries none, and every one of those read
+ * the live install.
+ */
+export const corpusSnapshotOriginSchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("live") }).strict(),
+	z
+		.object({ kind: z.literal("directory"), source: z.string().min(1) })
+		.strict(),
+	z
+		.object({
+			kind: z.literal("chezmoi"),
+			ref: z.string().min(1),
+			commit: z.string().regex(/^[0-9a-f]{40}$/u, "Invalid commit sha"),
+		})
+		.strict(),
+]);
+
+export type CorpusSnapshotOrigin = z.infer<typeof corpusSnapshotOriginSchema>;
+
 const corpusFileSchema = z
 	.object({
 		path: z.string().min(1),
@@ -95,6 +118,7 @@ export const sessionAttemptRecordSchema = z
 		effort: effortSchema.optional(),
 		sessionBudgetUsd: z.number().positive(),
 		corpusFiles: z.array(corpusFileSchema),
+		corpusOrigin: corpusSnapshotOriginSchema.optional(),
 		prompt: z.string().min(1),
 		reply: z.string().optional(),
 		transcriptFile: z.string().min(1),

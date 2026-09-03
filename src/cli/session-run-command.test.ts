@@ -238,6 +238,39 @@ describe("running a session case against a corpus source", () => {
 		);
 	});
 
+	/**
+	 * Criterion 8's purpose is that two runs at one ref are comparable and a
+	 * moved ref is visible, which only holds if the record on disk says where
+	 * the bytes came from.
+	 */
+	it("records the directory source the corpus came from", async () => {
+		const root = await corpusDirectory("marker brief\n");
+
+		const outcome = await attemptWith(root);
+
+		expect(outcome.record.corpusOrigin).toEqual({
+			kind: "directory",
+			source: root,
+		});
+	});
+
+	it("records the live install as the origin when no source is named", async () => {
+		const outcome = await attemptWith(undefined);
+
+		expect(outcome.record.corpusOrigin).toEqual({ kind: "live" });
+	});
+
+	it("writes the origin to the record file, not only to the value it returns", async () => {
+		const root = await corpusDirectory("marker brief\n");
+
+		const outcome = await attemptWith(root);
+
+		expect(
+			parseSessionAttemptRecord(await Bun.file(outcome.recordFile).text())
+				.corpusOrigin,
+		).toEqual({ kind: "directory", source: root });
+	});
+
 	it("changes the lineage when the source's declared bytes differ", async () => {
 		const first = await attemptWith(await corpusDirectory("one brief\n"));
 		const second = await attemptWith(await corpusDirectory("another brief\n"));

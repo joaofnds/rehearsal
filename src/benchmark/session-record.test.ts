@@ -96,6 +96,59 @@ describe("sessionAttemptRecordSchema", () => {
 	 * compiler refuses this literal in typed code, which is the same guarantee
 	 * one layer earlier.
 	 */
+	/**
+	 * Criterion 8 exists so two runs at one chezmoi ref are comparable and a
+	 * moved ref is visible, which nothing in the record could show while the
+	 * origin lived only in memory.
+	 */
+	it("carries the chezmoi origin's ref and resolved commit", () => {
+		const parsed = sessionAttemptRecordSchema.parse(
+			record({
+				corpusOrigin: {
+					kind: "chezmoi",
+					ref: "HEAD",
+					commit: "0".repeat(40),
+				},
+			}),
+		);
+
+		expect(parsed.corpusOrigin).toEqual({
+			kind: "chezmoi",
+			ref: "HEAD",
+			commit: "0".repeat(40),
+		});
+	});
+
+	it("carries a directory origin's source", () => {
+		expect(
+			sessionAttemptRecordSchema.parse(
+				record({ corpusOrigin: { kind: "directory", source: "/corpus" } }),
+			).corpusOrigin,
+		).toEqual({ kind: "directory", source: "/corpus" });
+	});
+
+	/**
+	 * Records written before the origin existed carry no such field, and they
+	 * were all the live install, which is what an absent origin means.
+	 */
+	it("accepts a record written before the origin existed", () => {
+		const { corpusOrigin: _dropped, ...legacy } = record();
+
+		expect(
+			sessionAttemptRecordSchema.parse(legacy).corpusOrigin,
+		).toBeUndefined();
+	});
+
+	it("refuses a chezmoi origin whose commit is not a sha", () => {
+		const parsed = sessionAttemptRecordSchema.safeParse(
+			record({
+				corpusOrigin: { kind: "chezmoi", ref: "HEAD", commit: "not-a-sha" },
+			}),
+		);
+
+		expect(parsed.success).toBe(false);
+	});
+
 	it("refuses a result naming a check kind that does not exist", () => {
 		const parsed = sessionAttemptRecordSchema.safeParse({
 			...record({ checks: [] }),
