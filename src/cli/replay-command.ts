@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readdir } from "node:fs/promises";
 import {
 	loadAttempts,
 	LineageMismatchError,
@@ -40,7 +39,7 @@ import type { BenchmarkRunPaths } from "#benchmark/run-layout";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
-	runNameFromCheckpointsEntry,
+	recordedRunNames,
 } from "#benchmark/run-layout";
 import { loadStageRubric, runStageJudge } from "#benchmark/stage-grading";
 import {
@@ -256,15 +255,7 @@ export async function resolveRunDirectory(runName: string): Promise<string> {
 		return paths.checkpointsDirectory;
 	}
 
-	let runEntries: string[];
-	try {
-		runEntries = await readdir(paths.runsDirectory);
-	} catch {
-		runEntries = [];
-	}
-	const recorded = runEntries
-		.map((entry) => runNameFromCheckpointsEntry(entry))
-		.filter((entry) => entry !== undefined);
+	const recorded = await recordedRunNames(paths.runsDirectory);
 
 	throw new RefusedPreconditionError(
 		`No replayable run named ${paths.name}; recorded runs: ${

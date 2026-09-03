@@ -1,7 +1,10 @@
+import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const CHECKPOINTS_SUFFIX = ".checkpoints";
 const MANIFEST_FILE = "manifest.json";
+const RECORD_SUFFIX = ".json";
 
 export interface BenchmarkRunPaths {
 	readonly runsDirectory: string;
@@ -125,4 +128,92 @@ export function comparisonReportPaths(
 	const directory = join(runsDirectory, "comparisons", manifestDigest);
 
 	return { directory, reportFile: join(directory, "report.json") };
+}
+
+/**
+ * Enumeration lives beside the path builders because this module is the only
+ * one that knows a run's checkpoints directory carries a suffix, a group is a
+ * directory under `confirmations`, and a replay record is a timestamp file
+ * under its lineage. A directory that was never written is nothing recorded,
+ * not a failure: `list` over a fresh checkout prints no line and exits 0.
+ */
+async function entries(directory: string): Promise<readonly Dirent[]> {
+	const found: Dirent[] = await readdir(directory, {
+		withFileTypes: true,
+	}).catch(() => []);
+
+	return found.toSorted((left, right) => (left.name < right.name ? -1 : 1));
+}
+
+async function directoryNames(directory: string): Promise<readonly string[]> {
+	const found = await entries(directory);
+
+	return found.filter((entry) => entry.isDirectory()).map(({ name }) => name);
+}
+
+export async function recordedRunNames(
+	runsDirectory: string,
+): Promise<readonly string[]> {
+	const names = await directoryNames(runsDirectory);
+
+	return names
+		.map((entry) => runNameFromCheckpointsEntry(entry))
+		.filter((name) => name !== undefined);
+}
+
+export function confirmationGroupIds(
+	runsDirectory: string,
+): Promise<readonly string[]> {
+	return directoryNames(join(runsDirectory, "confirmations"));
+}
+
+export function comparisonDigests(
+	runsDirectory: string,
+): Promise<readonly string[]> {
+	return directoryNames(join(runsDirectory, "comparisons"));
+}
+
+export interface SessionAttemptId {
+	readonly caseId: string;
+	readonly uuid: string;
+}
+
+export async function sessionAttemptIds(
+	runsDirectory: string,
+): Promise<readonly SessionAttemptId[]> {
+	const sessionsDirectory = join(runsDirectory, "sessions");
+	const attempts: SessionAttemptId[] = [];
+
+	for (const caseId of await directoryNames(sessionsDirectory)) {
+		for (const uuid of await directoryNames(join(sessionsDirectory, caseId))) {
+			attempts.push({ caseId, uuid });
+		}
+	}
+
+	return attempts;
+}
+
+export interface StageAttemptId {
+	readonly lineage: string;
+	readonly timestamp: string;
+}
+
+export async function replayAttemptIds(
+	runsDirectory: string,
+): Promise<readonly StageAttemptId[]> {
+	const replaysDirectory = join(runsDirectory, "replays");
+	const attempts: StageAttemptId[] = [];
+
+	for (const lineage of await directoryNames(replaysDirectory)) {
+		for (const entry of await entries(join(replaysDirectory, lineage))) {
+			if (entry.isFile() && entry.name.endsWith(RECORD_SUFFIX)) {
+				attempts.push({
+					lineage,
+					timestamp: entry.name.slice(0, -RECORD_SUFFIX.length),
+				});
+			}
+		}
+	}
+
+	return attempts;
 }
