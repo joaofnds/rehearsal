@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "./command";
+import { CommandError, runCommand } from "./command";
 import { StageValidationError } from "./contracts";
 import {
 	addWorktree,
@@ -13,6 +13,7 @@ import {
 	capturePlanningAdvance,
 	captureWorkflowBackup,
 	claimTarget,
+	refExists,
 	removeWorktree,
 	restoreTarget,
 	teardownTarget,
@@ -99,6 +100,49 @@ describe(assertBuildCommitted.name, () => {
 		expect(
 			assertBuildCommitted(source.directory, source.sha),
 		).rejects.toBeInstanceOf(StageValidationError);
+	});
+});
+
+describe(refExists.name, () => {
+	it("finds a ref the repository holds", async () => {
+		const source = await testResources.createRepository();
+		await runCommand(
+			["git", "update-ref", "refs/rehearsal/run-1", source.sha],
+			source.directory,
+		);
+
+		expect(await refExists(source.directory, "refs/rehearsal/run-1")).toBe(
+			true,
+		);
+	});
+
+	it("reports a ref the repository does not hold", async () => {
+		const source = await testResources.createRepository();
+
+		expect(await refExists(source.directory, "refs/rehearsal/run-1")).toBe(
+			false,
+		);
+	});
+
+	/**
+	 * A repository that has moved is not a run that retained nothing. Telling
+	 * the two apart is what decides whether the caller goes looking for the
+	 * repository or re-runs the benchmark, so the unreadable repository is
+	 * raised rather than answered with false.
+	 */
+	it("raises a repository it cannot read rather than calling the ref missing", () => {
+		const missing = join(tmpdir(), "rehearsal-absent-repository");
+
+		expect(refExists(missing, "refs/rehearsal/run-1")).rejects.toThrow();
+	});
+
+	it("raises a directory that holds no repository", async () => {
+		const plain = await mkdtemp(join(tmpdir(), "rehearsal-plain-"));
+		testResources.track(plain);
+
+		expect(refExists(plain, "refs/rehearsal/run-1")).rejects.toBeInstanceOf(
+			CommandError,
+		);
 	});
 });
 

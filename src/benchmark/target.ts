@@ -411,8 +411,10 @@ export function assertCommitSubjects(
 
 /**
  * Whether the target still holds a run's retained candidate. `rev-parse
- * --verify` fails on a name that resolves to nothing, which is the question,
- * and `git` turns that into a thrown CommandError.
+ * --verify --quiet` exits 1 on a name that resolves to nothing, which is the
+ * question, and 128 when it cannot read a repository there at all, which is
+ * not: a repository that moved still holds the candidate, and its caller
+ * should be sent looking for it rather than told to re-run.
  */
 export async function refExists(
 	repositoryRoot: string,
@@ -422,8 +424,12 @@ export async function refExists(
 		await git(repositoryRoot, "rev-parse", "--verify", "--quiet", reference);
 
 		return true;
-	} catch {
-		return false;
+	} catch (error) {
+		if (error instanceof CommandError && error.exitCode === 1) {
+			return false;
+		}
+
+		throw error;
 	}
 }
 

@@ -220,16 +220,35 @@ async function refuseExistingDirectory(directory: string): Promise<void> {
 	);
 }
 
+/**
+ * The two ways `--checkout` can find nothing, told apart. A repository that
+ * moved still holds the candidate under its retention ref, so its caller is
+ * sent to find the repository; only a readable repository without the ref
+ * means the run retained nothing and has to be re-run.
+ */
 async function refuseUnretainedRun(
 	sourceRoot: string,
 	reference: string,
 	run: string,
 ): Promise<void> {
-	if (await refExists(sourceRoot, reference)) {
+	if (await retainsCandidate(sourceRoot, reference)) {
 		return;
 	}
 
 	throw new RefusedPreconditionError(
 		`No ${reference} in ${sourceRoot}; run ${run} retained no candidate there`,
 	);
+}
+
+async function retainsCandidate(
+	sourceRoot: string,
+	reference: string,
+): Promise<boolean> {
+	try {
+		return await refExists(sourceRoot, reference);
+	} catch (error) {
+		throw new RefusedPreconditionError(
+			`Cannot read the target repository at ${sourceRoot} this run recorded; the candidate may still be retained wherever it is now: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }
