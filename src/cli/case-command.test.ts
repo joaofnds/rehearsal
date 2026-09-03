@@ -154,8 +154,12 @@ describe(runCaseCapture.name, () => {
 					title: "Capture probe",
 					prompt: "Say the codeword.",
 					tools: [],
-					corpusFiles: [],
-					checks: [{ kind: "word-band", max: 1 }],
+					settings: { outputStyle: "brief" },
+					corpusFiles: ["output-styles/brief.md"],
+					checks: [
+						{ kind: "word-band", max: 1 },
+						{ kind: "forbidden-text", strings: ["\u2014"] },
+					],
 				},
 				null,
 				2,
@@ -232,7 +236,7 @@ describe(runCaseCapture.name, () => {
 		expect(written.trimEnd().split("\n")).toHaveLength(3);
 	});
 
-	it("writes the committed declaration with the tab indent the repository formats to", async () => {
+	it("writes the committed declaration with a tab indent rather than the two spaces a record takes", async () => {
 		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
