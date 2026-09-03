@@ -7,8 +7,9 @@ import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
-import { runList } from "#cli/list-command";
+import { LIST_KINDS, runList } from "#cli/list-command";
 import { parseRecordId } from "#cli/record-id";
+import { runShow } from "#cli/show-command";
 
 function lines(stdout: readonly string[]): readonly string[] {
 	const text = stdout.join("");
@@ -130,29 +131,30 @@ describe(runList.name, () => {
 		]);
 	});
 
-	it("prints every id in a form show accepts back", async () => {
-		const fixture = await writtenFixture();
-
-		for (const kind of [
-			"cases",
-			"runs",
-			"checkpoints",
-			"attempts",
-			"groups",
-			"comparisons",
-		] as const) {
+	it.each([...LIST_KINDS])(
+		"prints ids show accepts back for %s",
+		async (kind) => {
+			const fixture = await writtenFixture();
 			const recorder = recordOutput();
 			await runList(
 				{ kind, runsDirectory: fixture.runsDirectory },
 				recorder.output,
 			);
+			const printed = ids(recorder.stdout);
 
-			expect(ids(recorder.stdout).length).toBeGreaterThan(0);
-			for (const id of ids(recorder.stdout)) {
-				expect(() => parseRecordId(id)).not.toThrow();
+			expect(printed.length).toBeGreaterThan(0);
+			for (const id of printed) {
+				const shown = recordOutput();
+				await runShow(
+					{ id, json: true, runsDirectory: fixture.runsDirectory },
+					shown.output,
+				);
+
+				expect(shown.stdout.join("")).not.toBe("");
+				expect(parseRecordId(id)).toBeDefined();
 			}
-		}
-	});
+		},
+	);
 
 	describe("when one record cannot be read", () => {
 		it("still prints the valid lines and names the unreadable one on stderr", async () => {
