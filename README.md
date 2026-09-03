@@ -266,6 +266,11 @@ writes nothing, and exits 3, so the second invocation approves a result the
 caller has seen. A calibration that needed no rejudge completes without the
 flag, because there is nothing to approve.
 
+Both invocations run the rejudge, so confirming one costs its Judge calls
+twice. That is deliberate: each invocation reads the rubrics and instructions
+as they stand at that moment, and a grade carried over from the first would
+let you approve a result the current corpus no longer produces.
+
 Invalid review JSON, inconsistent findings, malformed rubric IDs, or an
 ineffective rubric revision leave the record where it was and exit 3 with the
 reason. Under `--pause` the same refusal returns to the review prompt with the

@@ -381,6 +381,15 @@ function judgeKnobsOf(record: Readonly<CalibratableRecord>): JudgeKnobs {
  * result. It asks nothing. `--confirm-rejudge` stands in for the typed yes the
  * paused loop asks for, and is required exactly where that question was asked:
  * when a rejudge produced a revised result the caller has not seen.
+ *
+ * Each invocation pays for its own rejudge, so confirming one costs the Judge
+ * calls twice. That is the price of the two-invocation protocol rather than an
+ * oversight: the rubrics and instructions are read fresh each time, and a
+ * grade cached from the first invocation would let the caller confirm a result
+ * the current corpus no longer produces, which is what the confirmation
+ * exists to prevent. A cache would have to be invalidated on exactly the
+ * inputs the rejudge already reads, so it would buy nothing a third read
+ * does not.
  */
 export async function runCalibrate(
 	request: Readonly<CalibrateRequest>,
@@ -411,7 +420,7 @@ export async function runCalibrate(
 		output.stderr(`${revisedGrades(calibration)}\n`);
 
 		throw new RefusedPreconditionError(
-			`The rejudge revised the grades above; re-run with --confirm-rejudge to record them for run ${run}`,
+			`The rejudge revised the grades above; re-run with --confirm-rejudge to record them for run ${run}. That rejudge runs again, against the rubrics as they stand then.`,
 		);
 	}
 
