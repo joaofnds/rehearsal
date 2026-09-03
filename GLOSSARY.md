@@ -84,6 +84,18 @@
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
+- **Corpus overlay** — the project-level files a session attempt is given so it
+  reads a corpus variant: the snapshot's output styles and agent definitions
+  written under the attempt directory's `.claude/`, where they shadow the
+  same-named user-level ones. The session runs with the live configuration, so
+  its hooks, memory, and MCP are the real ones and nothing installed moves. A
+  skill cannot be delivered this way, because a project-level skill does not
+  shadow a user-level one.
+- **Corpus snapshot origin** — how a snapshot's bytes were selected, recorded
+  beside them: the live install, a directory, or a chezmoi ref with the commit
+  that ref resolved to. The commit rather than the ref, because `chezmoi:HEAD`
+  names different bytes on different days and two runs at one ref must be
+  comparable.
 - **Corpus source** — where an attempt's corpus bytes come from, named by
   `--corpus`: a directory already in corpus layout, or `chezmoi:<ref>`, the
   chezmoi source at that git ref rendered into a scratch destination and mapped

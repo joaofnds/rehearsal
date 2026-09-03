@@ -393,6 +393,13 @@ bun run rehearsal run \
   --effort low \
   --session-budget-usd 0.2
 
+bun run rehearsal run \
+  --case smoke \
+  --corpus ~/variants/brief-rewrite \
+  --model haiku \
+  --effort low \
+  --session-budget-usd 0.2
+
 bun run rehearsal case capture <case-id> \
   --session <session-id-or-prefix> \
   --cut <index>
@@ -401,6 +408,25 @@ bun run rehearsal case capture <case-id> \
 `--case` names a declared case under `cases/` and defaults to `audit-log`. A
 session case takes neither `--target` nor `--pipeline`; naming either is a
 usage error rather than a flag that quietly does nothing.
+
+`--corpus` names the corpus under test: a directory already in corpus layout
+(`CLAUDE.md`, `skills/<name>/`, `output-styles/<name>.md`, `agents/<name>.md`),
+or `chezmoi:<ref>`, the chezmoi source at that git ref rendered into a scratch
+destination the run deletes afterwards. Absent `--corpus` the corpus is the live
+install, exactly as before. Either way the source is resolved and snapshotted
+before any provider call, and the snapshot is the only place the bytes are read
+from for hashing and for delivery, so a run against a moving source cannot
+record one corpus and read another.
+
+The variant reaches the session as project-level files under the attempt
+directory the harness owns and deletes, which shadow the same-named user-level
+ones. Nothing installed moves and no running session is affected, and because
+the session still runs with the live configuration its hooks, memory, and MCP
+are the real ones. A skill cannot be delivered this way on claude 2.1.258: a
+project-level skill does not shadow a user-level one, so a case that declares a
+skill as a corpus file is refused naming ACT-28, and `--corpus` on a pipeline
+case or a stage replay, whose corpus is its skills, is refused for the same
+reason.
 
 `rehearsal case capture` freezes a real session file as a case's transcript
 prefix: it copies lines `[0, cut)` of the source session into the case's
