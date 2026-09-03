@@ -70,6 +70,12 @@
   any of them can make a prior attempt stale.
 - **Cut** — the 0-based line index of the first session-file record a transcript
   prefix drops. A cut of N keeps lines [0, N).
+- **Corpus layout** — the directory shape a corpus takes once resolved, and the
+  only shape the harness reads: `CLAUDE.md`, `skills/<name>/`,
+  `output-styles/<name>.md`, and `agents/<name>.md` under one root. A corpus
+  layout path names a file within it. Every corpus source resolves to this
+  layout, so the code that hashes and installs a corpus never learns where the
+  bytes came from.
 - **Corpus layout path** — how a case names a corpus file, independent of where
   the corpus is installed: `CLAUDE.md`, `output-styles/<name>.md`,
   `agents/<name>.md`, or `skills/<name>/...`. One resolver maps a layout path
@@ -78,8 +84,19 @@
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
+- **Corpus source** — where an attempt's corpus bytes come from, named by
+  `--corpus`: a directory already in corpus layout, or `chezmoi:<ref>`, the
+  chezmoi source at that git ref rendered into a scratch destination and mapped
+  onto the layout. Absent `--corpus` the source is the live install. A source is
+  resolved to one snapshot directory before any provider call, and that
+  directory is the single place the bytes are read from for hashing and
+  installing.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
+- **Corpus variant** — one corpus a comparison arm runs against, identified by
+  the snapshot its source resolved to rather than by the source string, so a
+  directory and a chezmoi ref holding the same bytes are the same variant. It is
+  the corpus half of a variant, which also fixes model and effort.
 - **Delivery stage** — a stage whose artifact is committed code; its
   evidence is a diff, changed paths, check integrity, and local check results.
   Today, `build`.

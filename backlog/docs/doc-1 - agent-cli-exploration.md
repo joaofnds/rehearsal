@@ -178,6 +178,26 @@ refused preconditions, and execution failures, with the reason on stderr.
    and hashed into lineage, the same way checkpoints are kept; only the case
    declaration is committed.
 
+### The mechanism under decision 1, replaced at ACT-26.6 Shape
+
+Decision 1's intent stands: the session sees the live hooks, memory, and MCP,
+only the files under test are replaced, and nothing live is touched. The
+mechanism it named — a copy of the config directory — cannot serve it, and the
+observation that settles this was taken 2026-09-02: copying `settings.json` and
+`.claude.json` into a scratch `CLAUDE_CONFIG_DIR` and running `claude -p` there
+returns "Not logged in · Please run /login". Login state lives in the keychain,
+outside the config directory, so a copied config needs an interactive login per
+copy and is unavailable to an autonomous run.
+
+The mechanism that serves the same intent is an overlay inside the attempt
+directory, which the harness already owns and which no live session reads. The
+session runs with the live config, so hooks, memory, and MCP are the real ones;
+the corpus files under test are placed as project-level files that shadow the
+user-level ones. Observed at ACT-26.6 Shape, 2026-09-03, on claude 2.1.258:
+project-level output styles and agent definitions shadow same-named user-level
+ones, and project-level skills do not (ACT-28). The intent is João's; the
+mechanism is not the one he named, and this is why.
+
 ## Card map and recommended order
 
 Replace the scripts first, then the terminal touchpoints:
