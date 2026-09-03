@@ -111,7 +111,7 @@ const confirmationFlags: readonly FlagDefinition[] = [
 const jsonFlag: FlagDefinition = {
 	name: "--json",
 	kind: "switch",
-	help: "Print the record this command wrote on stdout instead of its path",
+	help: "Print the record's own bytes on stdout instead of its path",
 };
 
 export const COMMANDS: readonly CommandDefinition[] = [
