@@ -1,11 +1,11 @@
 ---
 id: ACT-26.6
 title: run against a corpus variant from a source without installing it live
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-02 15:14'
-updated_date: '2026-09-03 00:37'
+updated_date: '2026-09-03 01:06'
 labels: []
 dependencies: []
 references:
@@ -515,3 +515,49 @@ decision policy.
 `bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
 `bun test` **779 pass 0 fail**. Exit codes captured with `; echo $?`.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-03 01:06
+---
+Independent review (reviewer agent, one round). Full check at close: typecheck, lint, fmt:check exit 0; bun test 779 pass, 0 fail across 56 files. Axes applied: style, architecture, security, spec conformance, testing, refactoring. No axis skipped.
+
+BLOCKING, all three reproduced by the orchestrator, all three fixed and re-observed.
+
+1. Option injection through the chezmoi ref truncated any writable file. The shell-quoting fix made during Build closed the shell layer, but the injection is at the argv layer: git archive reads the ref as an option. The orchestrator reproduced it end to end: rev-parse on "--output=<path>" exits 0 and echoes the string back, so the guard passed and that literal became the recorded commit; the archive then truncated a real 32-byte file to 0 bytes before failing with exit 129. --add-file and --add-virtual-file are reachable the same way. The reviewer tried --remote=ext::sh and found the ext transport blocked by default, so arbitrary command execution was not achieved; arbitrary file truncation was. Fixed in c62194a: a ref opening with a dash is refused before any command runs. Verified by the orchestrator with the same probe through the executable: the file survived at 32 bytes with its contents intact and a clear refusal message.
+
+2. The archive pipeline reported tar's exit code, so a failed render was recorded as a successful one. Reproduced by the orchestrator: the bare archive command exits 129, the same command piped into tar exits 0. runCommand throws only on a nonzero exit, so any archive failure produced an empty scratch source, chezmoi rendered an empty tree, and the attempt proceeded recording lineage over nothing. Independently wrong from finding 1: it turned a render failure into a wrong measurement instead of an error. Fixed in 34ad797 with pipefail; removing that prefix fails four tests. Measured against a real shell: exit 0 without it, exit 128 with it.
+
+3. The attempt ran a corpus the case never declared, and could be measured against the wrong output style. snapshotStyleName returned the alphabetically first .md file in the snapshot, never consulting the case's declared corpus files, and the install copied the whole output-styles and agents trees. The reviewer built a corpus with a declared brief.md plus an undeclared aardvark.md and agents/rogue.md: the selected style was aardvark and rogue.md was installed. This worked only because the dotfiles hold exactly one style today, and the purpose of this flag is testing style variants, so the first second style would have made the harness select one style while recording another's digest in lineage. Fixed in ed82ce1 by threading the declared paths through snapshot, install, and selection, keeping the source-to-snapshot seam the reviewer identified as load-bearing. Three separate mutations now fail: alphabetical selection, whole-kind copies, and removing the snapshot filter. Observed end to end with a fake provider against the reviewer's exact corpus: settings carried brief, not aardvark; the session saw only the declared file; the recorded digest equalled the declared marker's bytes.
+
+SHOULD-FIX, all fixed.
+
+4. A refused run leaked a copy of the home tree, because the skill refusal threw before discardRender. The code's own comment says why this matters. Fixed in a69c8df with a finally.
+5. The snapshot followed symlinks, so a corpus entry could pull in arbitrary files. Observed for both a directory source and a chezmoi render. The CHEZMOI_LAYOUT defense was structural only, avoiding the three symlinks the dotfiles happen to have today by path, so a new one would make the harness hash and install the live corpus while the record said it rendered a ref. Fixed in 3f59d15 by refusing a symlinked entry outright, following the ACT-26.5 fixture precedent.
+6. The recorded commit was unvalidated and became the literal option string under the injection. Fixed in 85e84b3, asserting a resolved commit sha.
+7. Acceptance criterion 8 was checked while nothing persisted the origin: CorpusSnapshotOrigin was constructed and read nowhere, the attempt record schema is strict with no such field, and lineage hashed only upstream, corpusFiles, model, and effort. So the ref and its commit survived nowhere on disk and the criterion's stated purpose was false in the artifact. Fixed in bc6e9cc by persisting the origin as an optional field whose absence means the live install, so pre-existing records still parse.
+8. The security regression test passed against an exploitable implementation: it asserted a string literal rather than shell behavior, and its probe ref carried no single quote, so it exercised none of the escaping. The reviewer showed the naive broken quoting matches the expected string exactly and is exploitable. Fixed in 2ebfe36 with refs carrying embedded quotes and a real-shell round-trip; the naive quoting now fails four tests.
+9. No test pinned the style selection rule or the overlay's scope, which is why finding 3 was invisible. Closed by finding 3's tests.
+10. Criterion 13 and the code disagreed: the text says a source that changes skill bytes is refused, the code refuses when the case declares a skills path and never compares bytes. The narrower rule is right given ACT-28, and the reviewer agreed. The criterion text was corrected in 99eaabc, recording that the broader guarantee waits on ACT-28.
+14. A constant was exported and imported nowhere. Removed in edec2dd.
+
+NOTES, no action.
+12. withCorpus reads as if a cast were happening when none is. No defect.
+13. resolveCorpusFile now confines CLAUDE.md for non-live sources through the source root, an improvement; the confinement depends on the root being trustworthy, which it is, since every root is mkdtemp output or a resolved user-supplied path.
+11. The reviewer could not verify criteria 17 and 18 without a paid run. The orchestrator observed both directly: a directory corpus carrying a marker style recorded the digest 600426af0d6bd18e matching the marker file exactly, read from the run's own directory, with the live style file unchanged and chezmoi diff clean.
+
+The reviewer named one strength worth preserving: the resolved-source to snapshot seam, whose test mutates the source after snapshotting and observes the digests unchanged. That is what makes "cannot record one corpus and read another" true at the byte level, and finding 3's fix threaded declared paths into it rather than dissolving it.
+
+Paid spend on this card: 0.069510 USD by the worker across four calls, plus two verification runs by the orchestrator at about 0.017 USD each. Run total after this card: about 0.36 USD against the 50 USD ceiling.
+
+Not observed: a real chezmoi render end to end after the pipefail fix (the chezmoi path is exercised through the injected command runner, and pipefail's effect is measured against a real shell rather than a real render); a chezmoi ref other than HEAD end to end; an agent definition delivered through the overlay, since no case declares one; and --corpus on replay beyond its refusal.
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+--corpus <source> on run and replay takes either a directory in corpus layout or chezmoi:<ref>, rendered into a scratch destination the harness owns. The corpus is snapshotted into the run's own directory, hashed into lineage, and installed as overlays inside the attempt directory, so the session under test reads the variant while nothing live is touched. Only what the case declares is snapshotted, installed, and selected. Absent --corpus, today's behavior stands. João's recorded decision stands in intent, but its mechanism was replaced: a copied CLAUDE_CONFIG_DIR is logged out, verified twice, so overlays inside the attempt directory carry the variant instead while the live config keeps supplying hooks, memory, and MCP. Recorded on this card and in doc-1. Skills in a corpus source are refused rather than silently ignored, because a project-level skill does not shadow a user-level one on claude 2.1.258; that is ACT-28. Review found three blocking defects, all fixed: a crafted ref truncated any writable file to zero bytes, a failed render was recorded as a successful measurement of an empty corpus, and the output style was chosen alphabetically rather than by declaration. Seven should-fix defects fixed, including a snapshot that followed symlinks out of the source and a security test that passed against an exploitable implementation. Observed live: a directory corpus carrying a marker style recorded that marker's digest, with the live style file unchanged and chezmoi diff clean. Not observed: a real chezmoi render after the pipefail fix, a ref other than HEAD end to end, and an agent definition through the overlay.
+<!-- SECTION:FINAL_SUMMARY:END -->
