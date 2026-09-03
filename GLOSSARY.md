@@ -15,8 +15,13 @@
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
   directory's real path is what names the attempt's project slug.
-- **Calibration** — the human-review step that validates a Judge result and
-  turns findings into rubric or instruction changes.
+- **Calibration** — the step that validates a Judge result against a human
+  review and turns findings into rubric or instruction changes. It reads the
+  frozen evidence a run recorded and the corpus files as they stand now, never
+  the live target, so it can run long after the target was restored. It is one
+  function of the review, the frozen evidence, and the current rubrics and
+  instructions, whether a paused run calls it in a retry loop or the
+  `calibrate` command calls it once.
 - **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
   state, artifacts, and lineage.
 - **Check-integrity file** — a target-relative file declared by the pipeline
@@ -34,8 +39,8 @@
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
-  `compare`, `list`, `show`, `stale`, `case list`, `case show`,
-  `case capture`), declaring its own flags with their defaults, environment
+  `compare`, `review`, `calibrate`, `list`, `show`, `stale`, `case list`,
+  `case show`, `case capture`), declaring its own flags with their defaults, environment
   fallbacks, and help lines as data. A name is one or two
   tokens; the longer declared name wins over a prefix of it. The declaration is the single source of
   the flag's name in help, parsing, and documentation, and a command with no
@@ -135,6 +140,11 @@
   to the forked file rather than writing a new one.
 - **Fresh checkpoint chain** — a replay's consumed checkpoint chain when none
   of its checkpoints is stale.
+- **Human review** — the verdict, summary, and classified findings a reviewer
+  records against a run's Judge result, in `<run>.review.json`. The reviewer is
+  a person or the agent standing in for one; the name says whose judgment the
+  record carries, not which hand typed it. `rehearsal review` writes it from
+  flags or from a file, and calibration reads it.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
   rubric-scored LLM with rationale.
 - **Judge agreement baseline** — accumulated binary Judge and human decisions
@@ -154,6 +164,12 @@
   reply of zero words: no check is evaluated and none is recorded, so the
   attempt reads as a measurement that did not happen rather than one that
   passed.
+- **Pause** — the interactive stop a run makes with the candidate still in the
+  target, asking the reviewer to edit files and press Enter until the
+  calibration validates. It is requested by `--pause` and needs a TTY, refused
+  before any paid work without one. A run without `--pause` never stops: it
+  writes the preliminary artifact, retains the candidate, restores the target,
+  and exits, leaving the review and the calibration to their own commands.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
   data.
 - **Pipeline definition** — the declared, user-authored data the harness reads
@@ -187,6 +203,13 @@
   stop or execution failure is unsuccessful.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
+- **Retained candidate** — the run's final result commit, pinned in the target
+  repository under `refs/rehearsal/<run>` before the target is restored, so the
+  candidate outlives the run that produced it. Restoring makes the commit
+  unreachable and only the ref keeps gc from pruning it;
+  `show run:<name> --checkout <dir>` materializes it as a detached worktree.
+  It is the same ref a checkpoint is pinned under, named by the run rather than
+  by a stage.
 - **Rubric** — the frozen grading contract a Judge applies; per-stage under the
   case's `rubrics/`, final in the case's `rubric.md`.
 - **Rubric criterion** — one identified hard blocker, requirement, or quality
