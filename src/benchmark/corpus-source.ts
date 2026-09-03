@@ -133,6 +133,23 @@ function scratchDirectory(prefix: string): Promise<string> {
 	return mkdtemp(join(tmpdir(), prefix));
 }
 
+const COMMIT_SHA = /^[0-9a-f]{40}$/u;
+
+/**
+ * The snapshot records this as the ref's resolved commit, which is what makes
+ * two runs at one ref comparable, so anything that is not a sha is a resolve
+ * that did not happen rather than a commit.
+ */
+function resolvedCommit(ref: string, resolved: string): string {
+	if (!COMMIT_SHA.test(resolved)) {
+		throw new CorpusSourceError(
+			`Corpus source chezmoi:${ref} resolved to ${resolved || "nothing"}, which is not a commit sha`,
+		);
+	}
+
+	return resolved;
+}
+
 /**
  * `tar` exits 0 on an empty stream, so without `pipefail` the pipeline reports
  * tar's status and a failed archive renders an empty tree that the attempt
@@ -161,7 +178,7 @@ async function renderChezmoi(
 		],
 		tmpdir(),
 	);
-	const commit = revParse.trim();
+	const commit = resolvedCommit(ref, revParse.trim());
 	const sourceDirectory = await scratchDirectory("rehearsal-chezmoi-source-");
 	const root = await scratchDirectory("rehearsal-chezmoi-render-");
 

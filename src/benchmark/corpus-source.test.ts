@@ -138,9 +138,11 @@ class FakeCommandRunner {
 	};
 }
 
+const RESOLVED_COMMIT = "0123456789abcdef0123456789abcdef01234567";
+
 describe("rendering a chezmoi corpus source", () => {
 	function runner(): FakeCommandRunner {
-		return new FakeCommandRunner(new Map([["git", "abc123def456\n"]]));
+		return new FakeCommandRunner(new Map([["git", `${RESOLVED_COMMIT}\n`]]));
 	}
 
 	async function rendered(
@@ -206,13 +208,35 @@ describe("rendering a chezmoi corpus source", () => {
 	});
 
 	/**
+	 * Criterion 8 records the ref's resolved commit sha, and an unvalidated
+	 * `rev-parse` result is whatever git echoed back: under the option
+	 * injection it was the literal `--output=<path>`.
+	 */
+	it.each(["--output=/tmp/victim.txt", "not a sha", "abc123", ""])(
+		"refuses %p as a resolved commit, which is not a sha",
+		async (resolved) => {
+			const fake = new FakeCommandRunner(new Map([["git", `${resolved}\n`]]));
+
+			const failure = await failureOf(
+				resolveCorpusSource("chezmoi:HEAD", {
+					runCommand: fake.run,
+					dotfilesDirectory: "/dotfiles",
+				}),
+			);
+
+			expect(failure).toBeInstanceOf(CorpusSourceError);
+			expect(failure.message).toContain("HEAD");
+		},
+	);
+
+	/**
 	 * `tar` succeeds on an empty stream, so without `pipefail` the pipeline
 	 * reports tar's exit code and a failed archive renders an empty tree that
 	 * the attempt then measures and records lineage over.
 	 */
 	it("fails the render when the archive step fails, rather than reporting tar's success", async () => {
 		const fake = new FakeCommandRunner(
-			new Map([["git", "abc123def456\n"]]),
+			new Map([["git", `${RESOLVED_COMMIT}\n`]]),
 			(command) =>
 				command[0] === "sh" &&
 				(command[2] ?? "").startsWith("set -o pipefail; "),
@@ -298,7 +322,7 @@ describe("rendering a chezmoi corpus source", () => {
 
 		expect(source.kind).toBe("chezmoi");
 		expect(source.ref).toBe("HEAD");
-		expect(source.commit).toBe("abc123def456");
+		expect(source.commit).toBe(RESOLVED_COMMIT);
 	});
 });
 
