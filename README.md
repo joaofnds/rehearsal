@@ -173,12 +173,14 @@ Human acceptance remains the final calibration standard. Passing stage grades an
 ## Human Calibration
 
 A run grades the candidate and writes a preliminary artifact with status
-`AWAITING_HUMAN_REVIEW` beside an empty `<timestamp>.review.json`. What happens
-next depends on whether the run was asked to pause.
+`AWAITING_HUMAN_REVIEW`. What happens next depends on whether the run was asked
+to pause.
 
 Without `--pause` the run does not stop. It pins the final candidate under
 `refs/rehearsal/<run>` in the target, restores the target, prints the artifact
-path, and exits 0. The candidate outlives the run because of that ref:
+path and the two commands that finish the record, and exits 0. It writes no
+review file: `rehearsal review` creates `<timestamp>.review.json` when you
+record the review. The candidate outlives the run because of that ref:
 restoring `main` makes the commit unreachable, and only the ref keeps gc from
 pruning it. Nothing is asked, so an agent or a CI job can drive the run and
 record the review afterwards.
@@ -195,8 +197,9 @@ bun run rehearsal calibrate <name> --confirm-rejudge
 ```
 
 With `--pause` the run keeps today's interactive flow: it holds the target with
-the candidate in place, prints both paths, and waits at a prompt until the
-review file and the rubric edits validate. `--pause` needs a terminal and is
+the candidate in place, writes an empty `<timestamp>.review.json` for you to
+fill in, prints both paths, and waits at a prompt until the review file and the
+rubric edits validate. `--pause` needs a terminal and is
 refused before any provider call without one.
 
 ### Reading the candidate

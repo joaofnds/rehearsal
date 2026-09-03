@@ -1005,7 +1005,9 @@ export async function runBenchmark(
 		});
 		await abort.writePendingArtifact(artifact);
 		console.log(`Run artifact: ${runFiles.artifactFile}`);
-		console.log(`Human review: ${runFiles.reviewFile}`);
+		if (config.pause) {
+			console.log(`Human review: ${runFiles.reviewFile}`);
+		}
 
 		await finishGradedRun(
 			{
