@@ -550,6 +550,61 @@ The directory is ignored by Git. Each artifact records:
 
 The preliminary artifact is written after a valid original Judge result and before human review. Successful calibration updates the same file rather than creating a disconnected result. If both returned final Judge payloads fail harness validation, the harness instead writes a `FAILED` main artifact without a grade; it retains the completed workflow, stage scorecards, frozen candidate evidence, original prompt, both payloads, both validation errors, per-call costs, and aggregate cost. A run that aborts after the preliminary artifact rewrites it with status `FAILED`. A stage Judge failure rewrites its stage file as `STAGE_JUDGE_FAILED`; an exhausted output-validation retry retains the original prompt and both attempts in addition to the error and frozen input. Invocation and Claude-envelope failures retain the earlier one-call failure records. A run that fails earlier preserves terminal output and pauses for inspection before restoration.
 
+## Reading the Records
+
+`list`, `show`, and `stale` read what is on disk. None of them starts a
+provider session or a worktree, and none of them writes anything.
+
+```sh
+bun run rehearsal list <cases|runs|checkpoints|attempts|groups|comparisons>
+bun run rehearsal show <record-id> [--json]
+bun run rehearsal stale [--corpus <source>]
+```
+
+Every id `list` prints is one `show` accepts back as an argument:
+
+| kind               | id                                    |
+| ------------------ | ------------------------------------- |
+| case               | `case:<id>`                           |
+| run                | `run:<name>`                          |
+| checkpoint         | `checkpoint:<run>/<stage>`            |
+| session attempt    | `attempt:session:<case>/<uuid>`       |
+| stage replay       | `attempt:stage:<lineage>/<timestamp>` |
+| confirmation group | `group:<group-id>`                    |
+| comparison         | `comparison:<manifest-digest>`        |
+
+The two attempt forms name their kind because the two carry different
+identities on disk: a session attempt is a case and the uuid of the directory
+the harness created for it, and a stage replay is the lineage it consumed and
+the timestamp it ran at. Both are two segments, so without the kind in the id
+`show` would have to guess from the shape of the first one.
+
+`list` prints one tab-separated line per record on stdout. A record it cannot
+read is named on stderr with the reason while every record that parses still
+prints, and the command still exits 0: one half-written group must not hide
+the groups beside it.
+
+`show <id> --json` prints the bytes of the one record file the id names, so a
+caller pipes it straight into a parser. Without `--json`, a run, a group, and a
+comparison print a short markdown summary a session can paste onto a card — a
+run's stages with their grades and its total cost, a group's success rate,
+standard error, and pass^k with its cost, and a comparison's paired deltas
+beside the contrast against the control arm. Every other kind prints its own
+bytes. The summaries are pure functions of the parsed record: no clock and no
+second record shape.
+
+`stale` names every checkpoint and session case whose recorded corpus digests
+the current corpus no longer matches, each with the files that differ. It
+hashes the corpus and never installs it, which is why it needs no worktree and
+why it accepts `--corpus` where `run` and `replay` refuse one. A session case
+with no recorded attempt is not stale: staleness claims a prior measurement no
+longer describes the corpus, and with no measurement there is nothing to
+invalidate.
+
+Exit codes follow the table in `rehearsal --help`: `2` for an unknown list kind
+or a malformed id, `3` for a well-formed id naming no record and for a
+`--corpus` source that does not resolve.
+
 ## Comparing Confirmation Groups
 
 Comparison reporting reads completed confirmation evidence and never starts a provider session or worktree. Give it a versioned manifest with at least two benchmark cases. Paths are relative to the manifest, and every case has exactly the baseline, candidate, and user-provided minimal-corpus control arms:

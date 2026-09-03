@@ -34,13 +34,16 @@
   one frozen input set, used by the outer loop to produce a score; defaults to
   five reps.
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
-  `compare`, `case list`, `case show`, `case capture`), declaring its own flags with their
-  defaults, environment fallbacks, and help lines as data. A name is one or two
+  `compare`, `list`, `show`, `stale`, `case list`, `case show`,
+  `case capture`), declaring its own flags with their defaults, environment
+  fallbacks, and help lines as data. A name is one or two
   tokens; the longer declared name wins over a prefix of it. The declaration is the single source of
-  the flag's name in help, parsing, and documentation.
+  the flag's name in help, parsing, and documentation, and a command with no
+  declared flag prints no flag section.
 - **Command record** — the strict, zod-validated artifact a command writes and
   the only thing `--json` prints: the run artifact for `run`, the replay record
-  for `replay`, the comparison report for `compare`. A command never prints a
+  for `replay`, the comparison report for `compare`, and for `show` the bytes
+  of the one record file its id names. A command never prints a
   second, summary-only shape.
 - **Comparison** — a deterministic report over completed confirmation evidence
   for at least two benchmark cases, each containing the baseline, candidate,
