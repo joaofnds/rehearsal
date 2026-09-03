@@ -568,4 +568,176 @@ Six haiku calls, 0.086929 USD total, against a ceiling of 2.00 USD.
 Unpaid observations: the `--confirm` projection, the `--pipeline` refusal, the
 corpus refusal, and every `case capture` refusal all completed without a
 provider call.
+
+## Review fixes (Build, directed)
+
+Eleven commits, one per finding, each test-first where a test could pin it. No
+paid provider call: spend for this dispatch was $0.00. Full gate on the final
+tree: `bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
+`bun test` 691 pass 0 fail. `git status` clean.
+
+| finding | commit | what the fix was |
+|---|---|---|
+| 3 | `2e1153c` | `resolveCorpusFile` confines a declared path to the install, like `caseRelative` does everywhere else |
+| 1, 2, 9 | `8679d32` | the attempt names its own session, so cleanup deletes the one file it owns and the slug goes with `rmdir` |
+| 4 | `276dc37` | a missing envelope result is the `NO_REPLY` outcome, not a reply of zero words |
+| 6 | `383c6cf` | the capture streaming assertion is absolute and counts observations |
+| 5 | `68cd91f` | the transcript reading path streams, through one shared chunked line reader |
+| 7 | `cf41d51` | the lineage test exercises AC 21's corpus neighbour and stops writing into `$TMPDIR` |
+| 8 | `6dfbcb1` | the case reader takes a root; capture tests own a temporary one |
+| 11 | `4f601d7` | `checkResultSchema.kind` is the four-kind literal union |
+| 10 | `9368c6c` | the `Immutable` doc comment sits on `Immutable` again |
+| 15 | `26321b6` | a fixture tree holding a symlink is refused before any provider call |
+| docs | `4fb3278` | README and glossary for the two new user-facing behaviors |
+
+### What the fixes changed in the design
+
+**Findings 1, 2 and 9 have one cause and one fix.** Cleanup could not name the
+file it was deleting. It took the alphabetically first new slug entry, so a
+foreign file sorting before the provider's was copied into the attempt record
+as evidence and then removed; and because the listing was read inside the `try`,
+a `runClaude` that threw left the provider's transcript in
+`~/.claude/projects` permanently.
+
+The attempt now names its own session before the call: the fork's uuid when
+resuming, `--session-id <uuid>` otherwise, which is the same flag the stage path
+already uses and which `claude --help` (2.1.258) documents. The file the attempt
+owns is `<sessionId>.jsonl` under its slug, known before the call rather than
+inferred from the directory after it. Cleanup removes that path and only that
+path, on both the returning and the throwing path, then takes the slug with
+`rmdir`.
+
+**Decided autonomously: an entry the attempt cannot attribute is left alone, and
+the slug directory it keeps is the signal.** The dispatch left this open.
+Deleting it was never an option, and throwing from the `finally` would mask the
+real failure of a failed attempt. `rmdir` refuses a non-empty directory, so a
+file the attempt cannot account for keeps its slug directory rather than being
+deleted with it, and the leftover directory is what a reader sees. What matters
+more, and is now structural, is that such a file can no longer be *recorded*:
+the transcript is identified by a session id the harness chose, so a planted
+file is never evidence regardless of where it sorts.
+
+**Decided autonomously: `sessionCaseArgs` emits `--session-id` for a session
+with no transcript.** AC 17 pins the flag set and forbids
+`--no-session-persistence` and `--json-schema`; it says nothing about
+`--session-id`, and persistence stays on. Not verified against the provider,
+because this dispatch makes no paid call — see "What was not verified" below.
+
+**Finding 4 is fixed at the boundary and made unrepresentable.** `reply` is
+absent exactly when the outcome is `NO_REPLY`, and the record schema refuses a
+`NO_REPLY` record carrying a reply or a check result, and a checked record
+missing either. A session that produced no reply can no longer be written down
+as one that passed its checks.
+
+### Mutations run to prove the new tests
+
+The dispatch asked for findings 1, 2 and 6; findings 4, 5 and 7 got the same
+treatment.
+
+- **Finding 1.** Renaming the old fixture to `0oao-was-here.jsonl` failed the
+  old test, confirming its outcome depended on the filename's sort position.
+  The new tests plant `0000-unrelated-live.jsonl` and `zzzz-unrelated-live.jsonl`,
+  bracketing the provider's file, so no sort direction can pass. Restoring the
+  sort-order pick fails both "keeps every file another session planted" and
+  "records the transcript the provider's own session wrote".
+- **Finding 2.** Moving cleanup off the failure path, so it runs only after a
+  successful record, fails "leaves nothing behind when the provider writes its
+  transcript and then throws".
+- **Finding 6.** Replacing `sourceLines` with `Bun.file(path).text()` leaves the
+  observer uncalled: measured `widest` 0 against `sourceBytes` 1649490, so the
+  old `widest < sourceBytes` assertion **passed** against a non-streaming
+  subject. The new assertion fails it on the observation count.
+- **Finding 4.** Restoring `envelope.result ?? ""` fails both new attempt tests.
+- **Finding 5.** Replacing `parseTranscriptFile`'s body with a whole-file read
+  fails its streaming test on the observation count.
+- **Finding 7.** Hashing the corpus file's directory instead of its declared
+  digest fails the new corpus-neighbour test and only that test, which the
+  replaced test could not have detected at all.
+
+### Observed directly
+
+- The finding 15 refusal, through the executable. A temporary case declaring a
+  fixture with `escape.md -> /etc/hosts`:
+  `bun rehearsal.ts run --case zz-symlink-probe --model haiku --effort low
+  --session-budget-usd 0.2` exits **3** with
+  `Fixture entry escape.md is a symlink, which would lead out of the attempt
+  directory`, and no provider call. The probe case was deleted, never committed.
+- Finding 3 before and after: `resolveCorpusFile("skills/../../../../etc/passwd")`
+  returned `/etc/passwd` and `resolveCorpusFile("agents/../../.ssh/id_rsa")`
+  returned `/Users/joaofnds/.ssh/id_rsa`; both now refuse naming the path.
+- Finding 15's mechanism: a `cp` with `recursive` leaves the copied entry a
+  symlink (`lstat().isSymbolicLink()` true) reading `/etc/hosts` from inside the
+  attempt directory.
+- Finding 7's leak: `beside.md` was present in the shared temp root from an
+  earlier suite run, was removed, and no longer reappears after a full run.
+- Finding 8's harm: with a `zz-capture-probe` directory present in `cases/`,
+  `listCases()` returns `audit-log, smoke, zz-capture-probe`.
+- The fork's byte fidelity, after making it stream: a source ending with a
+  newline, one ending without, and an empty one each fork to bytes identical to
+  the source except the session id.
+
+### What was not verified
+
+- **That the provider honors `--session-id` for a fresh session in `-p` mode.**
+  The flag is documented in `claude --help` on 2.1.258 and the stage path
+  already uses it, but this dispatch made no paid call, so it has not been sent
+  for a session case. This is the one thing the next paid run must watch: if the
+  provider ignored it and named the session itself, the attempt would copy an
+  empty transcript and leave the real one behind, which the `rmdir` would then
+  surface as a slug directory that survives. The cheap check is the smoke case.
+- `--settings` with `outputStyle` on `--resume`, unchanged from the Build
+  handoff and still unobserved.
+- The `files-read` check against a real transcript, unchanged.
+
+### Findings recorded without a code change
+
+- **12.** `SessionRunConfig` carries `judgeModel` and `judgeEffort`, which a
+  session case has no judge for. Inconsistent with decision 2's reasoning, no
+  behavioral defect. Removing them means splitting the shared session-knob
+  parsing, which is a change to the pipeline path this dispatch was not asked to
+  touch.
+- **13.** `run --help` still describes only the pipeline case and lists
+  `--target` and `--pipeline` without saying a session case refuses them. The
+  refusal itself works (AC 23).
+- **14.** `rehearsal.ts:63-67` reads `case capture`'s two flags with a
+  hand-written scan rather than through `parseCommandLine`, a second home for
+  flag spellings where the glossary says there is one. Safe today because
+  undeclared flags are rejected first.
+- **17.** The confirmation record change is correct in both directions for every
+  record on disk, and the rewritten success rule is logically identical for
+  stage and pipeline. The caveat: a record written now with `mode: "session"` at
+  schemaVersion 1 would fail a reader built before this change, so "readable in
+  both directions" holds for records on disk, not for older readers. Costs
+  nothing today because there is one local executable.
+- **16, and a disagreement with it.** The finding says the session run-command
+  suite holds two near-duplicate tests where the second asserts strictly less
+  than the first. Read again this dispatch, they assert different things: the
+  first checks the returned record's fields, the second reads the file back off
+  disk and parses it with `parseSessionAttemptRecord`, which is AC 18's "parses
+  with the schema that wrote it" and is the only coverage of the write path.
+  Deleting the second would drop that. Left as is, and flagged here rather than
+  acted on, because removing real coverage on a contested reading is the more
+  expensive mistake.
+
+### Refactor pass
+
+Three structural opportunities the fixes exposed, each taken in the commit that
+exposed it rather than as a separate pass:
+
+- The chunked line reader had one copy in `session-capture.ts` and was about to
+  get a second in `transcript.ts`. It became `file-lines.ts`, and the fork uses
+  it too, so three readers of multi-megabyte session files share one
+  implementation of how a file becomes lines.
+- `buildAttemptRecord` built its optional keys through nested ternaries that
+  doubled with each new optional field. It assembles the record in statements
+  now, which is also what the `no-conditional-empty-object-spread` guard asks
+  for.
+- `case-command.ts` had its own `declarationFile` duplicating the path
+  `case.ts` knows how to build. It calls `caseDeclarationPath` now.
+
+### Still open for the reviewer
+
+Nothing from this pass. The session-naming change is the one that wants a paid
+observation before the card leaves Review; every other fix is proven by a test
+that fails against the behavior it replaced.
 <!-- SECTION:NOTES:END -->
