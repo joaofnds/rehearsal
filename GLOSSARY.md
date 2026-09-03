@@ -164,6 +164,18 @@
 - **Provider call** — one invocation of the model provider by a worker, Product
   Owner, or Judge. Its evidence may include usage metrics; the call remains
   explicit when those metrics are absent.
+- **Record ID** — how a session names one recorded thing to the CLI and how
+  the CLI names it back: a kind prefix and the identity that kind already has
+  on disk, `case:<id>`, `run:<name>`, `checkpoint:<run>/<stage>`,
+  `attempt:stage:<lineage>/<timestamp>`, `attempt:session:<case>/<uuid>`,
+  `group:<group-id>`, `comparison:<manifest-digest>`. Every id `list` prints is
+  one `show` accepts, and the prefix is parsed once at the boundary into the
+  kind, so `show` never guesses which record a bare string named.
+- **Record summary** — the short markdown a session pastes onto a card,
+  computed as a pure function of one parsed record: for a run its stages,
+  grades, verdict, and cost; for a group its reliability summary and cost; for
+  a comparison its paired deltas beside the control arm. It is never a second
+  record shape: `--json` still prints the strict record's own bytes.
 - **Rep** — one repetition of a run; scores are distributions over reps, never
   a single rep.
 - **Rep outcome** — one binary reliability observation. A declared stage
@@ -211,6 +223,12 @@
 - **Stage scorecard** — persisted Judge result for one stage: its frozen input
   and rubric, citations, grade, prompt, and Judge cost; a rejected scorecard
   also carries its calibration.
+- **Stale case** — a session case whose most recent attempt recorded corpus
+  file digests that the current corpus no longer matches. It is the session
+  kind's counterpart to a stale checkpoint: the same "this measurement no
+  longer describes the corpus" claim, keyed on the files the case declared
+  rather than on the skill a stage invoked. A case with no attempt is not
+  stale, because nothing was invalidated.
 - **Stale checkpoint** — a checkpoint whose recorded inputs (corpus files,
   model, effort, or an upstream checkpoint) no longer match the current
   state; still replayable for exploration, refused in comparisons.
