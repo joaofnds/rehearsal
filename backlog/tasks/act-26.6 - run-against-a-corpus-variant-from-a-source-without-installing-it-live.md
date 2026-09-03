@@ -393,4 +393,125 @@ encrypted,scripts` was empty at every check.
 
 `bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
 `bun test` 742 pass 0 fail. Exit codes captured with `; echo $?`.
+
+## Review fixes, 2026-09-03
+
+Ten findings from the review, each in its own commit, no paid provider call:
+spend for this dispatch **USD 0.00**. Every fix is pinned by a test that fails
+against the behavior it replaces; the mutation that proves each is named below.
+
+| # | finding | commit | proof |
+|---|---|---|---|
+| 1 | option injection through the chezmoi ref | `c62194a` | probe below |
+| 2 | pipeline reported tar's exit code | `34ad797` | real shell, below |
+| 3 | attempt ran an undeclared corpus | `ed82ce1` | end-to-end run, below |
+| 4 | refused run leaked the render | `a69c8df` | discard moved out of `finally` fails it |
+| 5 | snapshot followed symlinks | `3f59d15` | dropping `refuseSymlinks` fails both tests |
+| 6 | recorded commit unvalidated | `85e84b3` | four non-sha values, all refused |
+| 7 | criterion 8 persisted nothing | `bc6e9cc` | record read back off disk |
+| 8 | security test passed an exploitable impl | `2ebfe36` | naive quoting fails four tests |
+| 9 | no test pinned selection or overlay scope | in `ed82ce1` | three mutations, each caught |
+| 10 | criterion 13 disagreed with the code | `99eaabc` | criterion text now matches |
+| 14 | dead export | `edec2dd` | nothing imported it |
+
+Docs followed in `859e196`; one refactor-pass commit, `538cda5`.
+
+### Finding 1, and what the probe now shows
+
+Reproduced first, to see the failure directly:
+`git -C ~/code/dotfiles rev-parse '--output=/tmp/.../VICTIM.txt'` exits **0** and
+echoes the string back, so the guard passed it; the piped archive then truncated
+a real 33-byte file to **0 bytes** and the pipeline still exited **0**.
+
+`git archive` parses its positional ref as an option, so quoting could never
+reach this: the injection is at argv. A ref opening with `-` is refused before
+either command runs, and the resolve is now
+`git rev-parse --verify --end-of-options <ref>^{commit}`, so a ref naming no
+commit is rejected rather than resolved to itself.
+
+The orchestrator's exact probe, run against a file created under a temporary
+directory: refused naming the ref, and the victim survived at **33 bytes** with
+its contents intact.
+
+### Finding 2, in a real shell
+
+`set -o pipefail` was chosen over writing the archive to a temporary file,
+because criterion 6 asserts the pipe and the temp-file route would remove it.
+`/bin/sh` here is bash and honors it. Observed on the same failing archive:
+
+- without pipefail: **exit 0**
+- with pipefail: **exit 128**
+
+### Finding 3, observed end to end
+
+A session attempt run through `runSessionDebugAttempt` with a fake provider,
+against the reviewer's exact corpus (declared `brief.md`, undeclared
+`aardvark.md` and `agents/rogue.md`):
+
+- `--settings` carried `{"outputStyle":"brief"}`, not `aardvark`
+- the only file the session saw was `.claude/output-styles/brief.md`; neither
+  `aardvark.md` nor `rogue.md` reached the attempt directory
+- the recorded digest `39ef6efe...` equals the declared marker's bytes exactly
+- `corpusOrigin` on disk was `{"kind":"directory","source":"..."}`
+
+The snapshot now carries the case's declared paths, and the copy, the overlay,
+and the style selection each read that rather than the directory listing. The
+`ResolvedCorpusSource` to `SessionCorpusSnapshot` seam is untouched, as the
+reviewer asked.
+
+### Finding 11, the orchestrator's observation of criteria 17 and 18
+
+Recorded here because the reviewer could not verify them without a paid run and
+the orchestrator has since observed both directly: a directory corpus carrying a
+marker style recorded the digest `600426af0d6bd18e` matching the marker file
+exactly, read from the run's own directory, with the live style file unchanged
+and `chezmoi diff` clean.
+
+### Findings 12 and 13, no change
+
+Both were recorded as notes, not defects: `withCorpus` in `config.ts` performs no
+cast, and `resolveCorpusFile`'s confinement of `CLAUDE.md` for non-live sources
+is an improvement whose trustworthy root holds.
+
+## Decided autonomously, 2026-09-03
+
+No reader was available, so each of these was settled under the dispatch's
+decision policy.
+
+1. **`set -o pipefail` rather than an intermediate archive file.** Criterion 6
+   asserts the archive is piped into tar, and the temp-file route the review
+   offered as an alternative would have removed the pipe the criterion names.
+   Reason: a settled criterion is a constraint, and pipefail closes the defect
+   without touching it. Cost: a strict POSIX `sh` would fail on the `set` itself,
+   which is a loud failure rather than the silent one being fixed.
+2. **A leading-dash refusal rather than a ref allowlist.** Refusing every ref
+   opening with `-` is the smallest rule that closes the argv layer, and it
+   rejects nothing a git ref may be named: `git branch -- '-foo'` answers
+   `fatal: '-foo' is not a valid branch name`, checked this dispatch in a
+   throwaway repository, while `foo-bar` and `feature/x` pass
+   `check-ref-format`. An allowlist would have refused legitimate refs carrying
+   `/`, `~`, `^`, and `@{...}`.
+3. **The snapshot copy is scoped to declared paths, not only the install.** The
+   review named the install and the selection; scoping the copy too means the
+   snapshot directory itself cannot carry bytes no case declared, so nothing
+   downstream can reach them by any route. Reason: the snapshot is the single
+   place bytes are read from, and a guard the structure enforces beats one each
+   reader must remember.
+4. **A symlinked corpus entry is refused rather than resolved and confined.**
+   This follows the precedent ACT-26.5 set for a fixture holding a symlink, which
+   the review named, and it needs no judgment about which link targets are
+   acceptable. The `CHEZMOI_LAYOUT` comment no longer claims a defense it never
+   provided: it is a mapping, and the refusal is the defense.
+5. **Criterion 8 kept, with the origin persisted, rather than dropped as
+   speculative.** The criterion's purpose (two runs at one ref comparable, a
+   moved ref visible) is real and cheap to satisfy, and dropping it would have
+   left the glossary's corpus snapshot origin term describing nothing. The field
+   is optional and its absence means the live install, which is what every record
+   written before it read, so old records still parse: records readable in both
+   directions, per the policy.
+
+### Final check, this dispatch
+
+`bun run typecheck` 0, `bun run lint` 0, `bun run fmt:check` 0,
+`bun test` **779 pass 0 fail**. Exit codes captured with `; echo $?`.
 <!-- SECTION:NOTES:END -->
