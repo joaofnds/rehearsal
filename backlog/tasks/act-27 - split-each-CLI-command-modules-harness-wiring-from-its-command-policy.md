@@ -4,7 +4,7 @@ title: split each CLI command module's harness wiring from its command policy
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:16'
-updated_date: '2026-09-03 13:07'
+updated_date: '2026-09-04 01:51'
 labels: []
 dependencies:
   - ACT-26.7
@@ -32,9 +32,9 @@ Cost of leaving it: run-command.ts is 236 lines and replay-command.ts 282, most 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-03: the description says run-command.ts is 236 lines and replay-command.ts 282. `wc -l` now returns 406 and 265. run-command.ts grew by 170 lines after the card was filed, so the cost of leaving it is larger than the card states, not smaller.
+Triage 2026-09-04, ranked against the project's goal. Stays Low, and deliberately unassigned to a milestone.
 
-Triage 2026-09-03: depends on ACT-26.7. This card moves the harness wiring out of src/cli/run-command.ts and replay-command.ts, and that wiring is where the dependency lists handed to the harness are assembled. ACT-26.7 adds an injected writer to those same lists (its acceptance #5). Doing ACT-26.7 first means the writer arrives before the wiring is relocated, so it is moved once. Neither card's acceptance changes; this is ordering only.
+The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a). Until m-1 produces a comparison somebody reads, internal restructuring changes nothing an operator can observe. These three are the last work to do, not the next.
 
-Per decision-1, the count with its command: `wc -l src/cli/run-command.ts src/cli/replay-command.ts` returns 406 and 265 on 2026-09-03.
+One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
 <!-- SECTION:NOTES:END -->

@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-03 13:07'
+updated_date: '2026-09-04 01:51'
 labels: []
 dependencies: []
 parent_task_id: ACT-26
@@ -37,7 +37,9 @@ Why: an agent that pipes `--json` into a parser gets a stream with harness prose
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-03: the description says 17 console.log sites in src/benchmark/. `grep -rn 'console\.log' src/benchmark/ | wc -l` returns 14, across calibration.ts, workflow.ts, target.ts, checks.ts, and run.ts. The writer's count stands as written; the current fact is 14. Acceptance #5 is stated as a grep returning no match, so it is unaffected by the count.
+Triage 2026-09-04, ranked against the project's goal. Stays Low, and deliberately unassigned to a milestone.
 
-Per decision-1, the count with its command: `grep -rn 'console\.log' src/benchmark/ | wc -l` returns 14 on 2026-09-03 (calibration.ts 1, checks.ts 1, run.ts 9, target.ts 1, workflow.ts 2). Re-run it rather than trusting either number.
+The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a). Until m-1 produces a comparison somebody reads, internal restructuring changes nothing an operator can observe. These three are the last work to do, not the next.
+
+One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
 <!-- SECTION:NOTES:END -->

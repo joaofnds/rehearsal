@@ -4,8 +4,9 @@ title: run the three unrun brief-reply turns and record their word bands
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:56'
-updated_date: '2026-09-03 13:06'
+updated_date: '2026-09-04 01:50'
 labels: []
+milestone: m-3
 dependencies:
   - ACT-32
 references:

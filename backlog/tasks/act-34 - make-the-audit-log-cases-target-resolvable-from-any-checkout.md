@@ -4,8 +4,9 @@ title: make the audit-log case's target resolvable from any checkout
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-04 00:54'
+updated_date: '2026-09-04 01:50'
 labels: []
+milestone: m-2
 dependencies: []
 references:
   - ACT-30

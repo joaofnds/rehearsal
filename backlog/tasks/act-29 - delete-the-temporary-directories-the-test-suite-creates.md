@@ -4,8 +4,9 @@ title: delete the temporary directories the test suite creates
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:32'
-updated_date: '2026-09-04 00:54'
+updated_date: '2026-09-04 01:50'
 labels: []
+milestone: m-2
 dependencies: []
 priority: medium
 ordinal: 31008

@@ -4,7 +4,7 @@ title: make runBenchmark reachable from a test with fake dependencies
 status: To Do
 assignee: []
 created_date: '2026-09-03 03:17'
-updated_date: '2026-09-03 13:06'
+updated_date: '2026-09-04 01:51'
 labels: []
 dependencies:
   - ACT-26.7
@@ -32,5 +32,9 @@ runGradedStages next door takes a StageDependencies record and is fully faked in
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-03: depends on ACT-26.7, verified against the code rather than assumed. Eight of the fourteen `console.log` sites in src/benchmark/ sit inside run.ts's runBenchmark (lines 849-851, 947, 1016-1031, 1080), which is the function this card converts to a RunDependencies record. ACT-26.7's acceptance #5 requires every one of them to reach the caller through an injected writer, which is a parameter on that same record. Doing this card first means ACT-26.7 re-edits the record it just introduced; doing ACT-26.7 first means the writer is one more collaborator this card moves into the record with the rest.
+Triage 2026-09-04, ranked against the project's goal. Stays Low, and deliberately unassigned to a milestone.
+
+The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a). Until m-1 produces a comparison somebody reads, internal restructuring changes nothing an operator can observe. These three are the last work to do, not the next.
+
+One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
 <!-- SECTION:NOTES:END -->

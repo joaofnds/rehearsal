@@ -6,11 +6,12 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 04:21'
-updated_date: '2026-09-04 00:54'
+updated_date: '2026-09-04 01:51'
 labels:
   - defect
+milestone: m-3
 dependencies: []
-priority: high
+priority: medium
 ordinal: 34008
 ---
 
@@ -43,4 +44,6 @@ Per decision-1, a line number is not a measurement: the site is the `toolUses(tr
 Triage 2026-09-04: premise re-verified at 45c522c and unchanged. `grep -n 'toolUses' src/benchmark/session-attempt.ts` returns one evaluation site, in `recordAttempt`, passing the whole parsed transcript into `evaluateChecks`. Nothing in that function reads the case's `cut`, so the fix has to carry the cut into `recordAttempt`, which today receives only the request, the attempt directory, and the attempt output.
 
 Acceptance #2's premise also confirmed: `files-read` is a real check kind (src/benchmark/session-check-files-read.ts) evaluated from the same evidence record, so both kinds are fixed by the same change rather than needing two.
+
+Triage 2026-09-04, re-prioritized against the goal: high → medium, assigned to m-3. It is a genuine correctness defect and it stays ahead of the refactoring cards. It ranks below m-1 because it makes session-case evidence trustworthy, and session cases measure the reply-shaping corpus (the brief output style), not the workflow corpus the tool exists to tune. Nothing in m-1 or m-2 depends on it.
 <!-- SECTION:NOTES:END -->
