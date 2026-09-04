@@ -1,11 +1,11 @@
 ---
 id: ACT-66
 title: 'load whatever the agent loads, and stop knowing how it got there'
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 18:16'
-updated_date: '2026-09-04 21:03'
+updated_date: '2026-09-04 21:23'
 labels: []
 dependencies: []
 documentation:
@@ -40,7 +40,7 @@ The work: delete the source kind. `--corpus` takes a directory in corpus layout 
 - [x] #3 A corpus living in a dotfiles ref is still measurable by rendering it outside rehearsal and passing the directory
 - [x] #4 A recorded artifact naming a chezmoi origin still loads, or the schema drops it and the record says why
 - [x] #5 rehearsal run --corpus chezmoi:HEAD exits 2 with a message naming chezmoi:HEAD and saying a corpus source is a directory in corpus layout
-- [ ] #6 grep -ri chezmoi src/ returns nothing
+- [x] #6 grep -ri chezmoi src/ returns nothing
 - [x] #7 ResolvedCorpusSource is the union live | directory, and no member names a producing tool
 - [x] #8 corpusLayoutEntries over a fixture holding both .agents/skills/x and skills/x enumerates only skills/x, and over a fixture holding only .claude/CLAUDE.md enumerates no CLAUDE.md entry
 - [x] #9 A session attempt record carrying corpusOrigin {kind: chezmoi, ref, commit} is refused by the schema, and a record carrying no corpusOrigin field still loads
@@ -148,6 +148,36 @@ Due by the review skill's triggers: this deletes a security-relevant refusal pat
 ACT-67 landed (576cb20), excluding the vendored docs/design-handoff/ from lint and format. With it, the full check passes together on this branch: bun test 1002 pass, bun run typecheck, bun run lint and bun run fmt:check each exit 0. Criterion 12 checked on that evidence.
 
 Criterion 6 stays unchecked, for the reason recorded above: it contradicts criteria 5 and 9, which require tests that feed the harness a chezmoi string and assert it is refused. That one needs your call, not another commit.
+
+## Independent review, 2026-09-04
+
+Review, 2026-09-04: independent reviewer found no blocking or should-fix findings across style, architecture, security, spec, and testing axes. Two notes, both wording gaps in acceptance criteria rather than defects:
+
+AC6 ("grep -ri chezmoi src/ returns nothing"): three test files still contain the literal string "chezmoi" (corpus-source.test.ts:78, session-run-command.test.ts:369, session-record.test.ts:130), by design, to assert that a chezmoi-shaped source or record is refused. No production code under src/ mentions chezmoi. Criterion's literal wording doesn't hold; its intent does. Checking as met.
+
+AC12: full suite verified green this session after the review (bun test 1002/1002, typecheck clean, lint clean, fmt:check clean). An earlier run in this same session had lint/fmt failing on docs/design-handoff/support.js, a pre-existing vendored file outside this diff; a later commit (576cb20) excludes that file from lint/fmt tooling, resolving it independently of this task.
+
+AC5 note: the chezmoi:HEAD -> exit 2 refusal is exercised and correct for a session-case run; a pipeline-case run refuses --corpus earlier via a different message path. Card's example matches the session-case reading, which the tests cover.
+
+Verdict: proceed.
+
+(Restored through the CLI after this session reverted the card file, which had the reviewer's uncommitted edit in it. The reviewer's text is unchanged; only its placement moved, so the build handoff above it survives.)
+
+## Criterion 6 settled by João, 2026-09-04
+
+The review checked criterion 6 on the reading that three test files holding the literal string were acceptable, since no production file did. João rejected that reading: no reference anywhere in the code base.
+
+Done. The three tests now use neutral inputs and assert the same behavior, which was never about chezmoi specifically:
+
+- corpus-source.test.ts refuses dotfiles:HEAD, git://example.com/corpus and scheme:, proving any non-directory source is refused in terms of what a corpus source is.
+- session-run-command.test.ts pairs /no/such/corpus with dotfiles:HEAD for the usage-error path.
+- session-record.test.ts refuses an origin of kind "rendered", proving the schema admits only live and directory.
+
+Each was verified to fail for the right reason before being trusted: making the resolver accept any source containing a colon fails the three resolver cases, and adding a third member to the origin union fails the schema case. Both probes were reverted.
+
+rg -Fi chezmoi over the repository, excluding the board, now returns nothing. The board still carries the word in fourteen files, which are the record of why the removal happened, including this card. Left deliberately: erasing them would erase why the code looks the way it does. Say the word if you want those scrubbed too.
+
+Full check green after the change: 1003 tests pass, typecheck, lint and fmt:check each exit 0.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -157,7 +187,9 @@ Deleted the chezmoi corpus source. --corpus takes a directory in corpus layout a
 
 Observed directly: run --corpus chezmoi:HEAD exits 2 naming the source and saying a corpus source is a directory in corpus layout; a dotfiles ref rendered outside rehearsal and passed as a directory is still measurable by stale; all ten attempt records still load.
 
-Two criteria left unchecked. Criterion 6 contradicts criteria 5 and 9: the three surviving chezmoi strings under src/ are test inputs those two criteria require, and no non-test file mentions it. Criterion 12 fails only on lint and fmt:check, both already red on a clean tree from third-party files vendored into docs/design-handoff/ without lint exclusions; filed as ACT-67.
+Independent review found no blocking or should-fix findings across five axes; verdict proceed.
 
-Review is due: this deletes a security-relevant refusal path and changes a persisted schema.
+At João's direction the three tests that still fed the harness a chezmoi string now use neutral inputs, so no file outside the board mentions the tool. Each was verified to fail for the right reason before being trusted.
+
+All twelve criteria met. Full check green: 1003 tests, typecheck, lint, fmt:check.
 <!-- SECTION:FINAL_SUMMARY:END -->
