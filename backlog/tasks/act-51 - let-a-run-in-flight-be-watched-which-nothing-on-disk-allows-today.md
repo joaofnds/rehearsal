@@ -4,11 +4,12 @@ title: 'let a run in flight be watched, which nothing on disk allows today'
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 13:01'
+updated_date: '2026-09-04 13:23'
 labels: []
 milestone: m-4
 dependencies:
   - ACT-49
+  - ACT-52
 priority: medium
 ordinal: 53008
 ---
@@ -35,4 +36,5 @@ Depends on the gap inventory, which is what establishes the real scope.
 - [ ] #2 The monitor shows the running step, spend against the ceiling, and elapsed time, observed against a real run rather than a fixture
 - [ ] #3 A run killed partway leaves state a later reader can reconcile into an interrupted outcome, observed by killing one
 - [ ] #4 Harness progress no longer goes to stdout as prose, satisfying ACT-26.7 or superseding it explicitly
+- [ ] #5 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
 <!-- AC:END -->

@@ -4,13 +4,14 @@ title: build the screens that read only what is already on disk
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 13:01'
+updated_date: '2026-09-04 13:23'
 labels: []
 milestone: m-4
 dependencies:
   - ACT-47
   - ACT-48
   - ACT-49
+  - ACT-52
 priority: medium
 ordinal: 52008
 ---
@@ -38,4 +39,5 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 - [ ] #3 A stopped run renders as a recorded outcome, visually distinct from an error, matching the design
 - [ ] #4 Every screen has the empty state the design specifies, observed on a checkout with no records at all
 - [ ] #5 A record id that would escape the runs directory is refused, proven by a test over the served routes
+- [ ] #6 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
 <!-- AC:END -->
