@@ -277,13 +277,11 @@ const INSTALLED_LAYOUT: readonly (readonly [string, string])[] = [
  * the whole home layout, so its copy sits under `.claude` where the install
  * puts it at the root.
  */
-const INSTRUCTIONS_SOURCE_PATH: Readonly<
-	Record<ResolvedCorpusSource["kind"], string>
-> = {
+const INSTRUCTIONS_SOURCE_PATH = {
 	live: "CLAUDE.md",
 	directory: "CLAUDE.md",
 	chezmoi: ".claude/CLAUDE.md",
-};
+} satisfies Record<ResolvedCorpusSource["kind"], string>;
 
 /**
  * Every corpus file a source holds, in corpus layout. This is where a source's
