@@ -1,10 +1,11 @@
 ---
 id: ACT-39
 title: replay one stage against an edited instruction and read the comparison
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:33'
+updated_date: '2026-09-04 23:47'
 labels: []
 milestone: m-1
 dependencies:
@@ -74,4 +75,10 @@ So the real gap is that STAGE_JUDGE_FAILED keeps status, stage, a one-line error
 Criterion #1 removed 2026-09-05. It directed a fix at the corpus, and the probe showed the corpus already says the right thing. There is nothing there to fix. The defects belonged to one run's output, and a fresh run either repeats them or does not.
 
 The card now starts by paying for one shape run. ACT-70 carries the judge-findings gap, so a second failure would at least be diagnosable.
+
+Moved to Build 2026-09-05 by the iterate session. The shape step asked whether to hand off to build or wait for budget approval; João had already approved the paid run, so the question was already answered and the card moved rather than re-asking.
+
+Budget for the shape run: 1.50 USD cap, about triple the prior attempts (0.4304 and 0.5278).
+
+Precondition checked before spending: template-postgres-1 is up and healthy on 5432, which ACT-38's handoff named as required.
 <!-- SECTION:NOTES:END -->
