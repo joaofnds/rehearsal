@@ -75,6 +75,7 @@ export class TestResources {
 			["git", "config", "user.email", "benchmark@example.com"],
 			directory,
 		);
+		await Bun.write(join(directory, ".gitignore"), WORKFLOW_STATE_IGNORES);
 		await Bun.write(join(directory, "base.txt"), "base\n");
 		await Bun.write(
 			join(directory, "package.json"),
@@ -102,6 +103,14 @@ export class TestResources {
 		);
 	}
 }
+
+/**
+ * A target keeps its board, its agent state, and its dependencies out of the
+ * tree the harness measures, so a fixture repository that tracked them would
+ * read as dirty the moment a test wrote one.
+ */
+export const WORKFLOW_STATE_IGNORES =
+	"backlog/\n.boris/\n.claude/\nnode_modules/\n";
 
 export async function commitAll(
 	directory: string,
