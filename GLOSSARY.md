@@ -133,10 +133,6 @@
   installing.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
-- **Project instructions** — the instruction file a repository carries in its
-  own tree for agents working in it (`CLAUDE.md` or `AGENTS.md`). A property of
-  the repository, never installed by the harness. Distinct from the corpus's
-  global `CLAUDE.md`, which is the file under evaluation.
 - **Corpus variant** — one corpus a comparison arm runs against, identified by
   the snapshot its source resolved to rather than by the source string, so a
   directory and a chezmoi ref holding the same bytes are the same variant. It is
@@ -202,6 +198,10 @@
 - **Planning stage** — a stage whose artifact is a durable document attached to
   the backlog card; it is carried forward as a prior artifact to later stages.
   Today, `discuss`, `grill`, and `plan`.
+- **Project instructions** — the instruction file a repository carries in its
+  own tree for agents working in it (`CLAUDE.md` or `AGENTS.md`). A property of
+  the repository, never installed by the harness. Distinct from the corpus's
+  global `CLAUDE.md`, which is the file under evaluation.
 - **Product Owner (PO)** — the dynamic agent that answers stage questions from
   the product brief; one session per run.
 - **Provider call** — one invocation of the model provider by a worker, Product
