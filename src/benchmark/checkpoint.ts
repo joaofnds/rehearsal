@@ -273,6 +273,10 @@ export async function installStageCorpusSnapshot(
 ): Promise<void> {
 	const targetLayout = join(targetDirectory, ".claude");
 	await mkdir(targetLayout, { recursive: true });
+	await cp(
+		join(snapshotDirectory, "CLAUDE.md"),
+		join(targetLayout, "CLAUDE.md"),
+	);
 	await replaceLayoutDirectory(
 		join(snapshotDirectory, "skills"),
 		join(targetLayout, "skills"),

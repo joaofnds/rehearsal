@@ -192,6 +192,29 @@ describe(captureStageCorpus.name, () => {
 		).toBe("discuss skill");
 	});
 
+	it("installs the frozen instructions as CLAUDE.md under the target's .claude directory", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "doctrine", "doctrine skill");
+		await installSkill(roots[1], "discuss", "discuss skill");
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		testResources.track(parent);
+		const snapshotDirectory = join(parent, "snapshot");
+		const worktree = join(parent, "worktree");
+		await mkdir(worktree, { recursive: true });
+		await snapshotStageCorpus(
+			"discuss",
+			"frozen instructions",
+			roots,
+			snapshotDirectory,
+		);
+
+		await installStageCorpusSnapshot(snapshotDirectory, worktree);
+
+		expect(await Bun.file(join(worktree, ".claude", "CLAUDE.md")).text()).toBe(
+			"frozen instructions",
+		);
+	});
+
 	it("removes a prior stage's agents and output styles the next stage's snapshot does not carry", async () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "doctrine", "doctrine skill");

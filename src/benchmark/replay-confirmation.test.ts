@@ -273,6 +273,7 @@ describe(runReplayConfirmation.name, () => {
 			readonly targetDir: string;
 			readonly branch: string;
 			readonly skill: string;
+			readonly instructions: string;
 			readonly checkpoint: string;
 			rubric: string;
 			readonly model: string;
@@ -309,6 +310,9 @@ describe(runReplayConfirmation.name, () => {
 									"discuss",
 									"SKILL.md",
 								),
+							).text(),
+							instructions: await Bun.file(
+								join(workflowRequest.targetDir, ".claude", "CLAUDE.md"),
 							).text(),
 							checkpoint: await Bun.file(
 								join(workflowRequest.targetDir, "backlog", "config.yml"),
@@ -445,6 +449,7 @@ describe(runReplayConfirmation.name, () => {
 			Array.from({ length: 3 }, () => ({
 				branch: "",
 				skill: "frozen discuss\n",
+				instructions: "Frozen instructions\n",
 				checkpoint: "statuses: []\n",
 				rubric: rubric.content,
 				model: "sonnet",
