@@ -1,10 +1,10 @@
 ---
 id: ACT-62
-title: guard the board against id reuse across the archive
+title: fix backlog id reuse across the archive upstream
 status: To Do
 assignee: []
 created_date: '2026-09-04 17:16'
-updated_date: '2026-09-04 17:17'
+updated_date: '2026-09-04 17:33'
 labels: []
 dependencies: []
 priority: high
@@ -61,10 +61,10 @@ decided by whatever resolves the id later. They read as the live cards today.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Creating a new card on a board whose archive holds the highest id issues an id above that archived id, not a reused one
-- [ ] #2 A board carrying an id present in both backlog/tasks and backlog/archive/tasks is reported as a duplicate group by the check we run, naming both file paths
-- [ ] #3 The ACT-52 and ACT-53 collisions on this board are resolved, and a full scan of live plus archive frontmatter reports no duplicate id groups
-- [ ] #4 The dependency edges on ACT-50, ACT-51, and ACT-53 that name ACT-52 and ACT-53 resolve to the intended live cards after the collision is resolved
+- [ ] #1 An issue is filed on MrLesk/Backlog.md describing both defects with the reproduction, and its number is recorded on this card
+- [ ] #2 A PR is open upstream that makes duplicate-ID diagnosis report a group spanning backlog/tasks and backlog/archive/tasks, naming both paths and exiting non-zero
+- [ ] #3 The upstream position on whether allocation should stop reusing archived ids is recorded on this card, whether accepted, rejected, or split out
+- [ ] #4 The ACT-52 and ACT-53 collisions on this board are resolved, and a scan of live plus archive frontmatter reports no duplicate id groups
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -106,4 +106,49 @@ the highest issued id, and refuse or correct a create that would reuse one.
 
 An upstream report to MrLesk/Backlog.md carries both findings, with the scratch
 reproduction above, and needs Joao's direction before filing.
+
+## Decision, 2026-09-04: no local wrapper
+
+Joao's direction: we will not build a local wrapper for this. It is an upstream
+defect and it gets fixed upstream. The earlier recommendation in these notes for
+a wrapper that refuses a create reusing an archived id is withdrawn. Do not build
+one, and do not add a convention that asks a session to check the archive by hand.
+
+This leaves the board unguarded against a further collision until upstream ships
+a fix. That is accepted. The exposure is small and bounded: a collision only
+occurs when a new card is created while the highest ids sit in the archive, and
+the two existing collisions are already recorded below.
+
+## Findings from reading the upstream source
+
+Read from a clone of MrLesk/Backlog.md at 3c7fde6, so these are file-level facts
+rather than inference from CLI behavior.
+
+The id reuse is deliberate, not an oversight. Three comments assert it, e.g.
+above `getExistingIdsForType` in `src/core/backlog.ts`: "Archived tasks are
+intentionally excluded - archived IDs can be reused. This makes archive act as a
+soft delete for ID purposes." An upstream fix for allocation therefore has to
+win a design argument and may be rejected.
+
+Both symptoms share one root: `liveRecords()` in
+`src/core/task-identity-index.ts` keeps only records of type "task" and
+"completed". `getOccupiedIds()` feeds allocation through that filter, and
+`getContestedIds()` feeds duplicate detection through the same filter.
+
+The doctor half is a plain bug regardless of the design argument.
+`src/core/duplicate-task-repair.ts` never mentions the archive, while the
+ambiguity error raised from `src/utils/task-path.ts` tells the user to run
+`backlog doctor`. Reads and edits stay silent because `getTaskPath` scans only
+`tasksDir` and `completedDir`.
+
+## Next action
+
+A prompt for an implementing session was written to
+tmp/backlog-archive-id-prompt.md (untracked scratch, not repo content). It opens
+an issue and a PR against MrLesk/Backlog.md, splitting the doctor fix from the
+allocation change so the doctor fix can merge even if the soft-delete design is
+defended. Joao runs that session in a clone of the upstream repo.
+
+This card is now a tracking card for that upstream work. Nothing in this
+repository changes.
 <!-- SECTION:NOTES:END -->
