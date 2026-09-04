@@ -1,5 +1,13 @@
-import { resolve } from "node:path";
-import { liveCorpusRoot } from "./corpus-source";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
+/**
+ * Where the corpus is installed for a session that names no source. Every
+ * other corpus kind is already read from here; the instruction file is too.
+ */
+export function liveCorpusRoot(): string {
+	return join(homedir(), ".claude");
+}
 
 /**
  * What resolving a layout path needs and nothing more: the root the bytes are
@@ -44,6 +52,18 @@ const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
 export const CORPUS_INSTRUCTIONS_PATH = "CLAUDE.md";
 
 /**
+ * Where each source kind keeps that file under its own root. A chezmoi render
+ * is the whole home layout, so its copy sits under `.claude`, where an install
+ * keeps it at the root. Resolution and enumeration read this one map, so a
+ * source cannot hold a file the resolver then fails to find.
+ */
+export const INSTRUCTIONS_SOURCE_PATH = {
+	live: CORPUS_INSTRUCTIONS_PATH,
+	directory: CORPUS_INSTRUCTIONS_PATH,
+	chezmoi: `.claude/${CORPUS_INSTRUCTIONS_PATH}`,
+} satisfies Record<CorpusRoot["kind"], string>;
+
+/**
  * The one place that knows where a corpus layout path lands. A case names a
  * file in corpus layout paths, and this maps that layout onto the root the
  * resolved source carries, so the reader never learns where the bytes came
@@ -54,7 +74,7 @@ export function resolveCorpusFile(
 	layoutPath: string,
 ): string {
 	if (layoutPath === CORPUS_INSTRUCTIONS_PATH) {
-		return confinedTo(source.root, layoutPath);
+		return confinedTo(source.root, INSTRUCTIONS_SOURCE_PATH[source.kind]);
 	}
 
 	for (const prefix of CORPUS_LAYOUT_PREFIXES) {

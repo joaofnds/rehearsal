@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	assertPlanningStageCompleted,
-	createTaskCommit,
+	seedTaskBoard,
 	parseTaskState,
 	readTaskCard,
 	readTaskOutput,
@@ -868,7 +868,7 @@ export async function runBenchmark(
 			runCommand(["claude", "--version"], CONTROL_DIR),
 		]);
 		const rubricIds = validateRubricDefinition(rubric);
-		const { taskId, taskSha } = await createTaskCommit(
+		const { taskId, taskSha } = await seedTaskBoard(
 			source.root,
 			task,
 			pipeline.statuses,

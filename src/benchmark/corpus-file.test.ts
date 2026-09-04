@@ -1,14 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { CONTROL_DIR } from "#benchmark/config";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
 	liveCorpusInstructions,
+	liveCorpusRoot,
+	liveCorpusSource,
 	readCorpusInstructions,
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
-import { liveCorpusRoot, resolveCorpusSource } from "#benchmark/corpus-source";
+import { resolveCorpusSource } from "#benchmark/corpus-source";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
@@ -31,6 +34,12 @@ describe(resolveCorpusFile.name, () => {
 		expect(resolveCorpusFile(live, "CLAUDE.md")).toBe(
 			join(liveCorpusRoot(), "CLAUDE.md"),
 		);
+	});
+
+	it("resolves a chezmoi render's CLAUDE.md where the render keeps it", () => {
+		expect(
+			resolveCorpusFile({ kind: "chezmoi", root: "/render" }, "CLAUDE.md"),
+		).toBe("/render/.claude/CLAUDE.md");
 	});
 
 	it("refuses a path that is not a corpus layout path, naming it", () => {
@@ -63,12 +72,18 @@ describe(resolveCorpusFile.name, () => {
 
 describe(hashCorpusFiles.name, () => {
 	it("hashes each declared file's bytes under its layout path", async () => {
-		const [only] = await hashCorpusFiles(live, ["CLAUDE.md"]);
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "CLAUDE.md"), "corpus instructions\n");
+
+		const [only] = await hashCorpusFiles(await resolveCorpusSource(root), [
+			"CLAUDE.md",
+		]);
 
 		expect(only?.path).toBe("CLAUDE.md");
+		expect(only?.resolvedPath).toBe(join(root, "CLAUDE.md"));
 		expect(only?.sha256).toBe(
 			new Bun.CryptoHasher("sha256")
-				.update(await Bun.file(join(liveCorpusRoot(), "CLAUDE.md")).bytes())
+				.update("corpus instructions\n")
 				.digest("hex"),
 		);
 	});
@@ -131,9 +146,12 @@ describe(readCorpusInstructions.name, () => {
 });
 
 describe(liveCorpusInstructions.name, () => {
-	it("reads the live install's CLAUDE.md, not the control repository's", async () => {
-		expect(await liveCorpusInstructions()).toBe(
-			await Bun.file(join(liveCorpusRoot(), "CLAUDE.md")).text(),
+	it("resolves under the install root, never the control repository", () => {
+		expect(resolveCorpusFile(liveCorpusSource(), "CLAUDE.md")).toBe(
+			join(liveCorpusRoot(), "CLAUDE.md"),
+		);
+		expect(resolveCorpusFile(liveCorpusSource(), "CLAUDE.md")).not.toBe(
+			join(CONTROL_DIR, "CLAUDE.md"),
 		);
 	});
 });

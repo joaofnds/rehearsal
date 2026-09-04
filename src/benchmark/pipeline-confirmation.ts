@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import type { createTaskCommit } from "./backlog";
+import type { seedTaskBoard } from "./backlog";
 import type {
 	CheckpointRecord,
 	HashedFile,
@@ -95,7 +95,7 @@ export interface PipelineConfirmationDependencies {
 	readonly runFinalJudge: (
 		request: PipelineFinalJudgeRequest,
 	) => Promise<JudgeResult>;
-	readonly createTaskCommit: typeof createTaskCommit;
+	readonly seedTaskBoard: typeof seedTaskBoard;
 	readonly runChecks: typeof runChecks;
 	readonly captureBaselineContext: typeof captureBaselineContext;
 	readonly captureFileHashes: typeof captureFileHashes;
@@ -196,7 +196,7 @@ async function freezePipelineInputs(
 			request.pipeline.target.integrityFiles,
 		);
 		baselineContext = await dependencies.captureBaselineContext(setupWorktree);
-		({ taskId, taskSha } = await dependencies.createTaskCommit(
+		({ taskId, taskSha } = await dependencies.seedTaskBoard(
 			setupWorktree,
 			request.task,
 			request.pipeline.statuses,

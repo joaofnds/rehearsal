@@ -18,7 +18,7 @@ import {
 	stageCorpusRoots,
 } from "./checkpoint";
 import { CONTROL_DIR } from "./config";
-import { liveCorpusRoot } from "./corpus-source";
+import { liveCorpusRoot } from "./corpus-file";
 import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();

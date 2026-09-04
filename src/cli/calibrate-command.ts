@@ -19,8 +19,8 @@ import {
 	calibratableStageRecordSchema,
 } from "#benchmark/calibration-record";
 import { caseRelative, readCaseDeclaration } from "#benchmark/case";
-import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { displayPath } from "#benchmark/config";
+import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import type { Effort } from "#benchmark/config";
 import type {
 	CalibrationResult,

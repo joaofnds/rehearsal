@@ -76,11 +76,13 @@ async function configureBacklog(
 }
 
 /**
- * The commit a stage's changes are measured against. The target's own project
- * instructions are left as they are: they are a property of the target, and a
- * run that rewrote them would grade the agent against a repository nobody has.
+ * Seeds the target's board with the run's task and reports the commit the
+ * stage's changes are measured from. It writes no commit of its own: the
+ * board lives under the target's ignored workflow state, and the target's
+ * project instructions are a property of the target, so a run that rewrote
+ * them would grade the agent against a repository nobody has.
  */
-export async function createTaskCommit(
+export async function seedTaskBoard(
 	targetDir: string,
 	task: string,
 	statuses: readonly string[],

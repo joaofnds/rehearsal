@@ -411,6 +411,7 @@ export async function runReplayConfirmation(
 					frozen.checkpointDirectory,
 					plan.worktreePath,
 				);
+				setupOperation = "base commit reading";
 				const baseSha = await dependencies.currentSha(plan.worktreePath);
 				setupOperation = "corpus installation";
 				await installStageCorpusSnapshot(

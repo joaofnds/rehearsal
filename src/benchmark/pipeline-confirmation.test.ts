@@ -165,10 +165,10 @@ describe(runPipelineConfirmation.name, () => {
 
 				return dependencies.captureFileHashes(targetDir, integrityFiles);
 			},
-			createTaskCommit: (...args) => {
+			seedTaskBoard: (...args) => {
 				events.push("task setup");
 
-				return dependencies.createTaskCommit(...args);
+				return dependencies.seedTaskBoard(...args);
 			},
 			stageSession: {
 				...dependencies.stageSession,
@@ -232,10 +232,10 @@ describe(runPipelineConfirmation.name, () => {
 
 					return Promise.reject(new Error("baseline failed"));
 				},
-				createTaskCommit: (...args) => {
+				seedTaskBoard: (...args) => {
 					events.push("task setup");
 
-					return dependencies.createTaskCommit(...args);
+					return dependencies.seedTaskBoard(...args);
 				},
 				stageSession: {
 					...dependencies.stageSession,

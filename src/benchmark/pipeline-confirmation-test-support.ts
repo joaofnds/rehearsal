@@ -227,7 +227,7 @@ export class PipelineConfirmationHarness {
 					],
 					costUsd: CONFIRMATION_METRIC.costUsd,
 				}),
-			createTaskCommit: async (targetDir) => ({
+			seedTaskBoard: async (targetDir) => ({
 				taskId: "TASK-1",
 				taskSha: await currentSha(targetDir),
 			}),

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
 	assertPlanningStageCompleted,
-	createTaskCommit,
+	seedTaskBoard,
 	readTaskCard,
 	readTaskOutput,
 } from "#benchmark/backlog";
@@ -330,7 +330,7 @@ async function confirmRun(
 					judgeRequest.evidence.checkIntegrity,
 					judgeRequest.evidence.localChecks,
 				),
-			createTaskCommit,
+			seedTaskBoard,
 			runChecks,
 			captureBaselineContext,
 			captureFileHashes,

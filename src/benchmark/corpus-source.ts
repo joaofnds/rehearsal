@@ -2,6 +2,7 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "./command";
+import { INSTRUCTIONS_SOURCE_PATH, liveCorpusRoot } from "./corpus-file";
 import { pathExists } from "./file-presence";
 
 export class CorpusSourceError extends Error {
@@ -49,10 +50,6 @@ export type CommandRunner = (
 export interface CorpusSourceDependencies {
 	readonly runCommand: CommandRunner;
 	readonly dotfilesDirectory: string;
-}
-
-export function liveCorpusRoot(): string {
-	return join(homedir(), ".claude");
 }
 
 export function defaultCorpusSourceDependencies(): CorpusSourceDependencies {
@@ -271,17 +268,6 @@ const INSTALLED_LAYOUT: readonly (readonly [string, string])[] = [
 	["agents", "agents"],
 	["output-styles", "output-styles"],
 ];
-
-/**
- * Where each source kind keeps the corpus instructions. A chezmoi render is
- * the whole home layout, so its copy sits under `.claude` where the install
- * puts it at the root.
- */
-const INSTRUCTIONS_SOURCE_PATH = {
-	live: "CLAUDE.md",
-	directory: "CLAUDE.md",
-	chezmoi: ".claude/CLAUDE.md",
-} satisfies Record<ResolvedCorpusSource["kind"], string>;
 
 /**
  * Every corpus file a source holds, in corpus layout. This is where a source's

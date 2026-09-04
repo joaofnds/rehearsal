@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	assertStageArtifactState,
-	createTaskCommit,
+	seedTaskBoard,
 	parseTaskState,
 	readTaskCard,
 } from "./backlog";
@@ -142,13 +142,13 @@ describe(parseTaskState.name, () => {
  * wrote the harness's own CLAUDE.md over them would grade an agent against a
  * repository that does not exist.
  */
-describe(createTaskCommit.name, () => {
+describe(seedTaskBoard.name, () => {
 	const seed = "# Add an audit log\n\nRecord every write to the ledger.\n";
 
 	it("adds no CLAUDE.md to the target tree", async () => {
 		const target = await testResources.createRepository();
 
-		await createTaskCommit(target.directory, seed, ["To Do", "Done"]);
+		await seedTaskBoard(target.directory, seed, ["To Do", "Done"]);
 
 		expect(await Bun.file(join(target.directory, "CLAUDE.md")).exists()).toBe(
 			false,
@@ -158,7 +158,7 @@ describe(createTaskCommit.name, () => {
 	it("writes no instructions commit, leaving the base commit at HEAD", async () => {
 		const target = await testResources.createRepository();
 
-		const { taskSha } = await createTaskCommit(target.directory, seed, [
+		const { taskSha } = await seedTaskBoard(target.directory, seed, [
 			"To Do",
 			"Done",
 		]);
