@@ -4,7 +4,7 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-04 23:30'
+updated_date: '2026-09-04 23:37'
 labels: []
 dependencies: []
 type: feature
@@ -33,4 +33,8 @@ For scale: two single failed shape attempts on the audit-log case cost 0.4304 an
 
 <!-- SECTION:NOTES:BEGIN -->
 Created by the iterate session that shaped ACT-39, at João's direction to split the compare work onto its own budgeted card.
+
+Blocked on a second benchmark case, noted 2026-09-05. cases/ holds one pipeline case (audit-log); the rest are session cases. The report schema requires cases min 2, so a second pipeline case has to exist before a comparison can be assembled.
+
+Budget is unset and this is the board's largest provider spend: 2 cases x 3 arms x at least 2 reps. For scale, one single failed shape attempt on audit-log cost 0.43 to 0.53 USD. Do not start this card without a number from João.
 <!-- SECTION:NOTES:END -->
