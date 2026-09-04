@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:31'
+updated_date: '2026-09-04 23:33'
 labels: []
 milestone: m-1
 dependencies:
@@ -28,11 +28,10 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The two findings that failed the shape judge (the 201/202 status contradiction and the dropped validation rules) are fixed in the corpus
-- [ ] #2 The shape stage passes its judge once and records a stage checkpoint
-- [ ] #3 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
-- [ ] #4 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
-- [ ] #5 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
+- [ ] #1 The shape stage passes its judge once and records a stage checkpoint
+- [ ] #2 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
+- [ ] #3 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
+- [ ] #4 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -57,4 +56,22 @@ Two calls answered yes. Fix the two shape-judge findings first, then pay for one
 Acceptance criteria restated to match. The old criterion #3 (`rehearsal compare` produces a report over the two attempts) moved to ACT-69, because the report schema cannot express a two-attempt comparison. Reading the two attempt records directly is what answers the card's question now.
 
 The card's own order of work: fix the corpus defects, run shape once, confirm a checkpoint landed, edit one instruction, check `stale`, replay, read both records.
+
+Oversight probes, 2026-09-05 (second shape step). The stage was right that the corpus is clean and wrong that the evidence is gone.
+
+Corpus is clean, confirmed. cases/audit-log/product-brief.md states 202 once and states all three validation rules (trimmed, non-empty, non-null JSON object not an array). cases/audit-log/rubric.md agrees. No 201 anywhere in cases/audit-log/. So criterion #1's wording, 'fixed in the corpus', is wrong.
+
+The shape agent's output is NOT gone. It survives in the failed run artifacts under input.taskState and input.transcript.exchanges. Both defects are readable there right now.
+
+The 201/202 contradiction is in run 2026-09-04T02-09-23.870Z's shaped card, acceptance criterion #1: 'returns 201/202 without the row existing in the database yet'. The brief settles 202.
+
+The dropped validation rules are in the same card's criterion #2: 'actionType or resourceName missing or not a string, or details not a JSON object'. That drops trimmed and non-empty for the two strings, and drops 'not an array' for details.
+
+The second run (17-34-35) shaped a clean card: 202 throughout, all three rules stated. It still graded F, so its failure has a different cause, and the judge's reasoning is what the artifact does not keep. Run 2 also self-reported editing the task file directly instead of through the CLI, which is ACT-64's defect.
+
+So the real gap is that STAGE_JUDGE_FAILED keeps status, stage, a one-line error, and the input, but never the judge's findings. That is what makes run 2's failure unexplainable.
+
+Criterion #1 removed 2026-09-05. It directed a fix at the corpus, and the probe showed the corpus already says the right thing. There is nothing there to fix. The defects belonged to one run's output, and a fresh run either repeats them or does not.
+
+The card now starts by paying for one shape run. ACT-70 carries the judge-findings gap, so a second failure would at least be diagnosable.
 <!-- SECTION:NOTES:END -->
