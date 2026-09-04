@@ -429,11 +429,32 @@ Unit and filesystem integration tests for configuration parsing, stage and final
 - the skills the selected pipeline names (the default needs `/shape` and `/build`)
 - installed `backlog` CLI
 - target dependencies already installed
+- the target's own services running and its schema migrated, so its declared
+  checks pass before the run starts (see below)
 - clean, committed control repository
 - clean target repository on `main`
 - enough budget for one engineering session per pipeline stage, the shared PO, up to two calls for each stage or final Judge when output validation requires correction, and any calibration rejudges
 
 The `audit-log` case declares `/Users/joaofnds/code/nest/template` as its target, so a run needs no `--target`. Point a run at another checkout with `--target` or `BENCHMARK_TARGET_DIR`.
+
+### Check the target is green first
+
+A pipeline's declared target checks are also its delivery gate, and nothing
+verifies them before a run spends money. A target that fails them for its own
+reasons produces a failed build stage that reads as the corpus's fault. Run the
+case's checks by hand before the first run of the day:
+
+```sh
+cd /Users/joaofnds/code/nest/template
+docker compose up -d
+CONFIG_PATH=src/config/test.yaml bun run migrate up
+CONFIG_PATH=src/config/test.yaml bun run test:unit
+```
+
+The template needs Postgres running and its schema migrated. Without the
+database the suite fails on `ECONNREFUSED`; with an unmigrated database it
+fails on `relation "user" does not exist`. Neither failure involves an agent,
+and both would otherwise be scored as one.
 
 ## Running
 
