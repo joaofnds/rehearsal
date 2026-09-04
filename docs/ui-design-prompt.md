@@ -4,100 +4,70 @@ Paste everything below the line.
 
 ---
 
-Design the UI for a local desktop-class web app called **Rehearsal**. It runs
-on the developer's own machine, opens in a browser, and is used by one person:
-the engineer who owns the instruction corpus it measures.
+Design the interface for **Rehearsal**, a tool that runs locally on a
+developer's own machine and opens in their browser. One user: the engineer who
+owns the instructions it measures.
 
-## What the tool does, so the screens make sense
+## The problem it exists to solve
 
-An engineer writes instructions for their coding agent: a project `CLAUDE.md`,
-skills that own each stage of their workflow (shape, build, review), and rubrics
-that grade results. They keep editing those instructions and have no way to know
-whether an edit made the agent's work better or worse, because they never repeat
-the same task twice.
+Engineers write instructions for their coding agents: a project instruction
+file, skills that own each stage of their workflow, rubrics that grade the
+output. They keep editing those instructions on a hunch, and they never find out
+whether an edit helped, because they are never working on the same task twice.
+There is no way to attribute a better or worse outcome to a specific change.
 
-Rehearsal fixes that. It replays a frozen task against the current instructions,
-grades the result, and compares runs. The vocabulary:
+Rehearsal is a benchmark harness for an instruction corpus. It freezes a task,
+runs an agent against it under a known set of instructions, grades the result,
+and lets the engineer change one instruction, run it again, and see what moved.
+A single run is never presented as a score, because identical reruns of the same
+task vary severalfold.
 
-- **Case** — a frozen benchmark task, declared as data. Two kinds. A *pipeline*
-  case runs a multi-stage workflow against a real target repository. A *session*
-  case runs one agent session and judges its reply with deterministic checks.
-- **Pipeline** — the ordered stages a pipeline case runs (for example shape,
-  then build). Each stage is an agent session followed by a judge.
-- **Run** — one execution of a case. It either completes or stops when a stage
-  is graded below the minimum.
-- **Stage** — one step of a run: the agent session, its artifacts, and the
-  judge's verdict with a letter grade (A to F) and a reasoned scorecard.
-- **Checkpoint** — the frozen state after an accepted stage, so a later run can
-  resume from it instead of paying for the stages before it.
-- **Replay** — re-running one stage from a checkpoint against edited
-  instructions. This is the core loop.
-- **Corpus** — the instruction files under test. Every run records exactly which
-  files it read and their content hashes.
-- **Stale** — a recorded result whose corpus files have changed since, so the
-  result can no longer be trusted.
-- **Comparison** — a report over two or more runs, showing whether an
-  instruction edit moved the score.
+## What the tool can do today
 
-## The screens
+- Declare a benchmark case as data. Two kinds exist: one runs a multi-stage
+  workflow against a real target repository, the other runs a single agent
+  session judged by deterministic checks over its reply and its transcript.
+- Run a case. Each stage is an agent session followed by an independent judge
+  that returns a letter grade (A to F), a verdict of continue or stop, hard
+  blockers that either fired or did not, quality dimensions graded separately,
+  and every piece of evidence it cited with the source it came from. A stage
+  graded below the minimum stops the run and restores the target repository to
+  where it started.
+- Record a checkpoint at every accepted stage, holding the frozen state that
+  stage produced.
+- Replay a single stage from a checkpoint against the current instructions,
+  instead of paying for every stage before it.
+- Track exactly which instruction files each run read, with their content
+  hashes, and report which recorded results a later edit has invalidated.
+- Run a case repeatedly as a group, and report paired comparisons between two
+  instruction versions with a baseline arm, so verbosity cannot be mistaken for
+  improvement.
+- Record what every run cost in dollars and how long it took, and refuse to
+  start without a spend limit.
+- Calibrate a judge against a human's own review of the same evidence, and
+  accumulate how often the judge and the human agree.
 
-Design these, desktop-first, as one app with persistent navigation.
+Every run and every attempt is written to disk as a durable record. Runs take
+minutes, cost real money, and can be interrupted partway.
 
-**1. Monitor** — a run in flight. This is the screen the user watches while
-spending money. It must show, live: which stage is running, the agent's output
-streaming in, the cost accumulating against the budget they set, and the elapsed
-time. When a stage finishes, its judge verdict appears with the grade. When a
-stage is graded below the minimum, the run stops and the target repository is
-restored, and the screen has to make clear that stopping is a normal outcome
-rather than a crash. A run can be interrupted and resumed, so this screen also
-has to represent a run that was interrupted and reconciled on restart.
+## What is planned
 
-**2. Runs** — the history. Every past run, its case, its outcome, its grade per
-stage, what it cost, and whether it is stale. The user scans this to find the
-run they want to compare or replay from.
+- Running the same case against a matrix of instruction version, model, and
+  reasoning effort.
+- Showing projected cost before a large run, rather than reporting it after.
+- Testing a corpus against a newly released model, removing instructions one
+  block at a time to find which ones no longer earn their place, and surfacing
+  both the removable instructions and the stages that got worse.
+- Editing the instructions under test from inside the tool, with a review step
+  before a change is applied.
 
-**3. Run detail** — one run opened up. The stages in order, each with the
-agent's artifacts, its transcript, and the judge's scorecard: the letter grade,
-the hard blockers that fired, the quality dimensions graded independently, and
-every piece of evidence the judge cited with the source it came from. This is
-where the user decides whether the judge was right, so the judge's reasoning has
-to be readable rather than a JSON dump.
+## What to design
 
-**4. Compare** — two runs side by side, showing the per-stage grade delta and
-the cost delta, with the instruction diff that separates them. The question this
-screen answers is "did that edit help".
+The interface for all of that. Decide what the screens are, what belongs on
+each, and how someone moves between them.
 
-**5. Corpus** — the instruction files under test, which files each stage reads,
-and which recorded results a pending edit would invalidate. Editing a file here
-is reviewed before it is applied.
-
-**6. Cases** — the declared benchmark cases, each showing its kind, its target,
-its pipeline or its checks. Starting a run begins here, and starting one asks
-for the model, the reasoning effort, and a spend limit before it will proceed.
-
-## Design constraints
-
-- **Dense, not sparse.** This is a tool for one expert user reading a lot of
-  structured detail. Favor information density over whitespace. Think Linear,
-  Datadog, a CI dashboard. Not a marketing page.
-- **Money is always visible.** Every run costs real dollars. Cost appears
-  wherever a run does, and the app asks before spending.
-- **Grades are the primary signal.** A to F per stage, plus a verdict of
-  CONTINUE or STOP. Color alone must never carry that meaning: pair it with the
-  letter and a shape or icon.
-- **Stale is a first-class state**, not an error. A stale result is still
-  readable, but the UI must never let it be mistaken for current.
-- **Long-running and interruptible.** Runs take minutes and can be interrupted.
-  Every run-related surface needs a representation for in-flight, stopped,
-  completed, and interrupted-then-reconciled.
-- **Dark mode primary**, light mode supported.
-- **Monospace for identifiers**, hashes, file paths, and grades. A proportional
-  face for prose.
-- Accessibility floor: real semantic structure, visible keyboard focus on every
-  interactive element, and no meaning carried by color alone.
-
-## What to produce
-
-Screens 1, 2, and 3 first, at desktop width, since those are the ones the user
-lives in. Then 4, 5, and 6. Include the empty state for each, because a new
-install has no runs at all, and the first thing a new user sees is nothing.
+Constraints: it is a dense professional tool for a single expert user reading a
+lot of structured detail, not a consumer product. Dark mode primary. No meaning
+carried by color alone. Real semantic structure and visible keyboard focus
+throughout. Include the empty state for whatever you design, because a fresh
+install has no data at all.
