@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  html,body{margin:0;padding:0;background:#161826;color:#e9e9ed;font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  *{box-sizing:border-box}
+  h1,h2,h3,h4{font-weight:500;margin:0}
+  p{margin:0}
+  a{color:#b5abfc;text-decoration:none;border-bottom:1px solid #5d5294}
+  a:hover{color:#d2cefd;border-bottom-color:#9184d9}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  button[aria-disabled="true"]{cursor:not-allowed;opacity:.45}
+  input{font:inherit;color:inherit}
+  table{border-collapse:collapse}
+  :focus-visible{outline:2px solid #9184d9;outline-offset:2px;border-radius:3px}
+  ::selection{background:rgba(145,132,217,.35)}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:#3f424d;border:3px solid #161826;border-radius:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes rh-pulse{0%,100%{opacity:1}50%{opacity:.28}}
+  @keyframes rh-sweep{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+  .rh-live{animation:rh-pulse 1.4s ease-in-out infinite}
+  .rh-row:hover{background:#1c1e2b}
+  .rh-nav:hover{background:#232532}
+  .rh-btn:hover:not([aria-disabled="true"]){background:rgba(145,132,217,.14);border-color:#9184d9}
+  .rh-btn:active:not([aria-disabled="true"]){background:rgba(145,132,217,.24)}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:#161826">
+  <div style="flex:1;display:flex;min-height:0">
+
+    <nav aria-label="Sections" style="width:222px;flex:none;display:flex;flex-direction:column;gap:14px;padding:14px 10px;border-right:1px solid #292b31;background:#14161f;overflow-y:auto">
+      <div style="padding:2px 8px 0">
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span style="font-size:15px;font-weight:500;letter-spacing:-.01em">Rehearsal</span>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#75798c">v0.6.2</span>
+        </div>
+        <div style="margin-top:9px;padding:7px 8px;border:1px solid #2f3140;border-radius:6px;background:#1c1e2b">
+          <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Corpus under test</div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#d2cefd">corpus@a41c7e</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#9397ab">14 files</span>
+          </div>
+          <div style="margin-top:3px;font-size:10.5px;color:#9397ab"><span aria-hidden="true">✓</span> clean · no edits since 09:12</div>
+        </div>
+      </div>
+
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+          <li>
+            <button class="rh-nav" onClick="{{ n.go }}" aria-current="{{ n.current }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;border-left:2px solid {{ n.mark }};background:{{ n.bg }};color:{{ n.fg }};text-align:left">
+              <i class="{{ n.icon }}" aria-hidden="true" style="font-size:15px;opacity:.85"></i>
+              <span style="flex:1">{{ n.label }}</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#75798c">{{ n.badge }}</span>
+            </button>
+          </li>
+        </sc-for>
+      </ul>
+
+      <div style="margin-top:auto;padding:8px;border-top:1px solid #292b31">
+        <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Prototype state</div>
+        <button class="rh-btn" onClick="{{ toggleInstall }}" style="margin-top:6px;width:100%;padding:5px 8px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca;text-align:left">{{ installLabel }}</button>
+      </div>
+    </nav>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden">
+
+      <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow-y:auto;display:flex;justify-content:center;padding:56px 32px">
+          <div style="width:100%;max-width:620px">
+            <h1 style="font-size:22px;letter-spacing:-.01em">Nothing is measured yet</h1>
+            <p style="margin-top:8px;color:#9397ab;max-width:52ch;text-wrap:pretty">Rehearsal needs two things before a case can be declared: a hard ceiling on what a run may spend, and the instruction corpus whose effect it is measuring. A case is meaningless without a corpus to attribute results to.</p>
+
+            <ol style="list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:12px">
+              <li style="border:1px solid #3f424d;border-radius:8px;background:#1c1e2b;padding:16px 18px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span aria-hidden="true" style="width:20px;height:20px;flex:none;display:grid;place-items:center;border:1px solid #5d5294;border-radius:50%;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#d2cefd">1</span>
+                  <h2 style="font-size:14px">Set a spend limit</h2>
+                  <span style="margin-left:auto;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Required</span>
+                </div>
+                <p style="margin-top:8px;color:#9397ab;font-size:12.5px;max-width:52ch">Applies per run and per group. Rehearsal refuses to start a run without one, and stops mid-step when the ceiling is reached.</p>
+                <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <label style="display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid #3f424d;border-radius:6px;background:#161826">
+                    <span style="font-size:11px;color:#9397ab">USD</span>
+                    <input value="{{ limit }}" onChange="{{ setLimit }}" inputMode="decimal" aria-label="Spend limit in US dollars" style="width:72px;background:none;border:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;outline:none">
+                  </label>
+                  <sc-for list="{{ limitPresets }}" as="p" hint-placeholder-count="3">
+                    <button class="rh-btn" onClick="{{ p.pick }}" style="padding:6px 10px;border:1px solid {{ p.border }};border-radius:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:{{ p.fg }}">{{ p.label }}</button>
+                  </sc-for>
+                </div>
+              </li>
+
+              <li style="border:1px solid {{ step2Border }};border-radius:8px;background:#1c1e2b;padding:16px 18px;opacity:{{ step2Opacity }}">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span aria-hidden="true" style="width:20px;height:20px;flex:none;display:grid;place-items:center;border:1px solid #5d5294;border-radius:50%;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#d2cefd">2</span>
+                  <h2 style="font-size:14px">Point at an instruction corpus</h2>
+                  <span style="margin-left:auto;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">{{ step2State }}</span>
+                </div>
+                <p style="margin-top:8px;color:#9397ab;font-size:12.5px;max-width:52ch">A directory of instruction files — the project instruction file, skills, rubrics. Rehearsal hashes each file on every run so a result always names the version that produced it.</p>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                  <input value="{{ corpusPath }}" onChange="{{ setCorpus }}" placeholder="~/code/omelette/.claude" aria-label="Corpus directory" style="flex:1;padding:7px 10px;border:1px solid #3f424d;border-radius:6px;background:#161826;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;outline:none">
+                  <button class="rh-btn" onClick="{{ scanCorpus }}" aria-disabled="{{ scanDisabled }}" style="padding:7px 14px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Scan</button>
+                </div>
+                <sc-if value="{{ scanned }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:12px;border:1px solid #2f3140;border-radius:6px;overflow:hidden">
+                    <div style="padding:6px 10px;background:#232532;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#9397ab">Found 14 files · hashed as corpus@a41c7e</div>
+                    <ul style="list-style:none;margin:0;padding:0">
+                      <sc-for list="{{ scanFiles }}" as="f" hint-placeholder-count="4">
+                        <li style="display:flex;gap:10px;padding:5px 10px;border-top:1px solid #232532;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">
+                          <span style="flex:1;color:#e9e9ed">{{ f.path }}</span>
+                          <span style="color:#75798c">{{ f.hash }}</span>
+                          <span style="color:#75798c;width:56px;text-align:right">{{ f.lines }}</span>
+                        </li>
+                      </sc-for>
+                    </ul>
+                  </div>
+                </sc-if>
+              </li>
+
+              <li style="border:1px dashed #3f424d;border-radius:8px;padding:16px 18px;opacity:.5">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span aria-hidden="true" style="width:20px;height:20px;flex:none;display:grid;place-items:center;border:1px solid #595d6c;border-radius:50%;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">3</span>
+                  <h2 style="font-size:14px">Declare your first case</h2>
+                  <span style="margin-left:auto;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Locked</span>
+                </div>
+                <p style="margin-top:8px;color:#9397ab;font-size:12.5px;max-width:52ch">Unlocks once a corpus is linked. Two kinds: a multi-step task against a target repository, or a single agent session judged by deterministic checks.</p>
+              </li>
+            </ol>
+
+            <div style="margin-top:20px;display:flex;align-items:center;gap:12px">
+              <button class="rh-btn" onClick="{{ finishSetup }}" aria-disabled="{{ finishDisabled }}" style="padding:8px 16px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Finish setup</button>
+              <span style="font-size:11.5px;color:#75798c">{{ finishHint }}</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRuns }}" hint-placeholder-val="{{ true }}">
+        <header style="flex:none;padding:14px 20px 12px;border-bottom:1px solid #292b31;display:flex;align-items:flex-end;gap:16px">
+          <div>
+            <h1 style="font-size:17px;letter-spacing:-.01em">Run history</h1>
+            <p style="margin-top:3px;font-size:11.5px;color:#75798c">148 records on disk · newest first · every row names the corpus version that produced it</p>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:6px 12px;border:1px solid #3f424d;border-radius:6px;color:#b2b6ca">Replay a step<span style="margin-left:7px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#75798c">R</span></button>
+            <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:6px 12px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">New run<span style="margin-left:7px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#796cbf">N</span></button>
+          </div>
+        </header>
+
+        <div style="flex:none;padding:9px 20px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c;margin-right:2px">Filter</span>
+          <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+            <button class="rh-btn" onClick="{{ f.pick }}" aria-pressed="{{ f.on }}" style="padding:4px 10px;border:1px solid {{ f.border }};border-radius:99px;font-size:11.5px;background:{{ f.bg }};color:{{ f.fg }}">{{ f.label }}</button>
+          </sc-for>
+          <label style="margin-left:auto;display:flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid #3f424d;border-radius:6px;background:#1c1e2b">
+            <i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:13px;color:#75798c"></i>
+            <input placeholder="case, corpus hash, blocker id" aria-label="Search runs" style="width:210px;background:none;border:none;font-size:12px;outline:none">
+          </label>
+        </div>
+
+        <div style="flex:1;overflow-y:auto">
+          <table style="width:100%;font-size:12.5px">
+            <caption style="text-align:left;padding:10px 20px 4px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Durable records</caption>
+            <thead>
+              <tr style="position:sticky;top:0;background:#161826;box-shadow:inset 0 -1px 0 #292b31">
+                <th scope="col" style="text-align:left;padding:7px 12px 7px 20px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Run</th>
+                <th scope="col" style="text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Case</th>
+                <th scope="col" style="text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Outcome</th>
+                <th scope="col" style="text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Step grades</th>
+                <th scope="col" style="text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Task grade</th>
+                <th scope="col" style="text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Corpus</th>
+                <th scope="col" style="text-align:right;padding:7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Cost</th>
+                <th scope="col" style="text-align:right;padding:7px 20px 7px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Wall</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ runs }}" as="r" hint-placeholder-count="9">
+                <tr class="rh-row" style="border-top:1px solid #232532">
+                  <th scope="row" style="text-align:left;padding:9px 12px 9px 20px;font-weight:400">
+                    <button onClick="{{ r.open }}" style="display:block;text-align:left">
+                      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#d2cefd;border-bottom:1px solid #423a6a">{{ r.id }}</span>
+                      <span style="display:block;margin-top:2px;font-size:11px;color:#75798c">{{ r.when }}</span>
+                    </button>
+                  </th>
+                  <td style="padding:9px 12px;vertical-align:top">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ r.case }}</span>
+                    <span style="display:block;margin-top:2px;font-size:11px;color:#75798c">{{ r.kind }}</span>
+                  </td>
+                  <td style="padding:9px 12px;vertical-align:top">
+                    <span style="display:inline-flex;align-items:center;gap:6px">
+                      <span class="{{ r.pulse }}" aria-hidden="true" style="font-size:11px;color:{{ r.glyphColor }}">{{ r.glyph }}</span>
+                      <span>{{ r.outcome }}</span>
+                    </span>
+                    <span style="display:block;margin-top:2px;font-size:11px;color:#75798c">{{ r.outcomeNote }}</span>
+                  </td>
+                  <td style="padding:9px 12px;vertical-align:top;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:.04em">{{ r.grades }}</td>
+                  <td style="padding:9px 12px;vertical-align:top">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700">{{ r.taskGrade }}</span>
+                    <span style="display:block;margin-top:2px;font-size:11px;color:#75798c">{{ r.taskNote }}</span>
+                  </td>
+                  <td style="padding:9px 12px;vertical-align:top">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#b2b6ca">{{ r.corpus }}</span>
+                    <span style="display:flex;align-items:center;gap:5px;margin-top:2px;font-size:11px;color:{{ r.staleColor }}"><span aria-hidden="true">{{ r.staleGlyph }}</span>{{ r.stale }}</span>
+                  </td>
+                  <td style="padding:9px 12px;vertical-align:top;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px">{{ r.cost }}</td>
+                  <td style="padding:9px 20px 9px 12px;vertical-align:top;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#b2b6ca">{{ r.wall }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <div style="padding:14px 20px 28px;font-size:11.5px;color:#75798c;max-width:70ch;text-wrap:pretty">A stopped run is a recorded outcome, not an error: the step that fell below the minimum is the finding. Runs marked stale were produced by a corpus version that has since changed — their grades are kept as history and excluded from comparisons.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRunsEmpty }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:14px 20px 12px;border-bottom:1px solid #292b31">
+          <h1 style="font-size:17px">Run history</h1>
+          <p style="margin-top:3px;font-size:11.5px;color:#75798c">0 records on disk</p>
+        </header>
+        <div style="flex:1;display:grid;place-items:center;padding:40px">
+          <div style="max-width:44ch;text-align:left">
+            <div aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#3f424d;line-height:1.9">┌──────────────┐<br>│ &nbsp;no records&nbsp; │<br>└──────────────┘</div>
+            <h2 style="margin-top:14px;font-size:15px">No runs recorded</h2>
+            <p style="margin-top:6px;font-size:12.5px;color:#9397ab;text-wrap:pretty">The corpus is linked and a spend limit is set. Declare a case, then run it — every attempt lands here as a durable record.</p>
+            <button class="rh-btn" onClick="{{ goCases }}" style="margin-top:14px;padding:7px 14px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Declare a case</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMonitor }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="rh-live" aria-hidden="true" style="font-size:11px;color:#b5abfc">●</span>
+            <h1 style="font-size:16px">Run <span style="font-family:'JetBrains Mono',ui-monospace,monospace">r-0148</span> in progress</h1>
+          </div>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#9397ab">auth-refactor</span>
+          <span style="padding:2px 8px;border:1px solid #423a6a;border-radius:99px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#d2cefd">corpus@a41c7e</span>
+          <span style="font-size:11.5px;color:#75798c">target <span style="font-family:'JetBrains Mono',ui-monospace,monospace">omelette-web @ main…e91f2a</span> · sonnet-4.6 · effort high</span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="rh-btn" onClick="{{ noop }}" style="padding:6px 12px;border:1px solid #3f424d;border-radius:6px;color:#b2b6ca">Pause after this step</button>
+            <button class="rh-btn" onClick="{{ stopRun }}" style="padding:6px 12px;border:1px solid #595d6c;border-radius:6px;color:#e4e7f5">Stop &amp; restore repo</button>
+          </div>
+        </header>
+
+        <div style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;background:#1a1c28">
+          <div style="display:flex;align-items:flex-end;gap:28px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Spent this run</div>
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:26px;font-weight:500;letter-spacing:-.02em;color:#e9e9ed">{{ spendStr }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#9397ab">of {{ limitStr }} limit</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Burn rate</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;margin-top:3px">{{ burnStr }}<span style="font-size:11px;color:#75798c"> /min</span></div>
+            </div>
+            <div>
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Elapsed</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;margin-top:3px">{{ elapsedStr }}</div>
+            </div>
+            <div>
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Tokens in / out</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;margin-top:3px;color:#b2b6ca">{{ tokensStr }}</div>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Remaining step 4, at current rate</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;margin-top:3px;color:#b2b6ca">≈ $0.90 · 3m</div>
+            </div>
+          </div>
+          <div role="img" aria-label="{{ spendAria }}" style="margin-top:11px;position:relative;height:9px;border:1px solid #3f424d;border-radius:5px;background:#161826;overflow:hidden">
+            <div style="position:absolute;inset:0;width:{{ spendPct }};background:repeating-linear-gradient(115deg,#796cbf 0 6px,#5d5294 6px 12px)"></div>
+            <div aria-hidden="true" style="position:absolute;top:-3px;bottom:-3px;left:{{ spendPct }};width:1px;background:#e9e9ed"></div>
+          </div>
+          <div style="margin-top:5px;display:flex;justify-content:space-between;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#75798c">
+            <span>$0.00</span><span>{{ spendPctLabel }} of ceiling used · stops mid-step at the ceiling</span><span>{{ limitStr }}</span>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0;overflow-y:auto">
+
+          <section aria-label="Task graph" style="flex:0 0 auto;min-height:215px;overflow-y:auto;border-bottom:1px solid #292b31;background:#181a26">
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 16px 0">
+              <h2 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c;font-weight:500">Task · auth-refactor · 4 steps, in order</h2>
+              <span style="font-size:11px;color:#9397ab">click a step to bring its session and judge below</span>
+              <span aria-hidden="true" style="margin-left:auto;font-size:10.5px;color:#75798c">✓ accepted · ● running · ○ queued · ◆ checkpoint</span>
+            </div>
+            <div style="overflow-x:auto;padding:10px 16px 12px">
+              <ol style="list-style:none;margin:0;padding:0;display:flex;align-items:stretch;gap:0;min-width:max-content">
+                <sc-for list="{{ graphNodes }}" as="n" hint-placeholder-count="4">
+                  <li style="display:flex;align-items:stretch">
+                    <button class="rh-nav" onClick="{{ n.pick }}" aria-current="{{ n.current }}" style="width:252px;text-align:left;padding:10px 12px;border:1px solid {{ n.border }};border-radius:8px;background:{{ n.bg }};display:flex;flex-direction:column;gap:7px">
+                      <span style="display:flex;align-items:center;gap:8px">
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#75798c">{{ n.n }}</span>
+                        <span style="flex:1;font-size:13px;color:#e9e9ed">{{ n.name }}</span>
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:19px;font-weight:700;line-height:1;color:{{ n.gradeColor }}">{{ n.grade }}</span>
+                      </span>
+                      <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#b2b6ca">
+                        <span class="{{ n.pulse }}" aria-hidden="true">{{ n.glyph }}</span>{{ n.state }}
+                      </span>
+                      <sc-if value="{{ n.toolCall }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:block;padding:4px 7px;border:1px solid #423a6a;border-radius:5px;background:#1c1e2b;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#d2cefd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.toolCall }}</span>
+                      </sc-if>
+                      <span style="display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                        <span>{{ n.cost }}</span><span>{{ n.dur }}</span>
+                        <span>{{ n.blockers }}</span><span>{{ n.corpus }}</span>
+                      </span>
+                      <span style="display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed #3f424d;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:{{ n.ckptColor }}">
+                        <span aria-hidden="true">{{ n.ckptGlyph }}</span>{{ n.ckpt }}
+                      </span>
+                      <span style="font-size:11px;color:#9397ab">{{ n.contribution }}</span>
+                      <span style="display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#b2b6ca">
+                        <span>↓ {{ n.ins }}</span><span>↑ {{ n.outs }}</span>
+                      </span>
+                    </button>
+                    <span style="display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 5px">
+                      <button class="rh-btn" onClick="{{ n.openStep }}" aria-label="{{ n.name }} — instructions in, artifacts out" style="padding:4px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#d2cefd;white-space:nowrap">{{ n.openLabel }}</button>
+                      <button class="rh-btn" onClick="{{ n.replay }}" aria-disabled="{{ n.replayDisabled }}" aria-label="{{ n.replayAria }}" style="padding:4px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#b2b6ca">replay</button>
+                    </span>
+                    <sc-if value="{{ n.hasNext }}" hint-placeholder-val="{{ true }}">
+                      <span aria-hidden="true" style="display:flex;align-items:center;gap:3px;padding:0 8px;color:{{ n.edgeColor }}">
+                        <span style="display:block;width:24px;height:1px;background:{{ n.edgeColor }}"></span>
+                        <span style="font-size:10px">▶</span>
+                      </span>
+                    </sc-if>
+                  </li>
+                </sc-for>
+              </ol>
+            </div>
+            <div style="padding:0 16px 10px;font-size:11px;color:#75798c;text-wrap:pretty">Minimum grade for every step in this task is <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#b2b6ca">B−</span>. A task below it stops the run and restores <span style="font-family:'JetBrains Mono',ui-monospace,monospace">omelette-web</span> to <span style="font-family:'JetBrains Mono',ui-monospace,monospace">main…e91f2a</span>. Contribution is measured against the task's final grade and is provisional until the run ends.</div>
+          </section>
+
+          <div style="flex:1 1 40%;min-height:230px;display:grid;grid-template-columns:minmax(380px,1fr) minmax(320px,.8fr);overflow-x:auto">
+
+          <section aria-label="Live agent session" style="border-right:1px solid #292b31;display:flex;flex-direction:column;min-height:0">
+            <div style="flex:none;padding:9px 14px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:10px">
+              <h2 style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#9397ab;font-weight:500">Step 3 · Implement</h2>
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">session closed · 1,284 lines · 4m02s · $1.12</span>
+              <a href="#" onClick="{{ noop }}" style="margin-left:auto;font-size:11.5px">open session.jsonl</a>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:10px 14px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.7">
+              <sc-for list="{{ streamLines }}" as="l" hint-placeholder-count="12">
+                <div style="display:flex;gap:10px;padding:1px 0">
+                  <span style="flex:none;width:44px;text-align:right;color:#4a4d5c">{{ l.n }}</span>
+                  <span style="flex:none;width:64px;color:#75798c">{{ l.kind }}</span>
+                  <span style="flex:1;color:{{ l.color }};white-space:pre-wrap;word-break:break-word">{{ l.text }}</span>
+                </div>
+              </sc-for>
+              <div style="margin-top:10px;padding:8px 10px;border:1px solid #2f3140;border-radius:6px;background:#1c1e2b;font-family:Inter,sans-serif;font-size:11.5px;color:#9397ab">
+                Session ended. The full transcript is on disk; Rehearsal keeps only the spans the judge cites. <a href="#" onClick="{{ noop }}">runs/r-0148/step-3/session.jsonl</a>
+              </div>
+            </div>
+            <div style="flex:none;padding:7px 14px;border-top:1px solid #292b31;display:flex;align-items:center;gap:10px;font-size:11px;color:#75798c">
+              <span class="rh-live" aria-hidden="true" style="color:#b5abfc">●</span>
+              <span>Following tail · <span style="font-family:'JetBrains Mono',ui-monospace,monospace">j/k</span> to scroll, <span style="font-family:'JetBrains Mono',ui-monospace,monospace">f</span> to unfollow</span>
+              <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace">tool calls collapsed (34)</span>
+            </div>
+          </section>
+
+          <section aria-label="Judge" style="display:flex;flex-direction:column;min-height:0;background:#181a26">
+            <div style="flex:none;padding:9px 14px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:9px">
+              <h2 style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#9397ab;font-weight:500">Judge · step 3</h2>
+              <span class="rh-live" aria-hidden="true" style="font-size:10px;color:#b5abfc">●</span>
+              <span style="font-size:11.5px;color:#b5abfc">grading</span>
+              <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">independent session · $0.08</span>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:12px 14px 20px">
+
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #3f424d;border-radius:7px;background:#1c1e2b">
+                <div>
+                  <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Verdict</div>
+                  <div style="margin-top:2px;display:flex;align-items:center;gap:7px">
+                    <span aria-hidden="true" style="font-size:11px;color:#75798c">◌</span>
+                    <span style="font-size:13px;color:#b2b6ca">pending — dimensions still returning</span>
+                  </div>
+                </div>
+                <div style="margin-left:auto;text-align:right">
+                  <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Grade</div>
+                  <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:22px;font-weight:700;color:#595d6c">—</div>
+                </div>
+              </div>
+
+              <h3 style="margin-top:16px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Hard blockers <span style="color:#9397ab;letter-spacing:0;text-transform:none">· 4 of 4 evaluated</span></h3>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ blockers }}" as="b" hint-placeholder-count="4">
+                  <li style="display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid {{ b.border }};border-radius:6px;background:{{ b.bg }}">
+                    <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ b.fg }}">{{ b.glyph }}</span>
+                    <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ b.id }}</span>
+                    <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:{{ b.fg }}">{{ b.state }}</span>
+                    <button class="rh-btn" onClick="{{ b.toggle }}" aria-expanded="{{ b.open }}" style="padding:2px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#9397ab">{{ b.evLabel }}</button>
+                  </li>
+                  <sc-if value="{{ b.openBool }}" hint-placeholder-val="{{ false }}">
+                    <li style="padding:9px 11px;margin:2px 0 4px;border-left:2px solid #5d5294;background:#161826">
+                      <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Cited evidence</div>
+                      <sc-for list="{{ b.evidence }}" as="e" hint-placeholder-count="2">
+                        <div style="margin-top:8px">
+                          <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                            <span style="padding:1px 5px;border:1px solid #3f424d;border-radius:4px">{{ e.source }}</span>
+                            <a href="#" onClick="{{ noop }}">{{ e.locator }}</a>
+                          </div>
+                          <blockquote style="margin:5px 0 0;padding:6px 9px;border-left:1px solid #3f424d;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5;white-space:pre-wrap">{{ e.quote }}</blockquote>
+                        </div>
+                      </sc-for>
+                    </li>
+                  </sc-if>
+                </sc-for>
+              </ul>
+
+              <h3 style="margin-top:16px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Quality dimensions <span style="color:#9397ab;letter-spacing:0;text-transform:none">· 3 of 5 returned</span></h3>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ dims }}" as="d" hint-placeholder-count="5">
+                  <li style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid #232532">
+                    <span style="flex:1;font-size:12.5px;color:{{ d.nameColor }}">{{ d.name }}</span>
+                    <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#4a4d5c;letter-spacing:.12em">{{ d.bar }}</span>
+                    <span style="width:26px;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700;color:{{ d.color }}">{{ d.grade }}</span>
+                    <button class="rh-btn" onClick="{{ d.toggle }}" aria-expanded="{{ d.open }}" aria-disabled="{{ d.disabled }}" style="padding:2px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#9397ab">{{ d.evLabel }}</button>
+                  </li>
+                  <sc-if value="{{ d.openBool }}" hint-placeholder-val="{{ false }}">
+                    <li style="padding:9px 11px;margin:2px 0 6px;border-left:2px solid #5d5294;background:#161826">
+                      <sc-for list="{{ d.evidence }}" as="e" hint-placeholder-count="2">
+                        <div style="margin-bottom:8px">
+                          <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                            <span style="padding:1px 5px;border:1px solid #3f424d;border-radius:4px">{{ e.source }}</span>
+                            <a href="#" onClick="{{ noop }}">{{ e.locator }}</a>
+                          </div>
+                          <blockquote style="margin:5px 0 0;padding:6px 9px;border-left:1px solid #3f424d;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5;white-space:pre-wrap">{{ e.quote }}</blockquote>
+                        </div>
+                      </sc-for>
+                    </li>
+                  </sc-if>
+                </sc-for>
+              </ul>
+
+              <div style="margin-top:16px;padding:10px 12px;border:1px solid #2f3140;border-radius:7px;background:#1c1e2b">
+                <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Read this as one attempt</div>
+                <p style="margin-top:5px;font-size:11.5px;color:#9397ab;text-wrap:pretty">Identical reruns of this case have varied by two letter steps here. A single grade is a data point, not a score — <button class="rh-btn" onClick="{{ goCompare }}" style="border-bottom:1px solid #5d5294;color:#b5abfc">compare arms</button> to say whether an edit moved anything.</p>
+              </div>
+            </div>
+          </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <button class="rh-btn" onClick="{{ goRuns }}" style="padding:4px 9px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca"><span aria-hidden="true">←</span> History</button>
+          <div>
+            <h1 style="font-size:16px;display:flex;align-items:center;gap:9px">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace">r-0147</span>
+              <span style="font-size:12.5px;color:#9397ab">auth-refactor</span>
+            </h1>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:10px;font-size:11.5px;color:#75798c">
+              <span aria-hidden="true">◼</span><span>stopped at step 3 · below minimum B−</span>
+              <span>·</span><span>04 Sep 09:41 · 6m12s · $2.41</span>
+              <span>·</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace">sonnet-4.6 / high</span>
+            </div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="padding:3px 9px;border:1px solid #423a6a;border-radius:99px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#d2cefd">corpus@a41c7e</span>
+            <div role="group" aria-label="Run detail layout" style="display:flex;border:1px solid #3f424d;border-radius:6px;overflow:hidden">
+              <sc-for list="{{ layouts }}" as="l" hint-placeholder-count="2">
+                <button class="rh-nav" onClick="{{ l.pick }}" aria-pressed="{{ l.on }}" style="padding:5px 11px;font-size:11.5px;background:{{ l.bg }};color:{{ l.fg }};border-right:1px solid #3f424d">{{ l.label }}</button>
+              </sc-for>
+            </div>
+            <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:6px 12px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Replay step 3</button>
+          </div>
+        </header>
+
+        <div style="flex:none;padding:8px 20px;border-bottom:1px solid #292b31;background:#1a1c28;display:flex;align-items:center;gap:9px;font-size:11.5px;color:#b2b6ca">
+          <i class="ph ph-arrow-counter-clockwise" aria-hidden="true" style="font-size:14px;color:#9397ab"></i>
+          <span>Repository restored to <span style="font-family:'JetBrains Mono',ui-monospace,monospace">omelette-web @ main…e91f2a</span>. Checkpoints from steps 1–2 are retained and replayable.</span>
+          <span style="margin-left:auto;color:#75798c">{{ layoutNote }}</span>
+        </div>
+
+        <sc-if value="{{ isRail }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;display:grid;grid-template-columns:300px minmax(0,1fr);min-height:0">
+            <section aria-label="Steps" style="border-right:1px solid #292b31;overflow-y:auto;padding:12px 10px">
+              <div style="padding:0 6px 8px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Steps &amp; checkpoints</div>
+              <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px">
+                <sc-for list="{{ detailSteps }}" as="s" hint-placeholder-count="4">
+                  <li>
+                    <button class="rh-nav" onClick="{{ s.pick }}" aria-current="{{ s.current }}" style="width:100%;text-align:left;padding:9px 10px;border:1px solid {{ s.border }};border-radius:7px;background:{{ s.bg }}">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#75798c">{{ s.n }}</span>
+                        <span style="font-size:12.5px;flex:1">{{ s.name }}</span>
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700;color:{{ s.gradeColor }}">{{ s.grade }}</span>
+                      </div>
+                      <div style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:11px;color:#9397ab"><span aria-hidden="true">{{ s.glyph }}</span>{{ s.state }}</div>
+                      <div style="margin-top:3px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#75798c">{{ s.meta }}</div>
+                    </button>
+                  </li>
+                </sc-for>
+              </ul>
+
+              <div style="margin-top:14px;padding:0 6px 8px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Attempts at ckpt-0147-s2</div>
+              <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px">
+                <sc-for list="{{ attempts }}" as="a" hint-placeholder-count="3">
+                  <li style="padding:8px 10px;border:1px solid #2f3140;border-radius:7px;background:#1c1e2b">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#d2cefd;flex:1">{{ a.id }}</span>
+                      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700;color:{{ a.color }}">{{ a.grade }}</span>
+                    </div>
+                    <div style="margin-top:3px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">{{ a.corpus }}</div>
+                    <div style="margin-top:2px;display:flex;align-items:center;gap:5px;font-size:10.5px;color:{{ a.staleColor }}"><span aria-hidden="true">{{ a.staleGlyph }}</span>{{ a.note }}</div>
+                  </li>
+                </sc-for>
+              </ul>
+              <button class="rh-btn" onClick="{{ goCompare }}" style="margin-top:8px;width:100%;padding:6px 10px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Compare these attempts</button>
+            </section>
+
+            <section aria-label="Step report" style="overflow-y:auto;padding:16px 20px 32px">
+              <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                <div>
+                  <h2 style="font-size:15px">Step 3 · Implement</h2>
+                  <div style="margin-top:4px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#75798c">skills/implement.md · 4m02s · $1.12 · 1,284 transcript lines</div>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:10px">
+                  <div style="padding:9px 14px;border:1px solid #3f424d;border-radius:7px;background:#1c1e2b;text-align:right">
+                    <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Grade</div>
+                    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;line-height:1.1">D</div>
+                    <div style="font-size:10.5px;color:#9397ab">min B−</div>
+                  </div>
+                  <div style="padding:9px 14px;border:1px solid #3f424d;border-radius:7px;background:#1c1e2b;text-align:right">
+                    <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Verdict</div>
+                    <div style="margin-top:5px;display:flex;align-items:center;gap:7px;font-size:14px"><span aria-hidden="true">◼</span>stop</div>
+                    <div style="font-size:10.5px;color:#9397ab">2 blockers fired</div>
+                  </div>
+                </div>
+              </div>
+              <h3 style="margin-top:16px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Hard blockers</h3>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:1px;max-width:900px">
+                <sc-for list="{{ blockers }}" as="b" hint-placeholder-count="4">
+                  <li style="display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid {{ b.border }};border-radius:6px;background:{{ b.bg }}">
+                    <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ b.fg }}">{{ b.glyph }}</span>
+                    <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ b.id }}</span>
+                    <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:{{ b.fg }}">{{ b.state }}</span>
+                    <button class="rh-btn" onClick="{{ b.toggle }}" aria-expanded="{{ b.open }}" style="padding:2px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#9397ab">{{ b.evLabel }}</button>
+                  </li>
+                  <sc-if value="{{ b.openBool }}" hint-placeholder-val="{{ false }}">
+                    <li style="padding:10px 12px;margin:2px 0 5px;border-left:2px solid #5d5294;background:#1a1c28;max-width:900px">
+                      <sc-for list="{{ b.evidence }}" as="e" hint-placeholder-count="2">
+                        <div style="margin-bottom:9px">
+                          <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                            <span style="padding:1px 5px;border:1px solid #3f424d;border-radius:4px">{{ e.source }}</span>
+                            <a href="#" onClick="{{ noop }}">{{ e.locator }}</a>
+                          </div>
+                          <blockquote style="margin:5px 0 0;padding:7px 10px;border-left:1px solid #3f424d;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5;white-space:pre-wrap">{{ e.quote }}</blockquote>
+                        </div>
+                      </sc-for>
+                    </li>
+                  </sc-if>
+                </sc-for>
+              </ul>
+
+              <h3 style="margin-top:18px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Quality dimensions</h3>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;max-width:900px">
+                <sc-for list="{{ dimsFull }}" as="d" hint-placeholder-count="5">
+                  <li style="display:flex;align-items:center;gap:12px;padding:8px 11px;border-bottom:1px solid #232532">
+                    <span style="flex:1;font-size:12.5px">{{ d.name }}</span>
+                    <span style="font-size:11.5px;color:#9397ab;max-width:38ch">{{ d.note }}</span>
+                    <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#4a4d5c;letter-spacing:.12em">{{ d.bar }}</span>
+                    <span style="width:26px;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700;color:{{ d.color }}">{{ d.grade }}</span>
+                    <button class="rh-btn" onClick="{{ d.toggle }}" aria-expanded="{{ d.open }}" style="padding:2px 7px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;color:#9397ab">{{ d.evLabel }}</button>
+                  </li>
+                  <sc-if value="{{ d.openBool }}" hint-placeholder-val="{{ false }}">
+                    <li style="padding:10px 12px;margin:2px 0 6px;border-left:2px solid #5d5294;background:#1a1c28">
+                      <sc-for list="{{ d.evidence }}" as="e" hint-placeholder-count="2">
+                        <div style="margin-bottom:9px">
+                          <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                            <span style="padding:1px 5px;border:1px solid #3f424d;border-radius:4px">{{ e.source }}</span>
+                            <a href="#" onClick="{{ noop }}">{{ e.locator }}</a>
+                          </div>
+                          <blockquote style="margin:5px 0 0;padding:7px 10px;border-left:1px solid #3f424d;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5;white-space:pre-wrap">{{ e.quote }}</blockquote>
+                        </div>
+                      </sc-for>
+                    </li>
+                  </sc-if>
+                </sc-for>
+              </ul>
+
+              <h3 style="margin-top:18px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Instructions this step read</h3>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;max-width:900px;border:1px solid #2f3140;border-radius:7px;overflow:hidden">
+                <sc-for list="{{ readFiles }}" as="f" hint-placeholder-count="4">
+                  <li style="display:flex;gap:12px;align-items:center;padding:6px 11px;border-bottom:1px solid #232532;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">
+                    <span style="flex:1">{{ f.path }}</span>
+                    <span style="color:#75798c">{{ f.hash }}</span>
+                    <span style="display:flex;align-items:center;gap:5px;width:150px;font-family:Inter,sans-serif;font-size:11px;color:{{ f.color }}"><span aria-hidden="true">{{ f.glyph }}</span>{{ f.state }}</span>
+                  </li>
+                </sc-for>
+              </ul>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLedger }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow-y:auto;padding:16px 20px 40px">
+            <div style="max-width:1000px;display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ ledger }}" as="s" hint-placeholder-count="4">
+                <article aria-label="{{ s.aria }}" style="border:1px solid {{ s.border }};border-radius:8px;background:#1a1c28;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #2f3140;background:{{ s.headBg }}">
+                    <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">{{ s.n }}</span>
+                    <h2 style="font-size:14px">{{ s.name }}</h2>
+                    <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#9397ab"><span aria-hidden="true">{{ s.glyph }}</span>{{ s.state }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">{{ s.meta }}</span>
+                    <span style="margin-left:auto;padding:2px 8px;border:1px solid #423a6a;border-radius:99px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#d2cefd">{{ s.corpus }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:19px;font-weight:700;color:{{ s.gradeColor }};width:32px;text-align:right">{{ s.grade }}</span>
+                  </div>
+                  <div style="padding:11px 14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">
+                    <div>
+                      <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Blockers</div>
+                      <ul style="list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:3px">
+                        <sc-for list="{{ s.blockers }}" as="b" hint-placeholder-count="4">
+                          <li style="display:flex;align-items:center;gap:8px;font-size:11.5px">
+                            <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;color:{{ b.fg }}">{{ b.glyph }}</span>
+                            <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px">{{ b.id }}</span>
+                            <span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:{{ b.fg }}">{{ b.state }}</span>
+                          </li>
+                        </sc-for>
+                      </ul>
+                    </div>
+                    <div>
+                      <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Dimensions</div>
+                      <ul style="list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:3px">
+                        <sc-for list="{{ s.dims }}" as="d" hint-placeholder-count="5">
+                          <li style="display:flex;align-items:center;gap:10px;font-size:11.5px">
+                            <span style="flex:1">{{ d.name }}</span>
+                            <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#4a4d5c;letter-spacing:.12em">{{ d.bar }}</span>
+                            <span style="width:24px;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;color:{{ d.color }}">{{ d.grade }}</span>
+                          </li>
+                        </sc-for>
+                      </ul>
+                    </div>
+                  </div>
+                  <div style="padding:9px 14px;border-top:1px solid #2f3140;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#b2b6ca"><i class="{{ s.ckptIcon }}" aria-hidden="true" style="font-size:12px"></i>{{ s.ckpt }}</span>
+                    <button class="rh-btn" onClick="{{ s.toggle }}" aria-expanded="{{ s.open }}" style="margin-left:auto;padding:4px 10px;border:1px solid #3f424d;border-radius:6px;font-size:11px;color:#9397ab">{{ s.evLabel }}</button>
+                    <button class="rh-btn" onClick="{{ openLaunch }}" aria-disabled="{{ s.replayDisabled }}" style="padding:4px 10px;border:1px solid #9184d9;border-radius:6px;font-size:11px;color:#d2cefd">Replay from here</button>
+                  </div>
+                  <sc-if value="{{ s.openBool }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:12px 14px;border-top:1px solid #2f3140;background:#161826">
+                      <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Cited evidence · {{ s.evCount }} items · transcript spans only</div>
+                      <sc-for list="{{ s.evidence }}" as="e" hint-placeholder-count="3">
+                        <div style="margin-top:10px;display:grid;grid-template-columns:180px minmax(0,1fr);gap:12px;align-items:start">
+                          <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">
+                            <div style="padding:1px 5px;border:1px solid #3f424d;border-radius:4px;display:inline-block">{{ e.source }}</div>
+                            <div style="margin-top:4px"><a href="#" onClick="{{ noop }}">{{ e.locator }}</a></div>
+                            <div style="margin-top:4px;color:#75798c;font-family:Inter,sans-serif">supports {{ e.dim }}</div>
+                          </div>
+                          <blockquote style="margin:0;padding:7px 10px;border-left:2px solid #5d5294;background:#1a1c28;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5;white-space:pre-wrap">{{ e.quote }}</blockquote>
+                        </div>
+                      </sc-for>
+                      <div style="margin-top:12px;font-size:11.5px;color:#75798c">Uncited spans are not stored here. <a href="#" onClick="{{ noop }}">Open the full session on disk</a></div>
+                    </div>
+                  </sc-if>
+                </article>
+              </sc-for>
+              <div style="padding:12px 14px;border:1px dashed #3f424d;border-radius:8px;font-size:11.5px;color:#9397ab;max-width:1000px;text-wrap:pretty">Step 4 · Verify never ran. The run stopped after step 3 fell below the minimum and the target repository was restored. This is a recorded outcome for corpus@a41c7e, not a failed execution.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isTrace }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow-y:auto;padding:16px 20px 40px">
+            <div style="max-width:1000px;display:flex;flex-direction:column;gap:14px">
+
+              <section style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:12px">
+                <div style="padding:14px 16px;border:1px solid #3f424d;border-radius:8px;background:#1a1c28">
+                  <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Task grade · graded on its own</div>
+                  <div style="margin-top:6px;display:flex;align-items:baseline;gap:12px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:30px;font-weight:700;line-height:1;color:#595d6c">—</span>
+                    <span style="font-size:12.5px;color:#b2b6ca">not gradable · the task produced no final artifact</span>
+                  </div>
+                  <p style="margin-top:9px;font-size:12px;color:#9397ab;max-width:64ch;text-wrap:pretty">The task judge sees only what went in at step 1 and what came out of the last step. It does not read the intermediate steps, so it cannot grade a run that stopped early. Step grades below are unaffected.</p>
+                </div>
+                <div style="padding:14px 16px;border:1px solid #2f3140;border-radius:8px;background:#1c1e2b">
+                  <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Last task grade for this case</div>
+                  <div style="margin-top:6px;display:flex;align-items:baseline;gap:9px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:22px;font-weight:700">B</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#b5abfc">r-0144</span>
+                  </div>
+                  <div style="margin-top:5px;display:flex;align-items:center;gap:6px;font-size:11.5px;color:#b2b6ca"><span aria-hidden="true">⚠</span>stale · corpus@9f30d1</div>
+                  <p style="margin-top:7px;font-size:11.5px;color:#75798c;text-wrap:pretty">Not comparable to a corpus@a41c7e result.</p>
+                </div>
+              </section>
+
+              <section aria-label="Task map">
+                <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">The map · where each step sits</div>
+                <ol style="list-style:none;margin:8px 0 0;padding:0;display:flex;align-items:center;gap:0;flex-wrap:wrap">
+                  <sc-for list="{{ trace }}" as="t" hint-placeholder-count="4">
+                    <li style="display:flex;align-items:center">
+                      <span style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #2f3140;border-radius:7px;background:#1c1e2b">
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#75798c">{{ t.n }}</span>
+                        <span style="font-size:12px">{{ t.name }}</span>
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:700">{{ t.grade }}</span>
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:{{ t.color }}">{{ t.roleGlyph }}</span>
+                      </span>
+                      <span aria-hidden="true" style="padding:0 6px;color:#3f424d">▶</span>
+                    </li>
+                  </sc-for>
+                </ol>
+              </section>
+
+              <section aria-label="Culprit analysis" style="border:1px solid #5d5294;border-radius:8px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #3f424d;background:rgba(145,132,217,.10);flex-wrap:wrap">
+                  <h2 style="font-size:14px">Culprit analysis</h2>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">an agent read the recorded steps · $0.24 · 41s · 04 Sep 09:48</span>
+                  <span style="margin-left:auto;font-size:11.5px;color:#b2b6ca">culprit: <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#d2cefd">skills/implement.md</span> · scope-declaration block</span>
+                </div>
+                <div style="padding:12px 14px;border-bottom:1px solid #2f3140">
+                  <p style="font-size:12.5px;color:#e4e7f5;max-width:78ch;text-wrap:pretty">The rewritten scope block asks for a declaration before the first edit but does not say what to do when the work turns out to need a file the plan never named. Step 03 widened scope silently rather than amending. Step 02's plan made this reachable by naming files without requiring the declaration.</p>
+                  <p style="margin-top:8px;font-size:11.5px;color:#9397ab;max-width:78ch;text-wrap:pretty">This is one agent's reading of the evidence, not a measurement. The way to confirm it is a paired rerun with that block changed and nothing else.</p>
+                  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="rh-btn" onClick="{{ goCompare }}" style="padding:5px 11px;border:1px solid #9184d9;border-radius:6px;font-size:11.5px;color:#d2cefd">Set up the paired rerun</button>
+                    <button class="rh-btn" onClick="{{ goCorpus }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Open the block it names</button>
+                    <button class="rh-btn" onClick="{{ noop }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Re-run the analysis</button>
+                  </div>
+                </div>
+                <ol style="list-style:none;margin:0;padding:0">
+                  <sc-for list="{{ trace }}" as="t" hint-placeholder-count="4">
+                    <li style="display:grid;grid-template-columns:150px 92px 128px minmax(0,1fr) 92px;gap:14px;align-items:start;padding:11px 14px;border-bottom:1px solid #232532">
+                      <span>
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#75798c">{{ t.n }}</span>
+                        <span style="display:block;font-size:12.5px">{{ t.name }}</span>
+                      </span>
+                      <span>
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:16px;font-weight:700">{{ t.grade }}</span>
+                        <span aria-hidden="true" style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#796cbf;letter-spacing:.06em">{{ t.track }}</span>
+                        <span aria-hidden="true" style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:9px;color:#4a4d5c;letter-spacing:.06em">A B C D F</span>
+                      </span>
+                      <span style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:{{ t.color }}">
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace">{{ t.roleGlyph }}</span>{{ t.role }}
+                      </span>
+                      <span style="font-size:12px;color:#b2b6ca;text-wrap:pretty">{{ t.note }}</span>
+                      <button class="rh-btn" onClick="{{ noop }}" style="padding:4px 9px;border:1px solid #3f424d;border-radius:6px;font-size:11px;color:#9397ab;justify-self:end">Step report</button>
+                    </li>
+                  </sc-for>
+                </ol>
+              </section>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ isCompare }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div>
+            <h1 style="font-size:17px">Comparison · step 3 replay at ckpt-0144-s2</h1>
+            <div style="margin-top:3px;font-size:11.5px;color:#75798c">6 paired attempts per arm · same checkpoint, same task, same seed set · $8.94 total</div>
+          </div>
+          <div role="group" aria-label="Comparison presentation" style="margin-left:auto;display:flex;border:1px solid #3f424d;border-radius:6px;overflow:hidden">
+            <sc-for list="{{ compares }}" as="c" hint-placeholder-count="2">
+              <button class="rh-nav" onClick="{{ c.pick }}" aria-pressed="{{ c.on }}" style="padding:5px 11px;font-size:11.5px;background:{{ c.bg }};color:{{ c.fg }};border-right:1px solid #3f424d">{{ c.label }}</button>
+            </sc-for>
+          </div>
+        </header>
+
+        <div style="flex:none;padding:10px 20px;border-bottom:1px solid #292b31;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;background:#1a1c28">
+          <sc-for list="{{ arms }}" as="a" hint-placeholder-count="3">
+            <div style="padding:10px 12px;border:1px solid {{ a.border }};border-radius:7px;background:#1c1e2b">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">{{ a.role }}</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#d2cefd">{{ a.corpus }}</span>
+              </div>
+              <div style="margin-top:5px;font-size:12.5px">{{ a.label }}</div>
+              <div style="margin-top:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:20px;font-weight:700;line-height:1.2">{{ a.median }}</div>
+              <div style="margin-top:2px;font-size:11px;color:#9397ab">median of 6 · range {{ a.range }}</div>
+              <div style="margin-top:5px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">{{ a.cost }} · {{ a.words }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ isPaired }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;overflow-y:auto;padding:16px 20px 36px">
+            <h2 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Attempt pairs · same task instance, both arms</h2>
+            <table style="margin-top:9px;width:100%;max-width:920px;font-size:12.5px">
+              <thead>
+                <tr style="border-bottom:1px solid #3f424d">
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Pair</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Baseline<span style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:0;text-transform:none;color:#9397ab">no-skill</span></th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Arm A<span style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:0;text-transform:none;color:#9397ab">corpus@9f30d1</span></th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Arm B<span style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:0;text-transform:none;color:#9397ab">corpus@a41c7e</span></th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">A → B</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Blockers that changed</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ pairs }}" as="p" hint-placeholder-count="6">
+                  <tr class="rh-row" style="border-bottom:1px solid #232532">
+                    <th scope="row" style="text-align:left;padding:8px 10px;font-weight:400;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#9397ab">{{ p.seed }}</th>
+                    <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;color:#9397ab">{{ p.base }}</td>
+                    <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ p.a }}</td>
+                    <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ p.b }}</td>
+                    <td style="padding:8px 10px">
+                      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:{{ p.deltaColor }}">
+                        <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace">{{ p.arrow }}</span>{{ p.delta }}
+                      </span>
+                    </td>
+                    <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#b2b6ca">{{ p.blockers }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+
+            <div style="margin-top:18px;max-width:920px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+              <div style="padding:12px 14px;border:1px solid #3f424d;border-radius:8px;background:#1c1e2b">
+                <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">What the pairing says</div>
+                <p style="margin-top:6px;font-size:12.5px;color:#e4e7f5;text-wrap:pretty">4 of 6 pairs improved by one letter step, 1 held, 1 regressed. Both arms clear the baseline by two steps or more, so the corpus is doing work — but the A→B difference sits inside the spread of identical reruns.</p>
+                <p style="margin-top:8px;font-size:12px;color:#9397ab;text-wrap:pretty">Reply length rose 34% in arm B. Verbosity control held at B, so the gain is not length alone.</p>
+              </div>
+              <div style="padding:12px 14px;border:1px solid #3f424d;border-radius:8px;background:#1c1e2b">
+                <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Read with care</div>
+                <ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:#9397ab;display:flex;flex-direction:column;gap:5px">
+                  <li>6 pairs is enough to see a one-step shift, not a half-step one.</li>
+                  <li>Every grade here was produced by the corpus named in its column. Both arms are clean.</li>
+                  <li>The baseline arm strips the skill under test and keeps everything else.</li>
+                </ul>
+                <button class="rh-btn" onClick="{{ openLaunch }}" style="margin-top:10px;padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Add 6 more pairs · ≈ $8.90</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMatrix }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow-y:auto;padding:16px 20px 36px">
+            <h2 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">What moved · by dimension and blocker</h2>
+            <table style="margin-top:9px;width:100%;max-width:980px;font-size:12.5px">
+              <thead>
+                <tr style="border-bottom:1px solid #3f424d">
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Measure</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Baseline</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">A · 9f30d1</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">B · a41c7e</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Spread across 6 attempts</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Reading</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ matrix }}" as="m" hint-placeholder-count="9">
+                  <tr class="rh-row" style="border-bottom:1px solid #232532">
+                    <th scope="row" style="text-align:left;padding:9px 10px;font-weight:400">
+                      <span style="font-size:12.5px">{{ m.name }}</span>
+                      <span style="display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c">{{ m.kind }}</span>
+                    </th>
+                    <td style="padding:9px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;color:#9397ab">{{ m.base }}</td>
+                    <td style="padding:9px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ m.a }}</td>
+                    <td style="padding:9px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ m.b }}</td>
+                    <td style="padding:9px 10px">
+                      <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#796cbf;letter-spacing:.1em">{{ m.spread }}</span>
+                      <span style="display:block;font-size:10.5px;color:#75798c">{{ m.spreadNote }}</span>
+                    </td>
+                    <td style="padding:9px 10px">
+                      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:{{ m.color }}"><span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace">{{ m.glyph }}</span>{{ m.reading }}</span>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="margin-top:16px;max-width:980px;padding:12px 14px;border:1px solid #3f424d;border-radius:8px;background:#1c1e2b">
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Attribution</div>
+              <p style="margin-top:6px;font-size:12.5px;color:#e4e7f5;text-wrap:pretty">The only difference between arms A and B is <span style="font-family:'JetBrains Mono',ui-monospace,monospace">skills/implement.md</span> — the scope-declaration block was rewritten. Every other file hash is identical across arms, so a movement here is attributable to that block.</p>
+              <div style="margin-top:9px;display:flex;gap:10px;flex-wrap:wrap">
+                <button class="rh-btn" onClick="{{ goCorpus }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">See the diff between arms</button>
+                <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Add 6 more pairs · ≈ $8.90</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ isCorpus }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+          <div>
+            <h1 style="font-size:17px">Instruction corpus</h1>
+            <div style="margin-top:3px;font-size:11.5px;color:#75798c"><span style="font-family:'JetBrains Mono',ui-monospace,monospace">~/code/omelette/.claude</span> · 14 files · current version <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#d2cefd">corpus@a41c7e</span></div>
+          </div>
+          <div style="margin-left:auto;padding:8px 12px;border:1px solid #3f424d;border-radius:7px;background:#1c1e2b">
+            <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Invalidated by the last edit</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:8px;font-size:12.5px"><span aria-hidden="true">⚠</span><span><span style="font-family:'JetBrains Mono',ui-monospace,monospace">23</span> recorded results · <button class="rh-btn" onClick="{{ goRuns }}" style="border-bottom:1px solid #5d5294;color:#b5abfc">review them</button></span></div>
+          </div>
+        </header>
+
+        <div style="flex:1;overflow-y:auto;padding:14px 20px 36px">
+          <div style="max-width:1000px">
+            <h2 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Files, hashes and what each edit invalidated</h2>
+            <table style="margin-top:9px;width:100%;font-size:12.5px">
+              <thead>
+                <tr style="border-bottom:1px solid #3f424d">
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Path</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Hash</th>
+                  <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Last edited</th>
+                  <th scope="col" style="text-align:right;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Read by</th>
+                  <th scope="col" style="text-align:right;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Invalidated</th>
+                  <th scope="col" style="text-align:right;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Edit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ corpusFiles }}" as="f" hint-placeholder-count="6">
+                  <tr class="rh-row" style="border-bottom:1px solid #232532">
+                    <th scope="row" style="text-align:left;padding:8px 10px;font-weight:400;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ f.path }}</th>
+                    <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">{{ f.hash }}</td>
+                    <td style="padding:8px 10px;font-size:11.5px;color:#b2b6ca">{{ f.edited }}</td>
+                    <td style="padding:8px 10px;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ f.reads }}</td>
+                    <td style="padding:8px 10px;text-align:right">
+                      <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:{{ f.color }}"><span aria-hidden="true">{{ f.glyph }}</span>{{ f.invalidated }}</span>
+                    </td>
+                    <td style="padding:8px 10px;text-align:right">
+                      <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:3px 9px;border:1px solid #3f424d;border-radius:5px;font-size:11px;color:#9397ab">Edit</button>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+
+            <div style="margin-top:22px;border:1px dashed #5d5294;border-radius:8px;overflow:hidden;opacity:.62">
+              <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px dashed #5d5294;background:#1c1e2b">
+                <h2 style="font-size:13px">Edit an instruction, review, then apply</h2>
+                <span style="padding:2px 8px;border:1px solid #796cbf;border-radius:99px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#d2cefd">Planned</span>
+                <span style="margin-left:auto;font-size:11.5px;color:#9397ab">Not available in v0.6 — edit on disk for now</span>
+              </div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px">
+                <div style="padding:12px 14px;border-right:1px dashed #5d5294">
+                  <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">skills/implement.md · block 4 of 11</div>
+                  <div aria-hidden="true" style="margin-top:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.8">
+                    <div style="display:flex;gap:10px"><span style="color:#4a4d5c;width:26px;text-align:right">42</span><span style="color:#9397ab">## Scope</span></div>
+                    <div style="display:flex;gap:10px;background:#2b2136"><span style="color:#4a4d5c;width:26px;text-align:right">43</span><span style="color:#b2b6ca">− Declare the files you intend to touch.</span></div>
+                    <div style="display:flex;gap:10px;background:#1f2b2a"><span style="color:#4a4d5c;width:26px;text-align:right">43</span><span style="color:#d2cefd">+ Declare every file you intend to touch before</span></div>
+                    <div style="display:flex;gap:10px;background:#1f2b2a"><span style="color:#4a4d5c;width:26px;text-align:right">44</span><span style="color:#d2cefd">+ the first edit, and do not widen it mid-step.</span></div>
+                  </div>
+                </div>
+                <div style="padding:12px 14px">
+                  <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Review before apply</div>
+                  <ul style="margin:7px 0 0;padding-left:15px;font-size:11.5px;color:#9397ab;display:flex;flex-direction:column;gap:5px">
+                    <li>Writes a new corpus version, keeps the old one addressable</li>
+                    <li>Marks 23 recorded results stale, none deleted</li>
+                    <li>Offers the paired rerun that would settle it</li>
+                  </ul>
+                  <div style="margin-top:11px;display:flex;gap:8px">
+                    <button aria-disabled="true" style="padding:5px 11px;border:1px solid #5d5294;border-radius:6px;font-size:11.5px;color:#d2cefd">Apply</button>
+                    <button aria-disabled="true" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Discard</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+          <div>
+            <h1 style="font-size:17px">Tasks</h1>
+            <div style="margin-top:3px;font-size:11.5px;color:#75798c">A task is a chain of steps against a base repository · declared at <span style="font-family:'JetBrains Mono',ui-monospace,monospace">tasks/*.yaml</span></div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:6px 12px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Import a task</button>
+            <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:6px 12px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Export with judges</button>
+          </div>
+        </header>
+        <div style="flex:1;overflow-y:auto;padding:14px 20px 36px">
+          <div style="max-width:1000px;display:flex;flex-direction:column;gap:12px">
+            <p style="font-size:12px;color:#9397ab;max-width:78ch;text-wrap:pretty">A step is judged on what went into it and what came out. A task is judged from the first input and the last artifact only, so the same work as four steps and as one step produce comparable task grades. Import and export are drawn but not wired in v0.6.</p>
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="3">
+              <article style="border:1px solid #2f3140;border-radius:8px;background:#1a1c28;padding:13px 15px">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <h2 style="font-size:14px;font-family:'JetBrains Mono',ui-monospace,monospace">{{ t.id }}</h2>
+                  <span style="font-size:11.5px;color:#9397ab">{{ t.repo }}</span>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">{{ t.runs }} · {{ t.cases }} · {{ t.judges }}</span>
+                </div>
+                <p style="margin-top:7px;font-size:12.5px;color:#b2b6ca;max-width:80ch;text-wrap:pretty">{{ t.desc }}</p>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Steps</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5">{{ t.steps }}</span>
+                  <span style="margin-left:auto;display:flex;gap:8px">
+                    <button class="rh-btn" onClick="{{ goMonitor }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Open graph</button>
+                    <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Edit steps</button>
+                  </span>
+                </div>
+              </article>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCases }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:flex-end;gap:14px">
+          <div>
+            <h1 style="font-size:17px">Cases</h1>
+            <div style="margin-top:3px;font-size:11.5px;color:#75798c">Declared as data on disk · <span style="font-family:'JetBrains Mono',ui-monospace,monospace">cases/*.yaml</span></div>
+          </div>
+          <button class="rh-btn" onClick="{{ noop }}" style="margin-left:auto;padding:6px 12px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Declare a case</button>
+        </header>
+        <div style="flex:1;overflow-y:auto;padding:14px 20px 36px">
+          <div style="max-width:1000px;display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ cases }}" as="c" hint-placeholder-count="3">
+              <article style="border:1px solid #2f3140;border-radius:8px;background:#1a1c28;padding:13px 15px">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <h2 style="font-size:14px;font-family:'JetBrains Mono',ui-monospace,monospace">{{ c.id }}</h2>
+                  <span style="padding:2px 8px;border:1px solid #3f424d;border-radius:99px;font-size:10.5px;color:#b2b6ca">{{ c.kind }}</span>
+                  <span style="font-size:11.5px;color:#9397ab">{{ c.target }}</span>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#75798c">{{ c.runs }} runs · median {{ c.median }} · {{ c.avgCost }}/run</span>
+                </div>
+                <p style="margin-top:7px;font-size:12.5px;color:#b2b6ca;max-width:80ch;text-wrap:pretty">{{ c.desc }}</p>
+                <div style="margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">{{ c.stepsLabel }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#e4e7f5">{{ c.steps }}</span>
+                  <span style="margin-left:auto;display:flex;gap:8px">
+                    <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Run group</button>
+                    <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:5px 11px;border:1px solid #9184d9;border-radius:6px;font-size:11.5px;color:#d2cefd">Run once</button>
+                  </span>
+                </div>
+              </article>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCalib }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31;display:flex;align-items:flex-end;gap:14px">
+          <div>
+            <h1 style="font-size:17px">Judge calibration</h1>
+            <div style="margin-top:3px;font-size:11.5px;color:#75798c">41 reviews recorded · agreement within one letter step on <span style="font-family:'JetBrains Mono',ui-monospace,monospace">34/41</span> (83%)</div>
+          </div>
+          <button class="rh-btn" onClick="{{ noop }}" style="margin-left:auto;padding:6px 12px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Review next unjudged step</button>
+        </header>
+        <div style="flex:1;overflow-y:auto;padding:14px 20px 36px">
+          <div style="max-width:1000px;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px">
+            <div>
+              <h2 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Your grade against the judge's, same evidence</h2>
+              <table style="margin-top:9px;width:100%;font-size:12.5px">
+                <thead>
+                  <tr style="border-bottom:1px solid #3f424d">
+                    <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Step</th>
+                    <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Judge</th>
+                    <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">You</th>
+                    <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Agreement</th>
+                    <th scope="col" style="text-align:left;padding:6px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#75798c;font-weight:500">Where you differed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{ calib }}" as="c" hint-placeholder-count="6">
+                    <tr class="rh-row" style="border-bottom:1px solid #232532">
+                      <th scope="row" style="text-align:left;padding:8px 10px;font-weight:400;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#b2b6ca">{{ c.step }}</th>
+                      <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ c.judge }}</td>
+                      <td style="padding:8px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700">{{ c.human }}</td>
+                      <td style="padding:8px 10px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:{{ c.color }}"><span aria-hidden="true">{{ c.glyph }}</span>{{ c.agree }}</span></td>
+                      <td style="padding:8px 10px;font-size:11.5px;color:#9397ab">{{ c.note }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <aside style="padding:12px 14px;border:1px solid #3f424d;border-radius:8px;background:#1c1e2b;align-self:start">
+              <div style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Where the judge drifts</div>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ drift }}" as="d" hint-placeholder-count="4">
+                  <li>
+                    <div style="display:flex;align-items:baseline;gap:8px">
+                      <span style="flex:1;font-size:12px">{{ d.dim }}</span>
+                      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#b2b6ca">{{ d.val }}</span>
+                    </div>
+                    <div aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#796cbf;letter-spacing:.1em">{{ d.bar }}</div>
+                  </li>
+                </sc-for>
+              </ul>
+              <p style="margin-top:12px;font-size:11.5px;color:#9397ab;text-wrap:pretty">Calibration does not change a grade. It tells you how much to trust one.</p>
+            </aside>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <header style="flex:none;padding:12px 20px;border-bottom:1px solid #292b31">
+          <h1 style="font-size:17px">Settings</h1>
+          <div style="margin-top:3px;font-size:11.5px;color:#75798c">Local install · records at <span style="font-family:'JetBrains Mono',ui-monospace,monospace">~/.rehearsal/runs</span> · 148 records, 612 MB</div>
+        </header>
+        <div style="flex:1;overflow-y:auto;padding:16px 20px 36px">
+          <div style="max-width:640px;display:flex;flex-direction:column;gap:12px">
+            <section style="padding:14px 16px;border:1px solid #3f424d;border-radius:8px;background:#1a1c28">
+              <h2 style="font-size:14px">Spend limit</h2>
+              <p style="margin-top:6px;font-size:12.5px;color:#9397ab;max-width:56ch">Enforced per run and per group. A run cannot start without one and stops mid-step when reached.</p>
+              <div style="margin-top:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid #3f424d;border-radius:6px;background:#161826">
+                  <span style="font-size:11px;color:#9397ab">USD per run</span>
+                  <input value="{{ limit }}" onChange="{{ setLimit }}" inputMode="decimal" aria-label="Spend limit per run" style="width:72px;background:none;border:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;outline:none">
+                </label>
+                <span style="font-size:11.5px;color:#75798c">Group ceiling: 6 × per-run</span>
+              </div>
+            </section>
+            <section style="padding:14px 16px;border:1px solid #3f424d;border-radius:8px;background:#1a1c28">
+              <h2 style="font-size:14px">Corpus</h2>
+              <div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px">
+                <span style="flex:1">~/code/omelette/.claude</span>
+                <span style="color:#d2cefd">corpus@a41c7e</span>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <button class="rh-btn" onClick="{{ noop }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Rehash now</button>
+                <button class="rh-btn" onClick="{{ toggleInstall }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Unlink corpus</button>
+              </div>
+            </section>
+            <section style="padding:14px 16px;border:1px solid #3f424d;border-radius:8px;background:#1a1c28">
+              <h2 style="font-size:14px">Keyboard</h2>
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;font-size:12px">
+                <sc-for list="{{ keys }}" as="k" hint-placeholder-count="8">
+                  <li style="display:flex;align-items:baseline;gap:9px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:1px 6px;border:1px solid #3f424d;border-radius:4px;color:#d2cefd">{{ k.key }}</span>
+                    <span style="color:#b2b6ca">{{ k.does }}</span>
+                  </li>
+                </sc-for>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <sc-if value="{{ showStatus }}" hint-placeholder-val="{{ true }}">
+    <div role="status" aria-live="polite" style="flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;height:38px;border-top:1px solid #3f424d;background:#1c1e2b;font-size:12px">
+      <span class="rh-live" aria-hidden="true" style="font-size:10px;color:#b5abfc">●</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#d2cefd">r-0148</span>
+      <span style="color:#b2b6ca">auth-refactor</span>
+      <span aria-hidden="true" style="color:#3f424d">│</span>
+      <span style="color:#e9e9ed">step 3 of 4 · Implement</span>
+      <span style="color:#9397ab">judge grading</span>
+      <span aria-hidden="true" style="color:#3f424d">│</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#e9e9ed">{{ spendStr }}</span>
+        <span style="color:#75798c">/ {{ limitStr }}</span>
+        <span aria-hidden="true" style="position:relative;display:block;width:76px;height:5px;border:1px solid #3f424d;border-radius:3px;overflow:hidden">
+          <span style="position:absolute;inset:0;width:{{ spendPct }};background:#796cbf;display:block"></span>
+        </span>
+      </span>
+      <span aria-hidden="true" style="color:#3f424d">│</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#b2b6ca">{{ elapsedStr }}</span>
+      <span style="color:#75798c">grades so far A− B+</span>
+      <span style="margin-left:auto;display:flex;gap:8px">
+        <button class="rh-btn" onClick="{{ goMonitor }}" style="padding:4px 10px;border:1px solid #9184d9;border-radius:6px;font-size:11.5px;color:#d2cefd">Open monitor</button>
+        <button class="rh-btn" onClick="{{ stopRun }}" style="padding:4px 10px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Stop</button>
+      </span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(10,11,17,.66);display:grid;place-items:center;z-index:45;padding:24px">
+      <div role="dialog" aria-modal="true" aria-label="Step detail" style="width:100%;max-width:860px;max-height:86vh;display:flex;flex-direction:column;border:1px solid #595d6c;border-radius:10px;background:#1c1e2b;box-shadow:0 16px 40px rgba(0,0,0,.65);overflow:hidden">
+        <div style="flex:none;padding:12px 16px;border-bottom:1px solid #3f424d;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span aria-hidden="true" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.09em;color:#75798c">{{ modal.n }}</span>
+          <h2 style="font-size:15px">{{ modal.name }}</h2>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#9397ab">{{ modal.skill }} · {{ modal.cost }}</span>
+          <span style="display:flex;align-items:center;gap:9px;margin-left:auto">
+            <span style="font-size:11.5px;color:#b2b6ca">verdict {{ modal.verdict }}</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:20px;font-weight:700;line-height:1;color:{{ modal.gradeColor }}">{{ modal.grade }}</span>
+            <button class="rh-btn" onClick="{{ closeModal }}" aria-label="Close" style="padding:2px 8px;border:1px solid #3f424d;border-radius:5px;font-size:11.5px;color:#b2b6ca">Esc</button>
+          </span>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">
+          <section>
+            <h3 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Instructions this step loaded</h3>
+            <ul style="list-style:none;margin:8px 0 0;padding:0;border:1px solid #2f3140;border-radius:7px;overflow:hidden">
+              <sc-for list="{{ modal.inFiles }}" as="f" hint-placeholder-count="4">
+                <li style="padding:7px 10px;border-bottom:1px solid #232532">
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ f.path }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#75798c">{{ f.hash }}</span>
+                  </div>
+                  <div style="margin-top:2px;display:flex;align-items:center;gap:8px;font-size:10.5px">
+                    <span style="color:#75798c">{{ f.role }}</span>
+                    <span style="display:flex;align-items:center;gap:5px;color:{{ f.color }}"><span aria-hidden="true">{{ f.glyph }}</span>{{ f.state }}</span>
+                  </div>
+                </li>
+              </sc-for>
+            </ul>
+            <h3 style="margin-top:14px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Artifacts in</h3>
+            <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px">
+              <sc-for list="{{ modal.inArts }}" as="a" hint-placeholder-count="2">
+                <li style="display:flex;align-items:center;gap:9px;padding:6px 10px;border:1px solid #2f3140;border-radius:6px">
+                  <span aria-hidden="true" style="color:#75798c">↓</span>
+                  <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ a.name }}</span>
+                  <span style="font-size:10.5px;color:#75798c">{{ a.from }}</span>
+                </li>
+              </sc-for>
+            </ul>
+          </section>
+          <section>
+            <h3 style="font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Artifacts out</h3>
+            <sc-if value="{{ modal.hasOut }}" hint-placeholder-val="{{ true }}">
+              <ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px">
+                <sc-for list="{{ modal.outArts }}" as="o" hint-placeholder-count="2">
+                  <li style="display:flex;align-items:center;gap:9px;padding:6px 10px;border:1px solid #5d5294;border-radius:6px;background:rgba(145,132,217,.08)">
+                    <span aria-hidden="true" style="color:#9397ab">↑</span>
+                    <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px">{{ o.name }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;color:#9397ab">{{ o.detail }}</span>
+                  </li>
+                </sc-for>
+              </ul>
+            </sc-if>
+            <h3 style="margin-top:14px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Judge</h3>
+            <p style="margin-top:7px;font-size:12px;color:#b2b6ca;text-wrap:pretty">{{ modal.judge }}</p>
+            <div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="rh-btn" onClick="{{ goDetail }}" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#b2b6ca">Full step report</button>
+              <a href="#" onClick="{{ noop }}" style="align-self:center;font-size:11.5px">session.jsonl on disk</a>
+            </div>
+            <h3 style="margin-top:14px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#75798c">Operate on this step</h3>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="rh-btn" onClick="{{ openLaunch }}" style="padding:5px 11px;border:1px solid #9184d9;border-radius:6px;font-size:11.5px;color:#d2cefd">Replay from checkpoint</button>
+              <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Edit this step</button>
+              <button class="rh-btn" onClick="{{ noop }}" aria-disabled="true" style="padding:5px 11px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:#9397ab">Edit its skill</button>
+            </div>
+            <p style="margin-top:8px;font-size:11px;color:#75798c;text-wrap:pretty">Editing a step or its instructions writes a new corpus version and marks the results it invalidates. Planned for a later version.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ launchOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(10,11,17,.66);display:grid;place-items:center;z-index:40;padding:24px">
+      <div role="dialog" aria-modal="true" aria-label="Start a run" style="width:100%;max-width:560px;border:1px solid #595d6c;border-radius:10px;background:#1c1e2b;box-shadow:0 16px 40px rgba(0,0,0,.65);overflow:hidden">
+        <div style="padding:13px 16px;border-bottom:1px solid #3f424d;display:flex;align-items:center;gap:10px">
+          <h2 style="font-size:15px">Replay step 3 from checkpoint</h2>
+          <button class="rh-btn" onClick="{{ closeLaunch }}" aria-label="Close" style="margin-left:auto;padding:2px 8px;border:1px solid #3f424d;border-radius:5px;color:#b2b6ca">Esc</button>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px 12px;font-size:12.5px;align-items:center">
+            <span style="color:#9397ab">Checkpoint</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace">ckpt-0147-s2 · after Plan (B+)</span>
+            <span style="color:#9397ab">Corpus</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#d2cefd">corpus@a41c7e <span style="color:#9397ab">· 1 file changed since ckpt</span></span>
+            <span style="color:#9397ab">Attempts</span>
+            <span style="display:flex;gap:6px">
+              <sc-for list="{{ attemptCounts }}" as="n" hint-placeholder-count="4">
+                <button class="rh-btn" onClick="{{ n.pick }}" aria-pressed="{{ n.on }}" style="padding:3px 10px;border:1px solid {{ n.border }};border-radius:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;background:{{ n.bg }};color:{{ n.fg }}">{{ n.label }}</button>
+              </sc-for>
+            </span>
+            <span style="color:#9397ab">Spend limit</span>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #3f424d;border-radius:6px;background:#161826;width:max-content">
+              <span style="font-size:11px;color:#9397ab">USD</span>
+              <input value="{{ limit }}" onChange="{{ setLimit }}" inputMode="decimal" aria-label="Spend limit for this run" style="width:64px;background:none;border:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;outline:none">
+            </label>
+          </div>
+
+          <div style="border:1px dashed #5d5294;border-radius:7px;padding:11px 13px;opacity:.62">
+            <div style="display:flex;align-items:center;gap:9px">
+              <h3 style="font-size:12.5px">Projected cost before you start</h3>
+              <span style="padding:2px 8px;border:1px solid #796cbf;border-radius:99px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#d2cefd">Planned</span>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:20px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#9397ab">
+              <span>est. $–.–– ± –.––</span><span>est. –m––s</span><span>from 12 prior attempts</span>
+            </div>
+            <p style="margin-top:6px;font-size:11.5px;color:#75798c">v0.6 reports cost after the fact. Until then the ceiling above is the only guard.</p>
+          </div>
+
+          <p style="font-size:11.5px;color:#9397ab;text-wrap:pretty">Replaying restores <span style="font-family:'JetBrains Mono',ui-monospace,monospace">omelette-web</span> to the checkpoint state, runs step 3 against the current corpus, and records each attempt separately. Steps 1–2 are not re-run.</p>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid #3f424d;display:flex;align-items:center;gap:10px">
+          <span style="font-size:11.5px;color:#75798c">Ceiling {{ limitStr }} · stops mid-step if reached</span>
+          <span style="margin-left:auto;display:flex;gap:8px">
+            <button class="rh-btn" onClick="{{ closeLaunch }}" style="padding:6px 13px;border:1px solid #3f424d;border-radius:6px;color:#b2b6ca">Cancel</button>
+            <button class="rh-btn" onClick="{{ closeLaunch }}" style="padding:6px 13px;border:1px solid #9184d9;border-radius:6px;color:#d2cefd">Start · 3 attempts</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const MONO = '"JetBrains Mono",ui-monospace,monospace';
+const C = { txt:'#e9e9ed', mid:'#b2b6ca', mut:'#9397ab', dim:'#75798c', acc:'#b5abfc', accSoft:'#d2cefd' };
+
+const EV = {
+  scope: [
+    { source:'transcript', locator:'session.jsonl:1284', dim:'scope discipline',
+      quote:'I\'ll also tidy the adjacent token helper while I\'m in here — it\'s\nusing the old signature.' },
+    { source:'diff', locator:'src/auth/tokens.ts +38 −12', dim:'scope discipline',
+      quote:'12 lines removed outside the declared scope (src/auth/session.ts).\nNo declaration was amended before the edit.' }
+  ],
+  declare: [
+    { source:'transcript', locator:'session.jsonl:0041', dim:'instruction adherence',
+      quote:'Starting on the session refactor now.' },
+    { source:'instruction', locator:'skills/implement.md:43', dim:'instruction adherence',
+      quote:'Declare the files you intend to touch.' }
+  ],
+  tests: [
+    { source:'transcript', locator:'session.jsonl:1198', dim:'verification',
+      quote:'ran: pnpm test auth — 44 passed, 0 failed (6.2s)' }
+  ],
+  evidence: [
+    { source:'transcript', locator:'session.jsonl:0912', dim:'evidence quality',
+      quote:'The old flow refreshed on every request; the new one refreshes on\nexpiry. See src/auth/session.ts:88.' }
+  ],
+  hygiene: [
+    { source:'diff', locator:'src/auth/session.ts +64 −41', dim:'diff hygiene',
+      quote:'No formatting-only churn. One unrelated import reordering at line 4.' }
+  ]
+};
+
+const BLOCKERS = [
+  { id:'no-unrelated-refactors', fired:true, ev:EV.scope },
+  { id:'scope-declared-before-edit', fired:true, ev:EV.declare },
+  { id:'tests-pass-before-handoff', fired:false, ev:EV.tests },
+  { id:'no-secrets-in-diff', fired:false, ev:[] }
+];
+
+const DIMS = [
+  { name:'Scope discipline', grade:'D', bar:'▮▮▯▯▯', note:'widened scope twice without declaring', ev:EV.scope },
+  { name:'Evidence quality', grade:'C+', bar:'▮▮▮▯▯', note:'claims cited, two unsupported', ev:EV.evidence },
+  { name:'Diff hygiene', grade:'B−', bar:'▮▮▮▮▯', note:'one unrelated import reorder', ev:EV.hygiene },
+  { name:'Instruction adherence', grade:'—', bar:'▯▯▯▯▯', note:'pending', ev:[] },
+  { name:'Verbosity control', grade:'—', bar:'▯▯▯▯▯', note:'pending', ev:[] }
+];
+
+const DIMS_FULL = [
+  { name:'Scope discipline', grade:'D', bar:'▮▮▯▯▯', note:'widened scope twice without declaring', ev:EV.scope },
+  { name:'Evidence quality', grade:'C+', bar:'▮▮▮▯▯', note:'claims cited, two unsupported', ev:EV.evidence },
+  { name:'Diff hygiene', grade:'B−', bar:'▮▮▮▮▯', note:'one unrelated import reorder', ev:EV.hygiene },
+  { name:'Instruction adherence', grade:'C', bar:'▮▮▮▯▯', note:'skipped the declaration step', ev:EV.declare },
+  { name:'Verbosity control', grade:'B', bar:'▮▮▮▮▯', note:'reply within budget', ev:[] }
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'runs', installed: true, layout: 'rail', compare: 'paired',
+    step: 3, dstep: 3, ev: {}, elapsed: 372, spend: 1.83,
+    limit: '20.00', corpusPath: '', scanned: false, launch: false, attempts: 3,
+    noData: false, filter: 'All 148', modal: null
+  };
+
+  componentDidMount() {
+    this.t = setInterval(() => this.setState(s => ({
+      elapsed: s.elapsed + 1,
+      spend: Math.min(s.spend + 0.0048, 19.9)
+    })), 1000);
+    this.key = e => {
+      if (e.key === 'Escape') this.setState({ launch:false, modal:null });
+      if (e.key === 'n' || e.key === 'N') this.setState({ launch:true });
+    };
+    window.addEventListener('keydown', this.key);
+  }
+  componentWillUnmount() { clearInterval(this.t); window.removeEventListener('keydown', this.key); }
+
+  go = s => () => this.setState({ screen:s });
+  toggle = k => () => this.setState(s => ({ ev: Object.assign({}, s.ev, { [k]: !s.ev[k] }) }));
+
+  gradeColor(g) {
+    if (!g || g === '—') return '#595d6c';
+    const l = g[0];
+    if (l === 'A') return '#d2cefd';
+    if (l === 'B') return '#e9e9ed';
+    if (l === 'C') return '#b2b6ca';
+    return '#e4e7f5';
+  }
+
+  pill(on) {
+    return on
+      ? { bg:'rgba(145,132,217,.16)', fg:C.accSoft, border:'#9184d9', mark:'#9184d9' }
+      : { bg:'transparent', fg:C.mid, border:'#3f424d', mark:'transparent' };
+  }
+
+  mkEv(key, items) {
+    const open = !!this.state.ev[key];
+    return {
+      open: String(open), openBool: open, toggle: this.toggle(key),
+      evLabel: items.length ? (open ? 'hide evidence' : items.length + ' cited') : 'no evidence',
+      disabled: items.length ? undefined : 'true',
+      evidence: items
+    };
+  }
+
+  renderVals() {
+    const st = this.state;
+    const installed = st.installed;
+    const screen = installed ? st.screen : 'setup';
+
+    const navDef = [
+      { id:'runs',    label:'Run history',   icon:'ph ph-list-dashes',        badge:'148' },
+      { id:'monitor', label:'Live monitor',  icon:'ph ph-activity',          badge:'1' },
+      { id:'detail',  label:'Run detail',    icon:'ph ph-file-text',         badge:'' },
+      { id:'compare', label:'Comparisons',   icon:'ph ph-git-diff',          badge:'7' },
+      { id:'corpus',  label:'Corpus',        icon:'ph ph-scroll',            badge:'14' },
+      { id:'tasks',   label:'Tasks',         icon:'ph ph-graph',             badge:'' },
+      { id:'cases',   label:'Cases',         icon:'ph ph-cube',              badge:'' },
+      { id:'calib',   label:'Calibration',   icon:'ph ph-scales',            badge:'41' },
+      { id:'settings',label:'Settings',      icon:'ph ph-sliders-horizontal',badge:'' }
+    ];
+
+    const spend = st.spend, limit = parseFloat(st.limit) || 20;
+    const pct = Math.min(100, (spend / limit) * 100);
+    const mm = String(Math.floor(st.elapsed / 60)).padStart(2, '0');
+    const ss = String(st.elapsed % 60).padStart(2, '0');
+
+    const liveSteps = [
+      { n:'01', name:'Spec review', grade:'A−', state:'accepted', glyph:'✓', meta:'1m18s · $0.31', checkpoint:'ckpt-0148-s1' },
+      { n:'02', name:'Plan',        grade:'B+', state:'accepted', glyph:'✓', meta:'0m54s · $0.24', checkpoint:'ckpt-0148-s2' },
+      { n:'03', name:'Implement',   grade:'—',  state:'judge grading', glyph:'●', meta:'4m02s · $1.12', checkpoint:'', live:true },
+      { n:'04', name:'Verify',      grade:'—',  state:'queued', glyph:'○', meta:'not started', checkpoint:'' }
+    ].map((s, i) => {
+      const on = st.step === i + 1;
+      const p = this.pill(on);
+      return Object.assign({}, s, {
+        bg:p.bg, border:p.border, current: on ? 'step' : undefined,
+        gradeColor:this.gradeColor(s.grade), pick:() => this.setState({ step:i + 1 }),
+        pulse: s.live ? 'rh-live' : ''
+      });
+    });
+
+    const GRAPH = [
+      { n:'01', name:'Spec review', grade:'A−', state:'accepted', glyph:'✓', cost:'$0.31', dur:'1m18s',
+        blockers:'0 of 3 fired', corpus:'a41c7e', ckpt:'ckpt-0148-s1', ckptGlyph:'◆', toolCall:'',
+        contribution:'brief the later steps read', ins:'3 instruction files in', outs:'1 artifact out' },
+      { n:'02', name:'Plan', grade:'B+', state:'accepted', glyph:'✓', cost:'$0.24', dur:'0m54s',
+        blockers:'0 of 2 fired', corpus:'a41c7e', ckpt:'ckpt-0148-s2', ckptGlyph:'◆', toolCall:'',
+        contribution:'named 2 files to touch', ins:'4 instruction files in', outs:'1 artifact out' },
+      { n:'03', name:'Implement', grade:'—', state:'judge grading', glyph:'●', cost:'$1.12', dur:'4m02s',
+        blockers:'2 of 4 fired', corpus:'a41c7e', ckpt:'no checkpoint yet', ckptGlyph:'◇',
+        toolCall:'judge: reading cited spans', contribution:'contribution pending', ins:'5 instruction files in', outs:'2 artifacts out' },
+      { n:'04', name:'Verify', grade:'—', state:'queued', glyph:'○', cost:'$0.00', dur:'—',
+        blockers:'—', corpus:'a41c7e', ckpt:'no checkpoint yet', ckptGlyph:'◇', toolCall:'',
+        contribution:'not started', ins:'4 instruction files in', outs:'—' }
+    ];
+
+    const graphNodes = GRAPH.map((g, i) => {
+      const on = st.step === i + 1;
+      const p = this.pill(on);
+      const running = g.state === 'judge grading';
+      const done = g.glyph === '✓';
+      return Object.assign({}, g, {
+        bg: p.bg, border: on ? '#9184d9' : (running ? '#5d5294' : '#2f3140'),
+        current: on ? 'step' : undefined,
+        gradeColor: this.gradeColor(g.grade),
+        pulse: running ? 'rh-live' : '',
+        ckptColor: done ? '#b2b6ca' : '#75798c',
+        hasNext: i < GRAPH.length - 1,
+        edgeColor: done ? '#5d5294' : '#3f424d',
+        pick: () => this.setState({ step: i + 1 }),
+        openLabel: 'in / out ▸',
+        openStep: () => this.setState({ step: i + 1, modal: i }),
+        replay: done ? (() => this.setState({ launch:true })) : (e => e && e.preventDefault && e.preventDefault()),
+        replayDisabled: done ? undefined : 'true',
+        replayAria: done ? 'Replay ' + g.name + ' from its checkpoint' : g.name + ' has no checkpoint to replay from'
+      });
+    });
+
+    const MODALS = [
+      { name:'Spec review', n:'STEP 01', grade:'A−', verdict:'continue', state:'accepted',
+        cost:'$0.31 · 1m18s', skill:'skills/spec-review.md',
+        inFiles:[{ path:'CLAUDE.md', hash:'sha 4f21c8', role:'project instructions', changed:false },
+                 { path:'skills/spec-review.md', hash:'sha 88b0d2', role:'step skill', changed:false },
+                 { path:'rubrics/pr-quality.md', hash:'sha 3ac514', role:'judge rubric', changed:false }],
+        inArts:[{ name:'task brief', from:'task declaration' }],
+        outArts:[{ name:'spec.md', detail:'1.2 kB · 6 open questions raised' }],
+        judge:'0 of 3 blockers fired · comprehension A, question quality A−' },
+      { name:'Plan', n:'STEP 02', grade:'B+', verdict:'continue', state:'accepted',
+        cost:'$0.24 · 0m54s', skill:'skills/plan.md',
+        inFiles:[{ path:'CLAUDE.md', hash:'sha 4f21c8', role:'project instructions', changed:false },
+                 { path:'skills/plan.md', hash:'sha 6be117', role:'step skill', changed:false },
+                 { path:'rubrics/pr-quality.md', hash:'sha 3ac514', role:'judge rubric', changed:false },
+                 { path:'skills/spec-review.md', hash:'sha 88b0d2', role:'read for context', changed:false }],
+        inArts:[{ name:'spec.md', from:'step 01 · Spec review' }],
+        outArts:[{ name:'plan.md', detail:'2 files named: src/auth/session.ts, src/auth/index.ts' }],
+        judge:'0 of 2 blockers fired · sequencing B+, risk surfacing B' },
+      { name:'Implement', n:'STEP 03', grade:'—', verdict:'pending', state:'judge grading',
+        cost:'$1.12 · 4m02s', skill:'skills/implement.md',
+        inFiles:[{ path:'CLAUDE.md', hash:'sha 4f21c8', role:'project instructions', changed:false },
+                 { path:'skills/implement.md', hash:'sha a41c7e', role:'step skill', changed:true },
+                 { path:'rubrics/pr-quality.md', hash:'sha 3ac514', role:'judge rubric', changed:false },
+                 { path:'skills/verify.md', hash:'sha 12ff90', role:'read for context', changed:false },
+                 { path:'rubrics/reply-checks.md', hash:'sha 9d7e2b', role:'judge rubric', changed:false }],
+        inArts:[{ name:'plan.md', from:'step 02 · Plan' }, { name:'repo at ckpt-0148-s2', from:'step 02 checkpoint' }],
+        outArts:[{ name:'diff · src/auth/session.ts', detail:'+64 −41' },
+                 { name:'diff · src/auth/tokens.ts', detail:'+38 −12 · outside declared scope' }],
+        judge:'2 of 4 blockers fired · 3 of 5 dimensions returned' },
+      { name:'Verify', n:'STEP 04', grade:'—', verdict:'not started', state:'queued',
+        cost:'—', skill:'skills/verify.md',
+        inFiles:[{ path:'CLAUDE.md', hash:'sha 4f21c8', role:'project instructions', changed:false },
+                 { path:'skills/verify.md', hash:'sha 12ff90', role:'step skill', changed:false },
+                 { path:'rubrics/pr-quality.md', hash:'sha 3ac514', role:'judge rubric', changed:false },
+                 { path:'rubrics/reply-checks.md', hash:'sha 9d7e2b', role:'judge rubric', changed:false }],
+        inArts:[{ name:'diff from step 03', from:'step 03 · Implement' }],
+        outArts:[],
+        judge:'not run' }
+    ];
+
+    const tasks = [
+      { id:'auth-refactor', repo:'omelette-web @ main…e91f2a', steps:'spec review → plan → implement → verify',
+        desc:'The four steps I run by hand today, one skill each. Each step is judged on its own; the task is judged from the brief and the final diff, without looking inside.',
+        cases:'2 cases', judges:'4 step judges + 1 task judge', runs:'38 runs' },
+      { id:'auth-refactor-single', repo:'omelette-web @ main…e91f2a', steps:'idea → code',
+        desc:'The same work as one step, for when the four-step chain is tuned enough to run unsupervised. Same task judge, so its final grade is comparable to the four-step version.',
+        cases:'1 case', judges:'1 step judge + 1 task judge', runs:'4 runs' },
+      { id:'doc-rewrite', repo:'omelette-docs @ main…7a2b19', steps:'spec review → rewrite → verify',
+        desc:'Three steps over a documentation set. Interrupted twice by the spend ceiling; both partial records are retained.',
+        cases:'1 case', judges:'3 step judges + 1 task judge', runs:'11 runs' }
+    ];
+
+    const trace = [
+      { n:'01', name:'Spec review', grade:'A−', track:'▮ ▯ ▯ ▯ ▯', role:'not implicated', roleGlyph:'·',
+        note:'Produced the brief every later step read. The judge found no finding that the culprit pass traced forward.', color:C.mut },
+      { n:'02', name:'Plan', grade:'B+', track:'▯ ▮ ▯ ▯ ▯', role:'contributing', roleGlyph:'~',
+        note:'Named two files but did not require a scope declaration before editing, so step 03 had nothing to violate until the skill asked for one.', color:C.mid },
+      { n:'03', name:'Implement', grade:'D', track:'▯ ▯ ▯ ▮ ▯', role:'primary culprit', roleGlyph:'✕',
+        note:'Widened scope to a third file without amending the declaration. Both fired blockers landed here and the run stopped.', color:C.txt },
+      { n:'04', name:'Verify', grade:'—', track:'▯ ▯ ▯ ▯ ▯', role:'never ran', roleGlyph:'○',
+        note:'No evidence available.', color:C.dim }
+    ];
+
+    const detailSteps = [
+      { n:'01', name:'Spec review', grade:'A−', state:'accepted · ckpt-0147-s1', glyph:'✓', meta:'1m22s · $0.34' },
+      { n:'02', name:'Plan',        grade:'B+', state:'accepted · ckpt-0147-s2', glyph:'✓', meta:'0m58s · $0.27' },
+      { n:'03', name:'Implement',   grade:'D',  state:'below minimum · run stopped', glyph:'◼', meta:'4m02s · $1.12' },
+      { n:'04', name:'Verify',      grade:'—',  state:'never ran', glyph:'○', meta:'—' }
+    ].map((s, i) => {
+      const on = st.dstep === i + 1;
+      const p = this.pill(on);
+      return Object.assign({}, s, {
+        bg:p.bg, border:p.border, current: on ? 'step' : undefined,
+        gradeColor:this.gradeColor(s.grade), pick:() => this.setState({ dstep:i + 1 })
+      });
+    });
+
+    const blockers = BLOCKERS.map((b, i) => Object.assign({
+      id:b.id,
+      glyph: b.fired ? '✕' : '✓',
+      state: b.fired ? 'fired' : 'clear',
+      fg: b.fired ? '#e4e7f5' : C.mut,
+      bg: b.fired ? 'rgba(145,132,217,.10)' : 'transparent',
+      border: b.fired ? '#5d5294' : '#2f3140'
+    }, this.mkEv('b' + i, b.ev)));
+
+    const dims = DIMS.map((d, i) => Object.assign({
+      name:d.name, grade:d.grade, bar:d.bar, note:d.note,
+      color:this.gradeColor(d.grade),
+      nameColor: d.grade === '—' ? C.dim : C.txt
+    }, this.mkEv('d' + i, d.ev)));
+
+    const dimsFull = DIMS_FULL.map((d, i) => Object.assign({
+      name:d.name, grade:d.grade, bar:d.bar, note:d.note,
+      color:this.gradeColor(d.grade)
+    }, this.mkEv('f' + i, d.ev)));
+
+    const ledger = [
+      { n:'STEP 01', name:'Spec review', grade:'A−', state:'accepted', glyph:'✓', meta:'1m22s · $0.34 · 402 lines',
+        ckpt:'ckpt-0147-s1 · frozen state retained', ckptIcon:'ph ph-git-commit', evCount:3,
+        blockers:[{id:'brief-restated',fired:false},{id:'no-invented-requirements',fired:false},{id:'open-questions-raised',fired:false}],
+        dims:[{name:'Comprehension',grade:'A',bar:'▮▮▮▮▮'},{name:'Question quality',grade:'A−',bar:'▮▮▮▮▯'},{name:'Verbosity control',grade:'B+',bar:'▮▮▮▮▯'}],
+        evidence:EV.evidence },
+      { n:'STEP 02', name:'Plan', grade:'B+', state:'accepted', glyph:'✓', meta:'0m58s · $0.27 · 288 lines',
+        ckpt:'ckpt-0147-s2 · frozen state retained', ckptIcon:'ph ph-git-commit', evCount:2,
+        blockers:[{id:'scope-declared-before-edit',fired:false},{id:'no-unrelated-refactors',fired:false}],
+        dims:[{name:'Sequencing',grade:'B+',bar:'▮▮▮▮▯'},{name:'Risk surfacing',grade:'B',bar:'▮▮▮▮▯'},{name:'Verbosity control',grade:'A−',bar:'▮▮▮▮▮'}],
+        evidence:EV.hygiene },
+      { n:'STEP 03', name:'Implement', grade:'D', state:'below minimum B− · run stopped', glyph:'◼', meta:'4m02s · $1.12 · 1,284 lines',
+        ckpt:'no checkpoint · state discarded, repo restored', ckptIcon:'ph ph-arrow-counter-clockwise', evCount:5,
+        blockers:BLOCKERS.map(b => ({ id:b.id, fired:b.fired })),
+        dims:DIMS_FULL.map(d => ({ name:d.name, grade:d.grade, bar:d.bar })),
+        evidence:EV.scope.concat(EV.declare, EV.hygiene) }
+    ].map((s, i) => {
+      const stopped = s.grade === 'D';
+      return Object.assign({}, s, {
+        aria: s.name + ', grade ' + s.grade + ', ' + s.state,
+        corpus:'corpus@a41c7e',
+        gradeColor:this.gradeColor(s.grade),
+        border: stopped ? '#5d5294' : '#2f3140',
+        headBg: stopped ? 'rgba(145,132,217,.10)' : '#1c1e2b',
+        replayDisabled: i === 2 ? 'true' : undefined,
+        blockers: s.blockers.map(b => ({
+          id:b.id, glyph: b.fired ? '✕' : '✓', state: b.fired ? 'fired' : 'clear',
+          fg: b.fired ? '#e4e7f5' : C.mut
+        })),
+        dims: s.dims.map(d => Object.assign({}, d, { color:this.gradeColor(d.grade) })),
+        evCount: s.evidence.length
+      }, this.mkEv('L' + i, s.evidence));
+    }, this);
+
+    const runs = [
+      { id:'r-0148', when:'today 10:04', case:'auth-refactor', kind:'task · 4 steps', glyph:'●', glyphColor:C.acc, pulse:'rh-live',
+        outcome:'running · step 3 of 4', outcomeNote:'judge grading', grades:'A− B+ · ·', corpus:'corpus@a41c7e', stale:'clean', staleGlyph:'✓', staleColor:C.mut, cost:'$1.83', wall:mm + ':' + ss },
+      { id:'r-0147', when:'today 09:41', case:'auth-refactor', kind:'task · 4 steps', glyph:'◼', glyphColor:C.mid, pulse:'',
+        outcome:'stopped at step 3', outcomeNote:'Implement D · below minimum B−', grades:'A− B+ D ·', corpus:'corpus@a41c7e', stale:'clean', staleGlyph:'✓', staleColor:C.mut, cost:'$2.41', wall:'6:12' },
+      { id:'r-0146', when:'today 09:20', case:'auth-refactor', kind:'replay step 3 · ckpt-0147-s2', glyph:'✓', glyphColor:C.mid, pulse:'',
+        outcome:'accepted', outcomeNote:'attempt 3 of 3 at this checkpoint', grades:'· · B+ ·', corpus:'corpus@a41c7e', stale:'clean', staleGlyph:'✓', staleColor:C.mut, cost:'$1.04', wall:'3:48' },
+      { id:'r-0145', when:'today 09:14', case:'auth-refactor', kind:'replay step 3 · ckpt-0147-s2', glyph:'✓', glyphColor:C.mid, pulse:'',
+        outcome:'accepted', outcomeNote:'attempt 2 of 3 at this checkpoint', grades:'· · B− ·', corpus:'corpus@a41c7e', stale:'clean', staleGlyph:'✓', staleColor:C.mut, cost:'$0.97', wall:'3:31' },
+      { id:'r-0144', when:'yest 18:52', case:'auth-refactor', kind:'task · 4 steps', glyph:'✓', glyphColor:C.mid, pulse:'',
+        outcome:'completed 4 of 4', outcomeNote:'all steps at or above minimum', grades:'A− B+ B B+', corpus:'corpus@9f30d1', stale:'stale · corpus changed since', staleGlyph:'⚠', staleColor:C.mid, cost:'$3.12', wall:'9:04' },
+      { id:'g-0143', when:'yest 17:30', case:'skill-selection', kind:'group · 6 attempts', glyph:'✓', glyphColor:C.mid, pulse:'',
+        outcome:'6 of 6 recorded', outcomeNote:'median B · range C+ to A−', grades:'B (n=6)', corpus:'corpus@9f30d1', stale:'stale · corpus changed since', staleGlyph:'⚠', staleColor:C.mid, cost:'$4.28', wall:'12:19' },
+      { id:'r-0142', when:'yest 16:11', case:'skill-selection', kind:'single session · checks', glyph:'◼', glyphColor:C.mid, pulse:'',
+        outcome:'stopped', outcomeNote:'2 deterministic checks failed', grades:'D+', corpus:'corpus@9f30d1', stale:'stale · corpus changed since', staleGlyph:'⚠', staleColor:C.mid, cost:'$0.41', wall:'1:22' },
+      { id:'r-0141', when:'yest 15:58', case:'doc-rewrite', kind:'task · 3 steps', glyph:'⊘', glyphColor:C.mid, pulse:'',
+        outcome:'interrupted', outcomeNote:'spend ceiling reached mid-step 2', grades:'B · ·', corpus:'corpus@9f30d1', stale:'stale · corpus changed since', staleGlyph:'⚠', staleColor:C.mid, cost:'$5.00', wall:'8:40' },
+      { id:'r-0140', when:'yest 14:02', case:'skill-selection', kind:'single session · checks', glyph:'✓', glyphColor:C.mid, pulse:'',
+        outcome:'accepted', outcomeNote:'all checks passed', grades:'A−', corpus:'corpus@7c1e04', stale:'superseded · 2 versions back', staleGlyph:'⚠', staleColor:C.mid, cost:'$0.38', wall:'1:14' }
+    ].map(r => {
+      const TG = {
+        'r-0148':['—','pending'], 'r-0147':['—','no final artifact'], 'r-0146':['n/a','step replay only'],
+        'r-0145':['n/a','step replay only'], 'r-0144':['B','graded independently'], 'g-0143':['B','median of 6'],
+        'r-0142':['D+','graded independently'], 'r-0141':['—','no final artifact'], 'r-0140':['A−','graded independently']
+      }[r.id] || ['—',''];
+      return Object.assign({}, r, { open: this.go('detail'), taskGrade:TG[0], taskNote:TG[1] });
+    });
+
+    const streamLines = [
+      { n:'1246', kind:'assistant', text:'Refactoring session.ts to refresh on expiry rather than per request.', color:C.txt },
+      { n:'1251', kind:'tool', text:'edit  src/auth/session.ts  +64 −41', color:C.mid },
+      { n:'1258', kind:'tool', text:'read  src/auth/tokens.ts', color:C.mid },
+      { n:'1264', kind:'assistant', text:'The adjacent token helper still uses the old signature.', color:C.txt },
+      { n:'1271', kind:'tool', text:'edit  src/auth/tokens.ts  +38 −12', color:C.mid },
+      { n:'1278', kind:'tool', text:'bash  pnpm test auth', color:C.mid },
+      { n:'1281', kind:'result', text:'44 passed, 0 failed (6.2s)', color:C.mut },
+      { n:'1284', kind:'assistant', text:'Both files updated and tests pass. Handing off.', color:C.txt }
+    ];
+
+    const arms = [
+      { role:'Baseline', label:'skill under test removed', corpus:'no-skill', median:'C', range:'D+ – B−', cost:'$2.61', words:'avg 410 words', border:'#2f3140' },
+      { role:'Arm A', label:'before the edit', corpus:'corpus@9f30d1', median:'B−', range:'C+ – B+', cost:'$3.02', words:'avg 690 words', border:'#3f424d' },
+      { role:'Arm B', label:'after the edit', corpus:'corpus@a41c7e', median:'B', range:'C+ – A−', cost:'$3.31', words:'avg 925 words', border:'#5d5294' }
+    ];
+
+    const pairs = [
+      { seed:'seed-01', base:'C',  a:'B−', b:'B',  delta:'+1 step', arrow:'↑', blockers:'—' },
+      { seed:'seed-02', base:'D+', a:'C+', b:'B−', delta:'+1 step', arrow:'↑', blockers:'scope-declared: fired → clear' },
+      { seed:'seed-03', base:'C',  a:'B',  b:'B',  delta:'no change', arrow:'=', blockers:'—' },
+      { seed:'seed-04', base:'C−', a:'B−', b:'B+', delta:'+2 steps', arrow:'↑', blockers:'no-unrelated-refactors: fired → clear' },
+      { seed:'seed-05', base:'B−', a:'B+', b:'B−', delta:'−1 step', arrow:'↓', blockers:'no-unrelated-refactors: clear → fired' },
+      { seed:'seed-06', base:'C+', a:'B−', b:'A−', delta:'+2 steps', arrow:'↑', blockers:'—' }
+    ].map(p => Object.assign({}, p, { deltaColor: p.arrow === '=' ? C.dim : C.txt }));
+
+    const matrix = [
+      { name:'Step grade', kind:'overall', base:'C', a:'B−', b:'B', spread:'├──┼──┤', spreadNote:'arms overlap by 2 steps', glyph:'~', reading:'inside rerun noise', color:C.mid },
+      { name:'no-unrelated-refactors', kind:'hard blocker', base:'5/6 fired', a:'2/6 fired', b:'1/6 fired', spread:'├─┼─┤', spreadNote:'', glyph:'↑', reading:'fires less often', color:C.txt },
+      { name:'scope-declared-before-edit', kind:'hard blocker', base:'6/6 fired', a:'3/6 fired', b:'1/6 fired', spread:'├─┼──┤', spreadNote:'', glyph:'↑', reading:'clearest movement', color:C.accSoft },
+      { name:'tests-pass-before-handoff', kind:'hard blocker', base:'2/6 fired', a:'0/6 fired', b:'0/6 fired', spread:'┼', spreadNote:'', glyph:'=', reading:'unchanged, already clear', color:C.mut },
+      { name:'Scope discipline', kind:'dimension', base:'D', a:'C+', b:'B−', spread:'├──┼─┤', spreadNote:'', glyph:'↑', reading:'moved with the blocker', color:C.txt },
+      { name:'Evidence quality', kind:'dimension', base:'C−', a:'C+', b:'C+', spread:'├─┼─┤', spreadNote:'', glyph:'=', reading:'untouched by this edit', color:C.mut },
+      { name:'Diff hygiene', kind:'dimension', base:'C', a:'B−', b:'B−', spread:'├─┼──┤', spreadNote:'', glyph:'=', reading:'no change', color:C.mut },
+      { name:'Verbosity control', kind:'dimension', base:'A−', a:'B', b:'B', spread:'├──┼─┤', spreadNote:'reply length +34%', glyph:'~', reading:'held while output grew', color:C.mid },
+      { name:'Cost per attempt', kind:'meter', base:'$0.44', a:'$0.50', b:'$0.55', spread:'├─┼─┤', spreadNote:'', glyph:'↓', reading:'+10% per attempt', color:C.mid }
+    ];
+
+    const corpusFiles = [
+      { path:'CLAUDE.md', hash:'sha 4f21c8', edited:'3 days ago', reads:'148', invalidated:'0 results', glyph:'✓', color:C.mut },
+      { path:'skills/implement.md', hash:'sha a41c7e', edited:'today 09:12', reads:'96', invalidated:'23 results', glyph:'⚠', color:C.mid },
+      { path:'skills/spec-review.md', hash:'sha 88b0d2', edited:'6 days ago', reads:'112', invalidated:'0 results', glyph:'✓', color:C.mut },
+      { path:'skills/verify.md', hash:'sha 12ff90', edited:'6 days ago', reads:'74', invalidated:'0 results', glyph:'✓', color:C.mut },
+      { path:'rubrics/pr-quality.md', hash:'sha 3ac514', edited:'2 weeks ago', reads:'148', invalidated:'0 results', glyph:'✓', color:C.mut },
+      { path:'rubrics/reply-checks.md', hash:'sha 9d7e2b', edited:'2 weeks ago', reads:'52', invalidated:'0 results', glyph:'✓', color:C.mut }
+    ];
+
+    const cases = [
+      { id:'auth-refactor', kind:'task · target repo', target:'omelette-web @ main…e91f2a', runs:'38', median:'B', avgCost:'$3.04',
+        desc:'Four steps against a real repository: spec review, plan, implement, verify. Each step is judged independently and a step below B− stops the run and restores the repo.',
+        stepsLabel:'Steps', steps:'spec-review → plan → implement → verify' },
+      { id:'skill-selection', kind:'single session · deterministic checks', target:'no repository', runs:'22', median:'B−', avgCost:'$0.43',
+        desc:'One agent session, judged by checks over the reply and the transcript: did it invoke the right skill, did it avoid the forbidden tool, did it ask before adding sections.',
+        stepsLabel:'Checks', steps:'skill-invoked · no-write-before-ask · sections-not-invented' },
+      { id:'auth-refactor-single', kind:'task · target repo', target:'omelette-web @ main…e91f2a', runs:'4', median:'C+', avgCost:'$2.86',
+        desc:'The same work as one unsupervised step, judged by the same task judge as the four-step version so the two final grades are comparable. Four runs so far, all below the four-step median.',
+        stepsLabel:'Steps', steps:'idea → code' },
+      { id:'doc-rewrite', kind:'task · target repo', target:'omelette-docs @ main…7a2b19', runs:'11', median:'B+', avgCost:'$2.18',
+        desc:'Three steps over a documentation set. Interrupted twice by the spend ceiling; both partial records are retained.',
+        stepsLabel:'Steps', steps:'spec-review → rewrite → verify' }
+    ];
+
+    const calib = [
+      { step:'r-0147 · s3', judge:'D',  human:'D',  agree:'exact', glyph:'✓', color:C.mut, note:'—' },
+      { step:'r-0146 · s3', judge:'B+', human:'B',  agree:'within 1 step', glyph:'≈', color:C.mid, note:'I read the import reorder as churn' },
+      { step:'r-0144 · s4', judge:'B+', human:'C+', agree:'2 steps apart', glyph:'✕', color:C.txt, note:'judge accepted an unverified claim' },
+      { step:'r-0144 · s2', judge:'B+', human:'B+', agree:'exact', glyph:'✓', color:C.mut, note:'—' },
+      { step:'r-0142 · s1', judge:'D+', human:'D+', agree:'exact', glyph:'✓', color:C.mut, note:'—' },
+      { step:'r-0140 · s1', judge:'A−', human:'B+', agree:'within 1 step', glyph:'≈', color:C.mid, note:'brevity credited too generously' }
+    ];
+
+    const drift = [
+      { dim:'Evidence quality', val:'judge +0.7 steps', bar:'▮▮▮▮▯▯▯' },
+      { dim:'Verbosity control', val:'judge +0.5 steps', bar:'▮▮▮▯▯▯▯' },
+      { dim:'Scope discipline', val:'agrees', bar:'▮▯▯▯▯▯▯' },
+      { dim:'Diff hygiene', val:'judge −0.3 steps', bar:'▮▮▯▯▯▯▯' }
+    ];
+
+    const keys = [
+      { key:'g r', does:'run history' }, { key:'g m', does:'live monitor' },
+      { key:'n', does:'new run' }, { key:'r', does:'replay a step' },
+      { key:'e', does:'expand cited evidence' }, { key:'j / k', does:'move through rows' },
+      { key:'f', does:'follow / unfollow the tail' }, { key:'Esc', does:'close dialog' }
+    ];
+
+    const scanFiles = [
+      { path:'CLAUDE.md', hash:'sha 4f21c8', lines:'218 ln' },
+      { path:'skills/implement.md', hash:'sha a41c7e', lines:'96 ln' },
+      { path:'skills/spec-review.md', hash:'sha 88b0d2', lines:'71 ln' },
+      { path:'rubrics/pr-quality.md', hash:'sha 3ac514', lines:'140 ln' }
+    ];
+
+    const limitOk = (parseFloat(st.limit) || 0) > 0;
+
+    return {
+      nav: navDef.map(n => {
+        const on = screen === n.id;
+        const p = this.pill(on);
+        const counts = { tasks: tasks.length, cases: cases.length, runs: runs.length + 139, corpus: corpusFiles.length + 8, calib: calib.length + 35 };
+        const badge = counts[n.id] !== undefined ? String(counts[n.id]) : n.badge;
+        return Object.assign({}, n, { badge, bg:p.bg, fg:p.fg, mark:p.mark, current: on ? 'page' : undefined, go:this.go(n.id) });
+      }),
+      installLabel: installed ? 'Showing demo records — switch to fresh install' : 'Showing fresh install — restore demo records',
+      toggleInstall: () => this.setState(s => ({ installed: !s.installed, noData:false, scanned:false, corpusPath:'', screen:'runs' })),
+
+      isSetup: screen === 'setup',
+      isRuns: screen === 'runs' && installed && !st.noData,
+      isRunsEmpty: screen === 'runs' && installed && st.noData,
+      isMonitor: screen === 'monitor',
+      isDetail: screen === 'detail',
+      isCompare: screen === 'compare',
+      isCorpus: screen === 'corpus',
+      isCases: screen === 'cases',
+      isCalib: screen === 'calib',
+      isSettings: screen === 'settings',
+      showStatus: installed && !st.noData,
+
+      limit: st.limit,
+      setLimit: e => this.setState({ limit: e.target.value }),
+      limitPresets: ['5.00', '20.00', '50.00'].map(v => {
+        const on = st.limit === v;
+        return { label:'$' + v, pick:() => this.setState({ limit:v }), border: on ? '#9184d9' : '#3f424d', fg: on ? C.accSoft : C.mid };
+      }),
+      corpusPath: st.corpusPath,
+      setCorpus: e => this.setState({ corpusPath: e.target.value }),
+      scanCorpus: () => this.setState({ scanned:true }),
+      scanDisabled: undefined,
+      scanned: st.scanned, scanFiles,
+      step2Border: limitOk ? '#3f424d' : '#292b31',
+      step2Opacity: limitOk ? '1' : '.55',
+      step2State: st.scanned ? 'Linked' : (limitOk ? 'Required' : 'Set a limit first'),
+      finishDisabled: st.scanned ? undefined : 'true',
+      finishHint: st.scanned ? 'A spend limit and a corpus are recorded. Cases unlock next.' : 'Set a limit, then scan a corpus directory.',
+      finishSetup: () => this.setState({ installed:true, noData:true, screen:'runs' }),
+
+      filters: ['All 148', 'Running', 'Stopped', 'Replays', 'Groups', 'Clean corpus only'].map(label => {
+        const on = st.filter === label;
+        const p = this.pill(on);
+        return { label, on:String(on), bg:p.bg, fg:p.fg, border:p.border, pick:() => this.setState({ filter:label }) };
+      }),
+
+      goRuns:this.go('runs'), goMonitor:this.go('monitor'), goCompare:this.go('compare'),
+      goCorpus:this.go('corpus'), goCases:this.go('cases'),
+      goDetail: () => this.setState({ modal:null, screen:'detail' }), noop:e => { if (e && e.preventDefault) e.preventDefault(); },
+
+      spendStr:'$' + spend.toFixed(2), limitStr:'$' + limit.toFixed(2),
+      spendPct: pct.toFixed(1) + '%', spendPctLabel: pct.toFixed(0) + '%',
+      spendAria: 'Spent ' + spend.toFixed(2) + ' dollars of a ' + limit.toFixed(2) + ' dollar ceiling',
+      burnStr:'$0.29', elapsedStr: mm + ':' + ss, tokensStr:'842k / 31k',
+
+      liveSteps, detailSteps, blockers, dims, dimsFull, ledger, runs, streamLines,
+      arms, pairs, matrix, corpusFiles, cases, calib, drift, keys,
+      graphNodes, tasks, trace,
+
+      isTasks: screen === 'tasks',
+      modalOpen: st.modal !== null && st.modal !== undefined,
+      modal: Object.assign({}, MODALS[st.modal || 0], {
+        gradeColor: this.gradeColor((MODALS[st.modal || 0] || {}).grade),
+        inFiles: ((MODALS[st.modal || 0] || {}).inFiles || []).map(f => ({
+          path:f.path, hash:f.hash, role:f.role,
+          state: f.changed ? 'changed since this run' : 'unchanged',
+          glyph: f.changed ? '⚠' : '✓',
+          color: f.changed ? C.mid : C.mut
+        })),
+        hasOut: ((MODALS[st.modal || 0] || {}).outArts || []).length > 0
+      }),
+      closeModal: () => this.setState({ modal:null }),
+
+      layouts: [
+        { id:'rail', label:'Step rail' },
+        { id:'ledger', label:'Record ledger' },
+        { id:'trace', label:'Contribution' }
+      ].map(l => {
+        const on = st.layout === l.id;
+        const p = this.pill(on);
+        return { label:l.label, on:String(on), bg:p.bg, fg:p.fg, pick:() => this.setState({ layout:l.id }) };
+      }),
+      isRail: st.layout === 'rail', isLedger: st.layout === 'ledger', isTrace: st.layout === 'trace',
+      layoutNote: st.layout === 'rail' ? 'Layout A · one step at a time, attempts alongside'
+        : st.layout === 'ledger' ? 'Layout B · the whole record top to bottom'
+        : 'Layout C · task grade first, then the culprit pass',
+
+      compares: [
+        { id:'paired', label:'Attempt pairs' },
+        { id:'matrix', label:'What moved' }
+      ].map(c => {
+        const on = st.compare === c.id;
+        const p = this.pill(on);
+        return { label:c.label, on:String(on), bg:p.bg, fg:p.fg, pick:() => this.setState({ compare:c.id }) };
+      }),
+      isPaired: st.compare === 'paired', isMatrix: st.compare === 'matrix',
+
+      readFiles: corpusFiles.slice(0, 4).map(f => ({
+        path:f.path, hash:f.hash,
+        state: f.path === 'skills/implement.md' ? 'changed since this run' : 'unchanged',
+        glyph: f.path === 'skills/implement.md' ? '⚠' : '✓',
+        color: f.path === 'skills/implement.md' ? C.mid : C.mut
+      })),
+
+      attempts: [
+        { id:'a-0146-3', grade:'B+', corpus:'corpus@a41c7e', note:'current corpus', staleGlyph:'✓', staleColor:C.mut },
+        { id:'a-0146-2', grade:'B−', corpus:'corpus@a41c7e', note:'current corpus', staleGlyph:'✓', staleColor:C.mut },
+        { id:'a-0145-1', grade:'C+', corpus:'corpus@9f30d1', note:'stale · corpus changed', staleGlyph:'⚠', staleColor:C.mid }
+      ].map(a => Object.assign({}, a, { color:this.gradeColor(a.grade) })),
+
+      launchOpen: st.launch,
+      openLaunch: () => this.setState({ launch:true }),
+      closeLaunch: () => this.setState({ launch:false }),
+      attemptCounts: [1, 3, 6, 12].map(n => {
+        const on = st.attempts === n;
+        const p = this.pill(on);
+        return { label:'× ' + n, on:String(on), bg:p.bg, fg:p.fg, border:p.border, pick:() => this.setState({ attempts:n }) };
+      })
+    };
+  }
+}
+
+</script>
+</body>
+</html>
