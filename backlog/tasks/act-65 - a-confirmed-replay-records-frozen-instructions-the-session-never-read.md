@@ -1,10 +1,11 @@
 ---
 id: ACT-65
 title: a confirmed replay records frozen instructions the session never read
-status: Build
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-04 17:47'
-updated_date: '2026-09-04 22:44'
+updated_date: '2026-09-04 22:49'
 labels: []
 dependencies: []
 type: bug
@@ -29,12 +30,12 @@ Before building, settle one fact this card does not assume: where a stage sessio
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
-- [ ] #2 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
-- [ ] #3 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
-- [ ] #4 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
-- [ ] #5 An original run's stage session reads the same corpus CLAUDE.md bytes the run record hashes for that stage
-- [ ] #6 The stage session's project instructions are delivered without writing to the target repository's own root CLAUDE.md
+- [x] #1 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
+- [x] #2 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
+- [x] #3 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
+- [x] #4 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
+- [x] #5 An original run's stage session reads the same corpus CLAUDE.md bytes the run record hashes for that stage
+- [x] #6 The stage session's project instructions are delivered without writing to the target repository's own root CLAUDE.md
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -90,4 +91,16 @@ session's recorded hash still matches the frozen bytes, not the live edit.
 Scope settled by João, 2026-09-05: this card covers BOTH the confirmed replay path and the original run path. They share one function (installStageCorpusSnapshot), so one fix and one commit closes both. No separate card for run. Two acceptance criteria were added for the run path; the title still says replay but the scope is both.
 
 Independently probed by the overseeing session before this decision, confirming the shape session's two claims: (1) a project .claude/CLAUDE.md does load under --setting-sources project, and a worktree-root CLAUDE.md loads alongside it, both present in the same session; (2) installStageCorpusSnapshot is called from pipeline-confirmation.ts:388 (original run) and replay-confirmation.ts:417 (confirmed replay), and LAYOUT_DIRECTORY_KINDS (checkpoint.ts:177) is only [agents, output-styles], so CLAUDE.md is delivered by neither path.
+
+Fixed and committed at 6098f6b. installStageCorpusSnapshot now copies the frozen CLAUDE.md from the snapshot into <targetDirectory>/.claude/CLAUDE.md, alongside skills/agents/output-styles, never touching the worktree root.
+
+Observed directly: a checkpoint.test.ts unit test asserts the installed file's bytes equal the frozen instructions string. An extended replay-confirmation.test.ts integration test runs the real snapshot-then-install path for 3 concurrent confirmed-replay reps and reads each rep's own worktree .claude/CLAUDE.md back, confirming it equals the frozen instructions the record hashes, with no cross-rep leakage. Full suite (1004 tests), typecheck, lint, and format all pass.
+
+Not verified this session: an actual claude CLI session reading .claude/CLAUDE.md at replay time end-to-end (the fake stage-session dependency stands in for it in all tests, as it does everywhere else in this suite). That delivery mechanism itself was independently confirmed on the card before build started, by an empirical probe on claude 2.1.260 with --setting-sources project.
+
+One function serves both call sites (pipeline-confirmation.ts:388 original run, replay-confirmation.ts:417 confirmed replay), so both paths are closed by the same commit; acceptance criteria 1-4 (duplicated in the card) and 5 share the same evidence.
+
+Advisory note from the review is filed as ACT-68 (instructions taken as a bare string instead of resolved from roots, unlike every other corpus kind): not blocking, follow-up only.
+
+Review: not triggered. This is an internal harness bug fix, not outward-facing, and the change is a 4-line addition confined to one already-tested function.
 <!-- SECTION:NOTES:END -->
