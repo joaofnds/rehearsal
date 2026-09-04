@@ -27,7 +27,7 @@ import type { CommandOutput } from "#cli/output";
 import type { RecordId, RunRecordId } from "#cli/record-id";
 import { parseRecordId, parseRunRecordId, recordIdForms } from "#cli/record-id";
 
-function recordFileFor(id: RecordId, runsDirectory: string): string {
+export function recordFileFor(id: RecordId, runsDirectory: string): string {
 	switch (id.kind) {
 		case "case": {
 			return caseDeclarationPath(id.caseId, casesRoot());
