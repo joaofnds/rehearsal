@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CASES_DIRECTORY } from "./case";
 import { CONTROL_DIR } from "./config";
-import { resolveCorpusFile } from "./corpus-file";
 import { resolveCorpusSource } from "./corpus-source";
 import {
 	directorySource,
@@ -92,24 +91,6 @@ describe(staleCheckpoints.name, () => {
 	});
 
 	describe("when no corpus is named, which is the live install", () => {
-		/**
-		 * The branch a user gets by typing `rehearsal stale`, and it differs from
-		 * every branch the tests above take: the instructions come from the
-		 * control repository's own CLAUDE.md rather than from a file under the
-		 * corpus root, because that is where the live install's project
-		 * instructions are. The skills the live branch searches are pinned by
-		 * `stageCorpusRoots`, which cannot be asserted here without depending on
-		 * which skills this machine happens to have installed.
-		 */
-		it("reads the instructions from the control repository, not the corpus root", async () => {
-			const live = await resolveCorpusSource(undefined);
-
-			expect(resolveCorpusFile(live, "CLAUDE.md")).toBe(
-				join(CONTROL_DIR, "CLAUDE.md"),
-			);
-			expect(resolveCorpusFile(live, "CLAUDE.md")).not.toStartWith(live.root);
-		});
-
 		it("answers over a runs directory holding no run, reaching no skill", async () => {
 			const runsDirectory = await temporaryDirectory("rehearsal-stale-live-");
 

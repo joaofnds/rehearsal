@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
+	readCorpusInstructions,
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
 import { liveCorpusRoot, resolveCorpusSource } from "#benchmark/corpus-source";
@@ -102,5 +103,28 @@ describe("hashing a directory source's own bytes", () => {
 				.digest("hex"),
 		);
 		expect(variant?.sha256).not.toBe(installed?.sha256 ?? "");
+	});
+});
+
+describe(readCorpusInstructions.name, () => {
+	it("reads the corpus root's CLAUDE.md", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "CLAUDE.md"), "corpus instructions\n");
+
+		expect(await readCorpusInstructions(await resolveCorpusSource(root))).toBe(
+			"corpus instructions\n",
+		);
+	});
+
+	it("refuses a corpus holding no CLAUDE.md, naming the resolved path", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "output-styles/brief.md"), "a brief\n");
+
+		const failure = await failureOf(
+			readCorpusInstructions(await resolveCorpusSource(root)),
+		);
+
+		expect(failure).toBeInstanceOf(CorpusFileError);
+		expect(failure.message).toContain(join(root, "CLAUDE.md"));
 	});
 });

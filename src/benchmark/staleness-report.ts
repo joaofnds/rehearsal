@@ -15,7 +15,7 @@ import type { CorpusRoot } from "./corpus-file";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
-	resolveCorpusFile,
+	readCorpusInstructions,
 } from "./corpus-file";
 import { loadRunManifest } from "./manifest";
 import type { RunManifest } from "./manifest";
@@ -119,25 +119,6 @@ async function checkpointChain(
 }
 
 /**
- * A corpus needs a CLAUDE.md only to answer for a checkpoint, and
- * `resolveCorpusSource` accepts a directory holding any one corpus kind, so a
- * corpus of styles alone is valid. Reading it lazily lets the case half answer
- * for such a corpus, and the failure arrives in the caller's terms rather than
- * as a raw ENOENT.
- */
-async function projectInstructions(source: CorpusRoot): Promise<string> {
-	const path = resolveCorpusFile(source, "CLAUDE.md");
-	const file = Bun.file(path);
-	if (!(await file.exists())) {
-		throw new CorpusFileError(
-			`Corpus file CLAUDE.md does not exist at ${path}`,
-		);
-	}
-
-	return file.text();
-}
-
-/**
  * Staleness needs the corpus hashed, never installed, so `stale` needs no
  * worktree, no git, and no session: `captureStageCorpus` reads the roots it is
  * given and nothing else, and those roots are the ones a replay against the
@@ -163,7 +144,7 @@ export async function staleCheckpoints(
 		}
 
 		const manifest = await loadRunManifest(paths.manifestFile);
-		const instructions = await projectInstructions(source);
+		const instructions = await readCorpusInstructions(source);
 		const chain = await checkpointChain(
 			runsDirectory,
 			run,

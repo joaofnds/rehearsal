@@ -67,6 +67,26 @@ export function resolveCorpusFile(
 	);
 }
 
+/**
+ * The corpus's global instructions, read through the same resolution every
+ * other corpus kind goes through. A corpus source holding any one kind is
+ * valid, so a source with no CLAUDE.md is possible and is refused here in the
+ * caller's terms rather than as a raw ENOENT at the point of use.
+ */
+export async function readCorpusInstructions(
+	source: CorpusRoot,
+): Promise<string> {
+	const path = resolveCorpusFile(source, CORPUS_INSTRUCTIONS_PATH);
+	const file = Bun.file(path);
+	if (!(await file.exists())) {
+		throw new CorpusFileError(
+			`Corpus file ${CORPUS_INSTRUCTIONS_PATH} does not exist at ${path}`,
+		);
+	}
+
+	return file.text();
+}
+
 export interface ResolvedCorpusFile {
 	readonly path: string;
 	readonly resolvedPath: string;
