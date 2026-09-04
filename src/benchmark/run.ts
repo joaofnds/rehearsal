@@ -32,7 +32,8 @@ import {
 import { killActiveCommands, runCommand } from "./command";
 import type { BenchmarkCase } from "./case";
 import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
-import { CONTROL_DIR, readProjectInstructions } from "./config";
+import { CONTROL_DIR } from "./config";
+import { liveCorpusInstructions } from "./corpus-file";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -863,7 +864,7 @@ export async function runBenchmark(
 		);
 		const { task, productBrief, finalRubric: rubric } = benchmarkCase;
 		const [instructions, claudeVersion] = await Promise.all([
-			readProjectInstructions(),
+			liveCorpusInstructions(),
 			runCommand(["claude", "--version"], CONTROL_DIR),
 		]);
 		const rubricIds = validateRubricDefinition(rubric);

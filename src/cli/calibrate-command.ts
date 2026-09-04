@@ -19,7 +19,8 @@ import {
 	calibratableStageRecordSchema,
 } from "#benchmark/calibration-record";
 import { caseRelative, readCaseDeclaration } from "#benchmark/case";
-import { displayPath, readProjectInstructions } from "#benchmark/config";
+import { liveCorpusInstructions } from "#benchmark/corpus-file";
+import { displayPath } from "#benchmark/config";
 import type { Effort } from "#benchmark/config";
 import type {
 	CalibrationResult,
@@ -278,7 +279,7 @@ export async function readControlSources(
 	caseId: string | undefined,
 	frozenRubric: string,
 ): Promise<CurrentControlSources> {
-	const instructions = await readProjectInstructions();
+	const instructions = await liveCorpusInstructions();
 	if (caseId === undefined) {
 		return { instructions, finalRubric: frozenRubric };
 	}

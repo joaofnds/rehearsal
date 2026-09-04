@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
+	liveCorpusInstructions,
 	readCorpusInstructions,
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
@@ -126,5 +127,13 @@ describe(readCorpusInstructions.name, () => {
 
 		expect(failure).toBeInstanceOf(CorpusFileError);
 		expect(failure.message).toContain(join(root, "CLAUDE.md"));
+	});
+});
+
+describe(liveCorpusInstructions.name, () => {
+	it("reads the live install's CLAUDE.md, not the control repository's", async () => {
+		expect(await liveCorpusInstructions()).toBe(
+			await Bun.file(join(liveCorpusRoot(), "CLAUDE.md")).text(),
+		);
 	});
 });

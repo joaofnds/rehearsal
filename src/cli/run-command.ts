@@ -26,12 +26,12 @@ import type { BenchmarkConfig, SessionRunConfig } from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import {
 	CONTROL_DIR,
-	readProjectInstructions,
 	judgeSelfPreferenceWarning,
 	parseArgs,
 	parseCaseId,
 	parseSessionArgs,
 } from "#benchmark/config";
+import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
@@ -298,7 +298,7 @@ async function confirmRun(
 	const [controlSha, source, instructions] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
-		readProjectInstructions(),
+		liveCorpusInstructions(),
 	]);
 	validateRubricDefinition(benchmarkCase.finalRubric);
 

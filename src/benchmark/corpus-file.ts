@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { liveCorpusRoot } from "./corpus-source";
 
 /**
  * What resolving a layout path needs and nothing more: the root the bytes are
@@ -85,6 +86,18 @@ export async function readCorpusInstructions(
 	}
 
 	return file.text();
+}
+
+/**
+ * The live install as a corpus source. A run, replay, or calibration takes no
+ * corpus source, so the corpus it measures is whatever is installed.
+ */
+export function liveCorpusSource(): CorpusRoot {
+	return { kind: "live", root: liveCorpusRoot() };
+}
+
+export function liveCorpusInstructions(): Promise<string> {
+	return readCorpusInstructions(liveCorpusSource());
 }
 
 export interface ResolvedCorpusFile {

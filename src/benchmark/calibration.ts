@@ -1,6 +1,11 @@
 import { CommandError } from "./command";
 import type { Effort, WorkflowStage } from "./config";
-import { PROJECT_INSTRUCTIONS_PATH, readProjectInstructions } from "./config";
+import {
+	liveCorpusInstructions,
+	liveCorpusSource,
+	resolveCorpusFile,
+} from "./corpus-file";
+
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -452,9 +457,10 @@ export async function collectCalibration(
 	context: CalibrationContext,
 ): Promise<CalibrationResult> {
 	await writeHumanReviewTemplate(context.reviewFile);
+	const instructionsPath = resolveCorpusFile(liveCorpusSource(), "CLAUDE.md");
 	const editTargets = context.finalCandidate
-		? `${PROJECT_INSTRUCTIONS_PATH}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
-		: `${PROJECT_INSTRUCTIONS_PATH} and/or the relevant file under ${context.rubricsDirectory}`;
+		? `${instructionsPath}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
+		: `${instructionsPath} and/or the relevant file under ${context.rubricsDirectory}`;
 	const frozen: FrozenCalibrationEvidence = {
 		instructions: context.originalInstructions,
 		finalRubric: context.originalRubric,
@@ -520,7 +526,7 @@ async function readCurrentSources(
 ): Promise<CurrentCalibrationSources> {
 	const [instructions, finalRubric] = await asCalibrationInput(() =>
 		Promise.all([
-			readProjectInstructions(),
+			liveCorpusInstructions(),
 			Bun.file(context.finalRubricPath).text(),
 		]),
 	);

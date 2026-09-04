@@ -24,10 +24,10 @@ import { runCommand } from "#benchmark/command";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {
 	CONTROL_DIR,
-	readProjectInstructions,
 	judgeSelfPreferenceWarning,
 	parseReplayArgs,
 } from "#benchmark/config";
+import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { runReplay } from "#benchmark/replay";
 import type { ReplayDependencies, ReplayRequest } from "#benchmark/replay";
 import type { ReplayStageOutcome } from "#benchmark/replay-command";
@@ -213,7 +213,7 @@ export async function executeReplay(
 	const replayRequest: ReplayRequest = {
 		paths,
 		stage: config.stage,
-		instructions: await readProjectInstructions(),
+		instructions: await liveCorpusInstructions(),
 		controlSha: await currentControlSha(),
 		model: config.model,
 		effort: config.effort,
