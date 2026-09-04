@@ -1,13 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { PROJECT_INSTRUCTIONS_PATH } from "#benchmark/config";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
 	resolveCorpusFile,
 } from "#benchmark/corpus-file";
-import { resolveCorpusSource } from "#benchmark/corpus-source";
+import { liveCorpusRoot, resolveCorpusSource } from "#benchmark/corpus-source";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
@@ -26,9 +25,9 @@ describe(resolveCorpusFile.name, () => {
 		expect(resolveCorpusFile(live, layoutPath)).toBe(expected);
 	});
 
-	it("resolves CLAUDE.md to the control root's project instructions", () => {
+	it("resolves CLAUDE.md onto the install, like every other corpus kind", () => {
 		expect(resolveCorpusFile(live, "CLAUDE.md")).toBe(
-			PROJECT_INSTRUCTIONS_PATH,
+			join(liveCorpusRoot(), "CLAUDE.md"),
 		);
 	});
 
@@ -67,7 +66,7 @@ describe(hashCorpusFiles.name, () => {
 		expect(only?.path).toBe("CLAUDE.md");
 		expect(only?.sha256).toBe(
 			new Bun.CryptoHasher("sha256")
-				.update(await Bun.file(PROJECT_INSTRUCTIONS_PATH).bytes())
+				.update(await Bun.file(join(liveCorpusRoot(), "CLAUDE.md")).bytes())
 				.digest("hex"),
 		);
 	});

@@ -1,11 +1,9 @@
 import { resolve } from "node:path";
-import { PROJECT_INSTRUCTIONS_PATH } from "./config";
 
 /**
  * What resolving a layout path needs and nothing more: the root the bytes are
- * under, and whether that root is the live install, whose CLAUDE.md lives at
- * the control root instead. A resolved corpus source and a corpus snapshot
- * both satisfy it.
+ * under, and which kind of source supplied it. A resolved corpus source and a
+ * corpus snapshot both satisfy it.
  */
 export interface CorpusRoot {
 	readonly kind: "live" | "directory" | "chezmoi";
@@ -39,6 +37,12 @@ const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
 ];
 
 /**
+ * The corpus's global instruction file, in corpus layout. A repository's own
+ * CLAUDE.md is its project instructions and is not this file.
+ */
+export const CORPUS_INSTRUCTIONS_PATH = "CLAUDE.md";
+
+/**
  * The one place that knows where a corpus layout path lands. A case names a
  * file in corpus layout paths, and this maps that layout onto the root the
  * resolved source carries, so the reader never learns where the bytes came
@@ -48,10 +52,8 @@ export function resolveCorpusFile(
 	source: CorpusRoot,
 	layoutPath: string,
 ): string {
-	if (layoutPath === "CLAUDE.md") {
-		return source.kind === "live"
-			? PROJECT_INSTRUCTIONS_PATH
-			: confinedTo(source.root, layoutPath);
+	if (layoutPath === CORPUS_INSTRUCTIONS_PATH) {
+		return confinedTo(source.root, layoutPath);
 	}
 
 	for (const prefix of CORPUS_LAYOUT_PREFIXES) {
