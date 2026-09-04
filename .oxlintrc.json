@@ -69,7 +69,7 @@
 			{
 				"treatMethodsAsReadonly": true,
 				"ignoreInferredTypes": true,
-				"allow": ["ZodType", "BunFile", "Subprocess", "Request"]
+				"allow": ["ZodType", "BunFile", "Subprocess"]
 			}
 		],
 		"eslint/no-duplicate-imports": "off",

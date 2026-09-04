@@ -5,18 +5,6 @@ Everything here is a command you run. No step needs a session.
 The point of the tool: change an instruction, and find out whether the change
 made your agent's work better or worse. Everything below builds to that.
 
-## The page
-
-```bash
-bun run ui
-```
-
-Open http://localhost:4173. It lists every record on disk by kind, and each
-one links to its own JSON. Records the tool cannot read appear as unreadable
-with the reason, rather than breaking the listing the way the CLI does.
-
-It reads only. Runs still start from the commands below.
-
 ## 0. One-time check
 
 ```sh

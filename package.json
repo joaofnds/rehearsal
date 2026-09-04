@@ -7,8 +7,7 @@
 	"type": "module",
 	"imports": {
 		"#benchmark/*": "./src/benchmark/*.ts",
-		"#cli/*": "./src/cli/*.ts",
-		"#ui/*": "./src/ui/*.ts"
+		"#cli/*": "./src/cli/*.ts"
 	},
 	"scripts": {
 		"fmt": "oxfmt",
@@ -16,8 +15,7 @@
 		"lint": "oxlint --type-aware",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
-		"rehearsal": "bun run rehearsal.ts",
-		"ui": "bun run src/ui/main.ts"
+		"rehearsal": "bun run rehearsal.ts"
 	},
 	"dependencies": {
 		"zod": "^4.4.3"
