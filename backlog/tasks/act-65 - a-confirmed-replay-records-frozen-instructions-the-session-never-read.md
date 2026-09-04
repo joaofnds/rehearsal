@@ -32,10 +32,8 @@ Before building, settle one fact this card does not assume: where a stage sessio
 <!-- AC:BEGIN -->
 - [x] #1 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
 - [x] #2 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
-- [x] #3 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
-- [x] #4 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
-- [x] #5 An original run's stage session reads the same corpus CLAUDE.md bytes the run record hashes for that stage
-- [x] #6 The stage session's project instructions are delivered without writing to the target repository's own root CLAUDE.md
+- [x] #3 An original run's stage session reads the same corpus CLAUDE.md bytes the run record hashes for that stage
+- [x] #4 The stage session's project instructions are delivered without writing to the target repository's own root CLAUDE.md
 <!-- AC:END -->
 
 ## Implementation Notes
