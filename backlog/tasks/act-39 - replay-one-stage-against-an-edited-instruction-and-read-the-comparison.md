@@ -2,8 +2,7 @@
 id: ACT-39
 title: replay one stage against an edited instruction and read the comparison
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-04 01:50'
 updated_date: '2026-09-04 23:47'
 labels: []
