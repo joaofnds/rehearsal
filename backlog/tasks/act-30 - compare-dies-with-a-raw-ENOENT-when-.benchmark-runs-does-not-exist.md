@@ -4,7 +4,7 @@ title: compare dies with a raw ENOENT when .benchmark-runs does not exist
 status: To Do
 assignee: []
 created_date: '2026-09-03 02:34'
-updated_date: '2026-09-03 13:06'
+updated_date: '2026-09-04 00:54'
 labels: []
 dependencies: []
 references:
@@ -28,7 +28,86 @@ Found while fixing ACT-26.2's review findings; out of that card's scope because 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 `rehearsal compare <manifest>` on a checkout with no .benchmark-runs directory does not exit 1 with a raw ENOENT
-- [ ] #2 `bun test src/benchmark/comparison-loader.test.ts` run alone on a clone with no .benchmark-runs directory passes, so no test in that file depends on a directory another test created
+- [ ] #2 A clone's first whole-suite run, in a checkout with no .benchmark-runs directory, records no failure caused by that directory's absence, observed by running the suite once on a fresh clone placed where no sibling nest/ resolves
+
+Rejudging the same discuss stage
+{
+  "hardBlockers": [
+    {
+      "id": "invalid-stage-delivery",
+      "status": "PASS",
+      "evidence": [
+        {
+          "source": "task",
+          "path": "backlog-seed.md",
+          "claim": "evidence"
+        }
+      ]
+    },
+    {
+      "id": "contradiction",
+      "status": "PASS",
+      "evidence": [
+        {
+          "source": "artifact",
+          "path": "backlog/docs/spec.md",
+          "claim": "evidence"
+        }
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "scope",
+      "status": "FAIL",
+      "evidence": [
+        {
+          "source": "artifact",
+          "path": "backlog/docs/spec.md",
+          "claim": "evidence"
+        }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "clarity",
+      "grade": "B",
+      "evidence": [
+        {
+          "source": "artifact",
+          "path": "backlog/docs/spec.md",
+          "claim": "evidence"
+        }
+      ]
+    }
+  ],
+  "summary": "stage grade",
+  "grade": "C",
+  "verdict": "STOP"
+}
+Target restored to 3f5236c54fbee9e43c33e15cdbc387b38684089a.
+
+Custom checks
+
+Treatment checks
+
+Treatment checks
+
+Treatment checks
+Which scope?
+Product Owner: Use the small scope
+Shaped
+Shaped
+Shaped
+Which scope?
+Product Owner: Use the small scope
+Which scope?
+Product Owner: Use the small scope
+Which scope?
+Product Owner: Use the small scope
+Which scope?
+Product Owner: Use the small scope, in a checkout with no .benchmark-runs directory, records no failure caused by that directory's absence, proven by running the whole suite once on a fresh clone
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -43,4 +122,16 @@ Criterion #2 does not measure what the card says it measures. A whole `bun test`
 ACT-26's final summary says trunk has 'five pre-existing failures' on a fresh clone. That is now one. The local checkout runs 1016 pass, 0 fail.
 
 Consequence for this card: criterion #2 as written can be satisfied without fixing anything in compare, and cannot be satisfied at all by compare's fix, since its failure has an unrelated cause. Recommend splitting the outside-repo target off; see the triage doc.
+
+Triage 2026-09-04: the defect is wider than the card and than the 2026-09-03 note state. Measured on a fresh clone at 45c522c placed so no `nest/` sibling resolves (/tmp/deep2/a/b/c/rehearsal; the 2026-09-03 probe at /tmp/act30probe still resolved ../../../nest/template to the real one on this machine, which is why it saw fewer failures).
+
+A clone's FIRST `bun test`, before .benchmark-runs exists, fails 5. Every run after fails 1. Four of the five are this card's ENOENT, not one:
+- loadComparisonEvidence > writes one read-only comparison report without external execution
+- rehearsal > prints only the report path for a valid manifest, and nothing on stdout otherwise
+- rehearsal > prints exactly the report JSON on stdout with --json
+- rehearsal > delivers a record larger than the pipe buffer whole on stdout
+
+The fifth is ACT-34's. Reproduce with: clone to a path with no `nest/` sibling above it, `bun install --frozen-lockfile`, then `bun test` once and read the failure list; run it a second time and four of the five are gone because an earlier test created .benchmark-runs.
+
+So the cost of leaving this card is a first-run experience that fails 5 tests for a new contributor, three of them in the CLI suite the card never mentions, and all of them self-healing on the second run, which is the shape of defect that wastes the most of someone's time.
 <!-- SECTION:NOTES:END -->

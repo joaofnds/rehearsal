@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-03 04:21'
-updated_date: '2026-09-03 13:07'
+updated_date: '2026-09-04 00:54'
 labels:
   - defect
 dependencies: []
@@ -39,4 +39,8 @@ Until this lands, the four brief-reply cases record a FAIL on `tool-calls` that 
 Triage 2026-09-03: premise re-checked. src/benchmark/session-attempt.ts passes `toolUses(transcript)` over the whole forked transcript at line 318; the card cites line 284, which moved with ACT-25's later commits. One site, unchanged in substance.
 
 Per decision-1, a line number is not a measurement: the site is the `toolUses(transcript)` call in `recordAttempt`'s request assembly in src/benchmark/session-attempt.ts, one call, found by `grep -n 'toolUses' src/benchmark/session-attempt.ts`.
+
+Triage 2026-09-04: premise re-verified at 45c522c and unchanged. `grep -n 'toolUses' src/benchmark/session-attempt.ts` returns one evaluation site, in `recordAttempt`, passing the whole parsed transcript into `evaluateChecks`. Nothing in that function reads the case's `cut`, so the fix has to carry the cut into `recordAttempt`, which today receives only the request, the attempt directory, and the attempt output.
+
+Acceptance #2's premise also confirmed: `files-read` is a real check kind (src/benchmark/session-check-files-read.ts) evaluated from the same evidence record, so both kinds are fixed by the same change rather than needing two.
 <!-- SECTION:NOTES:END -->

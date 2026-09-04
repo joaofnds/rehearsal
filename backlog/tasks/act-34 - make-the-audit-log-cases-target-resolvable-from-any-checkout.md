@@ -4,7 +4,7 @@ title: make the audit-log case's target resolvable from any checkout
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-03 23:20'
+updated_date: '2026-09-04 00:54'
 labels: []
 dependencies: []
 references:
@@ -40,4 +40,14 @@ Decided by Joao, 2026-09-03 (triage question 5): a pipeline case may declare a t
 What that leaves for Shape: a skipped test reports nothing, so a checkout that has the target and a checkout that does not now pass identically, and a genuinely broken declaration (a typo in the path) becomes invisible. The mechanism has to tell 'this machine does not have the sibling repository', which is expected, from 'this declaration is wrong', which is not. That distinction is the design work.
 
 2026-09-04, runner: moved back to To Do. Its question was answered 2026-09-03 and no session is shaping it, so Shape read as work in progress beside ACT-28. Shape is for a card a session is shaping.
+
+Triage 2026-09-04: the premise holds, but reproducing it needs a condition neither the description nor the 2026-09-03 measurement states. The declared path is relative, so a clone three directories deep under /Users/joaofnds/code still resolves ../../../nest/template to the real sibling and PASSES. The 2026-09-03 probe at /tmp/act30probe resolved to /nest/template, absent, which is why it failed there; a clone at a different depth would not have.
+
+Reproduce with a clone placed where no `nest/` sibling resolves from three levels up:
+  mkdir -p /tmp/deep/a/b/c && git clone <repo> /tmp/deep/a/b/c/rehearsal
+  cd /tmp/deep/a/b/c/rehearsal && bun install --frozen-lockfile
+  bun test src/benchmark/case.test.ts
+Observed 2026-09-04 at 45c522c: 33 pass, 1 fail, ENOENT stat '/private/tmp/deep/a/b/c/nest/template'. The same file on this checkout: 34 pass, 0 fail.
+
+This path-dependence is itself an argument for the card: whether the suite passes depends on where the checkout happens to sit, which is the property a test should never have.
 <!-- SECTION:NOTES:END -->
