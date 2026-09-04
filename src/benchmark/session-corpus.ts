@@ -1,6 +1,5 @@
 import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
-import { PROJECT_INSTRUCTIONS_PATH } from "./config";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
 import { corpusLayoutEntries, discardRender } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
@@ -168,10 +167,6 @@ async function copyDeclared(
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });
 		await cp(entry.sourcePath, target, { recursive: true });
-	}
-
-	if (source.kind === "chezmoi" && declaredPaths.includes("CLAUDE.md")) {
-		await cp(PROJECT_INSTRUCTIONS_PATH, join(destination, "CLAUDE.md"));
 	}
 }
 

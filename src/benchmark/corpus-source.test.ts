@@ -379,6 +379,7 @@ describe("rendering a chezmoi corpus source", () => {
 describe(corpusLayoutEntries.name, () => {
 	async function renderedHomeTree(): Promise<string> {
 		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, ".agents/AGENTS.md"), "global instructions\n");
 		await Bun.write(join(root, ".agents/skills/style/SKILL.md"), "style\n");
 		await Bun.write(join(root, ".agents/agents/reviewer.md"), "reviewer\n");
 		await Bun.write(join(root, ".claude/output-styles/brief.md"), "brief\n");
@@ -434,6 +435,41 @@ describe(corpusLayoutEntries.name, () => {
 				(entry) => !entry.sourcePath.startsWith(join(root, ".claude/skills")),
 			),
 		).toBe(true);
+	});
+
+	it("lists the rendered .claude/CLAUDE.md as the corpus instructions", async () => {
+		const root = await renderedHomeTree();
+		await Bun.write(join(root, ".claude/CLAUDE.md"), "rendered instructions\n");
+
+		const entries = await corpusLayoutEntries({
+			kind: "chezmoi",
+			ref: "HEAD",
+			commit: "abc",
+			root,
+			sourceDirectory: root,
+		});
+
+		expect(
+			entries.find((entry) => entry.layoutPath === "CLAUDE.md")?.sourcePath,
+		).toBe(join(root, ".claude/CLAUDE.md"));
+	});
+
+	it("lists a symlinked .claude/CLAUDE.md, so the snapshot can refuse it", async () => {
+		const root = await renderedHomeTree();
+		await symlink(
+			join(root, ".agents/AGENTS.md"),
+			join(root, ".claude/CLAUDE.md"),
+		);
+
+		const entries = await corpusLayoutEntries({
+			kind: "chezmoi",
+			ref: "HEAD",
+			commit: "abc",
+			root,
+			sourceDirectory: root,
+		});
+
+		expect(entries.map((entry) => entry.layoutPath)).toContain("CLAUDE.md");
 	});
 
 	it("lists a directory source's own layout entries", async () => {

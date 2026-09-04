@@ -273,6 +273,19 @@ const INSTALLED_LAYOUT: readonly (readonly [string, string])[] = [
 ];
 
 /**
+ * Where each source kind keeps the corpus instructions. A chezmoi render is
+ * the whole home layout, so its copy sits under `.claude` where the install
+ * puts it at the root.
+ */
+const INSTRUCTIONS_SOURCE_PATH: Readonly<
+	Record<ResolvedCorpusSource["kind"], string>
+> = {
+	live: "CLAUDE.md",
+	directory: "CLAUDE.md",
+	chezmoi: ".claude/CLAUDE.md",
+};
+
+/**
  * Every corpus file a source holds, in corpus layout. This is where a source's
  * shape stops mattering: the snapshot copies these entries and nothing after it
  * knows whether they were rendered or read from an install.
@@ -289,8 +302,8 @@ export async function corpusLayoutEntries(
 		);
 	}
 
-	const instructions = join(source.root, "CLAUDE.md");
-	if (source.kind !== "chezmoi" && (await pathExists(instructions))) {
+	const instructions = join(source.root, INSTRUCTIONS_SOURCE_PATH[source.kind]);
+	if (await pathExists(instructions)) {
 		entries.unshift({ layoutPath: "CLAUDE.md", sourcePath: instructions });
 	}
 

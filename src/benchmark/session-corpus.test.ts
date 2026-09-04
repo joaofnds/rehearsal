@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { PROJECT_INSTRUCTIONS_PATH } from "#benchmark/config";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
 import { pathExists } from "#benchmark/file-presence";
 import type { ChezmoiCorpusSource } from "#benchmark/corpus-source";
@@ -17,6 +16,16 @@ import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
 const resources = TestResources.forEachTest();
+
+function chezmoiSource(root: string): ChezmoiCorpusSource {
+	return {
+		kind: "chezmoi",
+		ref: "HEAD",
+		commit: "abc123",
+		root,
+		sourceDirectory: root,
+	};
+}
 
 async function directoryCorpus(
 	files: Readonly<Record<string, string>>,
@@ -78,30 +87,51 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(after[0]?.sha256).toBe(sha256Of("variant brief\n"));
 	});
 
-	it("gives a chezmoi source the control root's CLAUDE.md, which it carries none of", async () => {
+	it("snapshots the CLAUDE.md a chezmoi render carries", async () => {
 		const rendered = await resources.createControlDirectory();
 		await Bun.write(
-			join(rendered, ".claude/output-styles/brief.md"),
-			"rendered brief\n",
+			join(rendered, ".claude/CLAUDE.md"),
+			"rendered instructions\n",
 		);
 		const destination = await resources.createControlDirectory();
-		const source: ChezmoiCorpusSource = {
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc123",
-			root: rendered,
-			sourceDirectory: rendered,
-		};
 
 		const snapshot = await snapshotSessionCorpus(
-			source,
+			chezmoiSource(rendered),
 			join(destination, "corpus"),
 			["CLAUDE.md"],
 		);
 
-		expect(await Bun.file(join(snapshot.root, "CLAUDE.md")).bytes()).toEqual(
-			await Bun.file(PROJECT_INSTRUCTIONS_PATH).bytes(),
+		expect(await Bun.file(join(snapshot.root, "CLAUDE.md")).text()).toBe(
+			"rendered instructions\n",
 		);
+	});
+
+	/**
+	 * The dotfiles render `.claude/CLAUDE.md` as a link into the live
+	 * `~/.agents`, so copying it would snapshot the live install while the
+	 * record says it snapshotted the ref.
+	 */
+	it("refuses a chezmoi render whose CLAUDE.md is a symlink", async () => {
+		const rendered = await resources.createControlDirectory();
+		await Bun.write(join(rendered, ".agents/AGENTS.md"), "live instructions\n");
+		await mkdir(join(rendered, ".claude"), { recursive: true });
+		await symlink(
+			join(rendered, ".agents/AGENTS.md"),
+			join(rendered, ".claude/CLAUDE.md"),
+		);
+		const destination = await resources.createControlDirectory();
+
+		const failure = await failureOf(
+			snapshotSessionCorpus(
+				chezmoiSource(rendered),
+				join(destination, "corpus"),
+				["CLAUDE.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("CLAUDE.md");
+		expect(failure.message).toContain("symlink");
 	});
 
 	/**
