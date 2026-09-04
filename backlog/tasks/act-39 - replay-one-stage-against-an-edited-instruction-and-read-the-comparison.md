@@ -4,6 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
+updated_date: '2026-09-04 23:02'
 labels: []
 milestone: m-1
 dependencies:
@@ -32,3 +33,9 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 - [ ] #3 `rehearsal compare` produces a report over the two attempts, and its path is recorded on this card
 - [ ] #4 The question 'did that edit improve the stage' is answered on this card from the comparison's own output, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Bet, 2026-09-04: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+<!-- SECTION:NOTES:END -->

@@ -4,8 +4,9 @@ title: 'search the target''s project corpus root, not the control repository''s'
 status: To Do
 assignee: []
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-04 17:30'
+updated_date: '2026-09-04 23:01'
 labels: []
+milestone: m-1
 dependencies: []
 type: bug
 ordinal: 60008

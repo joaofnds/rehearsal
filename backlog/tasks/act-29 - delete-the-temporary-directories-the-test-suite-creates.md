@@ -4,7 +4,7 @@ title: delete the temporary directories the test suite creates
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:32'
-updated_date: '2026-09-04 01:50'
+updated_date: '2026-09-04 23:01'
 labels: []
 milestone: m-2
 dependencies: []
@@ -34,4 +34,6 @@ Per decision-1, the counts with their commands, on 2026-09-03: `ls $TMPDIR | gre
 Triage 2026-09-04: re-run. The work's size is unchanged: `grep -rln 'mkdtemp' src/ | wc -l` returns 45, `grep -rln 'TestResources' src/ | wc -l` returns 24.
 
 The visible leak grew from 210 to 1075 in one day (`ls /tmp | grep -c '^rehearsal-'`), which is the rate this triage's own suite runs produced. That number is not progress evidence, per the note above, but the rate is: roughly 865 directories per day of ordinary work on this repository.
+
+Triage 2026-09-05: re-run. mkdtemp count 44 (was 45; one site dropped, work size otherwise unchanged), TestResources count 24 unchanged. Visible leak: `ls /tmp | grep -c '^rehearsal-'` -> 1072 (was 1075). No consequence for the fix; noted per decision-1.
 <!-- SECTION:NOTES:END -->

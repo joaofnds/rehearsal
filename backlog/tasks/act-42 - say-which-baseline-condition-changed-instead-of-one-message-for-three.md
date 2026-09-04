@@ -4,6 +4,7 @@ title: 'say which baseline condition changed, instead of one message for three'
 status: To Do
 assignee: []
 created_date: '2026-09-04 02:13'
+updated_date: '2026-09-04 23:01'
 labels: []
 milestone: m-1
 dependencies: []
@@ -31,3 +32,9 @@ Reproduce by running any pipeline stage that leaves an uncommitted file, or by r
 - [ ] #3 A stage refused for a moved HEAD reports both shas
 - [ ] #4 The stage judge's harness-failure evidence carries that detail, so a judge never has to infer which condition occurred
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-05: premise re-verified at HEAD. The two raise sites are now at target.ts:223 and :257 (were 214/248), moved by intervening commits; same two sites, same message, unchanged in substance.
+<!-- SECTION:NOTES:END -->

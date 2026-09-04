@@ -4,6 +4,7 @@ title: list runs cannot see a stopped run and prints a raw ENOENT for it
 status: To Do
 assignee: []
 created_date: '2026-09-04 02:14'
+updated_date: '2026-09-04 23:01'
 labels: []
 milestone: m-1
 dependencies: []
@@ -32,3 +33,9 @@ Same class as ACT-40 (list attempts prints raw ENOENT for empty attempt director
 - [ ] #2 show on that run id prints the record that exists on disk
 - [ ] #3 No raw filesystem error reaches the operator from either command for a run whose record exists
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-05: acceptance #1 re-verified live. `./rehearsal.ts list runs` on this checkout prints raw ENOENT for both stopped runs now on disk (2026-09-04T02-09-23.870Z and 2026-09-04T17-34-35.900Z), unchanged from the card's 2026-09-04 observation. Independent of ACT-63/64, which were filed after this card and touch a different failure class on the same milestone path.
+<!-- SECTION:NOTES:END -->
