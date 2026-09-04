@@ -4,7 +4,7 @@ title: name what the design shows that the harness cannot yet supply
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 13:01'
+updated_date: '2026-09-04 13:10'
 labels: []
 milestone: m-4
 dependencies:
@@ -38,3 +38,26 @@ This card produces the inventory, not the fixes. Each real gap becomes its own c
 - [ ] #2 Each not-recorded item names the card that would supply it, existing or newly filed
 - [ ] #3 The live-run gap states specifically what a UI would have to read to show a run in progress, since nothing on disk answers that today
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-04, after ACT-47 landed the export. This card was written from screenshots of one screen and says so ("the three run-detail layouts and the two comparison layouts were not inspectable"). docs/design-handoff/SPEC.md now specifies all nine screens in text, so the inventory can be complete rather than partial.
+
+Gaps the spec names that this card could not see. Not a replacement for the card's own list, an addition to it:
+
+- Judge cost per step, shown as "independent session · $0.08" in the judge pane. This is ACT-43, and the spec makes it visible rather than merely recorded, which raises its priority.
+- A per-file read manifest per step, with each instruction file's ROLE: project instructions / step skill / judge rubric / read for context, plus its hash and whether it changed since the run. The harness records corpus files with hashes; the role classification does not exist.
+- Cited evidence with a source kind (transcript / diff / instruction), a locator that opens the file (session.jsonl:1284, src/auth/tokens.ts +38 -12, skills/implement.md:43), and the quoted span itself. The spec stores only cited spans and links out for the rest.
+- Contribution phrases per step ("brief the later steps read", "named 2 files to touch").
+- Culprit analysis: an agent reading the recorded steps and naming a probable cause, carrying its own cost, duration, and timestamp, explicitly labeled as opinion rather than measurement. Does not exist in any form.
+- Per-dimension judge drift ("judge +0.7 steps", "agrees") on the calibration screen. Judge-vs-human agreement accumulates from ACT-7; whether it resolves per dimension is unverified.
+- Word count per attempt, shown beside cost in the comparison arm cards. The spec says this placement is deliberate: it is how verbosity gets caught.
+- Wall-clock per run and per step.
+- Checkpoint ids in the form ckpt-0148-s1.
+- Spread across attempts rendered as an interval, and a "reading" verdict per measure (inside rerun noise / fires less often / clearest movement).
+
+Two spec rules that constrain how a gap may be closed, worth carrying into the inventory:
+- A task that stopped early is NOT gradable at task level. Show a dash with the reason, never a zero and never an error.
+- An attribution claim is legitimate only when exactly one instruction file hash differs between arms. If more than one differs, the UI must say so and refuse the claim.
+<!-- SECTION:NOTES:END -->
