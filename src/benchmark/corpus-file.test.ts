@@ -36,10 +36,13 @@ describe(resolveCorpusFile.name, () => {
 		);
 	});
 
-	it("resolves a chezmoi render's CLAUDE.md where the render keeps it", () => {
+	it("resolves a directory source's CLAUDE.md at the root of corpus layout", () => {
 		expect(
-			resolveCorpusFile({ kind: "chezmoi", root: "/render" }, "CLAUDE.md"),
-		).toBe("/render/.claude/CLAUDE.md");
+			resolveCorpusFile(
+				{ kind: "directory", root: "/variants/brief" },
+				"CLAUDE.md",
+			),
+		).toBe("/variants/brief/CLAUDE.md");
 	});
 
 	it("refuses a path that is not a corpus layout path, naming it", () => {

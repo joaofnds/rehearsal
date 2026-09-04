@@ -96,29 +96,6 @@ describe("sessionAttemptRecordSchema", () => {
 	 * compiler refuses this literal in typed code, which is the same guarantee
 	 * one layer earlier.
 	 */
-	/**
-	 * Criterion 8 exists so two runs at one chezmoi ref are comparable and a
-	 * moved ref is visible, which nothing in the record could show while the
-	 * origin lived only in memory.
-	 */
-	it("carries the chezmoi origin's ref and resolved commit", () => {
-		const parsed = sessionAttemptRecordSchema.parse(
-			record({
-				corpusOrigin: {
-					kind: "chezmoi",
-					ref: "HEAD",
-					commit: "0".repeat(40),
-				},
-			}),
-		);
-
-		expect(parsed.corpusOrigin).toEqual({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "0".repeat(40),
-		});
-	});
-
 	it("carries a directory origin's source", () => {
 		expect(
 			sessionAttemptRecordSchema.parse(
@@ -139,12 +116,19 @@ describe("sessionAttemptRecordSchema", () => {
 		).toBeUndefined();
 	});
 
-	it("refuses a chezmoi origin whose commit is not a sha", () => {
-		const parsed = sessionAttemptRecordSchema.safeParse(
-			record({
-				corpusOrigin: { kind: "chezmoi", ref: "HEAD", commit: "not-a-sha" },
-			}),
-		);
+	/**
+	 * An origin names where the bytes came from, not what produced them. No
+	 * record on disk has ever carried a producing tool, so the schema refuses
+	 * one rather than keeping a parse path for a record that never existed. A
+	 * record on disk is data, so the kind arrives as an unchecked string; the
+	 * compiler refuses this shape in typed code, which is the same guarantee one
+	 * layer earlier.
+	 */
+	it("refuses an origin naming the tool that produced the corpus", () => {
+		const parsed = sessionAttemptRecordSchema.safeParse({
+			...record(),
+			corpusOrigin: { kind: "chezmoi", ref: "HEAD", commit: "0".repeat(40) },
+		});
 
 		expect(parsed.success).toBe(false);
 	});

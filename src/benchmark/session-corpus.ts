@@ -1,7 +1,7 @@
 import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
-import { corpusLayoutEntries, discardRender } from "./corpus-source";
+import { corpusLayoutEntries } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
 
 export class SessionCorpusError extends Error {
@@ -11,7 +11,7 @@ export class SessionCorpusError extends Error {
 /**
  * The one directory a session attempt's corpus bytes are read from, for
  * hashing and for installing alike. Its shape is corpus layout, so a reader
- * cannot tell whether the bytes were rendered, copied, or already installed.
+ * cannot tell whether the bytes were copied or already installed.
  * It carries the paths the case declared because a source holds files no case
  * named, and installing or selecting one of those would run the attempt
  * against a corpus it never declared.
@@ -48,10 +48,10 @@ export function stageCorpusRefusal(corpus: string): SessionCorpusError {
 }
 
 /**
- * A rendered source carries the whole corpus, most of which no case reads, so
- * the refusal keys on what the case declared: a skill the case does not name is
- * never reported, and refusing on its presence would make a chezmoi source
- * unusable for the styles and agents that do get delivered.
+ * A source carries the whole corpus, most of which no case reads, so the
+ * refusal keys on what the case declared: a skill the case does not name is
+ * never reported, and refusing on its presence would make a source unusable for
+ * the styles and agents that do get delivered.
  */
 function refuseDeclaredSkills(declaredPaths: readonly string[]): void {
 	const skill = declaredPaths.find((layoutPath) =>
@@ -65,9 +65,6 @@ function refuseDeclaredSkills(declaredPaths: readonly string[]): void {
 }
 
 function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {
-	if (source.kind === "chezmoi") {
-		return { kind: "chezmoi", ref: source.ref, commit: source.commit };
-	}
 	if (source.kind === "directory") {
 		return { kind: "directory", source: source.root };
 	}
@@ -89,14 +86,8 @@ export async function snapshotSessionCorpus(
 		return snapshotOf(source, source.root, declaredPaths);
 	}
 
-	try {
-		refuseDeclaredSkills(declaredPaths);
-		await copyDeclared(source, destination, declaredPaths);
-	} finally {
-		if (source.kind === "chezmoi") {
-			await discardRender(source);
-		}
-	}
+	refuseDeclaredSkills(declaredPaths);
+	await copyDeclared(source, destination, declaredPaths);
 
 	return snapshotOf(source, destination, declaredPaths);
 }

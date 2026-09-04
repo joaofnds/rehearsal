@@ -245,7 +245,7 @@ describe("the corpus source flag", () => {
 			const help = commandHelp(command ?? exampleCommand);
 
 			expect(help).toContain("--corpus");
-			expect(help).toContain("chezmoi:<ref>");
+			expect(help).toContain("directory in corpus layout");
 		},
 	);
 

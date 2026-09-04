@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CorpusSourceDependencies } from "#benchmark/corpus-source";
-import { pathExists } from "#benchmark/file-presence";
 import {
 	directorySource,
 	RecordedRunsFixture,
@@ -13,65 +11,6 @@ import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runStale } from "#cli/stale-command";
 
 const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
-
-interface RecordedRunner {
-	readonly dependencies: CorpusSourceDependencies;
-	readonly commands: readonly (readonly string[])[];
-}
-
-/**
- * `stale` must reach no provider and no git, so the one command seam it could
- * use is faked and asserted empty rather than left to the real runner.
- */
-function refusingRunner(): RecordedRunner {
-	const commands: (readonly string[])[] = [];
-
-	return {
-		commands,
-		dependencies: {
-			runCommand: (command) => {
-				commands.push(command);
-
-				return Promise.reject(new Error("stale ran a command"));
-			},
-			dotfilesDirectory: "/nowhere",
-		},
-	};
-}
-
-interface RenderingRunner {
-	readonly dependencies: CorpusSourceDependencies;
-	readonly rendered: readonly string[];
-}
-
-/**
- * A chezmoi render without chezmoi: `git rev-parse` answers a commit and the
- * archive and apply do nothing, which leaves the two scratch directories
- * `renderChezmoi` created exactly as a real render would.
- */
-function renderingRunner(): RenderingRunner {
-	const rendered: string[] = [];
-
-	return {
-		rendered,
-		dependencies: {
-			runCommand: (command, cwd) => {
-				if (command[0] === "git") {
-					return Promise.resolve(`${"0".repeat(40)}\n`);
-				}
-				if (command[0] === "chezmoi") {
-					rendered.push(
-						command[command.indexOf("--source") + 1] ?? "",
-						command[command.indexOf("--destination") + 1] ?? "",
-					);
-				}
-
-				return Promise.resolve(cwd === "" ? "" : "");
-			},
-			dotfilesDirectory: "/nowhere",
-		},
-	};
-}
 
 async function treeOf(root: string): Promise<readonly string[]> {
 	const entries = await readdir(root, { recursive: true });
@@ -129,7 +68,6 @@ describe(runStale.name, () => {
 		const fixture = await fixtureRecordedAgainst(
 			await corpusDirectory("build skill\n"),
 		);
-		const runner = refusingRunner();
 		const recorder = recordOutput();
 
 		await runStale(
@@ -137,7 +75,7 @@ describe(runStale.name, () => {
 				corpus: await corpusDirectory("build skill, edited\n"),
 				runsDirectory: fixture.runsDirectory,
 			},
-			{ output: recorder.output, corpusSource: runner.dependencies },
+			{ output: recorder.output },
 		);
 
 		const printed = recorder.stdout.join("").trimEnd().split("\n");
@@ -158,7 +96,7 @@ describe(runStale.name, () => {
 				corpus,
 				runsDirectory: fixture.runsDirectory,
 			},
-			{ output: recorder.output, corpusSource: refusingRunner().dependencies },
+			{ output: recorder.output },
 		);
 
 		expect(recorder.stdout).toEqual([]);
@@ -180,7 +118,7 @@ describe(runStale.name, () => {
 				corpus: edited,
 				runsDirectory: fixture.runsDirectory,
 			},
-			{ output: recorder.output, corpusSource: refusingRunner().dependencies },
+			{ output: recorder.output },
 		);
 
 		// An output style joins every stage's corpus, the same as a global
@@ -200,7 +138,6 @@ describe(runStale.name, () => {
 		const fixture = await fixtureRecordedAgainst(
 			await corpusDirectory("build skill\n"),
 		);
-		const runner = refusingRunner();
 		const before = await treeOf(fixture.runsDirectory);
 
 		await runStale(
@@ -208,10 +145,9 @@ describe(runStale.name, () => {
 				corpus,
 				runsDirectory: fixture.runsDirectory,
 			},
-			{ output: recordOutput().output, corpusSource: runner.dependencies },
+			{ output: recordOutput().output },
 		);
 
-		expect(runner.commands).toEqual([]);
 		expect(await treeOf(fixture.runsDirectory)).toEqual(before);
 	});
 
@@ -228,10 +164,7 @@ describe(runStale.name, () => {
 					effort: undefined,
 					runsDirectory: fixture.runsDirectory,
 				},
-				{
-					output: recorder.output,
-					corpusSource: refusingRunner().dependencies,
-				},
+				{ output: recorder.output },
 			);
 
 			const printed = recorder.stdout.join("").trimEnd().split("\n");
@@ -256,10 +189,7 @@ describe(runStale.name, () => {
 					corpus: await corpusDirectory("build skill, edited\n"),
 					runsDirectory: fixture.runsDirectory,
 				},
-				{
-					output: recorder.output,
-					corpusSource: refusingRunner().dependencies,
-				},
+				{ output: recorder.output },
 			);
 
 			expect(
@@ -293,10 +223,7 @@ describe(runStale.name, () => {
 
 			await runStale(
 				{ corpus: styles, runsDirectory: root },
-				{
-					output: recorder.output,
-					corpusSource: refusingRunner().dependencies,
-				},
+				{ output: recorder.output },
 			);
 
 			expect(recorder.stdout.join("").trimEnd().split("\n")).toEqual([
@@ -318,10 +245,7 @@ describe(runStale.name, () => {
 				const failure = await failureOf(
 					runStale(
 						{ corpus: styles, runsDirectory: fixture.runsDirectory },
-						{
-							output: recorder.output,
-							corpusSource: refusingRunner().dependencies,
-						},
+						{ output: recorder.output },
 					),
 				);
 
@@ -347,42 +271,14 @@ describe(runStale.name, () => {
 				["output-styles/brief.md"],
 			);
 			const recorder = recordOutput();
-			const runner = refusingRunner();
 
 			await runStale(
 				{ corpus: undefined, runsDirectory: root },
-				{ output: recorder.output, corpusSource: runner.dependencies },
+				{ output: recorder.output },
 			);
 
-			expect(runner.commands).toEqual([]);
 			expect(recorder.stdout.join("")).toContain("case:smoke");
 			expect(recorder.stdout.join("")).toContain("output-styles/brief.md");
-		});
-	});
-
-	describe("when --corpus names a chezmoi ref", () => {
-		it("leaves neither scratch directory behind", async () => {
-			const root = await temporaryDirectory("rehearsal-stale-chezmoi-");
-			const fixture = new RecordedRunsFixture(root);
-			await fixture.writeAttemptReading(
-				await corpusDirectory("build skill\n"),
-				"smoke",
-				["output-styles/brief.md"],
-			);
-			const scratch = renderingRunner();
-
-			await runStale(
-				{ corpus: "chezmoi:HEAD", runsDirectory: root },
-				{
-					output: recordOutput().output,
-					corpusSource: scratch.dependencies,
-				},
-			);
-
-			expect(scratch.rendered).toHaveLength(2);
-			for (const directory of scratch.rendered) {
-				expect(await pathExists(directory)).toBe(false);
-			}
 		});
 	});
 
@@ -401,10 +297,7 @@ describe(runStale.name, () => {
 						effort: undefined,
 						runsDirectory: fixture.runsDirectory,
 					},
-					{
-						output: recorder.output,
-						corpusSource: refusingRunner().dependencies,
-					},
+					{ output: recorder.output },
 				),
 			);
 

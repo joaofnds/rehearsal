@@ -845,12 +845,9 @@ describe(stageCorpusRoots.name, () => {
 		);
 	});
 
-	it.each(["directory", "chezmoi"] as const)(
-		"searches only the resolved root for a %s corpus",
-		(kind) => {
-			expect(stageCorpusRoots({ kind, root: "/variants/brief" })).toEqual([
-				"/variants/brief",
-			]);
-		},
-	);
+	it("searches only the resolved root for a directory corpus", () => {
+		expect(
+			stageCorpusRoots({ kind: "directory", root: "/variants/brief" }),
+		).toEqual(["/variants/brief"]);
+	});
 });

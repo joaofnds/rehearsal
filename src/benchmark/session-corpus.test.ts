@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
-import { pathExists } from "#benchmark/file-presence";
-import type { ChezmoiCorpusSource } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
@@ -16,16 +14,6 @@ import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
 const resources = TestResources.forEachTest();
-
-function chezmoiSource(root: string): ChezmoiCorpusSource {
-	return {
-		kind: "chezmoi",
-		ref: "HEAD",
-		commit: "abc123",
-		root,
-		sourceDirectory: root,
-	};
-}
 
 async function directoryCorpus(
 	files: Readonly<Record<string, string>>,
@@ -87,141 +75,6 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(after[0]?.sha256).toBe(sha256Of("variant brief\n"));
 	});
 
-	it("snapshots the CLAUDE.md a chezmoi render carries", async () => {
-		const rendered = await resources.createControlDirectory();
-		await Bun.write(
-			join(rendered, ".claude/CLAUDE.md"),
-			"rendered instructions\n",
-		);
-		const destination = await resources.createControlDirectory();
-
-		const snapshot = await snapshotSessionCorpus(
-			chezmoiSource(rendered),
-			join(destination, "corpus"),
-			["CLAUDE.md"],
-		);
-
-		expect(await Bun.file(join(snapshot.root, "CLAUDE.md")).text()).toBe(
-			"rendered instructions\n",
-		);
-	});
-
-	/**
-	 * The dotfiles render `.claude/CLAUDE.md` as a link into the live
-	 * `~/.agents`, so copying it would snapshot the live install while the
-	 * record says it snapshotted the ref.
-	 */
-	it("refuses a chezmoi render whose CLAUDE.md is a symlink", async () => {
-		const rendered = await resources.createControlDirectory();
-		await Bun.write(join(rendered, ".agents/AGENTS.md"), "live instructions\n");
-		await mkdir(join(rendered, ".claude"), { recursive: true });
-		await symlink(
-			join(rendered, ".agents/AGENTS.md"),
-			join(rendered, ".claude/CLAUDE.md"),
-		);
-		const destination = await resources.createControlDirectory();
-
-		const failure = await failureOf(
-			snapshotSessionCorpus(
-				chezmoiSource(rendered),
-				join(destination, "corpus"),
-				["CLAUDE.md"],
-			),
-		);
-
-		expect(failure).toBeInstanceOf(SessionCorpusError);
-		expect(failure.message).toContain("CLAUDE.md");
-		expect(failure.message).toContain("symlink");
-	});
-
-	/**
-	 * A chezmoi render is the whole home layout, so leaving one behind puts a
-	 * copy of João's home tree in $TMPDIR after every run.
-	 */
-	it("deletes the chezmoi render once its bytes are in the snapshot", async () => {
-		const rendered = await resources.createControlDirectory();
-		await Bun.write(
-			join(rendered, ".claude/output-styles/brief.md"),
-			"rendered brief\n",
-		);
-		const sourceDirectory = await resources.createControlDirectory();
-		const destination = await resources.createControlDirectory();
-
-		await snapshotSessionCorpus(
-			{
-				kind: "chezmoi",
-				ref: "HEAD",
-				commit: "abc123",
-				root: rendered,
-				sourceDirectory,
-			},
-			join(destination, "corpus"),
-			[],
-		);
-
-		expect(await pathExists(rendered)).toBe(false);
-		expect(await pathExists(sourceDirectory)).toBe(false);
-	});
-
-	/**
-	 * A render is the whole home layout, so a refusal that keeps it leaves a copy
-	 * of the home tree in the temporary directory after every refused run.
-	 */
-	it("deletes the chezmoi render even when the snapshot is refused", async () => {
-		const rendered = await resources.createControlDirectory();
-		await Bun.write(
-			join(rendered, ".agents/skills/style/SKILL.md"),
-			"a variant skill the harness cannot deliver\n",
-		);
-		const sourceDirectory = await resources.createControlDirectory();
-		const destination = await resources.createControlDirectory();
-
-		const failure = await failureOf(
-			snapshotSessionCorpus(
-				{
-					kind: "chezmoi",
-					ref: "HEAD",
-					commit: "abc123",
-					root: rendered,
-					sourceDirectory,
-				},
-				join(destination, "corpus"),
-				["skills/style/SKILL.md"],
-			),
-		);
-
-		expect(failure).toBeInstanceOf(SessionCorpusError);
-		expect(await pathExists(rendered)).toBe(false);
-		expect(await pathExists(sourceDirectory)).toBe(false);
-	});
-
-	it("records the chezmoi source's resolved commit on the snapshot", async () => {
-		const rendered = await resources.createControlDirectory();
-		await Bun.write(
-			join(rendered, ".claude/output-styles/brief.md"),
-			"rendered brief\n",
-		);
-		const destination = await resources.createControlDirectory();
-
-		const snapshot = await snapshotSessionCorpus(
-			{
-				kind: "chezmoi",
-				ref: "HEAD",
-				commit: "abc123",
-				root: rendered,
-				sourceDirectory: rendered,
-			},
-			join(destination, "corpus"),
-			[],
-		);
-
-		expect(snapshot.origin).toEqual({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc123",
-		});
-	});
-
 	it("refuses a declared skill the harness cannot deliver, naming the skill and ACT-28", async () => {
 		const root = await directoryCorpus({
 			"skills/style/SKILL.md": "a variant skill the harness cannot deliver\n",
@@ -242,10 +95,10 @@ describe(snapshotSessionCorpus.name, () => {
 	});
 
 	/**
-	 * A rendered chezmoi tree carries every skill in the corpus, and refusing on
-	 * their presence would make chezmoi:<ref> unusable for the styles and agents
-	 * the harness can deliver. What must not happen is reporting a skill result,
-	 * and a skill the case does not declare is never reported.
+	 * A corpus source carries every skill in the corpus, and refusing on their
+	 * presence would make a source unusable for the styles and agents the harness
+	 * can deliver. What must not happen is reporting a skill result, and a skill
+	 * the case does not declare is never reported.
 	 */
 	it("carries a skill the case does not declare without refusing, and installs none of it", async () => {
 		const root = await directoryCorpus({
@@ -319,36 +172,6 @@ describe(snapshotSessionCorpus.name, () => {
 
 		expect(failure).toBeInstanceOf(SessionCorpusError);
 		expect(failure.message).toContain("leak.md");
-	});
-
-	it("never reads through a .claude symlink in a rendered tree", async () => {
-		const rendered = await resources.createControlDirectory();
-		const live = await directoryCorpus({
-			"style/SKILL.md": "the live skill\n",
-		});
-		await Bun.write(
-			join(rendered, ".claude/output-styles/brief.md"),
-			"rendered brief\n",
-		);
-		await mkdir(join(rendered, ".claude"), { recursive: true });
-		await symlink(live, join(rendered, ".claude/skills"));
-		const destination = await resources.createControlDirectory();
-
-		const snapshot = await snapshotSessionCorpus(
-			{
-				kind: "chezmoi",
-				ref: "HEAD",
-				commit: "abc123",
-				root: rendered,
-				sourceDirectory: rendered,
-			},
-			join(destination, "corpus"),
-			[],
-		);
-
-		expect(
-			await Bun.file(join(snapshot.root, "skills/style/SKILL.md")).exists(),
-		).toBe(false);
 	});
 });
 

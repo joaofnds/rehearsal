@@ -86,7 +86,7 @@ const corpusFlag: FlagDefinition = {
 	name: "--corpus",
 	kind: "value",
 	defaultValue: "the live install",
-	help: "Corpus under test: a directory in corpus layout, or chezmoi:<ref> rendered into a scratch destination",
+	help: "Corpus under test: a directory in corpus layout",
 };
 
 const confirmationFlags: readonly FlagDefinition[] = [
@@ -452,8 +452,8 @@ export function asUsageError<Parsed>(parse: () => Parsed): Parsed {
 }
 
 /**
- * Parsing a corpus source reads the filesystem to tell a directory from a
- * chezmoi ref, so its rejection arrives as a rejected promise rather than a
+ * Parsing a corpus source reads the filesystem to tell whether the directory
+ * holds a corpus, so its rejection arrives as a rejected promise rather than a
  * throw; at this boundary it is the same usage error.
  */
 export async function asUsageErrorAsync<Parsed>(

@@ -1,13 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { homedir, tmpdir } from "node:os";
-import { mkdir, symlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "#benchmark/command";
 import { resolveCorpusFile } from "#benchmark/corpus-file";
-import type {
-	ChezmoiCorpusSource,
-	CommandRunner,
-} from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
 	corpusLayoutEntries,
@@ -51,7 +45,7 @@ describe("refusing a source that names no corpus", () => {
 
 		expect(failure).toBeInstanceOf(CorpusSourceError);
 		expect(failure.message).toContain("/no/such/corpus/directory");
-		expect(failure.message).toContain("chezmoi:<ref>");
+		expect(failure.message).toContain("directory in corpus layout");
 	});
 
 	it("refuses a directory holding none of the corpus layout entries, naming the root", async () => {
@@ -76,12 +70,21 @@ describe("refusing a source that names no corpus", () => {
 		},
 	);
 
-	it("refuses chezmoi: with no ref, naming the source", async () => {
-		const failure = await failureOf(resolveCorpusSource("chezmoi:"));
+	/**
+	 * A corpus source is a directory in corpus layout, so a string naming a tool
+	 * that produces one is refused the same way any other non-directory is: the
+	 * harness reads a corpus without knowing what rendered it.
+	 */
+	it.each(["chezmoi:HEAD", "chezmoi:"])(
+		"refuses %p, naming the source and what a corpus source is",
+		async (source) => {
+			const failure = await failureOf(resolveCorpusSource(source));
 
-		expect(failure).toBeInstanceOf(CorpusSourceError);
-		expect(failure.message).toContain("chezmoi:");
-	});
+			expect(failure).toBeInstanceOf(CorpusSourceError);
+			expect(failure.message).toContain(source);
+			expect(failure.message).toContain("directory in corpus layout");
+		},
+	);
 });
 
 describe("resolving a corpus file against a source", () => {
@@ -106,370 +109,36 @@ describe("resolving a corpus file against a source", () => {
 	});
 });
 
-interface RecordedCommand {
-	readonly command: readonly string[];
-	readonly cwd: string;
-}
-
-/**
- * The real shell decides whether a pipeline failed, so `fails` is how a test
- * says which command the shell would have returned nonzero for: `runCommand`
- * turns a nonzero exit into a rejection, and that is what the fake reproduces.
- */
-class FakeCommandRunner {
-	public readonly commands: RecordedCommand[] = [];
-
-	public constructor(
-		private readonly outputs: ReadonlyMap<string, string>,
-		private readonly fails: (command: readonly string[]) => boolean = () =>
-			false,
-	) {}
-
-	public readonly run = (
-		command: readonly string[],
-		cwd: string,
-	): Promise<string> => {
-		this.commands.push({ command: [...command], cwd });
-
-		if (this.fails(command)) {
-			return Promise.reject(new Error("git archive failed: exit 129"));
-		}
-
-		return Promise.resolve(this.outputs.get(command[0] ?? "") ?? "");
-	};
-}
-
-const RESOLVED_COMMIT = "0123456789abcdef0123456789abcdef01234567";
-
-describe("rendering a chezmoi corpus source", () => {
-	function runner(): FakeCommandRunner {
-		return new FakeCommandRunner(new Map([["git", `${RESOLVED_COMMIT}\n`]]));
-	}
-
-	async function rendered(
-		source: string,
-		run: CommandRunner,
-	): Promise<ChezmoiCorpusSource> {
-		const resolved = await resolveCorpusSource(source, {
-			runCommand: run,
-			dotfilesDirectory: "/dotfiles",
-		});
-		if (resolved.kind !== "chezmoi") {
-			throw new Error(`Expected a chezmoi source, got ${resolved.kind}`);
-		}
-
-		return resolved;
-	}
-
-	it("archives the ref into a scratch source and applies it with both exclusions and no --verbose", async () => {
-		const fake = runner();
-
-		const source = await rendered("chezmoi:HEAD~1", fake.run);
-		resources.track(source.root);
-		resources.track(source.sourceDirectory);
-
-		const commands = fake.commands.map((recorded) => recorded.command);
-		const archive = commands.find((command) => command[0] === "sh");
-		const apply = commands.find((command) => command[0] === "chezmoi");
-		expect(archive).toEqual([
-			"sh",
-			"-c",
-			`set -o pipefail; git -C '/dotfiles' archive 'HEAD~1' | tar -x -C '${source.sourceDirectory}'`,
-		]);
-		expect(apply).toEqual([
-			"chezmoi",
-			"apply",
-			"--source",
-			source.sourceDirectory,
-			"--destination",
-			source.root,
-			"--exclude",
-			"encrypted,scripts",
-		]);
-		expect(apply?.includes("--verbose")).toBe(false);
-	});
-
-	async function archiveCommand(ref: string): Promise<string> {
-		const fake = runner();
-
-		const source = await rendered(`chezmoi:${ref}`, fake.run);
-		resources.track(source.root);
-		resources.track(source.sourceDirectory);
-
-		const archive = fake.commands
-			.map((recorded) => recorded.command)
-			.find((command) => command[0] === "sh");
-
-		return archive?.[2] ?? "";
-	}
-
-	/**
-	 * The assertion that matters is not the string the harness builds but what a
-	 * shell does with it, so a real `sh` reads it back: a ref survives quoting
-	 * when the shell hands `printf` those exact bytes as one argument. Every
-	 * value here carries a metacharacter the escaping exists for, and the last
-	 * three carry the single quote a naive `\'${value}\'` would close.
-	 */
-	it.each([
-		"HEAD",
-		"HEAD~1",
-		"HEAD; touch /tmp/pwned",
-		"HEAD && touch /tmp/pwned",
-		"HEAD$(touch /tmp/pwned)",
-		"HEAD`touch /tmp/pwned`",
-		"HEAD'; touch /tmp/pwned; '",
-		"HEAD' | tar -x -C /tmp '",
-		String.raw`HEAD'\''`,
-	])(
-		"passes the ref %p through a real shell as those exact bytes",
-		async (ref) => {
-			const command = await archiveCommand(ref);
-			const quoted = command.slice(
-				command.indexOf("archive ") + "archive ".length,
-				command.lastIndexOf(" | tar -x -C "),
-			);
-
-			const roundTripped = await runCommand(
-				["sh", "-c", `printf %s ${quoted}`],
-				tmpdir(),
-			);
-
-			expect(roundTripped).toBe(ref);
-		},
-	);
-
-	/**
-	 * A ref carrying its own single quote is where a naive quoting breaks: it
-	 * closes the quote at that byte and the rest of the ref reaches the shell as
-	 * syntax, so the pipeline runs a command the ref chose.
-	 */
-	it("never lets a ref's own quote end the quoting and start a command", async () => {
-		const command = await archiveCommand("HEAD'; touch /tmp/pwned; '");
-
-		const outside = command
-			.slice(
-				command.indexOf("archive ") + "archive ".length,
-				command.lastIndexOf(" | tar -x -C "),
-			)
-			.replaceAll(`'\\''`, "");
-		expect(outside?.startsWith("'")).toBe(true);
-		expect(outside?.endsWith("'")).toBe(true);
-		expect(outside?.slice(1, -1)).not.toContain("'");
-	});
-
-	/**
-	 * Criterion 8 records the ref's resolved commit sha, and an unvalidated
-	 * `rev-parse` result is whatever git echoed back: under the option
-	 * injection it was the literal `--output=<path>`.
-	 */
-	it.each(["--output=/tmp/victim.txt", "not a sha", "abc123", ""])(
-		"refuses %p as a resolved commit, which is not a sha",
-		async (resolved) => {
-			const fake = new FakeCommandRunner(new Map([["git", `${resolved}\n`]]));
-
-			const failure = await failureOf(
-				resolveCorpusSource("chezmoi:HEAD", {
-					runCommand: fake.run,
-					dotfilesDirectory: "/dotfiles",
-				}),
-			);
-
-			expect(failure).toBeInstanceOf(CorpusSourceError);
-			expect(failure.message).toContain("HEAD");
-		},
-	);
-
-	/**
-	 * `tar` succeeds on an empty stream, so without `pipefail` the pipeline
-	 * reports tar's exit code and a failed archive renders an empty tree that
-	 * the attempt then measures and records lineage over.
-	 */
-	it("fails the render when the archive step fails, rather than reporting tar's success", async () => {
-		const fake = new FakeCommandRunner(
-			new Map([["git", `${RESOLVED_COMMIT}\n`]]),
-			(command) =>
-				command[0] === "sh" &&
-				(command[2] ?? "").startsWith("set -o pipefail; "),
-		);
-
-		const failure = await failureOf(
-			resolveCorpusSource("chezmoi:HEAD", {
-				runCommand: fake.run,
-				dotfilesDirectory: "/dotfiles",
-			}),
-		);
-
-		expect(failure.message).toContain("archive failed");
-	});
-
-	it("makes the pipeline's own failure the shell's exit status", async () => {
-		const fake = runner();
-
-		const source = await rendered("chezmoi:HEAD", fake.run);
-		resources.track(source.root);
-		resources.track(source.sourceDirectory);
-
-		const archive = fake.commands
-			.map((recorded) => recorded.command)
-			.find((command) => command[0] === "sh");
-		expect(archive?.[2]).toStartWith("set -o pipefail; ");
-	});
-
-	/**
-	 * `git archive` parses its ref as an option, so a ref opening with a dash
-	 * reaches argv as `--output=<path>` and truncates that file before failing.
-	 * `git rev-parse` echoes such a string back and exits 0, so resolving it
-	 * first does not catch it.
-	 */
-	it.each([
-		"--output=/tmp/rehearsal-victim.txt",
-		"--add-file=/etc/passwd",
-		"--add-virtual-file=x:y",
-		"-o/tmp/rehearsal-victim.txt",
-	])("refuses the ref %s, which git would read as an option", async (ref) => {
-		const fake = runner();
-
-		const failure = await failureOf(
-			resolveCorpusSource(`chezmoi:${ref}`, {
-				runCommand: fake.run,
-				dotfilesDirectory: "/dotfiles",
-			}),
-		);
-
-		expect(failure).toBeInstanceOf(CorpusSourceError);
-		expect(failure.message).toContain(ref);
-		expect(fake.commands).toEqual([]);
-	});
-
-	it("resolves the ref to a commit, so a ref naming no commit is refused", async () => {
-		const fake = runner();
-
-		const source = await rendered("chezmoi:HEAD", fake.run);
-		resources.track(source.root);
-		resources.track(source.sourceDirectory);
-
-		expect(
-			fake.commands
-				.map((recorded) => recorded.command)
-				.find((command) => command[0] === "git"),
-		).toEqual([
-			"git",
-			"-C",
-			"/dotfiles",
-			"rev-parse",
-			"--verify",
-			"--end-of-options",
-			"HEAD^{commit}",
-		]);
-	});
-
-	it("records the ref's resolved commit rather than the ref string", async () => {
-		const fake = runner();
-
-		const source = await rendered("chezmoi:HEAD", fake.run);
-		resources.track(source.root);
-		resources.track(source.sourceDirectory);
-
-		expect(source.kind).toBe("chezmoi");
-		expect(source.ref).toBe("HEAD");
-		expect(source.commit).toBe(RESOLVED_COMMIT);
-	});
-});
-
 describe(corpusLayoutEntries.name, () => {
-	async function renderedHomeTree(): Promise<string> {
+	/**
+	 * A home tree is not corpus layout. The enumerator reads corpus layout and
+	 * nothing else, so a source carrying both a home tree's `.agents/skills` and
+	 * a corpus's `skills` yields only the corpus one.
+	 */
+	it("enumerates the corpus layout entry and not the home tree beside it", async () => {
 		const root = await resources.createControlDirectory();
-		await Bun.write(join(root, ".agents/AGENTS.md"), "global instructions\n");
-		await Bun.write(join(root, ".agents/skills/style/SKILL.md"), "style\n");
-		await Bun.write(join(root, ".agents/agents/reviewer.md"), "reviewer\n");
-		await Bun.write(join(root, ".claude/output-styles/brief.md"), "brief\n");
-		await mkdir(join(root, ".claude"), { recursive: true });
-		await symlink(
-			"/Users/joaofnds/.agents/skills",
-			join(root, ".claude/skills"),
-		);
+		await Bun.write(join(root, ".agents/skills/style/SKILL.md"), "home tree\n");
+		await Bun.write(join(root, "skills/style/SKILL.md"), "corpus\n");
 
-		return root;
-	}
-
-	it("maps the rendered .agents and .claude paths onto corpus layout", async () => {
-		const root = await renderedHomeTree();
-
-		const entries = await corpusLayoutEntries({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc",
-			root,
-			sourceDirectory: root,
-		});
+		const entries = await corpusLayoutEntries(await resolveCorpusSource(root));
 
 		expect(entries).toEqual([
-			{
-				layoutPath: "skills/style",
-				sourcePath: join(root, ".agents/skills/style"),
-			},
-			{
-				layoutPath: "agents/reviewer.md",
-				sourcePath: join(root, ".agents/agents/reviewer.md"),
-			},
-			{
-				layoutPath: "output-styles/brief.md",
-				sourcePath: join(root, ".claude/output-styles/brief.md"),
-			},
+			{ layoutPath: "skills/style", sourcePath: join(root, "skills/style") },
 		]);
 	});
 
-	it("never reads through the .claude/skills symlink into the live corpus", async () => {
-		const root = await renderedHomeTree();
+	/**
+	 * The corpus instructions live at the root of corpus layout. A source keeping
+	 * a CLAUDE.md anywhere else is carrying a file this corpus does not declare.
+	 */
+	it("enumerates no instructions entry for a CLAUDE.md kept under .claude", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "output-styles/brief.md"), "variant\n");
+		await Bun.write(join(root, ".claude/CLAUDE.md"), "home tree\n");
 
-		const entries = await corpusLayoutEntries({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc",
-			root,
-			sourceDirectory: root,
-		});
+		const entries = await corpusLayoutEntries(await resolveCorpusSource(root));
 
-		expect(
-			entries.every(
-				(entry) => !entry.sourcePath.startsWith(join(root, ".claude/skills")),
-			),
-		).toBe(true);
-	});
-
-	it("lists the rendered .claude/CLAUDE.md as the corpus instructions", async () => {
-		const root = await renderedHomeTree();
-		await Bun.write(join(root, ".claude/CLAUDE.md"), "rendered instructions\n");
-
-		const entries = await corpusLayoutEntries({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc",
-			root,
-			sourceDirectory: root,
-		});
-
-		expect(
-			entries.find((entry) => entry.layoutPath === "CLAUDE.md")?.sourcePath,
-		).toBe(join(root, ".claude/CLAUDE.md"));
-	});
-
-	it("lists a symlinked .claude/CLAUDE.md, so the snapshot can refuse it", async () => {
-		const root = await renderedHomeTree();
-		await symlink(
-			join(root, ".agents/AGENTS.md"),
-			join(root, ".claude/CLAUDE.md"),
-		);
-
-		const entries = await corpusLayoutEntries({
-			kind: "chezmoi",
-			ref: "HEAD",
-			commit: "abc",
-			root,
-			sourceDirectory: root,
-		});
-
-		expect(entries.map((entry) => entry.layoutPath)).toContain("CLAUDE.md");
+		expect(entries.map((entry) => entry.layoutPath)).not.toContain("CLAUDE.md");
 	});
 
 	it("lists a directory source's own layout entries", async () => {

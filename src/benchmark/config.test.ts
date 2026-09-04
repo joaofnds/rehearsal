@@ -624,12 +624,12 @@ describe("the corpus source flag", () => {
 
 	it("carries --corpus onto a session run configuration", () => {
 		const config = parseSessionArgs(
-			[...knobs, "--corpus", "chezmoi:HEAD"],
+			[...knobs, "--corpus", "/variants/brief"],
 			{},
 			"smoke",
 		);
 
-		expect(config.corpus).toBe("chezmoi:HEAD");
+		expect(config.corpus).toBe("/variants/brief");
 	});
 
 	it("carries --corpus onto a replay configuration", () => {
@@ -641,12 +641,12 @@ describe("the corpus source flag", () => {
 				"--stage",
 				"build",
 				"--corpus",
-				"chezmoi:HEAD",
+				"/variants/brief",
 			],
 			{},
 		);
 
-		expect(config.corpus).toBe("chezmoi:HEAD");
+		expect(config.corpus).toBe("/variants/brief");
 	});
 
 	it("leaves the corpus absent when --corpus is not given, which is the live install", () => {
