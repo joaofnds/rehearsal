@@ -119,24 +119,23 @@
   its hooks, memory, and MCP are the real ones and nothing installed moves. A
   skill cannot be delivered this way, because a project-level skill does not
   shadow a user-level one.
-- **Corpus snapshot origin** — how a snapshot's bytes were selected, recorded
-  beside them and persisted in the attempt record: the live install, a
-  directory, or a chezmoi ref with the commit that ref resolved to. The commit
-  rather than the ref, because `chezmoi:HEAD` names different bytes on different
-  days and two runs at one ref must be comparable.
+- **Corpus snapshot origin** — where a snapshot's bytes were read from, recorded
+  beside them and persisted in the attempt record: the live install, or the
+  directory the source named. What produced that directory is not recorded,
+  because the harness never learns it.
 - **Corpus source** — where an attempt's corpus bytes come from, named by
-  `--corpus`: a directory already in corpus layout, or `chezmoi:<ref>`, the
-  chezmoi source at that git ref rendered into a scratch destination and mapped
-  onto the layout. Absent `--corpus` the source is the live install. A source is
-  resolved to one snapshot directory before any provider call, and that
-  directory is the single place the bytes are read from for hashing and
-  installing.
+  `--corpus`: a directory already in corpus layout, and nothing else. A corpus
+  that lives somewhere else is rendered to a directory with whatever tool owns
+  it, outside rehearsal, and that directory is passed. Absent `--corpus` the
+  source is the live install. A source is resolved to one snapshot directory
+  before any provider call, and that directory is the single place the bytes are
+  read from for hashing and installing.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
 - **Corpus variant** — one corpus a comparison arm runs against, identified by
-  the snapshot its source resolved to rather than by the source string, so a
-  directory and a chezmoi ref holding the same bytes are the same variant. It is
-  the corpus half of a variant, which also fixes model and effort.
+  the snapshot its source resolved to rather than by the source string, so two
+  directories holding the same bytes are the same variant. It is the corpus half
+  of a variant, which also fixes model and effort.
 - **Delivery stage** — a stage whose artifact is committed code; its
   evidence is a diff, changed paths, check integrity, and local check results.
   Today, `build`.

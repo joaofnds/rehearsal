@@ -501,9 +501,10 @@ usage error rather than a flag that quietly does nothing.
 
 `--corpus` names the corpus under test: a directory already in corpus layout
 (`CLAUDE.md`, `skills/<name>/`, `output-styles/<name>.md`, `agents/<name>.md`),
-or `chezmoi:<ref>`, the chezmoi source at that git ref rendered into a scratch
-destination the run deletes afterwards. Absent `--corpus` the corpus is the live
-install, exactly as before. Either way the source is resolved and snapshotted
+and nothing else. A corpus that lives somewhere else, such as a dotfiles ref, is
+rendered to a directory with whatever tool owns it and that directory is passed;
+rehearsal reads the corpus and does not learn what produced it. Absent
+`--corpus` the corpus is the live install, exactly as before. Either way the source is resolved and snapshotted
 before any provider call, and the snapshot is the only place the bytes are read
 from for hashing and for delivery, so a run against a moving source cannot
 record one corpus and read another.
@@ -655,10 +656,8 @@ The preliminary artifact is written after a valid original Judge result and befo
 ## Reading the Records
 
 `list`, `show`, and `stale` read what is on disk. None of them starts a
-provider session or a worktree, and none of them writes into `.benchmark-runs`.
-`stale --corpus chezmoi:<ref>` is the one exception to writing nothing at all:
-rendering that ref needs two scratch directories under the system temporary
-directory, and the command removes both before it returns.
+provider session or a worktree, none of them writes anything at all, and none of
+them runs a subprocess.
 
 ```sh
 bun run rehearsal list <cases|runs|checkpoints|attempts|groups|comparisons>
