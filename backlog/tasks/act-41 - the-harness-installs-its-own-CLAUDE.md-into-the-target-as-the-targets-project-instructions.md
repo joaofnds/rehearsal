@@ -7,7 +7,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:13'
-updated_date: '2026-09-04 14:49'
+updated_date: '2026-09-04 17:31'
 labels: []
 milestone: m-1
 dependencies: []
@@ -33,11 +33,11 @@ This invalidates any pipeline-case score against a target that is not this repos
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A run against the audit-log case adds no CLAUDE.md to the target tree and creates no 'chore: configure project instructions' commit
-- [ ] #2 A stage's recorded corpus hashes the bytes of the live corpus root's CLAUDE.md, not the control repository's project file
-- [ ] #3 run and replay against a corpus source holding no CLAUDE.md refuse before any provider call, naming the resolved path
-- [ ] #4 resolveCorpusFile returns a path under the source root for layout path CLAUDE.md for every source kind, with no live special case
-- [ ] #5 A session case declaring CLAUDE.md against a chezmoi source is refused as a symlink rather than silently reading the live install
+- [x] #1 A run against the audit-log case adds no CLAUDE.md to the target tree and creates no 'chore: configure project instructions' commit
+- [x] #2 A stage's recorded corpus hashes the bytes of the live corpus root's CLAUDE.md, not the control repository's project file
+- [x] #3 run and replay against a corpus source holding no CLAUDE.md refuse before any provider call, naming the resolved path
+- [x] #4 resolveCorpusFile returns a path under the source root for layout path CLAUDE.md for every source kind, with no live special case
+- [x] #5 A session case declaring CLAUDE.md against a chezmoi source is refused as a symlink rather than silently reading the live install
 - [ ] #6 The audit-log case is re-run and its shape agent reports no contradiction between the instructions and the codebase, and asks no question about the instruction file at completion
 <!-- AC:END -->
 
@@ -59,4 +59,18 @@ Decision for criterion #2, recorded as it asks: a run against a target that decl
 Glossary term to add: Project instructions, the instruction file a repository carries in its own tree for agents working in it, a property of the repository, never installed by the harness, distinct from the corpus's global CLAUDE.md. The existing Corpus entry stays as written.
 
 First test to write: corpus-file.test.ts, resolveCorpusFile with a live source and layout path CLAUDE.md returns join(liveCorpusRoot(), "CLAUDE.md"). It fails today, returning the control repository's path.
+
+Built 2026-09-04. Six commits, a1c610f through 560d788.
+
+What changed. resolveCorpusFile resolves layout path CLAUDE.md under the source root for every source kind; the live special case is gone. A chezmoi render's own .claude/CLAUDE.md is now listed as a corpus entry, so the existing symlink refusal answers for it instead of the snapshot silently substituting the control repository's file. readCorpusInstructions is the one place the corpus instructions are read, with the missing-file refusal staleness-report used to own alone; liveCorpusInstructions wraps it for the commands that take no --corpus. run, replay, and calibrate now read that file rather than the control repository's, so stage lineage hashes the installed CLAUDE.md and calibrate names it as the edit target. installInstructions is deleted: no target gets a CLAUDE.md or a 'chore: configure project instructions' commit, and the task and replay base SHAs come from target.ts currentSha, the checkout's HEAD.
+
+Observed directly, 2026-09-04. createTaskCommit driven against a clone of the real audit-log target (../nest/template): no CLAUDE.md in the tree, git log unchanged at 102e39b, taskSha equal to the target's own HEAD. captureStageCorpus against the live roots records CLAUDE.md sha c2c60cf..., equal to ~/.claude/CLAUDE.md and different from the control repository's e254602.... 'rehearsal stale --corpus <dir without CLAUDE.md>' prints 'Corpus file CLAUDE.md does not exist at /tmp/corpus-no-claude/CLAUDE.md'. liveCorpusInstructions under a HOME with no .claude throws CorpusFileError naming the resolved path, which is the refusal run and replay reach before any provider call.
+
+Checks. bun test 1034 pass 0 fail, lint and typecheck clean over src. fmt:check reports three files under docs/design-handoff/, vendored and unformatted before this task; verified failing at 946919a.
+
+Not verified. Criterion #6 is unchecked: it needs a paid pipeline run of the audit-log case and the shape agent's completion message. Nothing in this task exercised a provider.
+
+Found on the way. Two pre-existing tests in target.test.ts failed at baseline because the fixture repository tracked no .gitignore, so a test writing under backlog/ read as a dirty target; fixed in ed555f3 by moving the .gitignore five call sites wrote by hand into the fixture's base commit.
+
+Filed. ACT-63: stageCorpusRoots and both command sites still search corpusLayoutRoots(CONTROL_DIR), the same control-root assumption one layer down. Latent only, because rehearsal has no .claude directory today.
 <!-- SECTION:NOTES:END -->
