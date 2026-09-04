@@ -4,6 +4,7 @@ import type {
 	RunArtifact,
 	StageJudgeInput,
 	StageJudgeRecord,
+	StageScorecard,
 } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
 
@@ -18,6 +19,7 @@ export interface PendingStage {
 				readonly costUsd: number;
 		  }
 		| undefined;
+	readonly scorecard?: StageScorecard | undefined;
 }
 
 export interface RunAbortDependencies {
@@ -92,6 +94,14 @@ export async function writeStageJudgeFailure(
 	reason: string,
 	persistence: RunArtifactPersistence = fileRunArtifactPersistence,
 ): Promise<void> {
+	const findings = pending.scorecard
+		? {
+				hardBlockers: pending.scorecard.grade.hardBlockers,
+				requirements: pending.scorecard.grade.requirements,
+				dimensions: pending.scorecard.grade.dimensions,
+				summary: pending.scorecard.grade.summary,
+			}
+		: undefined;
 	await persistence.write(
 		pending.file,
 		`${JSON.stringify(
@@ -100,6 +110,7 @@ export async function writeStageJudgeFailure(
 				stage: pending.stage,
 				error: reason,
 				input: pending.input,
+				...findings,
 				...pending.failure,
 			},
 			null,

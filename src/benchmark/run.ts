@@ -740,6 +740,7 @@ export async function runGradedStages(
 		await writeStageRecord(stageRecord);
 		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
+			context.updatePendingStage({ ...pendingStage, scorecard });
 			const calibration = await context.calibrateStageFailure(stageScorecards);
 			if (calibration !== undefined) {
 				const judgeAgreement = await context.collectJudgeAgreement([

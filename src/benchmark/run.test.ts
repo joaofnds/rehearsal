@@ -745,6 +745,91 @@ describe(runGradedStages.name, () => {
 		});
 	});
 
+	it("retains the stopped scorecard on the pending stage for a normal grade failure", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const pendingStages: (PendingStage | undefined)[] = [];
+		const context = {
+			...(await stageContext()),
+			updatePendingStage: (pending: PendingStage) => {
+				pendingStages.push(pending);
+			},
+			calibrateStageFailure: (): Promise<CalibrationResult | undefined> =>
+				Promise.resolve(undefined),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		const outcome = runGradedStages(failing, context);
+
+		expect(outcome).rejects.toThrow("minimum grade is B");
+		await outcome.catch(() => undefined);
+		expect(pendingStages.at(-1)?.scorecard?.grade.verdict).toBe("STOP");
+	});
+
+	it("keeps the judge's findings in the aborted stage artifact after a normal grade failure", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const persistence = new ControlledRunArtifactPersistence();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const context = {
+			...(await stageContext()),
+			writePendingStage: abort.writePendingStage,
+			updatePendingStage: abort.updatePendingStage,
+			writeStageProgress: abort.writeStageProgress,
+			completeStage: abort.completeStage,
+			calibrateStageFailure: (): Promise<CalibrationResult | undefined> =>
+				Promise.resolve(undefined),
+		};
+		let stoppedScorecard: StageScorecard | undefined;
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => {
+				stoppedScorecard = scorecardFor(input, "STOP");
+
+				return Promise.resolve(stoppedScorecard);
+			},
+		};
+
+		const outcome = runGradedStages(failing, context);
+		await outcome.catch(() => undefined);
+		await abort.markAborted("shape stage graded F; minimum grade is B");
+
+		const record: unknown = JSON.parse(
+			persistence.files.get(context.stageFile("shape")) ?? "",
+		);
+		expect(record).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			hardBlockers: stoppedScorecard?.grade.hardBlockers,
+			requirements: stoppedScorecard?.grade.requirements,
+			dimensions: stoppedScorecard?.grade.dimensions,
+			summary: stoppedScorecard?.grade.summary,
+		});
+	});
+
 	function planningStage(
 		name: string,
 		artifact: string,

@@ -340,6 +340,32 @@ describe(writeStageJudgeFailure.name, () => {
 			costUsd: 0.3,
 		});
 	});
+
+	it("carries the scorecard's grade fields when a normal grade failure supplies one", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		testResources.track(directory);
+		const file = join(directory, "discuss.json");
+		const scorecard = stageScorecard("FAIL");
+		const pending: PendingStage = {
+			file,
+			stage: "discuss",
+			input: scorecard.input,
+			scorecard,
+		};
+
+		await writeStageJudgeFailure(pending, "discuss stage graded F");
+
+		expect(JSON.parse(await Bun.file(file).text())).toEqual({
+			status: "STAGE_JUDGE_FAILED",
+			stage: "discuss",
+			error: "discuss stage graded F",
+			input: scorecard.input,
+			hardBlockers: scorecard.grade.hardBlockers,
+			requirements: scorecard.grade.requirements,
+			dimensions: scorecard.grade.dimensions,
+			summary: scorecard.grade.summary,
+		});
+	});
 });
 
 describe(createRunAbort.name, () => {
