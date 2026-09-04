@@ -6,13 +6,25 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 22:48'
-updated_date: '2026-09-04 22:48'
+updated_date: '2026-09-04 22:50'
 labels: []
 dependencies:
   - ACT-65
 type: bug
 ordinal: 64008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Carried from the independent review of ACT-41 and left unresolved by ACT-65's fix.
+
+captureStageCorpus and snapshotStageCorpus (src/benchmark/checkpoint.ts) take instructions as a bare string parameter, while every other corpus kind (skills, agents, output-styles) is resolved from the corpus roots. That asymmetry is what allowed ACT-65's defect to exist: snapshotStageCorpus wrote the instruction bytes into the snapshot while installStageCorpusSnapshot never installed them, so the bytes were hashed into the record and never read by any session. Nothing in the types connected the write to the read.
+
+ACT-65 fixed the missing delivery by copying the snapshot's CLAUDE.md into the worktree's .claude directory. It did not remove the asymmetry, so the same class of defect can recur.
+
+Resolve by resolving instructions from roots like the other kinds, or by documenting the asymmetry as deliberate with the reason.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->

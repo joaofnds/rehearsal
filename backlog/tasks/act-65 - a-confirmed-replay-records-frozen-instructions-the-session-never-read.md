@@ -5,9 +5,11 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 17:47'
-updated_date: '2026-09-04 22:49'
+updated_date: '2026-09-04 22:58'
 labels: []
 dependencies: []
+documentation:
+  - backlog/docs/doc-11 - reflection-ACT-65-2026-09-05.md
 type: bug
 ordinal: 62008
 ---
