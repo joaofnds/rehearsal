@@ -39,17 +39,23 @@ function confinedTo(root: string, layoutPath: string): string {
 	return absolute;
 }
 
-const CORPUS_LAYOUT_PREFIXES: readonly string[] = [
-	"output-styles/",
-	"agents/",
-	"skills/",
-];
-
 /**
  * The corpus's global instruction file, in corpus layout. A repository's own
  * CLAUDE.md is its project instructions and is not this file.
  */
 export const CORPUS_INSTRUCTIONS_PATH = "CLAUDE.md";
+
+/**
+ * The directories corpus layout holds beside the instruction file. Resolving a
+ * declared path, enumerating a source, and deciding whether a directory is a
+ * corpus at all are three readings of this one list, so a source cannot hold a
+ * kind one of them then fails to see.
+ */
+export const CORPUS_LAYOUT_DIRECTORIES: readonly string[] = [
+	"skills",
+	"agents",
+	"output-styles",
+];
 
 /**
  * The one place that knows where a corpus layout path lands. A case names a
@@ -65,8 +71,8 @@ export function resolveCorpusFile(
 		return confinedTo(source.root, CORPUS_INSTRUCTIONS_PATH);
 	}
 
-	for (const prefix of CORPUS_LAYOUT_PREFIXES) {
-		if (layoutPath.startsWith(prefix)) {
+	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {
+		if (layoutPath.startsWith(`${directory}/`)) {
 			return confinedTo(source.root, layoutPath);
 		}
 	}

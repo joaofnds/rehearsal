@@ -1,6 +1,10 @@
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { CORPUS_INSTRUCTIONS_PATH, liveCorpusRoot } from "./corpus-file";
+import {
+	CORPUS_INSTRUCTIONS_PATH,
+	CORPUS_LAYOUT_DIRECTORIES,
+	liveCorpusRoot,
+} from "./corpus-file";
 import { pathExists } from "./file-presence";
 
 export class CorpusSourceError extends Error {
@@ -30,10 +34,8 @@ export type ResolvedCorpusSource = LiveCorpusSource | DirectoryCorpusSource;
  * then fails one at a time instead of the source failing once.
  */
 const CORPUS_LAYOUT_ENTRIES: readonly string[] = [
-	"CLAUDE.md",
-	"skills",
-	"output-styles",
-	"agents",
+	CORPUS_INSTRUCTIONS_PATH,
+	...CORPUS_LAYOUT_DIRECTORIES,
 ];
 
 async function holdsCorpusLayout(root: string): Promise<boolean> {
@@ -85,12 +87,6 @@ async function entriesUnder(
 			sourcePath: join(directory, name),
 		}));
 }
-
-const CORPUS_LAYOUT_DIRECTORIES: readonly string[] = [
-	"skills",
-	"agents",
-	"output-styles",
-];
 
 /**
  * Every corpus file a source holds, in corpus layout. A source is already in
