@@ -4,8 +4,9 @@ title: build the design system before the first screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:22'
+updated_date: '2026-09-04 14:20'
 labels: []
-milestone: m-1
+milestone: m-4
 dependencies:
   - ACT-48
 priority: high
