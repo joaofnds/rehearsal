@@ -6,8 +6,9 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-04 01:51'
+updated_date: '2026-09-04 14:47'
 labels: []
+milestone: m-6
 dependencies: []
 parent_task_id: ACT-26
 priority: low
@@ -37,9 +38,5 @@ Why: an agent that pipes `--json` into a parser gets a stream with harness prose
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-04, ranked against the project's goal. Stays Low, and deliberately unassigned to a milestone.
-
-The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a). Until m-1 produces a comparison somebody reads, internal restructuring changes nothing an operator can observe. These three are the last work to do, not the next.
-
-One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
+Triage 2026-09-04, assigned to m-4 and no longer merely a refactor. Decision-3 puts run events into SQLite behind an SSE stream, and this card is what gets harness progress off stdout so it has somewhere better to go. ACT-51 lands on top of it. The earlier note ranking this last was written when nothing consumed the harness's output programmatically; the UI does.
 <!-- SECTION:NOTES:END -->

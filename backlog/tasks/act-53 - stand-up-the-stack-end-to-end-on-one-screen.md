@@ -4,8 +4,9 @@ title: stand up the stack end to end on one screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 14:20'
+updated_date: '2026-09-04 14:47'
 labels: []
-milestone: m-4
+milestone: m-5
 dependencies:
   - ACT-48
   - ACT-52

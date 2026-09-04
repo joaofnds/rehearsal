@@ -1,12 +1,12 @@
 ---
 id: ACT-50
-title: build the screens that read only what is already on disk
+title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 13:23'
+updated_date: '2026-09-04 14:47'
 labels: []
-milestone: m-4
+milestone: m-7
 dependencies:
   - ACT-47
   - ACT-48
@@ -42,3 +42,13 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 - [ ] #5 A record id that would escape the runs directory is refused, proven by a test over the served routes
 - [ ] #6 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-04: narrowed. This card said 'every screen whose data the harness already records', which is six screens in one batch and the opposite of shipping small.
+
+Run history now belongs to ACT-53, which builds it as the walking skeleton for the stack. Run detail, tasks, cases, and calibration are each worth their own card once m-5 has shown what the first screen taught us about the wiring; filing them now would be planning six screens against a design nobody has used yet.
+
+What is left here is the pair that answers the product's own question: comparisons, and the corpus screen that says which recorded results an edit invalidated. Those two together are what m-7 is for.
+<!-- SECTION:NOTES:END -->

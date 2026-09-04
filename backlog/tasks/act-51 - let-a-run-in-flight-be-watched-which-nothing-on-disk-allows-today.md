@@ -4,9 +4,9 @@ title: 'let a run in flight be watched, which nothing on disk allows today'
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 13:23'
+updated_date: '2026-09-04 14:47'
 labels: []
-milestone: m-4
+milestone: m-6
 dependencies:
   - ACT-49
   - ACT-52

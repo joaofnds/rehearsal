@@ -4,9 +4,9 @@ title: settle the vocabulary the design introduces against the glossary
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:00'
-updated_date: '2026-09-04 13:10'
+updated_date: '2026-09-04 14:47'
 labels: []
-milestone: m-4
+milestone: m-5
 dependencies: []
 priority: high
 ordinal: 50008

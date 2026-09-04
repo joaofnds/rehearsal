@@ -4,7 +4,9 @@ title: list attempts prints raw ENOENT for every empty attempt directory
 status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
+updated_date: '2026-09-04 14:47'
 labels: []
+milestone: m-5
 dependencies: []
 priority: medium
 ordinal: 42008
@@ -30,3 +32,9 @@ Found during triage on 2026-09-04 while confirming the board had no recorded run
 - [ ] #2 An attempt directory with no record is either omitted or reported as an incomplete attempt, and which one is chosen is stated on this card with its reason
 - [ ] #3 A record that exists but cannot be parsed is still reported as unreadable, so this change does not hide a real failure
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-04, assigned to m-4. Filed as a CLI defect, but the design settles how this must behave: SPEC.md requires an unreadable record to appear in place with its reason rather than as an error, and ACT-50's acceptance carries the same rule. Fixing it in the shared read path (listRecords) fixes both surfaces at once, which is the argument for doing it with the UI rather than before it.
+<!-- SECTION:NOTES:END -->
