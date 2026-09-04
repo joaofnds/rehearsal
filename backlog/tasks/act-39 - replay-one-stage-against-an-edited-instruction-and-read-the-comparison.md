@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:02'
+updated_date: '2026-09-04 23:04'
 labels: []
 milestone: m-1
 dependencies:
@@ -38,4 +38,14 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 
 <!-- SECTION:NOTES:BEGIN -->
 Bet, 2026-09-04: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Oversight probes, 2026-09-05 (iterate session). Both of the shape agent's blocking claims were checked directly and both hold.
+
+No stage checkpoint exists. Both recorded runs' checkpoint directories contain only `initial`; neither holds a shape checkpoint. Both runs ended `STAGE_JUDGE_FAILED`. So acceptance criterion #1 is not reachable today: there is nothing to replay a stage from.
+
+Correction to the stage's cost figure: the two failed attempts cost 0.4304 and 0.5278 USD, 0.958 USD together, not 0.43. The stage quoted one run's cost as if it were both.
+
+`compare` cannot produce a report over two attempts. The report schema in src/benchmark/comparison-record.ts requires cases min 2 (line 311), reps min 2 (line 310), caseDeltas min 2 (line 170), and comparison-loader.ts loads three arms per case with control mandatory (lines 314-326). Acceptance criterion #3 as written cannot be satisfied by a replay pair; it needs a second benchmark case and full confirmation groups.
+
+Card left in To Do pending João's two calls.
 <!-- SECTION:NOTES:END -->
