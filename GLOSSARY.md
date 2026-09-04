@@ -78,6 +78,15 @@
   case cannot carry another kind's inputs.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
+- **Context manifest** — the complete set of instruction and context inputs one
+  attempt actually loaded, each named, classified by tier, and hashed where the
+  harness can resolve its bytes. It has two halves: the corpus half, the
+  engineer's global instruction set, varied by `--corpus`, and the project half,
+  the target repository's own instructions and documents, a property of the
+  target. It is observed from the transcript and reconciled against what the
+  case declared, so a divergence is reported rather than silently recorded. The
+  transcript names a load without carrying its bytes, so reconciliation is
+  name-against-name and every hash comes from the corpus resolver.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, and the agent
   definitions. A case names the ones it reads in corpus layout paths
@@ -124,6 +133,10 @@
   installing.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
+- **Project instructions** — the instruction file a repository carries in its
+  own tree for agents working in it (`CLAUDE.md` or `AGENTS.md`). A property of
+  the repository, never installed by the harness. Distinct from the corpus's
+  global `CLAUDE.md`, which is the file under evaluation.
 - **Corpus variant** — one corpus a comparison arm runs against, identified by
   the snapshot its source resolved to rather than by the source string, so a
   directory and a chezmoi ref holding the same bytes are the same variant. It is

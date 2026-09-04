@@ -3,12 +3,16 @@ id: ACT-41
 title: >-
   the harness installs its own CLAUDE.md into the target as the target's project
   instructions
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-04 02:13'
+updated_date: '2026-09-04 14:49'
 labels: []
 milestone: m-1
 dependencies: []
+documentation:
+  - backlog/docs/doc-8 - shape-ACT-41-project-instructions.md
 priority: high
 ordinal: 43008
 ---
@@ -29,8 +33,30 @@ This invalidates any pipeline-case score against a target that is not this repos
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A pipeline case whose target is a different repository runs with project instructions that describe that repository, not the control repository
-- [ ] #2 A run against a target that declares no project instructions is refused or proceeds without installing any, and which one is chosen is recorded on this card with its reason
-- [ ] #3 The corpus-under-evaluation meaning of the control CLAUDE.md is preserved for cases whose target IS the control repository, or the change records why that case no longer needs it
-- [ ] #4 The audit-log case is re-run and its shape agent reports no contradiction between the instructions and the codebase
+- [ ] #1 A run against the audit-log case adds no CLAUDE.md to the target tree and creates no 'chore: configure project instructions' commit
+- [ ] #2 A stage's recorded corpus hashes the bytes of the live corpus root's CLAUDE.md, not the control repository's project file
+- [ ] #3 run and replay against a corpus source holding no CLAUDE.md refuse before any provider call, naming the resolved path
+- [ ] #4 resolveCorpusFile returns a path under the source root for layout path CLAUDE.md for every source kind, with no live special case
+- [ ] #5 A session case declaring CLAUDE.md against a chezmoi source is refused as a symlink rather than silently reading the live install
+- [ ] #6 The audit-log case is re-run and its shape agent reports no contradiction between the instructions and the codebase, and asks no question about the instruction file at completion
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Shaped 2026-09-04. Document: backlog/docs/doc-8 - shape-ACT-41-project-instructions.md
+
+Goal: a pipeline stage session reads the corpus's global instructions and the target's own project instructions, and the harness writes its project file into no target.
+
+The card's premise was wrong on one point, and it changes the work. Criterion #3 asked how to preserve the corpus-under-evaluation meaning of the control repository's CLAUDE.md. That file was never the corpus. The corpus is the global instruction set, and its CLAUDE.md already exists at the live corpus root, where every other corpus kind (skills, agents, output styles) is already resolved from. Observed 2026-09-04: 'ls -la ~/.claude/CLAUDE.md' shows a symlink to ~/.agents/AGENTS.md, 10498 bytes, opening '# Working with João'; the control repository's own CLAUDE.md is 2917 bytes, opening '# Project Core Guidelines'. GLOSSARY.md:81 and docs/vision.md:36 both class CLAUDE.md as the global tier. 'git log -S' shows PROJECT_INSTRUCTIONS_PATH introduced by 116f8f7, a refactor whose body says it only collapsed four sites that each built join(CONTROL_DIR, "CLAUDE.md"); no commit argues for the choice it preserved. So criterion #3 dissolved and is not in the new list.
+
+The real defect: one 'instructions' string carries two meanings through the harness, the corpus file being graded and the project instructions installed into the target. It reaches three jobs: installed into the target (run.ts:866 -> backlog.ts:124 installInstructions, same via replay-command.ts:216), hashed into stage-corpus lineage (checkpoint.ts:187), and offered as calibrate's edit target (calibration.ts:456). The last two are corpus jobs, correct in intent and wrong in which file they read. The first is not a corpus job and should not exist.
+
+Approach chosen: point the corpus at the live root and install nothing into any target. The special cases at corpus-file.ts:53 and session-corpus.ts:174 go away with it. Rejected: sourcing installInstructions from the target's own file (a no-op that rewrites a file with itself, and the audit-log target has neither CLAUDE.md nor AGENTS.md, verified 2026-09-04), and letting a case declare its target's instructions (additive on top of this if a case ever needs it).
+
+Decision for criterion #2, recorded as it asks: a run against a target that declares no project instructions proceeds without installing any. The harness installs nothing into any target. The target's project instructions are a property of the target, and a benchmark that rewrites them measures a repository that does not exist. What is refused instead is a missing corpus CLAUDE.md, before any provider call, the way stale already does at staleness-report.ts:128.
+
+Glossary term to add: Project instructions, the instruction file a repository carries in its own tree for agents working in it, a property of the repository, never installed by the harness, distinct from the corpus's global CLAUDE.md. The existing Corpus entry stays as written.
+
+First test to write: corpus-file.test.ts, resolveCorpusFile with a live source and layout path CLAUDE.md returns join(liveCorpusRoot(), "CLAUDE.md"). It fails today, returning the control repository's path.
+<!-- SECTION:NOTES:END -->

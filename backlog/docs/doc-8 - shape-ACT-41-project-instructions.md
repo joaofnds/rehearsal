@@ -1,3 +1,10 @@
+---
+id: doc-8
+title: shape-ACT-41-project-instructions
+type: other
+created_date: '2026-09-04 14:55'
+---
+
 # ACT-41 — separate the corpus instructions from the target's project instructions
 
 ## Goal
