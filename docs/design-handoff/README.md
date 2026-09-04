@@ -1,19 +1,19 @@
 # Design handoff
 
-`SPEC.md` is the specification produced by Claude Design on 2026-09-04, from the
-brief in `docs/ui-design-prompt.md`. `prototype.html` is the design reference it
-came with: intended look, structure, and behavior.
+`SPEC.md` is the specification Claude Design produced on 2026-09-04, from the
+brief in `docs/ui-design-prompt.md`. It is the authority: read it for
+everything.
 
-The prototype is a reference, not production code. It was built on a streaming
-template runtime that exists only in the design environment; that runtime
-(`support.js`) is deliberately not vendored here, because the spec says not to
-port it and a file nobody may use is a file someone will eventually use.
+`prototype.html` is the design reference it shipped with. Open it from a local
+checkout to see the intended look, structure, and behavior of all nine screens.
 
-The prototype does not render standalone without that runtime. Read `SPEC.md`
-for everything; open the prototype in the design tool when a detail is
-ambiguous.
+`support.js` is the design environment's streaming-template runtime. It is here
+only because the prototype does not render without it: the markup is custom
+elements the runtime expands. **Do not port it, and do not import it into the
+application.** The spec says so directly, and the prototype's own header calls
+itself a reference rather than production code.
 
-`SPEC.md` describes a product wider than the harness currently is, and it
-renames the domain. Neither is a defect in the spec. Both are decisions on the
-board: ACT-47 settles the vocabulary, ACT-48 sizes the gap between what the
-spec's screens read and what the harness records.
+The spec describes a product wider than the harness currently is, and it renames
+the domain. Neither is a defect. Both are decisions on the board: ACT-48 settles
+the vocabulary against the glossary, ACT-49 inventories what the design shows
+that the harness cannot yet supply.
