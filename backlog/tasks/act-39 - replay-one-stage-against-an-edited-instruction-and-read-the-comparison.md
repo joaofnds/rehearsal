@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: Build
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:47'
+updated_date: '2026-09-04 23:48'
 labels: []
 milestone: m-1
 dependencies:
@@ -80,4 +80,18 @@ Moved to Build 2026-09-05 by the iterate session. The shape step asked whether t
 Budget for the shape run: 1.50 USD cap, about triple the prior attempts (0.4304 and 0.5278).
 
 Precondition checked before spending: template-postgres-1 is up and healthy on 5432, which ACT-38's handoff named as required.
+
+Paid run attempted and not made, 2026-09-05. Two routes tried, both closed, recorded so the next session does not repeat them.
+
+The build stage proposed either a shape-only pipeline or killing a full run mid-flight. It recommended killing the run. That is the wrong one: a killed run leaves no checkpoint, which is the whole point of the run, and ACT-38 already recorded a stopped run confusing 'list runs' (ACT-44).
+
+The shape-only pipeline route is closed by the schema. src/benchmark/pipeline.ts:217 requires a pipeline to declare exactly one delivery stage, and :227 requires it last. A planning-only pipeline is rejected. --pipeline is a real flag and cases/audit-log/pipelines/ is built to hold alternatives, so the idea was sound; the constraint is that every pipeline must end in delivery.
+
+--session-budget-usd is per session, not per run. ACT-38 passed 4 and the whole run cost 0.43 because it stopped at the shape judge. So there is no flag that bounds a run's total spend.
+
+Consequence for the budget: the 1.50 USD cap cannot be enforced by the tool. If shape fails again the run stops at the judge and costs roughly what the prior two did. If shape passes, the build stage runs and spends materially more, which is beyond what was approved.
+
+Also confirmed before spending: template-postgres-1 up and healthy on 5432. The prior runs used --model sonnet --effort medium, per ACT-38's note; the failed artifacts do not record the model, which is worth its own card.
+
+Unblocked by: João naming a total he accepts for a run that may include the build stage.
 <!-- SECTION:NOTES:END -->
