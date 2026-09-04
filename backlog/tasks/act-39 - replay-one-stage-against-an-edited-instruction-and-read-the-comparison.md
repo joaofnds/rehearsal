@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: Build
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:48'
+updated_date: '2026-09-04 23:53'
 labels: []
 milestone: m-1
 dependencies:
@@ -94,4 +94,6 @@ Consequence for the budget: the 1.50 USD cap cannot be enforced by the tool. If 
 Also confirmed before spending: template-postgres-1 up and healthy on 5432. The prior runs used --model sonnet --effort medium, per ACT-38's note; the failed artifacts do not record the model, which is worth its own card.
 
 Unblocked by: João naming a total he accepts for a run that may include the build stage.
+
+Budget approved 2026-09-05: 10 USD total for the run, explicitly covering the build stage if shape passes. Per-session cap set to 3 USD, since the tool enforces only per session and the run has several sessions plus judges. Total is watched, not enforced.
 <!-- SECTION:NOTES:END -->
