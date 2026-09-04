@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: Build
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:53'
+updated_date: '2026-09-04 23:56'
 labels: []
 milestone: m-1
 dependencies:
@@ -96,4 +96,16 @@ Also confirmed before spending: template-postgres-1 up and healthy on 5432. The 
 Unblocked by: João naming a total he accepts for a run that may include the build stage.
 
 Budget approved 2026-09-05: 10 USD total for the run, explicitly covering the build stage if shape passes. Per-session cap set to 3 USD, since the tool enforces only per session and the run has several sessions plus judges. Total is watched, not enforced.
+
+Paid run made 2026-09-05. Record: .benchmark-runs/2026-09-04T23-53-48.458Z.shape.json. Cost 0.4533 USD, well under the 10 USD approved. Command: rehearsal.ts run --case audit-log --model sonnet --effort medium --session-budget-usd 3.
+
+Result: shape graded F again, third failure. No checkpoint recorded, so acceptance criterion #1 is still unmet and the replay still cannot happen.
+
+The cause is now known and it is not the corpus. The only failing hard blocker is invalid-stage-delivery, from harness validation reporting 'Target baseline changed unexpectedly'. Every other hard blocker passed, including contradicts-source, whose evidence explicitly confirms the recorded validation rules match the brief. The 201/202 and dropped-rules defects from the first run did not recur.
+
+This is ACT-64 reproduced. That card's single acceptance criterion is precisely a shape stage completing without this harness failure, so ACT-64 now blocks ACT-39.
+
+Quality without the blocker would have been B across all four dimensions, which is the minimum grade. So the stage is one harness defect away from passing.
+
+ACT-70 verified live, which was the open item on that card. The artifact now has eight keys (status, stage, error, input, hardBlockers, requirements, dimensions, summary) where the two prior failed runs had four. The judge's findings, including the blocker's evidence, were readable straight from the artifact with no re-run. That is what made this diagnosis possible at all.
 <!-- SECTION:NOTES:END -->

@@ -4,7 +4,7 @@ title: 'a failed stage run records the judge''s findings, not just the grade'
 status: Done
 assignee: []
 created_date: '2026-09-04 23:32'
-updated_date: '2026-09-04 23:44'
+updated_date: '2026-09-04 23:57'
 labels: []
 dependencies: []
 documentation:
@@ -90,4 +90,10 @@ The regression test is real. Reverting only src/benchmark/run.ts and run-abort.t
 Full checks observed in this session: bun test 1007 pass, 0 fail across 65 files. typecheck clean. lint clean. fmt:check clean.
 
 Not verified here either: a live paid run. The end-to-end test drives the same abort path with real file I/O, so ACT-39's next run will be the first live confirmation.
+
+Live confirmation, 2026-09-05, closing this card's one open item.
+
+The paid audit-log run recorded at .benchmark-runs/2026-09-04T23-53-48.458Z.shape.json failed its shape grade, and the artifact now carries eight keys: status, stage, error, input, hardBlockers, requirements, dimensions, summary. The two prior failed runs carry four.
+
+The findings were readable straight from the artifact with no re-run. They named the single failing hard blocker, invalid-stage-delivery, with its evidence, and showed every other blocker passing. That diagnosis is what re-scoped ACT-64 and produced ACT-72, and none of it was possible from the four-key artifacts.
 <!-- SECTION:NOTES:END -->
