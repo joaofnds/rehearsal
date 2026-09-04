@@ -3,11 +3,11 @@ id: ACT-41
 title: >-
   the harness installs its own CLAUDE.md into the target as the target's project
   instructions
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:13'
-updated_date: '2026-09-04 17:47'
+updated_date: '2026-09-04 17:48'
 labels: []
 milestone: m-1
 dependencies: []
