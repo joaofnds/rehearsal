@@ -12,7 +12,8 @@
 	"ignorePatterns": [
 		".benchmark-runs",
 		"tools/oxlint/anti-slop/**",
-		"docs/recovered/**"
+		"docs/recovered/**",
+		"docs/design-handoff/**"
 	],
 	"jsPlugins": [
 		{

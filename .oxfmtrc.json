@@ -11,5 +11,10 @@
 	"arrowParens": "always",
 	"bracketSameLine": false,
 	"bracketSpacing": true,
-	"ignorePatterns": ["**/.benchmark-runs", "backlog/**", "docs/recovered/**"]
+	"ignorePatterns": [
+		"**/.benchmark-runs",
+		"backlog/**",
+		"docs/recovered/**",
+		"docs/design-handoff/**"
+	]
 }
