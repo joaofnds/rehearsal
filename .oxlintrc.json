@@ -9,7 +9,11 @@
 		"style": "error",
 		"restriction": "error"
 	},
-	"ignorePatterns": [".benchmark-runs", "tools/oxlint/anti-slop/**"],
+	"ignorePatterns": [
+		".benchmark-runs",
+		"tools/oxlint/anti-slop/**",
+		"docs/recovered/**"
+	],
 	"jsPlugins": [
 		{
 			"name": "anti-slop",

@@ -18,5 +18,6 @@
 		"target": "esnext",
 		"moduleResolution": "bundler",
 		"types": ["bun-types"]
-	}
+	},
+	"exclude": ["docs/recovered"]
 }
