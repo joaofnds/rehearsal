@@ -4,7 +4,7 @@ title: drop the chezmoi corpus source
 status: To Do
 assignee: []
 created_date: '2026-09-04 18:16'
-updated_date: '2026-09-04 18:17'
+updated_date: '2026-09-04 18:19'
 labels: []
 dependencies: []
 type: chore
@@ -35,3 +35,19 @@ Sequence this after ACT-65, which touches the same snapshot code, or take the tw
 - [ ] #2 A corpus variant living in a dotfiles ref is still measurable by rendering it outside rehearsal and passing the directory
 - [ ] #3 A recorded artifact carrying a chezmoi origin still loads, or the schema change is recorded as breaking with the reason
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Correction on how this card came to exist, 2026-09-04.
+
+I did not find this. I built on chezmoi and João caught it.
+
+Two of my ACT-41 commits added chezmoi code. 398ae27 added INSTRUCTIONS_SOURCE_PATH, a per-kind map teaching the layout enumerator that a render keeps its instruction file at .claude/CLAUDE.md. ca2f591 then moved that map next to the resolver, because the first change had left resolution and enumeration disagreeing, which broke stale --corpus chezmoi:<ref>. So one of the two defects this card cites as evidence against chezmoi is a defect I introduced while extending it.
+
+The shape document (doc-8) listed criterion 5 as a chezmoi symlink refusal and recorded that refusal as correct and worth keeping. I took the criterion as settled and built to it. I never asked whether the harness should know about chezmoi at all. That question was available at the start of the task, in the same document, and I read past it.
+
+What survives the removal: the deletion in session-corpus.ts copyDeclared, which stopped substituting the control repository's project file for a corpus that carried none. That is the ACT-41 fix and it is independent of the source kind. What dies with chezmoi: the per-kind map, the resolver's use of it, the CHEZMOI_LAYOUT table, and the tests pinning all three, including the two I wrote.
+
+Whoever picks this up should not treat my chezmoi commits as prior art to preserve. Revert direction is cleaner than refactor direction.
+<!-- SECTION:NOTES:END -->
