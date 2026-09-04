@@ -366,7 +366,7 @@ describe("running a session case against a corpus source", () => {
 	 * value, which the exit codes call a usage error; a corpus that resolves but
 	 * cannot be delivered is the refused precondition.
 	 */
-	it.each(["/no/such/corpus", "chezmoi:HEAD"])(
+	it.each(["/no/such/corpus", "dotfiles:HEAD"])(
 		"reports %s as a usage error, before any provider call",
 		async (corpus) => {
 			const failure = await failureOf(attemptWith(corpus));

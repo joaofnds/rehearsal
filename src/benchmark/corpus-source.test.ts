@@ -71,11 +71,11 @@ describe("refusing a source that names no corpus", () => {
 	);
 
 	/**
-	 * A corpus source is a directory in corpus layout, so a string naming a tool
-	 * that produces one is refused the same way any other non-directory is: the
-	 * harness reads a corpus without knowing what rendered it.
+	 * A corpus source is a directory in corpus layout. Anything else is refused
+	 * in those terms, so a source naming some other scheme is told what a corpus
+	 * source is rather than what it is not.
 	 */
-	it.each(["chezmoi:HEAD", "chezmoi:"])(
+	it.each(["dotfiles:HEAD", "git://example.com/corpus", "scheme:"])(
 		"refuses %p, naming the source and what a corpus source is",
 		async (source) => {
 			const failure = await failureOf(resolveCorpusSource(source));

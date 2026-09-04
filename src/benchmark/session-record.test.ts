@@ -117,17 +117,15 @@ describe("sessionAttemptRecordSchema", () => {
 	});
 
 	/**
-	 * An origin names where the bytes came from, not what produced them. No
-	 * record on disk has ever carried a producing tool, so the schema refuses
-	 * one rather than keeping a parse path for a record that never existed. A
-	 * record on disk is data, so the kind arrives as an unchecked string; the
-	 * compiler refuses this shape in typed code, which is the same guarantee one
-	 * layer earlier.
+	 * An origin is the live install or a directory, and nothing else. A record on
+	 * disk is data, so the kind arrives as an unchecked string; the compiler
+	 * refuses this shape in typed code, which is the same guarantee one layer
+	 * earlier.
 	 */
-	it("refuses an origin naming the tool that produced the corpus", () => {
+	it("refuses an origin naming a kind that does not exist", () => {
 		const parsed = sessionAttemptRecordSchema.safeParse({
 			...record(),
-			corpusOrigin: { kind: "chezmoi", ref: "HEAD", commit: "0".repeat(40) },
+			corpusOrigin: { kind: "rendered", ref: "HEAD", commit: "0".repeat(40) },
 		});
 
 		expect(parsed.success).toBe(false);
