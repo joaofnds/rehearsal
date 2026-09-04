@@ -1,10 +1,10 @@
 ---
 id: ACT-65
 title: a confirmed replay records frozen instructions the session never read
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 17:47'
-updated_date: '2026-09-04 17:47'
+updated_date: '2026-09-04 22:44'
 labels: []
 dependencies: []
 type: bug
@@ -31,4 +31,63 @@ Before building, settle one fact this card does not assume: where a stage sessio
 <!-- AC:BEGIN -->
 - [ ] #1 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
 - [ ] #2 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
+- [ ] #3 A confirmed replay rep's recorded corpus CLAUDE.md hash is the bytes the replayed session actually read
+- [ ] #4 Editing the live corpus CLAUDE.md between a checkpoint and a confirmed replay does not change what the replayed session reads
+- [ ] #5 An original run's stage session reads the same corpus CLAUDE.md bytes the run record hashes for that stage
+- [ ] #6 The stage session's project instructions are delivered without writing to the target repository's own root CLAUDE.md
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Goal: a confirmed replay's recorded corpus CLAUDE.md hash matches the bytes the
+replayed stage session actually reads, and editing the live corpus CLAUDE.md
+between checkpoint and replay cannot change that.
+
+Settled fact (verified this session, claude 2.1.260, empirical probe with a
+control marker, 2026-09-05): with --setting-sources project and cwd at a
+worktree root, Claude Code loads project instructions from BOTH
+<cwd>/CLAUDE.md and <cwd>/.claude/CLAUDE.md. Re-check on any claude version
+bump with the same probe (a temp dir, a marker string in each candidate file,
+`claude --setting-sources project -p "..."`, plus a no-marker control run).
+
+Fix site: installStageCorpusSnapshot (checkpoint.ts:270) writes skills/agents/
+output-styles into <targetDirectory>/.claude/ but never writes CLAUDE.md, even
+though snapshotStageCorpus (checkpoint.ts:234) already wrote CLAUDE.md into the
+snapshot directory next to skills/. installStageCorpusSnapshot must also copy
+that CLAUDE.md to <targetDirectory>/.claude/CLAUDE.md. It must NOT write to
+<targetDirectory>/CLAUDE.md (the worktree root): that path is the target
+repository's own project instructions, and ACT-41 correctly stopped
+overwriting it.
+
+Scope finding: installStageCorpusSnapshot is one function shared by the
+original run (pipeline-confirmation.ts:388) and by replay-confirmation.ts:417.
+Both call sites pass matching corpusRoots ([worktree]/.claude) and
+settingSources: "project", and both hand the session an instructions string
+that today never reaches the session's actual context the same way. The bug
+and the fix are identical for a first run's own stage sessions, not
+replay-specific. One function change closes both. Open question for João:
+does ACT-65 cover the original run path too (recommended, same fix, same
+commit), or does this card stay replay-only with a separate card filed for
+run?
+
+Advisory note carried from the review (unresolved by this shaping, worth a
+follow-up card, not blocking this fix): captureStageCorpus and
+snapshotStageCorpus take instructions as a bare string while every other
+corpus kind (skills, agents, output-styles) is resolved from roots. That
+asymmetry is what let a write exist with nothing reading it, and it is not
+removed by this fix.
+
+First test to write: a checkpoint.test.ts case around
+installStageCorpusSnapshot asserting that after the call,
+<targetDirectory>/.claude/CLAUDE.md exists and its bytes equal the instructions
+string snapshotStageCorpus was given, using the existing test's worktree/
+snapshot fixture pattern (see the two-worktree case around checkpoint.test.ts:176).
+Then an integration-level check (replay-confirmation path) that edits the live
+corpus CLAUDE.md between checkpoint and replay and asserts the replayed
+session's recorded hash still matches the frozen bytes, not the live edit.
+
+Scope settled by João, 2026-09-05: this card covers BOTH the confirmed replay path and the original run path. They share one function (installStageCorpusSnapshot), so one fix and one commit closes both. No separate card for run. Two acceptance criteria were added for the run path; the title still says replay but the scope is both.
+
+Independently probed by the overseeing session before this decision, confirming the shape session's two claims: (1) a project .claude/CLAUDE.md does load under --setting-sources project, and a worktree-root CLAUDE.md loads alongside it, both present in the same session; (2) installStageCorpusSnapshot is called from pipeline-confirmation.ts:388 (original run) and replay-confirmation.ts:417 (confirmed replay), and LAYOUT_DIRECTORY_KINDS (checkpoint.ts:177) is only [agents, output-styles], so CLAUDE.md is delivered by neither path.
+<!-- SECTION:NOTES:END -->
