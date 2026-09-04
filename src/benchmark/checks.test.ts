@@ -219,6 +219,7 @@ describe(captureBaselineContext.name, () => {
 
 		expect(tracked).toContain("bun.lock");
 		expect(context.map(({ path }) => path).toSorted()).toEqual([
+			".gitignore",
 			"base.txt",
 			"package.json",
 		]);

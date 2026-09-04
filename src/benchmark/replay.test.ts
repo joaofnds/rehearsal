@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAttempts, presentAttempts } from "./attempts";
-import { assertPlanningStageCompleted, installInstructions } from "./backlog";
+import { assertPlanningStageCompleted } from "./backlog";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
 	hashWorkflowState,
@@ -30,7 +30,7 @@ import {
 } from "./replay";
 import { benchmarkRunPaths } from "./run-layout";
 import { loadStageRubric } from "./stage-grading";
-import { addWorktree, removeWorktree } from "./target";
+import { addWorktree, currentSha, removeWorktree } from "./target";
 import {
 	TEST_TARGET,
 	TestResources,
@@ -683,10 +683,7 @@ describe(runReplay.name, () => {
 		);
 		await Bun.write(join(primary, "base.txt"), "base\n");
 		await commitAll(primary, "chore: base");
-		const taskSha = await installInstructions(
-			primary,
-			"Original instructions\n",
-		);
+		const taskSha = await currentSha(primary);
 		await mkdir(join(primary, "backlog", "docs"), { recursive: true });
 		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
 		const paths = benchmarkRunPaths(parent, "run");
@@ -830,7 +827,7 @@ describe(runReplay.name, () => {
 				materializeCheckpoint,
 				captureBaselineContext,
 				captureFileHashes,
-				installInstructions,
+				currentSha,
 				installDependencies: () =>
 					Promise.reject(new Error("not a delivery stage")),
 				log: () => undefined,
@@ -861,7 +858,7 @@ describe(runReplay.name, () => {
 		).toHaveLength(1);
 		const record = await readReplayRecord(outcome.recordPath);
 		expect(record.consumed.stage).toBe("initial");
-		expect(record.baseSha).not.toBe(taskSha);
+		expect(record.baseSha).toBe(taskSha);
 		expect(judged[0]?.artifact?.content).toBe("replayed spec\n");
 		expect(
 			await presentAttempts(

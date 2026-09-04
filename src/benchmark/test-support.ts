@@ -26,6 +26,14 @@ interface TrackedWorktree {
 	readonly path: string;
 }
 
+/**
+ * A target keeps its board, its agent state, and its dependencies out of the
+ * tree the harness measures, so a fixture repository that tracked them would
+ * read as dirty the moment a test wrote one.
+ */
+export const WORKFLOW_STATE_IGNORES =
+	"backlog/\n.boris/\n.claude/\nnode_modules/\n";
+
 export class TestResources {
 	private readonly directories: string[] = [];
 	private readonly worktrees: TrackedWorktree[] = [];
@@ -103,14 +111,6 @@ export class TestResources {
 		);
 	}
 }
-
-/**
- * A target keeps its board, its agent state, and its dependencies out of the
- * tree the harness measures, so a fixture repository that tracked them would
- * read as dirty the moment a test wrote one.
- */
-export const WORKFLOW_STATE_IGNORES =
-	"backlog/\n.boris/\n.claude/\nnode_modules/\n";
 
 export async function commitAll(
 	directory: string,

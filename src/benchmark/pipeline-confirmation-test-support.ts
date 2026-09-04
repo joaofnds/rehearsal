@@ -1,7 +1,6 @@
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { installInstructions } from "./backlog";
 import {
 	captureStageCorpus,
 	installStageCorpusSnapshot,
@@ -28,6 +27,7 @@ import {
 	assertBuildCommitted,
 	captureBuildCandidate,
 	changedPathsBetween,
+	currentSha,
 	removeWorktree,
 } from "./target";
 import { createProductOwner } from "./workflow";
@@ -110,11 +110,6 @@ export class PipelineConfirmationHarness {
 		resources: ConfirmationResources,
 	): Promise<PipelineConfirmationHarness> {
 		const source = await resources.createRepository();
-		await Bun.write(
-			join(source.directory, ".gitignore"),
-			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
-		);
-		await commitAll(source.directory, "chore: ignore workflow state");
 		const sourceHead = await runCommand(
 			["git", "rev-parse", "HEAD"],
 			source.directory,
@@ -232,9 +227,9 @@ export class PipelineConfirmationHarness {
 					],
 					costUsd: CONFIRMATION_METRIC.costUsd,
 				}),
-			createTaskCommit: async (targetDir, _task, instructions) => ({
+			createTaskCommit: async (targetDir) => ({
 				taskId: "TASK-1",
-				taskSha: await installInstructions(targetDir, instructions),
+				taskSha: await currentSha(targetDir),
 			}),
 			runChecks: () => Promise.resolve(),
 			captureBaselineContext,

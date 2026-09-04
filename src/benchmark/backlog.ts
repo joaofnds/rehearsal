@@ -75,10 +75,14 @@ async function configureBacklog(
 	await Bun.write(configPath, configured);
 }
 
+/**
+ * The commit a stage's changes are measured against. The target's own project
+ * instructions are left as they are: they are a property of the target, and a
+ * run that rewrote them would grade the agent against a repository nobody has.
+ */
 export async function createTaskCommit(
 	targetDir: string,
 	task: string,
-	instructions: string,
 	statuses: readonly string[],
 ): Promise<{ taskId: string; taskSha: string }> {
 	const [entryStatus] = statuses;
@@ -109,38 +113,7 @@ export async function createTaskCommit(
 		throw new Error("Backlog did not return the created task ID");
 	}
 
-	return {
-		taskId,
-		taskSha: await installInstructions(targetDir, instructions),
-	};
-}
-
-/**
- * Commits the instruction corpus so the session reads it from the tree like
- * any project file. A replay reuses this to swap the checkpoint-era
- * CLAUDE.md for the current one; when the content already matches, nothing
- * is committed and the checkout's SHA stands.
- */
-export async function installInstructions(
-	targetDir: string,
-	instructions: string,
-): Promise<string> {
-	await Bun.write(join(targetDir, "CLAUDE.md"), instructions);
-	await git(targetDir, "add", "--", "CLAUDE.md");
-	const stagedPaths = await git(targetDir, "diff", "--cached", "--name-only");
-
-	if (stagedPaths) {
-		await git(
-			targetDir,
-			"commit",
-			"-m",
-			"chore: configure project instructions",
-			"--",
-			"CLAUDE.md",
-		);
-	}
-
-	return git(targetDir, "rev-parse", "HEAD");
+	return { taskId, taskSha: await git(targetDir, "rev-parse", "HEAD") };
 }
 
 export function readTaskOutput(

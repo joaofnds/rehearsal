@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import type { installInstructions } from "./backlog";
 import type {
 	CheckpointRecord,
 	HashedFile,
@@ -29,7 +28,7 @@ import type { StageSessionDependencies } from "./run";
 import { executeStageSession } from "./run";
 import type { BenchmarkRunPaths } from "./run-layout";
 import type { loadStageRubric, runStageJudge } from "./stage-grading";
-import type { addWorktree, removeWorktree } from "./target";
+import type { addWorktree, currentSha, removeWorktree } from "./target";
 import type { createProductOwner } from "./workflow";
 
 export class ReplayError extends Error {
@@ -129,7 +128,7 @@ export interface ReplayDependencies {
 	readonly materializeCheckpoint: typeof materializeCheckpoint;
 	readonly captureBaselineContext: typeof captureBaselineContext;
 	readonly captureFileHashes: typeof captureFileHashes;
-	readonly installInstructions: typeof installInstructions;
+	readonly currentSha: typeof currentSha;
 	readonly installDependencies: (worktreeDir: string) => Promise<void>;
 	readonly log: (message: string) => void;
 }
@@ -364,10 +363,7 @@ export async function runReplay(
 			request.paths.checkpointDirectory(plan.consumed.stage),
 			worktreeDir,
 		);
-		const baseSha = await dependencies.installInstructions(
-			worktreeDir,
-			request.instructions,
-		);
+		const baseSha = await dependencies.currentSha(worktreeDir);
 		if (plan.definition.kind === "delivery") {
 			await dependencies.installDependencies(worktreeDir);
 		}

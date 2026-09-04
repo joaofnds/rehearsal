@@ -7,7 +7,6 @@ import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
-import { installInstructions } from "./backlog";
 import {
 	captureStageCorpus,
 	hashWorkflowState,
@@ -29,7 +28,7 @@ import { writeRunManifest } from "./manifest";
 import { runReplayConfirmation } from "./replay-confirmation";
 import { benchmarkRunPaths } from "./run-layout";
 import type { loadStageRubric } from "./stage-grading";
-import { addWorktree, removeWorktree } from "./target";
+import { addWorktree, currentSha, removeWorktree } from "./target";
 import {
 	TEST_TARGET,
 	TestResources,
@@ -188,10 +187,7 @@ describe(runReplayConfirmation.name, () => {
 		);
 		await Bun.write(join(primary, "base.txt"), "base\n");
 		await commitAll(primary, "chore: base");
-		const taskSha = await installInstructions(
-			primary,
-			"Original instructions\n",
-		);
+		const taskSha = await currentSha(primary);
 		await mkdir(join(primary, "backlog"), { recursive: true });
 		await Bun.write(join(primary, "backlog", "config.yml"), "statuses: []\n");
 		const paths = benchmarkRunPaths(parent, "run");
@@ -252,7 +248,6 @@ describe(runReplayConfirmation.name, () => {
 			join(corpusRoot, "skills", "doctrine", "SKILL.md"),
 			"frozen doctrine\n",
 		);
-		const instructions = "Frozen instructions\n";
 		const rubric = {
 			rubricPath: "rubrics/discuss.json",
 			content: '{"frozen":true}\n',
@@ -277,7 +272,6 @@ describe(runReplayConfirmation.name, () => {
 		const consumedInputs: {
 			readonly targetDir: string;
 			readonly branch: string;
-			readonly instructions: string;
 			readonly skill: string;
 			readonly checkpoint: string;
 			rubric: string;
@@ -290,7 +284,6 @@ describe(runReplayConfirmation.name, () => {
 			branch: await runCommand(["git", "branch", "--show-current"], primary),
 			status: await runCommand(["git", "status", "--porcelain"], primary),
 			base: await Bun.file(join(primary, "base.txt")).bytes(),
-			instructions: await Bun.file(join(primary, "CLAUDE.md")).bytes(),
 		};
 
 		const fake = new ReplayConfirmationHarness(testResources);
@@ -308,9 +301,6 @@ describe(runReplayConfirmation.name, () => {
 								["git", "branch", "--show-current"],
 								workflowRequest.targetDir,
 							),
-							instructions: await Bun.file(
-								join(workflowRequest.targetDir, "CLAUDE.md"),
-							).text(),
 							skill: await Bun.file(
 								join(
 									workflowRequest.targetDir,
@@ -419,7 +409,7 @@ describe(runReplayConfirmation.name, () => {
 				materializeCheckpoint,
 				captureBaselineContext,
 				captureFileHashes,
-				installInstructions,
+				currentSha,
 				installDependencies: () =>
 					Promise.reject(new Error("not a delivery stage")),
 				log: () => undefined,
@@ -454,7 +444,6 @@ describe(runReplayConfirmation.name, () => {
 		).toEqual(
 			Array.from({ length: 3 }, () => ({
 				branch: "",
-				instructions,
 				skill: "frozen discuss\n",
 				checkpoint: "statuses: []\n",
 				rubric: rubric.content,
@@ -489,7 +478,6 @@ describe(runReplayConfirmation.name, () => {
 			branch: await runCommand(["git", "branch", "--show-current"], primary),
 			status: await runCommand(["git", "status", "--porcelain"], primary),
 			base: await Bun.file(join(primary, "base.txt")).bytes(),
-			instructions: await Bun.file(join(primary, "CLAUDE.md")).bytes(),
 		};
 		expect(primaryAfter).toEqual(primaryBefore);
 		const worktrees = await runCommand(
@@ -527,7 +515,7 @@ describe(runReplayConfirmation.name, () => {
 			{},
 			(dependencies) => ({
 				...dependencies,
-				installInstructions: () => Promise.resolve(recorded.manifest.taskSha),
+				currentSha: () => Promise.resolve(recorded.manifest.taskSha),
 				createProductOwner: () => ({
 					ask: () => Promise.resolve("Use the small scope"),
 					snapshot: () => ({
@@ -599,7 +587,7 @@ describe(runReplayConfirmation.name, () => {
 			{ groupId: "judge-execution-evidence", reps: 2 },
 			(dependencies) => ({
 				...dependencies,
-				installInstructions: () => Promise.resolve(recorded.manifest.taskSha),
+				currentSha: () => Promise.resolve(recorded.manifest.taskSha),
 				createProductOwner: () => ({
 					ask: () => Promise.resolve("Use the small scope"),
 					snapshot: () => ({
@@ -644,15 +632,7 @@ describe(runReplayConfirmation.name, () => {
 
 	it("removes the temporary root after every replay rep completes with durable evidence", async () => {
 		const source = await testResources.createRepository();
-		await Bun.write(
-			join(source.directory, ".gitignore"),
-			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
-		);
-		await commitAll(source.directory, "chore: ignore workflow state");
-		const taskSha = await installInstructions(
-			source.directory,
-			"Original instructions\n",
-		);
+		const taskSha = await currentSha(source.directory);
 		await mkdir(join(source.directory, "backlog"), { recursive: true });
 		await Bun.write(
 			join(source.directory, "backlog", "config.yml"),
@@ -794,7 +774,7 @@ describe(runReplayConfirmation.name, () => {
 				materializeCheckpoint,
 				captureBaselineContext,
 				captureFileHashes,
-				installInstructions,
+				currentSha,
 			}),
 		);
 		const records = await Promise.all(
@@ -883,15 +863,7 @@ describe(runReplayConfirmation.name, () => {
 
 	it("cleans completed Judge outcomes while preserving a pre-evidence failure", async () => {
 		const source = await testResources.createRepository();
-		await Bun.write(
-			join(source.directory, ".gitignore"),
-			"backlog/\n.boris/\n.claude/\nnode_modules/\n",
-		);
-		await commitAll(source.directory, "chore: ignore workflow state");
-		const taskSha = await installInstructions(
-			source.directory,
-			"Original instructions\n",
-		);
+		const taskSha = await currentSha(source.directory);
 		await mkdir(join(source.directory, "backlog"), { recursive: true });
 		await Bun.write(
 			join(source.directory, "backlog", "config.yml"),
@@ -1064,7 +1036,7 @@ describe(runReplayConfirmation.name, () => {
 				},
 				captureBaselineContext,
 				captureFileHashes,
-				installInstructions,
+				currentSha,
 			}),
 		);
 

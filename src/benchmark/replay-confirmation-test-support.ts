@@ -362,7 +362,7 @@ export class ReplayConfirmationHarness {
 
 				return Promise.resolve([]);
 			},
-			installInstructions: (targetDir) => {
+			currentSha: (targetDir: string) => {
 				this.stageDirs.push(targetDir);
 
 				return Promise.resolve("base-sha");

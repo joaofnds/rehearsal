@@ -870,7 +870,6 @@ export async function runBenchmark(
 		const { taskId, taskSha } = await createTaskCommit(
 			source.root,
 			task,
-			instructions,
 			pipeline.statuses,
 		);
 		const recordRetainedCheckpoint = retainedCheckpointRecorder(runFiles.name);

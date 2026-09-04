@@ -13,6 +13,7 @@ import {
 	capturePlanningAdvance,
 	captureWorkflowBackup,
 	claimTarget,
+	currentSha,
 	refExists,
 	removeWorktree,
 	restoreTarget,
@@ -100,6 +101,14 @@ describe(assertBuildCommitted.name, () => {
 		expect(
 			assertBuildCommitted(source.directory, source.sha),
 		).rejects.toBeInstanceOf(StageValidationError);
+	});
+});
+
+describe(currentSha.name, () => {
+	it("reads the checkout's HEAD", async () => {
+		const repository = await testResources.createRepository();
+
+		expect(await currentSha(repository.directory)).toBe(repository.sha);
 	});
 });
 

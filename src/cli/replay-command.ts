@@ -6,7 +6,6 @@ import {
 } from "#benchmark/attempts";
 import {
 	assertPlanningStageCompleted,
-	installInstructions,
 	readTaskCard,
 	readTaskOutput,
 } from "#benchmark/backlog";
@@ -47,6 +46,7 @@ import {
 	assertBuildCommitted,
 	captureBuildCandidate,
 	changedPathsBetween,
+	currentSha,
 	git,
 	removeWorktree,
 } from "#benchmark/target";
@@ -202,7 +202,7 @@ export async function executeReplay(
 		materializeCheckpoint,
 		captureBaselineContext,
 		captureFileHashes,
-		installInstructions,
+		currentSha,
 		installDependencies: async (worktreeDir) => {
 			await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
 		},

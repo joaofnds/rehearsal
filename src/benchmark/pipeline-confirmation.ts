@@ -199,7 +199,6 @@ async function freezePipelineInputs(
 		({ taskId, taskSha } = await dependencies.createTaskCommit(
 			setupWorktree,
 			request.task,
-			request.instructions,
 			request.pipeline.statuses,
 		));
 		initialCheckpoint = await dependencies.recordCheckpoint(

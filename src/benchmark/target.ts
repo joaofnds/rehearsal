@@ -27,6 +27,15 @@ export async function git(
 	return output.trim();
 }
 
+/**
+ * The commit a checkout is on. A stage's changes are measured against it, and
+ * a replay's worktree starts there because the harness adds no commit of its
+ * own before the session runs.
+ */
+export function currentSha(directory: string): Promise<string> {
+	return git(directory, "rev-parse", "HEAD");
+}
+
 export async function assertSourceReady(
 	sourceDir: string,
 ): Promise<SourceBaseline> {
