@@ -1,11 +1,11 @@
 ---
 id: ACT-66
 title: 'load whatever the agent loads, and stop knowing how it got there'
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 18:16'
-updated_date: '2026-09-04 18:24'
+updated_date: '2026-09-04 20:58'
 labels: []
 dependencies: []
 documentation:
@@ -35,17 +35,17 @@ The work: delete the source kind. `--corpus` takes a directory in corpus layout 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 --corpus accepts a directory in corpus layout and rejects any other form, and no source file under src/ mentions chezmoi
-- [ ] #2 ResolvedCorpusSource carries no kind discriminant naming a producing tool
-- [ ] #3 A corpus living in a dotfiles ref is still measurable by rendering it outside rehearsal and passing the directory
-- [ ] #4 A recorded artifact naming a chezmoi origin still loads, or the schema drops it and the record says why
-- [ ] #5 rehearsal run --corpus chezmoi:HEAD exits 2 with a message naming chezmoi:HEAD and saying a corpus source is a directory in corpus layout
+- [x] #1 --corpus accepts a directory in corpus layout and rejects any other form, and no source file under src/ mentions chezmoi
+- [x] #2 ResolvedCorpusSource carries no kind discriminant naming a producing tool
+- [x] #3 A corpus living in a dotfiles ref is still measurable by rendering it outside rehearsal and passing the directory
+- [x] #4 A recorded artifact naming a chezmoi origin still loads, or the schema drops it and the record says why
+- [x] #5 rehearsal run --corpus chezmoi:HEAD exits 2 with a message naming chezmoi:HEAD and saying a corpus source is a directory in corpus layout
 - [ ] #6 grep -ri chezmoi src/ returns nothing
-- [ ] #7 ResolvedCorpusSource is the union live | directory, and no member names a producing tool
-- [ ] #8 corpusLayoutEntries over a fixture holding both .agents/skills/x and skills/x enumerates only skills/x, and over a fixture holding only .claude/CLAUDE.md enumerates no CLAUDE.md entry
-- [ ] #9 A session attempt record carrying corpusOrigin {kind: chezmoi, ref, commit} is refused by the schema, and a record carrying no corpusOrigin field still loads
-- [ ] #10 refuseSymlinks still throws on a symlinked entry under a directory source, asserted by a test that survives the removal
-- [ ] #11 grep -ri chezmoi README.md GLOSSARY.md returns nothing, and both still describe --corpus as taking a directory in corpus layout
+- [x] #7 ResolvedCorpusSource is the union live | directory, and no member names a producing tool
+- [x] #8 corpusLayoutEntries over a fixture holding both .agents/skills/x and skills/x enumerates only skills/x, and over a fixture holding only .claude/CLAUDE.md enumerates no CLAUDE.md entry
+- [x] #9 A session attempt record carrying corpusOrigin {kind: chezmoi, ref, commit} is refused by the schema, and a record carrying no corpusOrigin field still loads
+- [x] #10 refuseSymlinks still throws on a symlinked entry under a directory source, asserted by a test that survives the removal
+- [x] #11 grep -ri chezmoi README.md GLOSSARY.md returns nothing, and both still describe --corpus as taking a directory in corpus layout
 - [ ] #12 bun test, bun run typecheck, bun run lint, and bun run fmt:check all pass
 <!-- AC:END -->
 
@@ -91,4 +91,67 @@ Scale, run 2026-09-04 at e48a660: `grep -rio chezmoi --include='*.ts' src/ | wc 
 Glossary: three entries name chezmoi (Corpus snapshot origin, Corpus source, Corpus variant) and all three are edited rather than deleted. No new term: this card removes a concept.
 
 Sequencing: do this before ACT-65, as the description says. ACT-65 turns on where a stage session reads project instructions from, and collapsing INSTRUCTIONS_SOURCE_PATH to a constant removes one variable from that investigation. No dependency either way.
+
+## Build, 2026-09-04
+
+Three commits: bafc479 removes the source kind, af98791 fixes the prose, 35e1507 is the refactoring pass.
+
+### What changed
+
+`--corpus` takes a directory in corpus layout and nothing else. `ResolvedCorpusSource` is `live | directory`. Gone: `ChezmoiCorpusSource`, `renderChezmoi`, `discardRender`, `shellQuoted`, `optionRefRefusal`, `resolvedCommit`, `scratchDirectory`, `COMMIT_SHA`, `CHEZMOI_SCHEME`, `CHEZMOI_LAYOUT`, `INSTRUCTIONS_SOURCE_PATH`, `CommandRunner`, `CorpusSourceDependencies`, and `defaultCorpusSourceDependencies`. corpus-source.ts went from 328 lines to 132.
+
+Every unknown the shape document resolved held. The union did not collapse: `live` still carries behavior in the four places doc-10 named. The symlink refusal survived with only its comment changed, and two directory-source tests that predate this card assert it.
+
+`CorpusSourceDependencies` disappearing removed `stale`'s `corpusSource` dependency slot, which was that command's only route to a subprocess. The README claimed `stale` writes nothing 'except when rendering a ref'; with the render gone it writes nothing at all and runs no subprocess, and the README now says so.
+
+### The schema decision, criterion 4
+
+The schema drops the chezmoi member. Re-verified on disk this session: exactly two attempt records carry `corpusOrigin`, both `{kind:"live"}`, and the other eight carry no such field. Nothing under `.benchmark-runs` has ever recorded a chezmoi origin. `corpusOrigin` is already `.optional()`, so the eight pre-field records keep loading, verified by running `rehearsal list attempts` and seeing all ten. Keeping a parse path for a record that has never existed would be carrying a fiction.
+
+### Observed directly
+
+- Criterion 5: `bun rehearsal.ts run --corpus chezmoi:HEAD --case smoke --model sonnet --session-budget-usd 0.2` exits 2 with 'Corpus source chezmoi:HEAD is not an existing directory: a corpus source is a directory in corpus layout'.
+- Criterion 3: archived the dotfiles HEAD, ran `chezmoi apply` into a scratch home, copied `.agents/AGENTS.md` to `CLAUDE.md` plus the three layout directories into a corpus directory holding no symlinks, then `rehearsal stale --corpus <that directory>` exited 0 and reported 'case:brief-reply-92b2e8b0 output-styles/brief.md changed'. A corpus in a dotfiles ref is still measurable, from outside rehearsal.
+- Criterion 4/9: `rehearsal list attempts` lists all ten records.
+- `run --help` prints 'Corpus under test: a directory in corpus layout'.
+
+### Two criteria left unchecked
+
+**Criterion 6 (grep -ri chezmoi src/ returns nothing) contradicts criteria 5 and 9 and cannot hold as written.** Three test files still hold the string, all as *input* a user might type rather than as knowledge the harness carries:
+
+- corpus-source.test.ts: `it.each(["chezmoi:HEAD", "chezmoi:"])`, the resolver's rejection test.
+- session-run-command.test.ts: `it.each(["/no/such/corpus", "chezmoi:HEAD"])`, the CLI-layer rejection criterion 5 names explicitly.
+- session-record.test.ts: the `{kind:"chezmoi"}` origin criterion 9 asks the schema to refuse.
+
+Criterion 1's wording, 'no source file under src/ mentions chezmoi', is satisfied: no non-test file does. Deleting the three test inputs to satisfy criterion 6 literally would delete the very tests criteria 5 and 9 demand. I left them and left the criterion unchecked rather than choosing which criterion to break silently.
+
+**Criterion 12: bun test and bun run typecheck pass. bun run lint and bun run fmt:check fail, and both failed identically on a clean tree at f8e212d before this change.** Verified by stashing. Every error is in `docs/design-handoff/`, third-party JavaScript vendored in bab2b17 and 849bec0 without being added to `.oxlintrc.json`'s `ignorePatterns`. `src/` alone is clean under `oxlint --type-aware`. Filed as ACT-67. Note that `bun run fmt` rewrites those vendored files, so a session running it must revert `docs/` as I did.
+
+### Not verified
+
+No session was run against a corpus this session, because that costs provider calls. `stale` exercises the same resolve-and-hash path without them, and that is what I observed.
+
+### Refactoring pass
+
+Removing `CHEZMOI_LAYOUT` exposed duplicated knowledge: three lists naming the same three corpus directories, in three orders and two spellings. Collapsed to `CORPUS_LAYOUT_DIRECTORIES` in corpus-file.ts, which already owned `CORPUS_INSTRUCTIONS_PATH`. Tests green before and after, own commit.
+
+### For ACT-65
+
+Do it next, as planned. `INSTRUCTIONS_SOURCE_PATH` is gone, so 'where does this source keep CLAUDE.md' has one answer now: the root of corpus layout.
+
+### Review
+
+Due by the review skill's triggers: this deletes a security-relevant refusal path (shell quoting, option-ref refusal) and changes a persisted schema.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Deleted the chezmoi corpus source. --corpus takes a directory in corpus layout and nothing else; ResolvedCorpusSource is live | directory. corpus-source.ts went from 328 lines to 132, and the origin schema drops the chezmoi member because no record on disk has ever carried one.
+
+Observed directly: run --corpus chezmoi:HEAD exits 2 naming the source and saying a corpus source is a directory in corpus layout; a dotfiles ref rendered outside rehearsal and passed as a directory is still measurable by stale; all ten attempt records still load.
+
+Two criteria left unchecked. Criterion 6 contradicts criteria 5 and 9: the three surviving chezmoi strings under src/ are test inputs those two criteria require, and no non-test file mentions it. Criterion 12 fails only on lint and fmt:check, both already red on a clean tree from third-party files vendored into docs/design-handoff/ without lint exclusions; filed as ACT-67.
+
+Review is due: this deletes a security-relevant refusal path and changes a persisted schema.
+<!-- SECTION:FINAL_SUMMARY:END -->
