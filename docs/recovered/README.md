@@ -120,6 +120,36 @@ Named in transcripts, contents unrecoverable:
 `start-application.ts` is the most useful of them: its import list names almost
 every module the application had, which is how the inventory above was built.
 
+## The branch, and why nothing is left
+
+A session's memory file from 2026-08-29
+(`~/.claude/projects/-Users-joaofnds-code-rehearsal/memory/rehearsal-two-versions.md`)
+records what this actually was:
+
+> The 194-file/~46K-line expansion (HTTP server, storage, React client,
+> journals) was ruled over-complication and abandoned: its board cards and docs
+> were deleted from `backlog/` on 2026-08-29, and the `backup` branch (tip
+> 25c62a5, 118 commits ahead of old main tip f887f74) was slated for deletion,
+> but the session's permission layer blocked `git branch -D backup`, so the user
+> must run it themselves.
+
+So the whole thing, 194 files and 118 commits, lived on a branch named `backup`
+with tip `25c62a5`. Searched for on 2026-09-04 and not found in: this
+repository, the `origin` remote (which has only `main`), every opencode
+snapshot store, opencode's `repos` directory, Delta's clones and worktrees, and
+the trash. It existed only in `~/code/template-ops/.git`, which the rename
+removed. That is the same object store the opencode snapshot points at through
+`objects/info/alternates`, which is exactly why 39 of 49 blobs are unreadable
+there.
+
+Every backup route is closed. Time Machine has no destination configured and
+the disk carries no APFS local snapshots. Restic is configured
+(`~/.config/restic` holds `resticrepo.gpg` and `resticpass.gpg`) but João
+confirmed on 2026-09-04 that no snapshot covers this.
+
+So the 194 files and 118 commits are unrecoverable. What is in this directory,
+ten files and the complete name manifest, is all that is left of them.
+
 ## The lesson worth keeping
 
 This work was lost because it lived only in the working tree and the board, and
