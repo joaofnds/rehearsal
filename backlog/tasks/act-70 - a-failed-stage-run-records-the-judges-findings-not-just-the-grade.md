@@ -4,9 +4,11 @@ title: 'a failed stage run records the judge''s findings, not just the grade'
 status: Done
 assignee: []
 created_date: '2026-09-04 23:32'
-updated_date: '2026-09-04 23:43'
+updated_date: '2026-09-04 23:44'
 labels: []
 dependencies: []
+documentation:
+  - backlog/docs/doc-13 - reflection-ACT-70.md
 type: bug
 ordinal: 66008
 ---
