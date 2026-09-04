@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 18:16'
-updated_date: '2026-09-04 20:58'
+updated_date: '2026-09-04 21:03'
 labels: []
 dependencies: []
 documentation:
@@ -46,7 +46,7 @@ The work: delete the source kind. `--corpus` takes a directory in corpus layout 
 - [x] #9 A session attempt record carrying corpusOrigin {kind: chezmoi, ref, commit} is refused by the schema, and a record carrying no corpusOrigin field still loads
 - [x] #10 refuseSymlinks still throws on a symlinked entry under a directory source, asserted by a test that survives the removal
 - [x] #11 grep -ri chezmoi README.md GLOSSARY.md returns nothing, and both still describe --corpus as taking a directory in corpus layout
-- [ ] #12 bun test, bun run typecheck, bun run lint, and bun run fmt:check all pass
+- [x] #12 bun test, bun run typecheck, bun run lint, and bun run fmt:check all pass
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -142,6 +142,12 @@ Do it next, as planned. `INSTRUCTIONS_SOURCE_PATH` is gone, so 'where does this 
 ### Review
 
 Due by the review skill's triggers: this deletes a security-relevant refusal path (shell quoting, option-ref refusal) and changes a persisted schema.
+
+## Criterion 12 closed, 2026-09-04
+
+ACT-67 landed (576cb20), excluding the vendored docs/design-handoff/ from lint and format. With it, the full check passes together on this branch: bun test 1002 pass, bun run typecheck, bun run lint and bun run fmt:check each exit 0. Criterion 12 checked on that evidence.
+
+Criterion 6 stays unchecked, for the reason recorded above: it contradicts criteria 5 and 9, which require tests that feed the harness a chezmoi string and assert it is refused. That one needs your call, not another commit.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
