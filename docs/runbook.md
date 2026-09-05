@@ -43,6 +43,10 @@ beyond `--case`. Pass `--model` or `--session-budget-usd` to override what the
 case declares. A case that declares neither, run without either flag or its
 environment variable, refuses with exit 2 and one message naming both.
 
+Because the declaration alone would let an unattended command start a paid run,
+a run whose model comes only from the case needs a terminal. From a script or a
+test, pass `--model` to say which model you meant to pay for.
+
 It prints one line per check and then the record's path:
 
 ```text

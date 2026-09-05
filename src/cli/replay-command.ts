@@ -65,6 +65,7 @@ import { asUsageError } from "#cli/commands";
 import {
 	RefusedPreconditionError,
 	requireInteractiveStdin,
+	requireSpendAuthorization,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { writeDiagnostic, writeRecord } from "#cli/output";
@@ -117,6 +118,8 @@ export async function runReplayCommand(
 	const config = asUsageError(() =>
 		parseReplayArgs(request.args, Bun.env, declared),
 	);
+
+	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 

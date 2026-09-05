@@ -323,6 +323,41 @@ describe("rehearsal", () => {
 	});
 
 	/**
+	 * A case declaring the model means nothing the operator typed authorizes the
+	 * spend, so a bare `run` is held to a TTY or an explicit --model. Before the
+	 * declaration existed the missing --model refused this invocation; the guard
+	 * replaces that refusal rather than letting a paid run start from a bare
+	 * command or from the suite.
+	 */
+	it("refuses a run authorized only by the case declaration when stdin is not a terminal", async () => {
+		const result = await runCli(["run"]);
+
+		expect(result.exitCode).toBe(EXIT_CODES.refusedPrecondition);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("stdin is not a terminal");
+		expect(result.stderr).toContain("--model");
+	});
+
+	/**
+	 * The guard asks who authorized the spend, not how much it is. Naming the
+	 * model is the operator saying so, which is why the run below passes the
+	 * gate while the bare one above does not.
+	 */
+	it("passes the declaration gate when the model is named on the command line", async () => {
+		const result = await runCli([
+			"run",
+			"--target",
+			"/nonexistent-target",
+			"--model",
+			"sonnet",
+			"--session-budget-usd",
+			"1",
+		]);
+
+		expect(result.stderr).not.toContain("authorizes the spend");
+	});
+
+	/**
 	 * The terminal gate belongs to `--pause` alone now, so a run without it
 	 * reaches the work and fails on the state it finds rather than on a pause it
 	 * never asked for. What the run then fails on depends on the machine, so
@@ -346,9 +381,9 @@ describe("rehearsal", () => {
 
 	it.each([
 		{
-			condition: "a required flag is missing",
-			args: ["run", "--target", "/nonexistent", "--session-budget-usd", "1"],
-			message: "Provide --model or BENCHMARK_MODEL",
+			condition: "a flag needs a value it was not given",
+			args: ["run", "--session-budget-usd"],
+			message: "Flag --session-budget-usd needs a value",
 		},
 		{
 			condition: "a flag value is unparseable",
@@ -388,10 +423,21 @@ describe("rehearsal", () => {
  * provider, and each is held to the exact refusal that stops it: a weaker
  * assertion, one that accepts 0, would go on passing the day a change lets
  * `run` proceed and start a paid session from the suite.
+ *
+ * `run` refused on a missing --model until cases declared their own; the
+ * declaration answered that flag and left this invocation reaching the paid
+ * path, which is the regression the spend-authorization gate now stops. The
+ * refusal changed; what it guards did not.
  */
 const BARE_REFUSALS: ReadonlyMap<string, { code: number; reason: string }> =
 	new Map([
-		["run", { code: EXIT_CODES.usageError, reason: "Provide --model" }],
+		[
+			"run",
+			{
+				code: EXIT_CODES.refusedPrecondition,
+				reason: "nothing you passed authorizes the spend",
+			},
+		],
 		["replay", { code: EXIT_CODES.usageError, reason: "Provide --run" }],
 		["review", { code: EXIT_CODES.usageError, reason: "Provide the run" }],
 		["calibrate", { code: EXIT_CODES.usageError, reason: "Provide the run" }],

@@ -124,7 +124,15 @@ describe(executeReplayStage.name, () => {
 		]);
 	});
 
-	it("warns once before continuing with an explicit same-family Judge", async () => {
+	/**
+	 * The self-preference warning needs the resolved configuration, which now
+	 * needs the replayed run's manifest to read what its case declares. A run
+	 * that does not exist therefore refuses before the warning can be computed,
+	 * and it refuses without reaching a provider, which is the guarantee worth
+	 * pinning here. What the warning says when it does print is covered where
+	 * judgeSelfPreferenceWarning itself is tested.
+	 */
+	it("refuses a replay of an unrecorded run before resolving a Judge", async () => {
 		const missingRun = `missing-run-${randomUUID()}`;
 		const child = Bun.spawn(
 			[
@@ -154,11 +162,7 @@ describe(executeReplayStage.name, () => {
 		]);
 
 		expect(exitCode).not.toBe(0);
-		expect(stderr.match(/Self-preference warning/gu)).toEqual([
-			"Self-preference warning",
-		]);
-		expect(stderr.indexOf("Self-preference warning")).toBeLessThan(
-			stderr.indexOf(`No replayable run named ${missingRun}`),
-		);
+		expect(stderr).toContain(`No replayable run named ${missingRun}`);
+		expect(stderr.match(/Self-preference warning/gu)).toBeNull();
 	});
 });

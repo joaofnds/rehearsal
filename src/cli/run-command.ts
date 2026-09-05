@@ -60,6 +60,7 @@ import {
 	RefusedPreconditionError,
 	refuseStageCorpus,
 	requireInteractiveStdin,
+	requireSpendAuthorization,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 import { writeDiagnostic, writeRecord } from "#cli/output";
@@ -130,6 +131,7 @@ export async function runRunCommand(
 		}),
 	);
 	refuseStageCorpus(config.corpus);
+	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
 	refuseWithoutTerminal(config, request.stdinIsTerminal);
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
@@ -177,6 +179,8 @@ async function runSessionCase(
 			sessionBudgetUsd: sessionCase.declaration.sessionBudgetUsd,
 		}),
 	);
+
+	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
 
 	const outcome = await dependencies.executeSession(
 		config,
