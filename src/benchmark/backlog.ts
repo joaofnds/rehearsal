@@ -1,4 +1,5 @@
-import { mkdir, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { runCommand } from "./command";
@@ -21,7 +22,14 @@ const taskViewSchema = z
 
 type TaskView = Immutable<z.infer<typeof taskViewSchema>>;
 
-const WORKFLOW_STATE_PATHS = ["backlog/", "backlog.config.yml", ".boris/"];
+/**
+ * The base configuration names `.boris/backlog`, which the operator's global
+ * gitignore covers. A board at backlog's own default is untracked in a target
+ * that never opted into one, and the harness writes no commit for the board it
+ * creates, so the stage would be failed for a dirty worktree holding the
+ * harness's own scaffolding.
+ */
+const BASE_BOARD_CONFIG = join(homedir(), ".agents", "backlog-config.yml");
 
 interface TaskSeed {
 	readonly title: string;
@@ -42,52 +50,16 @@ function parseTaskSeed(task: string): TaskSeed {
 	return { title: heading.slice(2).trim(), description };
 }
 
-/**
- * The harness writes no commit for the board it creates, so a target that never
- * opted into a board reports it as untracked and the stage is failed for
- * scaffolding the harness put there. The exclusion goes in the repository's
- * private info/exclude rather than its .gitignore, which is the target's own
- * file and a property of the repository under test.
- */
-async function excludeWorkflowState(targetDir: string): Promise<void> {
-	const excludePath = join(targetDir, ".git", "info", "exclude");
-	const existing = await Bun.file(excludePath)
-		.text()
-		.catch(() => "");
-	const lines = existing.split("\n");
-	const missing = WORKFLOW_STATE_PATHS.filter((path) => !lines.includes(path));
-	if (missing.length === 0) {
-		return;
-	}
-
-	await mkdir(join(targetDir, ".git", "info"), { recursive: true });
-	const kept = existing.trimEnd();
-	const body = kept ? [kept, ...missing] : missing;
-
-	await Bun.write(excludePath, `${body.join("\n")}\n`);
-}
-
 async function configureBacklog(
 	targetDir: string,
 	statuses: readonly string[],
 ): Promise<void> {
-	const configPath = join(targetDir, "backlog", "config.yml");
+	const configPath = join(targetDir, "backlog.config.yml");
 	const configFile = Bun.file(configPath);
 
 	if (!(await configFile.exists())) {
-		await runCommand(
-			[
-				"backlog",
-				"init",
-				"Template",
-				"--defaults",
-				"--integration-mode",
-				"cli",
-				"--agent-instructions",
-				"none",
-			],
-			targetDir,
-		);
+		const base = await Bun.file(BASE_BOARD_CONFIG).text();
+		await Bun.write(configPath, base.replace("PLACEHOLDER", "Template"));
 	}
 
 	const config = await Bun.file(configPath).text();
@@ -119,7 +91,6 @@ export async function seedTaskBoard(
 		throw new Error("The pipeline must declare at least one board status");
 	}
 
-	await excludeWorkflowState(targetDir);
 	await configureBacklog(targetDir, statuses);
 	const { title, description } = parseTaskSeed(task);
 	const createdTask = await runCommand(

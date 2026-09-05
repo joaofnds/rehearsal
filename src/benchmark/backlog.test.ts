@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -171,7 +171,17 @@ describe(seedTaskBoard.name, () => {
 		expect(taskSha).toBe(target.sha);
 	});
 
-	it("leaves a target that ignores no workflow state clean", async () => {
+	it("puts the board where the base configuration says, under the ignored workflow state", async () => {
+		const target = await testResources.createRepository();
+
+		await seedTaskBoard(target.directory, seed, ["To Do", "Done"]);
+
+		expect(
+			await readdir(join(target.directory, ".boris", "backlog", "tasks")),
+		).toHaveLength(1);
+	});
+
+	it("leaves a target that ignores no board path clean", async () => {
 		const target = await testResources.createRepository();
 		await Bun.write(join(target.directory, ".gitignore"), "node_modules/\n");
 		await runCommand(["git", "add", ".gitignore"], target.directory);
