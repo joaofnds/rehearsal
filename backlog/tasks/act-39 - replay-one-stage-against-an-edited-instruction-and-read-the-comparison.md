@@ -1,15 +1,14 @@
 ---
 id: ACT-39
 title: replay one stage against an edited instruction and read the comparison
-status: Build
+status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-05 00:37'
+updated_date: '2026-09-05 00:42'
 labels: []
 milestone: m-1
 dependencies:
-  - ACT-38
-  - ACT-41
+  - ACT-28
 priority: high
 ordinal: 41008
 ---
@@ -30,7 +29,7 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 <!-- AC:BEGIN -->
 - [x] #1 The shape stage passes its judge once and records a stage checkpoint
 - [ ] #2 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
-- [ ] #3 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
+- [x] #3 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
 - [ ] #4 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
 <!-- AC:END -->
 
@@ -118,4 +117,16 @@ The run continued into build, which graded C against a B minimum, so it stopped 
 That finding is the natural corpus edit for this card. Criteria #2 through #4 are now reachable: edit one instruction so the build stage enforces the brief's validation rules, run stale, replay the build stage from the shape checkpoint, and read both attempts.
 
 Remaining budget is about 6.5 USD. A replay of the build stage alone should cost near the 2.69 that stage just cost.
+
+Replay refused 2026-09-05. The card cannot be completed until ACT-28 lands, and this is the corpus-freezing question triage flagged at the start of the session.
+
+'rehearsal replay --run 2026-09-05T00-21-40.070Z --stage shape --corpus <edited copy>' exits without running, saying: 'A stage's corpus is the skill it invokes, so --corpus cannot reach it, and a project-level skill does not shadow the user-level one: ACT-28 owns the delivery mechanism, so a skill variant cannot be measured yet.'
+
+The refusal is deliberate and it is right. src/benchmark/session-corpus.ts:26-37 records the reason: on claude 2.1.258 a project-level skill does not shadow the user-level one, so a corpus carrying skill bytes would be hashed into lineage and then never delivered, and the attempt would record a measurement of a corpus the session never read. Refusing beats recording a false measurement.
+
+So the inner loop this card exists to prove cannot run for a pipeline stage on any corpus edit, not just this one. The comment names session cases as where a corpus variant is measured until ACT-28 lands.
+
+What did happen, and is worth keeping: the shape checkpoint exists, and 'rehearsal stale --corpus <edited copy>' correctly reported 'checkpoint:2026-09-05T00-21-40.070Z/shape CLAUDE.md changed'. That is acceptance criterion #3, observed, and it is the first time staleness has been demonstrated against a real edit to a real checkpoint.
+
+Criteria #2 and #4 are blocked on ACT-28. This card should depend on it.
 <!-- SECTION:NOTES:END -->
