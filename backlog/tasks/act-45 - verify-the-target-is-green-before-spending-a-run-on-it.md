@@ -4,6 +4,7 @@ title: verify the target is green before spending a run on it
 status: To Do
 assignee: []
 created_date: '2026-09-04 02:14'
+updated_date: '2026-09-05 20:46'
 labels: []
 milestone: m-2
 dependencies: []
@@ -33,3 +34,15 @@ The run does execute baseline checks after it starts (the log prints "Baseline c
 - [ ] #2 The refusal is distinguishable by the operator from a target that is green, without reading the harness source
 - [ ] #3 A run that proceeds records the baseline check results in its artifact, so a later reader can tell the target was green when the run started
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decision, 2026-09-05 (João, in session): both shape questions settled.
+
+1. A red baseline refuses with exit code 3 (refusedPrecondition, already used for other pre-flight refusals) and names the failing check on stderr. No new artifact file for a run that never started, and no new exit code. João: 'agree'.
+
+2. A run that proceeds records its baseline check results using the same LocalCheckResult shape captureTreatmentChecks already produces, so a later reader sees both ends of a run in one format. João: 'agree'.
+
+Probed this session before relaying the shape session's claims: captureRunBaseline (src/benchmark/run.ts:802) does run before any workflow session, and runChecks throws on the first failing check, so a red target already stops the run before any provider call. The card's premise that money is at risk is wrong. The real gap is that the refusal is indistinguishable from an unrelated crash and a green baseline leaves no trace on disk.
+<!-- SECTION:NOTES:END -->
