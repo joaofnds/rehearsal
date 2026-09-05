@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-05 12:47'
-updated_date: '2026-09-05 14:51'
+updated_date: '2026-09-05 16:25'
 labels: []
 dependencies: []
 type: bug
@@ -43,4 +43,6 @@ Two parts, both needed. The corpus reorganization left ~/.agents/rules linked in
 Verified: 'rehearsal stale' exits 0 and reports the reorganization correctly against the recorded checkpoints, listing every rules file added and the doctrine skill files removed.
 
 The tests that exercised the global-skill mechanism did so through doctrine as its only member. The mechanism stays wired in run.ts for a future global; the tests that only asserted doctrine's membership are gone, and the one proving a missing skill stops a run before any stage now names a pipeline stage's skill.
+
+2026-09-05, follow-up (91495ba): the dotfiles link that closed this card sat at ~/.claude/rules, a directory Claude Code auto-loads at launch, so every session on the machine started with the whole rules tree in context, about 90k tokens, benchmark sessions included. The tree is now ~/.agents/rulebook, linked into each harness as rulebook (dotfiles b55eaf36), and the corpus kind here follows. stale exits 0 and reports rules/* removed, rulebook/* added, on every recorded checkpoint; full check green.
 <!-- SECTION:NOTES:END -->
