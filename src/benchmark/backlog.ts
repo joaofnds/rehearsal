@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { runCommand } from "./command";
@@ -21,6 +21,8 @@ const taskViewSchema = z
 
 type TaskView = Immutable<z.infer<typeof taskViewSchema>>;
 
+const WORKFLOW_STATE_PATHS = ["backlog/", "backlog.config.yml", ".boris/"];
+
 interface TaskSeed {
 	readonly title: string;
 	readonly description: string;
@@ -38,6 +40,31 @@ function parseTaskSeed(task: string): TaskSeed {
 	}
 
 	return { title: heading.slice(2).trim(), description };
+}
+
+/**
+ * The harness writes no commit for the board it creates, so a target that never
+ * opted into a board reports it as untracked and the stage is failed for
+ * scaffolding the harness put there. The exclusion goes in the repository's
+ * private info/exclude rather than its .gitignore, which is the target's own
+ * file and a property of the repository under test.
+ */
+async function excludeWorkflowState(targetDir: string): Promise<void> {
+	const excludePath = join(targetDir, ".git", "info", "exclude");
+	const existing = await Bun.file(excludePath)
+		.text()
+		.catch(() => "");
+	const lines = existing.split("\n");
+	const missing = WORKFLOW_STATE_PATHS.filter((path) => !lines.includes(path));
+	if (missing.length === 0) {
+		return;
+	}
+
+	await mkdir(join(targetDir, ".git", "info"), { recursive: true });
+	const kept = existing.trimEnd();
+	const body = kept ? [kept, ...missing] : missing;
+
+	await Bun.write(excludePath, `${body.join("\n")}\n`);
 }
 
 async function configureBacklog(
@@ -92,6 +119,7 @@ export async function seedTaskBoard(
 		throw new Error("The pipeline must declare at least one board status");
 	}
 
+	await excludeWorkflowState(targetDir);
 	await configureBacklog(targetDir, statuses);
 	const { title, description } = parseTaskSeed(task);
 	const createdTask = await runCommand(

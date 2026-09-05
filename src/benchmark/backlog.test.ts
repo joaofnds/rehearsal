@@ -170,4 +170,20 @@ describe(seedTaskBoard.name, () => {
 		expect(subjects).not.toContain("chore: configure project instructions");
 		expect(taskSha).toBe(target.sha);
 	});
+
+	it("leaves a target that ignores no workflow state clean", async () => {
+		const target = await testResources.createRepository();
+		await Bun.write(join(target.directory, ".gitignore"), "node_modules/\n");
+		await runCommand(["git", "add", ".gitignore"], target.directory);
+		await runCommand(
+			["git", "commit", "-m", "chore: drop workflow ignores"],
+			target.directory,
+		);
+
+		await seedTaskBoard(target.directory, seed, ["To Do", "Done"]);
+
+		expect(
+			await runCommand(["git", "status", "--porcelain"], target.directory),
+		).toBe("");
+	});
 });
