@@ -431,8 +431,8 @@ export class RecordedRunsFixture {
 
 	/**
 	 * A checkpoint stage directory a run created and died before writing a
-	 * checkpoint.json into, so its lister's read throws a raw ENOENT naming
-	 * the file's path.
+	 * checkpoint.json into, so its lister reports it as incomplete rather
+	 * than reading it.
 	 */
 	public async writeEmptyCheckpointDirectory(stage: string): Promise<void> {
 		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
