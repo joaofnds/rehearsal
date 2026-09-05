@@ -1,10 +1,10 @@
 ---
 id: ACT-46
 title: make both required run flags come from the case or a default
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 02:27'
-updated_date: '2026-09-05 21:35'
+updated_date: '2026-09-05 21:36'
 labels: []
 milestone: m-2
 dependencies: []
@@ -43,27 +43,74 @@ Filed after Joao pointed out he has never been able to run this tool himself.
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Bet, 2026-09-05: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+Shaped 2026-09-05.
 
-Decisions, 2026-09-05 (Joao, both agreed):
+Goal: a run of a declared case starts with --case alone; model and budget come
+from the case declaration, with --model/--session-budget-usd/env still
+overriding, same precedence --target already gives the declared target.
 
-1. Model: a case declares its model in case.json. --model and BENCHMARK_MODEL
-   still override it, the same precedence the declared target already gives
-   --target. Model already keys the lineage and the staleness comparison in
-   checkpoint.ts, so the declaration reaches the record with no separate
-   lineage change.
+Open question for João, blocks one file's scope (replay-command.ts):
+replay is named by --run, not --case, and today parses both knobs before it
+resolves anything about the recorded run. The run directory does carry the
+case id (attempt.caseId in run-layout.ts), so replay could load that case's
+current declaration and default to its model/budget. But replay's staleness
+check (checkpoint.ts deriveStaleness, ~line 453) exists to compare the
+checkpoint's recorded model against the model the new replay requests --
+defaulting to the case's *current* declared model makes that comparison live
+every time budgets/models get bumped later, which may be exactly the point or
+may be noise. Two options:
+  a) replay also reads the case declaration and defaults from it, same as run
+     (more consistent, touches replay-command.ts and parseReplayArgs)
+  b) replay keeps requiring both flags explicitly, since it's already
+     comparing against a frozen checkpoint and a silent default could compare
+     against a moving target unintentionally (smaller change, leaves one
+     asymmetry between run and replay)
+No evidence backs either as safer; it's a product call about what replay is for.
+Recommendation: (a), for consistency with run and because the override still
+lets you pin the checkpoint's original model explicitly when you want the
+frozen comparison.
 
-2. Budget (AC #3's recorded mechanism and reason): per-case declaration, not a
-   global default. Documented runs span 0.2 USD (haiku session case) to 10 USD
-   (sonnet full pipeline), a fiftyfold range. One flat constant would either
-   starve a pipeline run or let a cheap session case overspend by that factor,
-   so no single number is safe for all cases.
+Acceptance, restated as observations:
+- `bun run rehearsal run --case smoke` (no other flags) starts and completes.
+- `bun run rehearsal run --case audit-log` (no other flags) starts and completes.
+- A run given neither flag and a case that declares neither still gets ONE
+  error message naming both missing values (there is no such case among the
+  six today, but parseSessionKnobs must not throw on the first missing knob
+  and stop).
+- `case.json` schema (src/benchmark/case.ts, caseDeclarationSchema) gains an
+  optional model field on both the pipeline and session branches, and an
+  optional sessionBudgetUsd field on both branches.
+- Six cases get values per the card's scope note: audit-log at 10,
+  smoke + the four brief-reply-* cases at the cheap budget already printed in
+  README.md/docs/runbook.md (0.2).
+- README.md and docs/runbook.md first-run commands (lines ~476-491, ~573-574,
+  and runbook.md line 38/122) are edited to drop the now-unneeded flags and
+  re-run as printed; runbook.md line 41's "both are required" line is rewritten
+  to state the new precedence.
+- Model still keys lineage/staleness with no separate change needed
+  (checkpoint.ts already takes model as a plain field from SessionKnobs).
 
-Scope note: six cases need values, not two. audit-log at 10, and smoke plus the
-four brief-reply cases at a cheap budget, matching what README.md and
-docs/runbook.md already print.
+Where the fix lives: parseSessionKnobs (src/benchmark/config.ts:236) is the
+one function both refusals come from; it needs a third argument carrying the
+case's declared model/budget (undefined when the case doesn't declare them),
+mirroring how parseArgs already threads caseDefaults.targetPath. Callers to
+update: parseArgs (line 299, pipeline run), parseSessionArgs (line 351,
+session run), parseReplayArgs (line 382, pending the open question above).
 
-Both refusals come from parseSessionKnobs in src/benchmark/config.ts, called by
-run, replay, and the session-case parser, so AC #1's single message naming
-everything still missing has one place to live.
+First test to write: parseSessionKnobs, given a declared model and no --model
+flag and no env, returns that model instead of throwing (unit test in
+src/benchmark/config.test.ts, no case.json fixture needed since the function
+takes the declared values directly).
+
+No new glossary terms; "declared" precedence for a knob already exists in
+the glossary via CaseDefaults' target/pipeline pattern.
+
+Replay decision, 2026-09-05 (Joao agreed): replay defaults model and budget
+from the case declaration exactly as run does, with flags and env still
+overriding. The shape session's warning that a later bump to a declared model
+would silently change what an old replay compares against is wrong:
+deriveStaleness (src/benchmark/checkpoint.ts:453) compares the recorded model
+against the requested one and reports "model X is now Y" as a staleness cause,
+so a bumped declaration surfaces rather than passing quietly. This closes the
+open fork in the plan above; parseReplayArgs is no longer pending.
 <!-- SECTION:NOTES:END -->
