@@ -356,6 +356,10 @@ export interface SessionRunConfig extends SessionKnobs, CorpusSelection {
 
 const PIPELINE_ONLY_FLAGS = ["--target", "--pipeline"] as const;
 
+export interface SessionCaseDefaults extends DeclaredSessionKnobs {
+	readonly caseId: string;
+}
+
 /**
  * A session case declares neither a target repository nor a pipeline, so it
  * gets its own parser rather than a BenchmarkConfig with those fields defaulted
@@ -365,17 +369,22 @@ const PIPELINE_ONLY_FLAGS = ["--target", "--pipeline"] as const;
 export function parseSessionArgs(
 	args: readonly string[],
 	env: Readonly<Record<string, string | undefined>>,
-	caseId: string,
+	caseDefaults: SessionCaseDefaults,
 ): SessionRunConfig {
 	const flags = flagValues(args);
 	const refused = PIPELINE_ONLY_FLAGS.find((flag) => flags.values.has(flag));
 	if (refused !== undefined) {
-		throw new Error(`Case ${caseId} is a session case and takes no ${refused}`);
+		throw new Error(
+			`Case ${caseDefaults.caseId} is a session case and takes no ${refused}`,
+		);
 	}
 
 	return withConfirmation(
 		withCorpus(
-			{ caseId, ...parseSessionKnobs(flags.values, env) },
+			{
+				caseId: caseDefaults.caseId,
+				...parseSessionKnobs(flags.values, env, caseDefaults),
+			},
 			flags.values.get("--corpus"),
 		),
 		parseConfirmation(flags),

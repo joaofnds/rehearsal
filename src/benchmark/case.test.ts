@@ -61,6 +61,46 @@ describe(parseCaseDeclaration.name, () => {
 			"audit-log",
 		);
 	});
+
+	it("carries the model and session budget a pipeline case declares", () => {
+		const parsed = parseCaseDeclaration(
+			"audit-log",
+			JSON.stringify({
+				id: "audit-log",
+				kind: "pipeline",
+				title: "Audit log",
+				task: "backlog-seed.md",
+				productBrief: "product-brief.md",
+				finalRubric: "rubric.md",
+				pipeline: "pipelines/default.json",
+				rubrics: "rubrics",
+				target: { path: "../../../nest/template" },
+				model: "sonnet",
+				sessionBudgetUsd: 10,
+			}),
+		);
+
+		expect(parsed).toMatchObject({ model: "sonnet", sessionBudgetUsd: 10 });
+	});
+
+	it("carries the model and session budget a session case declares", () => {
+		const parsed = parseCaseDeclaration(
+			"smoke",
+			JSON.stringify({
+				id: "smoke",
+				kind: "session",
+				title: "Smoke",
+				prompt: "Reply with the single word OK.",
+				tools: [],
+				corpusFiles: ["output-styles/brief.md"],
+				checks: [{ kind: "tool-calls", max: 0 }],
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+			}),
+		);
+
+		expect(parsed).toMatchObject({ model: "sonnet", sessionBudgetUsd: 0.2 });
+	});
 });
 
 describe(caseRelative.name, () => {

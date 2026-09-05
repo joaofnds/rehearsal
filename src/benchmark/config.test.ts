@@ -675,7 +675,7 @@ describe("the corpus source flag", () => {
 		const config = parseSessionArgs(
 			[...knobs, "--corpus", "/variants/brief"],
 			{},
-			"smoke",
+			{ caseId: "smoke" },
 		);
 
 		expect(config.corpus).toBe("/variants/brief");
@@ -700,7 +700,37 @@ describe("the corpus source flag", () => {
 
 	it("leaves the corpus absent when --corpus is not given, which is the live install", () => {
 		expect(parseArgs(knobs, {}, CASE_DEFAULTS).corpus).toBeUndefined();
-		expect(parseSessionArgs(knobs, {}, "smoke").corpus).toBeUndefined();
+		expect(
+			parseSessionArgs(knobs, {}, { caseId: "smoke" }).corpus,
+		).toBeUndefined();
+	});
+});
+
+describe("session run knobs declared by the case", () => {
+	it("falls back to the model and budget the session case declares", () => {
+		const config = parseSessionArgs(
+			[],
+			{},
+			{
+				caseId: "smoke",
+				model: "declared-model",
+				sessionBudgetUsd: 0.2,
+			},
+		);
+
+		expect(config.model).toBe("declared-model");
+		expect(config.sessionBudgetUsd).toBe(0.2);
+	});
+
+	it("lets --model and --session-budget-usd override the session case's declared values", () => {
+		const config = parseSessionArgs(
+			["--model", "sonnet", "--session-budget-usd", "5"],
+			{},
+			{ caseId: "smoke", model: "declared-model", sessionBudgetUsd: 0.2 },
+		);
+
+		expect(config.model).toBe("sonnet");
+		expect(config.sessionBudgetUsd).toBe(5);
 	});
 });
 

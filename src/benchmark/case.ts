@@ -47,6 +47,9 @@ export const transcriptPrefixSchema = z
 
 export type TranscriptPrefix = z.infer<typeof transcriptPrefixSchema>;
 
+const declaredModelSchema = z.string().min(1).optional();
+const declaredSessionBudgetUsdSchema = z.number().positive().optional();
+
 export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 	z
 		.object({
@@ -59,6 +62,8 @@ export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 			pipeline: caseRelativePathSchema,
 			rubrics: caseRelativePathSchema,
 			target: z.object({ path: z.string().min(1) }).strict(),
+			model: declaredModelSchema,
+			sessionBudgetUsd: declaredSessionBudgetUsdSchema,
 		})
 		.strict(),
 	z
@@ -74,6 +79,8 @@ export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 			agents: jsonObjectSchema.optional(),
 			corpusFiles: z.array(z.string().min(1)),
 			checks: z.array(checkSchema).min(1),
+			model: declaredModelSchema,
+			sessionBudgetUsd: declaredSessionBudgetUsdSchema,
 		})
 		.strict(),
 ]);

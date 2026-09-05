@@ -125,6 +125,8 @@ export async function runRunCommand(
 			caseId: benchmarkCase.declaration.id,
 			pipelinePath: benchmarkCase.pipelinePath,
 			targetPath: benchmarkCase.targetPath,
+			model: benchmarkCase.declaration.model,
+			sessionBudgetUsd: benchmarkCase.declaration.sessionBudgetUsd,
 		}),
 	);
 	refuseStageCorpus(config.corpus);
@@ -169,7 +171,11 @@ async function runSessionCase(
 	dependencies: RunCommandDependencies,
 ): Promise<void> {
 	const config = asUsageError(() =>
-		parseSessionArgs(request.args, Bun.env, sessionCase.declaration.id),
+		parseSessionArgs(request.args, Bun.env, {
+			caseId: sessionCase.declaration.id,
+			model: sessionCase.declaration.model,
+			sessionBudgetUsd: sessionCase.declaration.sessionBudgetUsd,
+		}),
 	);
 
 	const outcome = await dependencies.executeSession(
