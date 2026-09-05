@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { z } from "zod";
 import { recordCheckpoint } from "./checkpoint";
-import { runCommand } from "./command";
+import { CommandError, runCommand } from "./command";
 import { parseArgs } from "./config";
 import type {
 	CalibrationResult,
@@ -17,6 +17,8 @@ import type {
 	StageScorecard,
 } from "./contracts";
 import { StageValidationError } from "./contracts";
+import { RefusedPreconditionError } from "./exit-codes";
+import { failureOf } from "#cli/cli-test-support";
 import type {
 	JudgeAgreementCalibration,
 	JudgeAgreementReport,
@@ -1576,6 +1578,36 @@ describe(captureRunBaseline.name, () => {
 			baselineHashes: hashes,
 			baselineContext: context,
 		});
+	});
+
+	it("refuses a target whose declared baseline check fails, naming the command and exit code", async () => {
+		const failure = new CommandError(
+			["bun", "run", "test:unit"],
+			1,
+			"",
+			"15 pass, 1 fail",
+		);
+
+		const refusal = await failureOf(
+			captureRunBaseline(
+				{
+					runChecks: () => Promise.reject(failure),
+					assertWorkspaceCleanAt: () => Promise.resolve(),
+					captureFileHashes: () => Promise.resolve(new Map()),
+					captureBaselineContext: () => Promise.resolve([]),
+				},
+				{ root: "/target", sha: "source-sha" },
+				{
+					checks: [{ command: ["bun", "run", "test:unit"] }],
+					integrityFiles: [],
+				},
+			),
+		);
+
+		expect(refusal).toBeInstanceOf(RefusedPreconditionError);
+		expect(refusal.message).toBe(
+			"Baseline check failed (exit 1): bun run test:unit",
+		);
 	});
 });
 

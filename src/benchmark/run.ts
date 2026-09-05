@@ -29,10 +29,11 @@ import {
 	captureTreatmentChecks,
 	runChecks,
 } from "./checks";
-import { killActiveCommands, runCommand } from "./command";
+import { CommandError, killActiveCommands, runCommand } from "./command";
 import type { BenchmarkCase } from "./case";
 import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
 import { CONTROL_DIR } from "./config";
+import { RefusedPreconditionError } from "./exit-codes";
 import { liveCorpusInstructions } from "./corpus-file";
 import type {
 	CalibrationResult,
@@ -799,7 +800,17 @@ export async function captureRunBaseline(
 	source: SourceBaseline,
 	target: TargetDefinition,
 ): Promise<RunBaseline> {
-	await dependencies.runChecks(source.root, "Baseline checks", target.checks);
+	try {
+		await dependencies.runChecks(source.root, "Baseline checks", target.checks);
+	} catch (error) {
+		if (error instanceof CommandError) {
+			throw new RefusedPreconditionError(
+				`Baseline check failed (exit ${error.exitCode}): ${error.command.join(" ")}`,
+			);
+		}
+
+		throw error;
+	}
 	await dependencies.assertWorkspaceCleanAt(source.root, source.sha);
 	const baselineHashes = await dependencies.captureFileHashes(
 		source.root,
