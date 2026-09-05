@@ -3,12 +3,13 @@ id: ACT-43
 title: >-
   a run's reported total cost omits the workflow sessions, so a run's price is
   understated
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 03:10'
-labels: []
+updated_date: '2026-09-05 03:24'
+labels:
+  - partial
 milestone: m-1
 dependencies: []
 priority: medium
@@ -82,4 +83,10 @@ The run did not complete. Shape graded B CONTINUE, then the build stage ended in
 What the run did produce is a second independent confirmation of the fix. On that fresh record the judge cost is 0.749989 and the workflow session cost is 0.7154158. runSummary now prints 'Total cost $1.47' against a true spend of 1.4654048. The pre-fix code would have printed $0.75, understating by half. Two real records now show the same correction, the earlier one 1.12 against 1.46.
 
 Open question for João: the build stage failing is its own defect and may deserve a card. It is not this card's subject.
+
+Closed partial 2026-09-05 at João's direction.
+
+Delivered and verified: a run's reported total cost now includes the workflow sessions. Confirmed twice on real records. On 2026-09-05T00-21-40.070Z.shape.json the summary prints $1.46 where the old code printed $1.12. On 2026-09-05T02-56-43.136Z.shape.json it prints $1.47 where the old code printed $0.75. Full checks pass: 1014 tests, typecheck, oxlint, oxfmt.
+
+Left undone: AC2 and AC3, which require the total checked against a completed run artifact and a real confirmation group report. Neither artifact exists. The audit-log run attempted for this purpose failed in its build stage, which is a defect in the pipeline rather than in this fix. The group report was not attempted because it costs roughly $8 to $10 and the same build defect would likely stop it.
 <!-- SECTION:NOTES:END -->
