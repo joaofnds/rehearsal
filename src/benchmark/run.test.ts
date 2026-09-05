@@ -1210,12 +1210,12 @@ describe(runGradedStages.name, () => {
 		expect(executed).toEqual([]);
 	});
 
-	it("fails before any stage runs when a global skill is missing", async () => {
+	it("fails before any stage runs when a stage's skill is missing", async () => {
 		const { dependencies, executed } = fakeStageDependencies();
 		const missing = {
 			...dependencies,
 			resolveSkillDirectory: (skill: string) => {
-				if (skill === "doctrine") {
+				if (skill === "build") {
 					return Promise.reject(
 						new Error(`The ${skill} skill is not installed`),
 					);
@@ -1226,7 +1226,7 @@ describe(runGradedStages.name, () => {
 		};
 
 		expect(runGradedStages(missing, await stageContext())).rejects.toThrow(
-			"doctrine skill is not installed",
+			"build skill is not installed",
 		);
 		expect(executed).toEqual([]);
 	});
@@ -1260,7 +1260,6 @@ describe(runGradedStages.name, () => {
 		await runGradedStages(timed, await stageContext());
 
 		expect(log).toEqual([
-			"resolve:doctrine",
 			"resolve:shape",
 			"resolve:build",
 			"corpus:shape",

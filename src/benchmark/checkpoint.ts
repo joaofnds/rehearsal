@@ -164,17 +164,24 @@ async function resolveLayoutDirectory(
 /**
  * Skills every stage reads regardless of which skill it invokes, so an edit
  * to one changes every stage's corpus. A declared list: adding another global
- * skill later is one entry here.
+ * skill later is one entry here. The doctrine left this list when it became a
+ * rules file, which `rules` now carries whole.
  */
-export const GLOBAL_SKILLS: readonly string[] = ["doctrine"];
+export const GLOBAL_SKILLS: readonly string[] = [];
 
 /**
  * The whole-directory corpus kinds a stage's corpus carries beside its skills:
- * every agent and every output style, whichever root supplies them, because a
- * stage session can invoke either and both must be frozen the same way a
- * skill is.
+ * every agent, every output style, and every rule, whichever root supplies
+ * them, because a stage session can read any of them and all must be frozen
+ * the same way a skill is. Rules are a directory of files rather than a named
+ * unit like a skill, so a stage reads them by path and the whole tree is
+ * frozen.
  */
-const LAYOUT_DIRECTORY_KINDS: readonly string[] = ["agents", "output-styles"];
+const LAYOUT_DIRECTORY_KINDS: readonly string[] = [
+	"agents",
+	"output-styles",
+	"rules",
+];
 
 /**
  * Corpus file paths are recorded relative to the corpus, not the machine, so

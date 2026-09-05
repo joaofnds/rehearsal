@@ -105,6 +105,15 @@ describe(captureStageCorpus.name, () => {
 		await Bun.write(join(root, "agents", `${agent}.md`), body);
 	}
 
+	async function installRule(
+		root: string,
+		rule: string,
+		body: string,
+	): Promise<void> {
+		await mkdir(join(root, "rules"), { recursive: true });
+		await Bun.write(join(root, "rules", `${rule}.md`), body);
+	}
+
 	async function installOutputStyle(
 		root: string,
 		style: string,
@@ -116,19 +125,16 @@ describe(captureStageCorpus.name, () => {
 
 	it("hashes the installed instructions and every skill file", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
 
 		const corpus = await captureStageCorpus("discuss", "instructions", roots);
 
 		expect(corpus.map(({ path }) => path)).toEqual([
 			"CLAUDE.md",
-			"skills/doctrine/SKILL.md",
-			"skills/doctrine/references/notes.md",
 			"skills/discuss/SKILL.md",
 			"skills/discuss/references/notes.md",
 		]);
-		expect(new Set(corpus.map(({ sha256 }) => sha256)).size).toBe(5);
+		expect(new Set(corpus.map(({ sha256 }) => sha256)).size).toBe(3);
 	});
 
 	it("records the same corpus wherever the same skill files live", async () => {
@@ -259,66 +265,14 @@ describe(captureStageCorpus.name, () => {
 
 	it("fails naming the skill and the searched roots when none has it", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
 
 		expect(
 			captureStageCorpus("discuss", "instructions", roots),
 		).rejects.toThrow(/discuss.*not installed/u);
 	});
 
-	it("hashes every global skill into each stage's corpus", async () => {
-		const roots = await corpusRoots();
-		await installSkill(roots[1], "discuss", "discuss skill");
-		await installSkill(roots[1], "doctrine", "doctrine skill");
-
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
-
-		expect(corpus.map(({ path }) => path)).toEqual([
-			"CLAUDE.md",
-			"skills/doctrine/SKILL.md",
-			"skills/doctrine/references/notes.md",
-			"skills/discuss/SKILL.md",
-			"skills/discuss/references/notes.md",
-		]);
-	});
-
-	it("hashes a global skill once when it is also the stage's own skill", async () => {
-		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
-
-		const corpus = await captureStageCorpus("doctrine", "instructions", roots);
-
-		expect(corpus.map(({ path }) => path)).toEqual([
-			"CLAUDE.md",
-			"skills/doctrine/SKILL.md",
-			"skills/doctrine/references/notes.md",
-		]);
-	});
-
-	it("changes every stage's corpus when a global skill file changes", async () => {
-		const roots = await corpusRoots();
-		await installSkill(roots[1], "discuss", "discuss skill");
-		await installSkill(roots[1], "doctrine", "doctrine skill");
-		const before = await captureStageCorpus("discuss", "instructions", roots);
-
-		await installSkill(roots[1], "doctrine", "doctrine skill, revised");
-		const after = await captureStageCorpus("discuss", "instructions", roots);
-
-		expect(after).not.toEqual(before);
-	});
-
-	it("fails naming the global skill when it is not installed", async () => {
-		const roots = await corpusRoots();
-		await installSkill(roots[1], "discuss", "discuss skill");
-
-		expect(
-			captureStageCorpus("discuss", "instructions", roots),
-		).rejects.toThrow(/doctrine.*not installed/u);
-	});
-
 	it("hashes every agent and output style file, project root first", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
 		await installAgent(roots[1], "reviewer", "reviewer agent");
 		await installOutputStyle(roots[1], "brief", "brief style");
@@ -329,8 +283,6 @@ describe(captureStageCorpus.name, () => {
 			"CLAUDE.md",
 			"agents/reviewer.md",
 			"output-styles/brief.md",
-			"skills/doctrine/SKILL.md",
-			"skills/doctrine/references/notes.md",
 			"skills/discuss/SKILL.md",
 			"skills/discuss/references/notes.md",
 		]);
@@ -338,7 +290,6 @@ describe(captureStageCorpus.name, () => {
 
 	it("prefers the project root's whole agents directory over the user's", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
 		await installAgent(roots[0], "reviewer", "project reviewer");
 		await installAgent(roots[1], "reviewer", "user reviewer");
@@ -350,9 +301,21 @@ describe(captureStageCorpus.name, () => {
 		expect(agentFiles.map(({ path }) => path)).toEqual(["agents/reviewer.md"]);
 	});
 
+	it("hashes every rule file, so an edit to one changes the corpus", async () => {
+		const roots = await corpusRoots();
+		await installSkill(roots[1], "discuss", "discuss skill");
+		await installRule(roots[1], "doctrine", "the doctrine");
+		const before = await captureStageCorpus("discuss", "instructions", roots);
+
+		await installRule(roots[1], "doctrine", "the doctrine, revised");
+		const after = await captureStageCorpus("discuss", "instructions", roots);
+
+		expect(before.some(({ path }) => path === "rules/doctrine.md")).toBe(true);
+		expect(after).not.toEqual(before);
+	});
+
 	it("captures no agents or output styles when neither root has them", async () => {
 		const roots = await corpusRoots();
-		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
 
 		const corpus = await captureStageCorpus("discuss", "instructions", roots);
