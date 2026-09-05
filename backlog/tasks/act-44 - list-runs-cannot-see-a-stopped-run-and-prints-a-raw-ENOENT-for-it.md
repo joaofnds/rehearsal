@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 16:58'
+updated_date: '2026-09-05 17:00'
 labels: []
 milestone: m-1
 dependencies: []
@@ -51,4 +51,6 @@ Build 2026-09-05: fixed. list runs and show both looked only for the run artifac
 Verified directly against the 13 real broken runs on this checkout: all print clean lines under list runs (8 STOPPED, 5 no record, matching the shape-stage triage counts), show run:<stopped-run> and --json both print the stage's stop record, show run:<no-record-run> refuses by name with exit code 3. Full suite green (1031 tests), typecheck and lint clean.
 
 No follow-up filed. The run-time exit code for a judged stop stays out of scope per João's 2026-09-05 'agree' on the card.
+
+Reflection 2026-09-05: doc-14. Verdict on track; goal (m-1) unaffected either way since this card was never on the ACT-39 critical path. Next: ACT-42, ACT-43, then ACT-39.
 <!-- SECTION:NOTES:END -->
