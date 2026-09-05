@@ -1,10 +1,10 @@
 ---
 id: ACT-85
 title: list checkpoints prints raw ENOENT for an empty checkpoint stage directory
-status: Review
+status: Done
 assignee: []
 created_date: '2026-09-05 22:43'
-updated_date: '2026-09-05 23:01'
+updated_date: '2026-09-05 23:08'
 labels: []
 dependencies: []
 ordinal: 81008
@@ -25,11 +25,12 @@ Same defect class as ACT-40, one lister over: listCheckpoints in src/cli/list-co
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Observed on a real checkout, not only the fixture. A scratch stage directory with no checkpoint.json under .benchmark-runs printed "ENOENT: no such file or directory, open '.benchmark-runs/act85-probe.checkpoints/zz-empty/checkpoint.json'" before the fix and "incomplete: no checkpoint.json recorded" after it. The scratch directory was removed.
+Review (2026-09-06): six axes dispatched (Spec, Style, Architecture, Security, Testing, Refactoring). Suite run once: 1005 pass, 48 fail, all 48 in src/cli/rehearsal-cli.test.ts, confirmed pre-existing by checking out the parent commit (22bcc89^) and re-running: same 48 failures, unrelated to this diff's files.
 
-The redaction test ACT-40 added had to change source. It used the empty checkpoint directory to produce a reason carrying a path, and this fix removes that path. It now uses a run missing its manifest. Breaking controlRelative deliberately still fails it, so ACT-40's coverage survived.
+Findings:
+- Should-fix, verified by four axes (Style, Architecture, Spec, Refactoring) independently: writeEmptyCheckpointDirectory's doc comment in src/benchmark/run-records-test-support.ts still claimed the checkpoint lister throws a raw ENOENT naming the file's path, true before this fix and false after it. Fixed and committed (0dd184d): restates that the lister now reports it as incomplete rather than reading it. Verified: bun test src/cli/list-command.test.ts (26 pass), typecheck, lint, fmt:check all clean.
+- Note (Testing): writeStoppedRunWithoutManifest repeats the 8-line stop-record JSON literal already in writeStoppedRun (Test Code Duplication, 03-test-aesthetics.md). Two sites, below the threshold for extracting a helper. No action taken.
+- Note (Refactoring): listRuns's manifest read (loadRunManifest, no existence check) still throws a raw ENOENT naming a path, same defect class as ACT-40/ACT-85 but in a different lister. Out of scope for this ticket; the relocated redaction test in this diff now depends on that same unguarded read. Worth its own card if the pattern is to be closed everywhere.
 
-Of the two new tests, only the incomplete-reason one fails without the fix. The other pins collect's existing contract that one unreadable record does not hide the valid ones.
-
-Full suite, typecheck, lint, and format all pass under the pinned bun 1.4.0.
+Both acceptance criteria confirmed present by the Spec reviewer, each with a passing test citation, verified by reverting the production fix and re-running (the incomplete-reason test fails pre-fix with the raw ENOENT, passes post-fix; the stderr-naming test passes either way, pinning collect's pre-existing contract). Security and Testing axes: nothing blocking.
 <!-- SECTION:NOTES:END -->
