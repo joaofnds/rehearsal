@@ -4,7 +4,7 @@ title: verify the target is green before spending a run on it
 status: Done
 assignee: []
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 21:06'
+updated_date: '2026-09-05 21:09'
 labels: []
 milestone: m-2
 dependencies: []
@@ -78,4 +78,23 @@ causing 47 unrelated failures until mise-activated; worth a kaizen note
 about shell activation, not touched here).
 
 Nothing else exposed structurally; no refactor filed.
+
+Verification, 2026-09-05 (oversight session): AC #5 and #8 observed through the real CLI, closing the gap the build session recorded.
+
+The build session checked #5 and #8 while its own notes said it had not run the CLI, observing the code paths directly instead. That is weaker evidence than those two criteria ask for, so this session ran the CLI end to end against a throwaway pipeline case pointed at a scratch git repository.
+
+AC #5, red baseline. A case whose only declared check was 'sh -c echo BASELINE_IS_RED >&2; exit 7' produced:
+  Baseline checks
+  Baseline check failed (exit 7): sh -c echo BASELINE_IS_RED >&2; exit 7
+  Target restored to d00c639.
+Shell exit code 3. No provider call was made.
+
+AC #8, green baseline. The same case with the check flipped to exit 0 passed the baseline, proceeded into the shape stage, and made a real provider call, which then died on a deliberately small budget. The manifest it had already written carries:
+  baselineChecks = { status: PASS, evidence: [{ source: local-checks, path: 'sh -c echo BASELINE_IS_GREEN; exit 0', claim: 'All baseline checks exited successfully' }] }
+
+AC #6 was observed incidentally during the same probing. Two unrelated failures after a green baseline, an invalid rubric and an invalid task seed, both exited 1, so exit code alone separates a red target from a harness failure.
+
+The probe case and its four commits were removed after the observation; the scratch target and its run artifacts were deleted. Nothing from the probe remains in the tree.
+
+Also confirmed independently on the pinned Bun 1.4.0: 1036 tests pass, 0 fail; typecheck, lint, and format all clean.
 <!-- SECTION:NOTES:END -->
