@@ -53,6 +53,7 @@ export const runSummarySchema = z
 		failure: z.string().min(1).optional(),
 		productOwnerCostUsd: z.number(),
 		judgeCostUsd: z.number(),
+		workflow: z.array(z.object({ costUsd: z.number() }).loose()),
 		stageScorecards: z.array(
 			z
 				.object({
@@ -81,8 +82,12 @@ export function runSummary(runName: string, record: RunSummaryRecord): string {
 		(total, scorecard) => total + scorecard.costUsd,
 		0,
 	);
+	const workflowCost = record.workflow.reduce(
+		(total, transcript) => total + transcript.costUsd,
+		0,
+	);
 	const totalCost =
-		stageCost + record.productOwnerCostUsd + record.judgeCostUsd;
+		stageCost + workflowCost + record.productOwnerCostUsd + record.judgeCostUsd;
 
 	return [
 		`## run:${runName}`,

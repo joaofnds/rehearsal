@@ -197,7 +197,7 @@ describe(runShow.name, () => {
 		expect(stdout).toContain("| stage | grade | verdict | cost |");
 		expect(stdout).toContain("| build | B | CONTINUE | $2.00 |");
 		expect(stdout).toContain("Final verdict PASS.");
-		expect(stdout).toContain("Total cost $4.75.");
+		expect(stdout).toContain("Total cost $7.75.");
 		expect(() => {
 			JSON.parse(stdout);
 		}).toThrow();

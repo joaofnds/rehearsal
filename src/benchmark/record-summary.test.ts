@@ -22,6 +22,7 @@ const RUN_RECORD: RunSummaryRecord = parseRunSummaryRecord(
 		grade: { verdict: "PASS", summary: "the final judge's summary" },
 		productOwnerCostUsd: 0.25,
 		judgeCostUsd: 1.5,
+		workflow: [{ costUsd: 3 }, { costUsd: 4 }],
 		stageScorecards: [
 			{
 				stage: "discuss",
@@ -102,7 +103,7 @@ Case audit-log, status COMPLETE.
 | build | B | CONTINUE | $2.00 |
 
 Final verdict PASS.
-Total cost $4.75.
+Total cost $11.75.
 `,
 		);
 	});

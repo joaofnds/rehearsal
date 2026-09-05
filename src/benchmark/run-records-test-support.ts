@@ -474,6 +474,10 @@ export class RecordedRunsFixture {
 			},
 			productOwnerCostUsd: 0.25,
 			judgeCostUsd: 1.5,
+			workflow: this.stages.map((stage, index) => ({
+				stage,
+				costUsd: index + 1,
+			})),
 			stageScorecards: this.stages.map((stage, index) => ({
 				stage,
 				costUsd: index + 1,
