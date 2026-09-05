@@ -1,9 +1,10 @@
 ---
 id: ACT-85
 title: list checkpoints prints raw ENOENT for an empty checkpoint stage directory
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-05 22:43'
+updated_date: '2026-09-05 22:54'
 labels: []
 dependencies: []
 ordinal: 81008
