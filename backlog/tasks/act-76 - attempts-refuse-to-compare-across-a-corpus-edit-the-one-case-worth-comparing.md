@@ -4,8 +4,9 @@ title: 'attempts refuse to compare across a corpus edit, the one case worth comp
 status: To Do
 assignee: []
 created_date: '2026-09-05 01:49'
-updated_date: '2026-09-05 01:49'
+updated_date: '2026-09-05 21:21'
 labels: []
+milestone: m-1
 dependencies: []
 type: bug
 ordinal: 72008

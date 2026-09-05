@@ -4,6 +4,7 @@ title: make both required run flags come from the case or a default
 status: To Do
 assignee: []
 created_date: '2026-09-04 02:27'
+updated_date: '2026-09-05 21:23'
 labels: []
 milestone: m-2
 dependencies: []
@@ -38,3 +39,9 @@ Filed after Joao pointed out he has never been able to run this tool himself.
 - [ ] #3 The session budget has a default or a per-case declaration, and the chosen mechanism is recorded on this card with its reason
 - [ ] #4 The README and docs/runbook.md first-run commands are re-run after the change and work as printed
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Bet, 2026-09-05: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+<!-- SECTION:NOTES:END -->
