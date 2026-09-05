@@ -473,15 +473,10 @@ bun run rehearsal case show audit-log --json
 
 bun run rehearsal run \
   --case audit-log \
-  --model sonnet \
-  --effort high \
-  --session-budget-usd 10
+  --effort high
 
 bun run rehearsal run \
-  --case smoke \
-  --model haiku \
-  --effort low \
-  --session-budget-usd 0.2
+  --case smoke
 
 bun run rehearsal run \
   --case smoke \
@@ -569,9 +564,7 @@ fallbacks:
 ```sh
 bun run rehearsal replay \
   --run 2026-08-30T10-00-00.000Z \
-  --stage build \
-  --model sonnet \
-  --session-budget-usd 10
+  --stage build
 ```
 
 `rehearsal` is one executable with three commands: `run`, `replay`, and
@@ -608,6 +601,8 @@ flag alternative yet; `replay --confirm` refuses without `--yes` when stdin
 is not a terminal, before it resolves the run directory or projects a cost.
 
 `--pipeline` selects the pipeline definition and defaults to the one the case declares. It is read and validated before the target is claimed, so a malformed definition cannot leave a target dirty.
+
+A case declares its own model and session budget, so `run` and `replay` need neither flag. `--model` and `--session-budget-usd` override the declaration, and `BENCHMARK_MODEL` and `BENCHMARK_SESSION_BUDGET_USD` sit between the flag and the declaration. A case that declares neither, invoked without either flag or variable, refuses with exit 2 and one message naming everything still missing. Because the model keys a checkpoint's lineage, raising a case's declared model shows up as staleness on the next replay rather than passing silently.
 
 `--model` and `--effort` apply to every engineering stage and the shared PO. Judge defaults to `opus`, except that an Opus workflow defaults Judge to `sonnet`; this recognizes both native aliases and full Claude model IDs. An unrecognized workflow model also defaults Judge to `opus`.
 

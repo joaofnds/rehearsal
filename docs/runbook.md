@@ -35,11 +35,13 @@ word, no tool calls). Without `--json` you get only the declaration's path.
 Now run it:
 
 ```sh
-bun run rehearsal run --case smoke --model sonnet --session-budget-usd 1
+bun run rehearsal run --case smoke
 ```
 
-Both `--model` and `--session-budget-usd` are required; the case declares
-neither, and the run refuses with exit 2 if either is missing.
+The case declares its own model and session budget, so a run needs nothing
+beyond `--case`. Pass `--model` or `--session-budget-usd` to override what the
+case declares. A case that declares neither, run without either flag or its
+environment variable, refuses with exit 2 and one message naming both.
 
 It prints one line per check and then the record's path:
 
@@ -119,7 +121,7 @@ dirty control repo, deliberately: it is what pins which corpus produced the
 score), and run:
 
 ```sh
-bun run rehearsal run --case audit-log --model sonnet --effort medium --session-budget-usd 4
+bun run rehearsal run --case audit-log --effort medium
 ```
 
 It prints its progress as it goes: baseline checks, then each stage's session,
