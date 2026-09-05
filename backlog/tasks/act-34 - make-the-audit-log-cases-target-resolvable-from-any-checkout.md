@@ -4,7 +4,7 @@ title: make the audit-log case's target resolvable from any checkout
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-04 01:50'
+updated_date: '2026-09-05 23:43'
 labels: []
 milestone: m-2
 dependencies: []
@@ -51,4 +51,20 @@ Reproduce with a clone placed where no `nest/` sibling resolves from three level
 Observed 2026-09-04 at 45c522c: 33 pass, 1 fail, ENOENT stat '/private/tmp/deep/a/b/c/nest/template'. The same file on this checkout: 34 pass, 0 fail.
 
 This path-dependence is itself an argument for the card: whether the suite passes depends on where the checkout happens to sit, which is the property a test should never have.
+
+Shape 2026-09-06 stopped on AC #3's distinction and recommended option 2: skip only when the declared target resolves outside the control repository, fail otherwise.
+
+Oversight probe 2026-09-06 refutes that recommendation. Resolving the declared path and testing it with relative(CONTROL_DIR, abs) classifies these identically:
+  ../../../nest/template  -> /Users/joaofnds/code/nest/template  outside=true
+  ../../../nest/tempalte  -> /Users/joaofnds/code/nest/tempalte  outside=true (typo)
+  ../../../nsst/template  -> /Users/joaofnds/code/nsst/template  outside=true (typo)
+A typo in an external path stays outside the repository, so option 2 skips it. It catches only a broken path that stays inside the repo, which is not the failure mode the audit-log declaration has. Against AC #3 it buys nothing over option 1.
+
+Verified separately: test.skipIf works, evaluated before the test body (bun 1.4.1, probe at /tmp/skipprobe). The mechanism is settled; only the absent-vs-malformed line is open.
+
+What the filesystem cannot answer: no stat-based check distinguishes an uncloned sibling from a misspelled sibling. Closing AC #3 needs a fact outside the filesystem, e.g. the declaration naming the target's origin (a git URL or a repo identity) so absence is checked against something verifiable, or AC #3 being rewritten to a weaker guarantee.
+
+Decided by João, 2026-09-06: option 1. The case declaration carries where its target comes from, so absence is checked against something verifiable and a wrong path is a mismatch rather than a silence. This widens the card beyond a bare skip, and that is accepted. Option 2 (skip when the path resolves outside the repository) is rejected: the 2026-09-06 probe above shows it classifies a misspelled external path the same as a correct one, so it skips the typo it exists to catch.
+
+Shape works from this decision. AC #3 stands as written and is now closable: a declaration whose target is malformed or unresolvable for a reason other than the target's absence still fails.
 <!-- SECTION:NOTES:END -->
