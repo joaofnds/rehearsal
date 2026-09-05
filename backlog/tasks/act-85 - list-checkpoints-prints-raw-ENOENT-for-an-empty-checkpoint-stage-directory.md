@@ -4,9 +4,11 @@ title: list checkpoints prints raw ENOENT for an empty checkpoint stage director
 status: Done
 assignee: []
 created_date: '2026-09-05 22:43'
-updated_date: '2026-09-05 23:08'
+updated_date: '2026-09-05 23:10'
 labels: []
 dependencies: []
+documentation:
+  - doc-19
 ordinal: 81008
 ---
 
