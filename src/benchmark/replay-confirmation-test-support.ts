@@ -61,6 +61,11 @@ export class ReplayConfirmationHarness {
 		readonly instructions: string;
 		readonly roots: readonly string[];
 	}[] = [];
+	public readonly settingSources: (string | undefined)[] = [];
+	public readonly corpusInstalls: {
+		readonly snapshotDirectory: string;
+		readonly targetDirectory: string;
+	}[] = [];
 
 	public constructor(
 		private readonly resources: DirectoryTracker,
@@ -230,8 +235,9 @@ export class ReplayConfirmationHarness {
 		return {
 			createProductOwner,
 			stageSession: {
-				runWorkflowStage: ({ targetDir, stage }) => {
+				runWorkflowStage: ({ targetDir, stage, settingSources }) => {
 					this.stageDirs.push(targetDir);
+					this.settingSources.push(settingSources);
 
 					return Promise.resolve({
 						stage,
@@ -369,6 +375,11 @@ export class ReplayConfirmationHarness {
 			},
 			installDependencies: (targetDir) => {
 				this.installed.push(targetDir);
+
+				return Promise.resolve();
+			},
+			installStageCorpusSnapshot: (snapshotDirectory, targetDirectory) => {
+				this.corpusInstalls.push({ snapshotDirectory, targetDirectory });
 
 				return Promise.resolve();
 			},

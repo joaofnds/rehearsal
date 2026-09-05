@@ -5,6 +5,7 @@ import { z } from "zod";
 import type {
 	CheckpointRecord,
 	HashedFile,
+	installStageCorpusSnapshot,
 	materializeCheckpoint,
 } from "./checkpoint";
 import {
@@ -130,6 +131,7 @@ export interface ReplayDependencies {
 	readonly captureFileHashes: typeof captureFileHashes;
 	readonly currentSha: typeof currentSha;
 	readonly installDependencies: (worktreeDir: string) => Promise<void>;
+	readonly installStageCorpusSnapshot: typeof installStageCorpusSnapshot;
 	readonly log: (message: string) => void;
 }
 
@@ -143,6 +145,8 @@ export interface ReplayRequest {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly settingSources?: "project" | undefined;
+	readonly corpusDirectory?: string | undefined;
 }
 
 export interface ReplayRecord {
@@ -363,6 +367,12 @@ export async function runReplay(
 			request.paths.checkpointDirectory(plan.consumed.stage),
 			worktreeDir,
 		);
+		if (request.corpusDirectory !== undefined) {
+			await dependencies.installStageCorpusSnapshot(
+				request.corpusDirectory,
+				worktreeDir,
+			);
+		}
 		const baseSha = await dependencies.currentSha(worktreeDir);
 		if (plan.definition.kind === "delivery") {
 			await dependencies.installDependencies(worktreeDir);
@@ -422,6 +432,7 @@ export async function runReplay(
 				baselineSha: baseSha,
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
 				corpusRoots: corpusLayoutRoots(worktreeDir),
+				settingSources: request.settingSources,
 				log: dependencies.log,
 			},
 			plan.definition,

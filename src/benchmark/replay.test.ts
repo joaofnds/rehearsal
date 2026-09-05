@@ -365,6 +365,49 @@ describe(runReplay.name, () => {
 		};
 	}
 
+	/**
+	 * A project-level skill shadows the user-level one under
+	 * --setting-sources project, so a replay given a corpus source tells the
+	 * session to read the frozen bytes rather than the live install.
+	 */
+	it("runs the stage under project setting sources when given a corpus", async () => {
+		const run = await recordedRun();
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		await runReplay(fake.dependencies, {
+			...request(run, "build"),
+			settingSources: "project",
+		});
+
+		expect(fake.settingSources).toEqual(["project"]);
+	});
+
+	it("installs the corpus snapshot into the worktree before the stage runs", async () => {
+		const run = await recordedRun();
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		await runReplay(fake.dependencies, {
+			...request(run, "build"),
+			corpusDirectory: "/frozen/corpus",
+		});
+
+		expect(fake.corpusInstalls).toEqual([
+			{
+				snapshotDirectory: "/frozen/corpus",
+				targetDirectory: fake.worktrees[0]?.path ?? "",
+			},
+		]);
+	});
+
+	it("leaves setting sources unset when no corpus is given", async () => {
+		const run = await recordedRun();
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(fake.settingSources).toEqual([undefined]);
+	});
+
 	it("replays a delivery stage in the worktree and never touches the primary", async () => {
 		const run = await recordedRun();
 		const fake = new ReplayConfirmationHarness(testResources);
@@ -830,6 +873,8 @@ describe(runReplay.name, () => {
 				currentSha,
 				installDependencies: () =>
 					Promise.reject(new Error("not a delivery stage")),
+				installStageCorpusSnapshot: () =>
+					Promise.reject(new Error("no corpus source")),
 				log: () => undefined,
 			},
 			{

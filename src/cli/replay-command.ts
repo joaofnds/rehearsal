@@ -13,6 +13,7 @@ import {
 	captureStageCorpus,
 	materializeCheckpoint,
 	corpusLayoutRoots,
+	installStageCorpusSnapshot,
 } from "#benchmark/checkpoint";
 import {
 	captureBaselineContext,
@@ -27,7 +28,12 @@ import {
 	judgeSelfPreferenceWarning,
 	parseReplayArgs,
 } from "#benchmark/config";
-import { liveCorpusInstructions } from "#benchmark/corpus-file";
+import {
+	CorpusFileError,
+	liveCorpusInstructions,
+	readCorpusInstructions,
+} from "#benchmark/corpus-file";
+import { resolveCorpusSource } from "#benchmark/corpus-source";
 import { runReplay } from "#benchmark/replay";
 import type { ReplayDependencies, ReplayRequest } from "#benchmark/replay";
 import type { ReplayStageOutcome } from "#benchmark/replay-command";
@@ -204,14 +210,18 @@ export async function executeReplay(
 		installDependencies: async (worktreeDir) => {
 			await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
 		},
+		installStageCorpusSnapshot,
 		log: (message) => {
 			output.stderr(`${message}\n`);
 		},
 	};
+	const corpus = await replayCorpus(config.corpus);
 	const replayRequest: ReplayRequest = {
 		paths,
 		stage: config.stage,
-		instructions: await liveCorpusInstructions(),
+		instructions: corpus.instructions,
+		settingSources: corpus.settingSources,
+		corpusDirectory: corpus.directory,
 		controlSha: await currentControlSha(),
 		model: config.model,
 		effort: config.effort,
@@ -244,6 +254,42 @@ export async function executeReplay(
 		});
 	} finally {
 		questioner.close();
+	}
+}
+
+/**
+ * A replay exists to iterate on a corpus, so a corpus source it is given is
+ * both the instructions the stage reads and the reason the session is told to
+ * prefer the project level. The live install needs neither, because a session
+ * reads it by default.
+ */
+async function replayCorpus(corpus: string | undefined): Promise<{
+	readonly instructions: string;
+	readonly settingSources: "project" | undefined;
+	readonly directory: string | undefined;
+}> {
+	if (corpus === undefined) {
+		return {
+			instructions: await liveCorpusInstructions(),
+			settingSources: undefined,
+			directory: undefined,
+		};
+	}
+
+	try {
+		const source = await resolveCorpusSource(corpus);
+
+		return {
+			instructions: await readCorpusInstructions(source),
+			settingSources: "project",
+			directory: source.root,
+		};
+	} catch (error) {
+		if (error instanceof CorpusFileError) {
+			throw new RefusedPreconditionError(error.message);
+		}
+
+		throw error;
 	}
 }
 
