@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	assertPlanningStageCompleted,
 	assertStageArtifactState,
 	seedTaskBoard,
 	parseTaskState,
@@ -192,6 +193,31 @@ describe(seedTaskBoard.name, () => {
 		expect(await readTaskCard(target.directory, taskId)).toContain(
 			"Add an audit log",
 		);
+	});
+
+	it("completes a planning stage that wrote no document", async () => {
+		const target = await testResources.createRepository();
+		const { taskId } = await seedTaskBoard(target.directory, seed, [
+			"To Do",
+			"Done",
+		]);
+		const view = { task: { acceptanceCriteria: [{}], documentation: [] } };
+		const stage = {
+			name: "shape",
+			kind: "planning",
+			skill: "shape",
+			rubric: "rubrics/shape.json",
+			requiresAcceptanceCriteria: false,
+		} as const;
+
+		const completed = await assertPlanningStageCompleted(
+			target.directory,
+			target.sha,
+			stage,
+			{ output: taskId, view },
+		);
+
+		expect(completed.artifact).toBeUndefined();
 	});
 
 	it("leaves a target that ignores no board path clean", async () => {

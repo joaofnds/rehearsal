@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, relative } from "node:path";
 import { z } from "zod";
 import { runCommand } from "./command";
 import { StageValidationError } from "./contracts";
@@ -237,14 +237,13 @@ export async function assertPlanningStageCompleted(
 		expectedBranch,
 	);
 	const { output, view } = taskState;
-	const documentFiles = await readdir(
-		join(await boardDirectory(targetDir), "docs"),
-	);
+	const board = await boardDirectory(targetDir);
+	const documentFiles = await readdir(join(board, "docs")).catch(() => []);
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
 	if (artifactFile === undefined) {
 		return { taskState: output, artifact: undefined, ...advance };
 	}
-	const artifactPath = join("backlog", "docs", artifactFile);
+	const artifactPath = join(relative(targetDir, board), "docs", artifactFile);
 
 	return {
 		taskState: output,
