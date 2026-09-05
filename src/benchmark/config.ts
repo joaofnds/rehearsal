@@ -398,28 +398,55 @@ export interface ReplayCliConfig extends SessionKnobs, CorpusSelection {
 }
 
 /**
- * Replay shares the run's model, effort, judge, and budget knobs and their
- * environment fallbacks; what it adds is naming the recorded run and the
- * stage to replay from it.
+ * Read before the rest of replay's configuration: the run manifest names the
+ * case being replayed, and that case's declared model and budget are what
+ * the rest of the parse falls back to.
  */
-export function parseReplayArgs(
-	args: readonly string[],
-	env: Readonly<Record<string, string | undefined>> = Bun.env,
-): ReplayCliConfig {
-	const flags = flagValues(args);
-	const { values } = flags;
-
+export function parseRunName(args: readonly string[]): string {
+	const { values } = flagValues(args);
 	const runName = values.get("--run");
-	const stage = values.get("--stage");
 
 	if (runName === undefined || runName === "") {
 		throw new Error("Provide --run with the run's name");
 	}
+
+	return runName;
+}
+
+/**
+ * Whether replay would ask for a cost approval, read without the run's case
+ * declaration: a projected cost is refused before any local or provider work
+ * when nothing can answer it, so the refusal must not wait on resolving the
+ * run first.
+ */
+export function parseReplayConfirmation(
+	args: readonly string[],
+): ConfirmationConfig | undefined {
+	return parseConfirmation(flagValues(args));
+}
+
+/**
+ * Replay shares the run's model, effort, judge, and budget knobs and their
+ * environment fallbacks, plus the model and budget the replayed run's case
+ * declares, at the same precedence `run` gives them; what it adds is naming
+ * the recorded run and the stage to replay from it.
+ */
+export function parseReplayArgs(
+	args: readonly string[],
+	env: Readonly<Record<string, string | undefined>> = Bun.env,
+	declared: DeclaredSessionKnobs = {},
+): ReplayCliConfig {
+	const flags = flagValues(args);
+	const { values } = flags;
+
+	const runName = parseRunName(args);
+	const stage = values.get("--stage");
+
 	if (stage === undefined || stage === "") {
 		throw new Error("Provide --stage with the stage to replay");
 	}
 
-	const sessionKnobs = parseSessionKnobs(values, env);
+	const sessionKnobs = parseSessionKnobs(values, env, declared);
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(

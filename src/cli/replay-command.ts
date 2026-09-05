@@ -21,13 +21,17 @@ import {
 	captureFileHashes,
 	captureTreatmentChecks,
 } from "#benchmark/checks";
+import { CaseDeclarationError, readCaseDeclaration } from "#benchmark/case";
 import { runCommand } from "#benchmark/command";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {
 	CONTROL_DIR,
 	judgeSelfPreferenceWarning,
 	parseReplayArgs,
+	parseReplayConfirmation,
+	parseRunName,
 } from "#benchmark/config";
+import { loadRunManifest } from "#benchmark/manifest";
 import {
 	CorpusFileError,
 	liveCorpusInstructions,
@@ -96,21 +100,26 @@ export async function runReplayCommand(
 	request: ReplayCommandRequest,
 	dependencies: ReplayCommandDependencies,
 ): Promise<void> {
-	const config = asUsageError(() => parseReplayArgs(request.args));
-	if (config.confirmation !== undefined && !config.confirmation.approved) {
+	const runName = asUsageError(() => parseRunName(request.args));
+	const confirmation = asUsageError(() =>
+		parseReplayConfirmation(request.args),
+	);
+	if (confirmation !== undefined && !confirmation.approved) {
 		requireInteractiveStdin(
 			request.stdinIsTerminal,
 			"approving the projected cost needs a TTY; pass --yes instead",
 		);
 	}
 
+	await dependencies.resolveRunDirectory(runName);
+	const paths = benchmarkRunPaths(benchmarkRunsDirectory(CONTROL_DIR), runName);
+	const declared = await declaredSessionKnobs(paths.manifestFile);
+	const config = asUsageError(() =>
+		parseReplayArgs(request.args, Bun.env, declared),
+	);
+
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
-	await dependencies.resolveRunDirectory(config.runName);
-	const paths = benchmarkRunPaths(
-		benchmarkRunsDirectory(CONTROL_DIR),
-		config.runName,
-	);
 	const outcome = await dependencies.execute(
 		config,
 		paths,
@@ -118,6 +127,34 @@ export async function runReplayCommand(
 	);
 
 	await reportOutcome(request, config, paths, outcome, dependencies.output);
+}
+
+/**
+ * The model and budget the replayed run's case declares today, read before
+ * the rest of replay's flags so they can stand in for --model and
+ * --session-budget-usd. A case that no longer loads, renamed or deleted
+ * since the run, leaves replay to the flags and environment alone rather
+ * than refusing a replay those still cover.
+ */
+async function declaredSessionKnobs(manifestFile: string): Promise<{
+	readonly model?: string | undefined;
+	readonly sessionBudgetUsd?: number | undefined;
+}> {
+	try {
+		const manifest = await loadRunManifest(manifestFile);
+		const declaration = await readCaseDeclaration(manifest.caseId);
+
+		return {
+			model: declaration.model,
+			sessionBudgetUsd: declaration.sessionBudgetUsd,
+		};
+	} catch (error) {
+		if (error instanceof CaseDeclarationError) {
+			return {};
+		}
+
+		throw error;
+	}
 }
 
 async function reportOutcome(

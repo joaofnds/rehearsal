@@ -10,6 +10,8 @@ import {
 	parseArgs,
 	parseCaseId,
 	parseReplayArgs,
+	parseReplayConfirmation,
+	parseRunName,
 	parseSessionArgs,
 	parseStaleArgs,
 } from "./config";
@@ -632,6 +634,38 @@ describe(parseCaseId.name, () => {
 	});
 });
 
+describe(parseRunName.name, () => {
+	it("reads the run named by --run", () => {
+		expect(parseRunName(["--run", "run-1", "--stage", "build"])).toBe("run-1");
+	});
+
+	it("refuses when --run is absent", () => {
+		expect(() => parseRunName(["--stage", "build"])).toThrow(
+			"Provide --run with the run's name",
+		);
+	});
+});
+
+describe(parseReplayConfirmation.name, () => {
+	it("reads a confirmation request without needing the model or budget", () => {
+		expect(
+			parseReplayConfirmation([
+				"--run",
+				"run-1",
+				"--stage",
+				"build",
+				"--confirm",
+			]),
+		).toEqual({ reps: 5, approved: false });
+	});
+
+	it("reads no confirmation when --confirm is absent", () => {
+		expect(
+			parseReplayConfirmation(["--run", "run-1", "--stage", "build"]),
+		).toBeUndefined();
+	});
+});
+
 describe(judgeSelfPreferenceWarning.name, () => {
 	it("warns when unrecognized model identifiers are equal", () => {
 		expect(
@@ -727,6 +761,42 @@ describe("session run knobs declared by the case", () => {
 			["--model", "sonnet", "--session-budget-usd", "5"],
 			{},
 			{ caseId: "smoke", model: "declared-model", sessionBudgetUsd: 0.2 },
+		);
+
+		expect(config.model).toBe("sonnet");
+		expect(config.sessionBudgetUsd).toBe(5);
+	});
+});
+
+describe("replay knobs declared by the replayed run's case", () => {
+	it("falls back to the model and budget the case declares", () => {
+		const config = parseReplayArgs(
+			["--run", "run-1", "--stage", "build"],
+			{},
+			{
+				model: "declared-model",
+				sessionBudgetUsd: 0.2,
+			},
+		);
+
+		expect(config.model).toBe("declared-model");
+		expect(config.sessionBudgetUsd).toBe(0.2);
+	});
+
+	it("lets --model and --session-budget-usd override the case's declared values", () => {
+		const config = parseReplayArgs(
+			[
+				"--run",
+				"run-1",
+				"--stage",
+				"build",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+			{ model: "declared-model", sessionBudgetUsd: 0.2 },
 		);
 
 		expect(config.model).toBe("sonnet");
