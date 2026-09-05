@@ -5,8 +5,10 @@ import { parseCheckpointRecord } from "#benchmark/checkpoint";
 import { unhandled } from "#benchmark/contracts";
 import { parseComparisonReport } from "#benchmark/comparison-record";
 import { parseConfirmationGroupRecord } from "#benchmark/confirmation-record";
+import { loadRunManifest } from "#benchmark/manifest";
 import { parseRunSummaryRecord } from "#benchmark/record-summary";
 import { readReplayRecord } from "#benchmark/replay";
+import { stoppedStage } from "#benchmark/run-outcome";
 import {
 	benchmarkRunPaths,
 	checkpointRecordFile,
@@ -112,6 +114,14 @@ async function listDeclaredCases(): Promise<RecordListing> {
 	};
 }
 
+/**
+ * A run that stopped at a stage never writes an artifact, and stopping is a
+ * normal outcome the pipeline takes whenever a judge grades below the
+ * minimum, not a failure to report as unreadable: the stage it stopped at,
+ * read from the stop record that stage's file holds, replaces the artifact's
+ * status. A run that also has no stop record and no artifact died before any
+ * stage finished; it gets a plain line saying so rather than a raw ENOENT.
+ */
 async function listRuns(runsDirectory: string): Promise<RecordListing> {
 	const names = await recordedRunNames(runsDirectory);
 
@@ -120,16 +130,27 @@ async function listRuns(runsDirectory: string): Promise<RecordListing> {
 		(run) => ({ kind: "run", run }),
 		async (run) => {
 			const paths = benchmarkRunPaths(runsDirectory, run);
-			const record = parseRunSummaryRecord(
-				await Bun.file(paths.artifactFile).text(),
-			);
-			const replayable = await Bun.file(paths.manifestFile).exists();
+			if (await Bun.file(paths.artifactFile).exists()) {
+				const record = parseRunSummaryRecord(
+					await Bun.file(paths.artifactFile).text(),
+				);
+				const replayable = await Bun.file(paths.manifestFile).exists();
 
-			return [
-				record.caseId,
-				record.status,
-				replayable ? "replayable" : "not replayable",
-			];
+				return [
+					record.caseId,
+					record.status,
+					replayable ? "replayable" : "not replayable",
+				];
+			}
+
+			const stopped = await stoppedStage(runsDirectory, run);
+			if (stopped === undefined) {
+				return ["no record"];
+			}
+
+			const { caseId } = await loadRunManifest(paths.manifestFile);
+
+			return [caseId, `STOPPED:${stopped.stage}`, "not replayable"];
 		},
 	);
 }

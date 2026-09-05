@@ -185,6 +185,53 @@ describe(runShow.name, () => {
 		expect(stdout).toBe(await Bun.file(fixture.stageAttemptFile).text());
 	});
 
+	it("prints the record that exists on disk for a run that stopped at a stage", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRun();
+		const paths = benchmarkRunPaths(fixture.runsDirectory, fixture.stoppedRun);
+
+		const stdout = await printed(
+			`run:${fixture.stoppedRun}`,
+			true,
+			fixture.runsDirectory,
+		);
+
+		expect(stdout).toBe(await Bun.file(paths.stageFile("build")).text());
+	});
+
+	it("prints a stopped run's stage record rather than a run summary without --json", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRun();
+		const paths = benchmarkRunPaths(fixture.runsDirectory, fixture.stoppedRun);
+
+		const stdout = await printed(
+			`run:${fixture.stoppedRun}`,
+			false,
+			fixture.runsDirectory,
+		);
+
+		expect(stdout).toBe(await Bun.file(paths.stageFile("build")).text());
+	});
+
+	it("refuses a run with no record of any kind by name, not with a raw filesystem error", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeNoRecordRun();
+
+		const failure = await failureOf(
+			runShow(
+				{
+					id: `run:${fixture.noRecordRun}`,
+					json: true,
+					runsDirectory: fixture.runsDirectory,
+				},
+				recordOutput().output,
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain(fixture.noRecordRun);
+	});
+
 	it("prints a run's stages, grades, verdict, and total cost without --json", async () => {
 		const fixture = await writtenFixture();
 

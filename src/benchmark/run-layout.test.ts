@@ -13,6 +13,7 @@ import {
 	replayAttemptIds,
 	runNameFromCheckpointsEntry,
 	runNameFromTimestamp,
+	runStageFiles,
 	sessionAttemptIds,
 	sessionAttemptPaths,
 } from "./run-layout";
@@ -256,6 +257,20 @@ describe("recorded record enumeration", () => {
 
 		expect(await replayAttemptIds(root)).toEqual([
 			{ lineage: "lineage-1", timestamp: "2026-09-03T00-00-00.000Z" },
+		]);
+	});
+
+	it("names every per-stage file a run wrote, artifact and review excluded", async () => {
+		const root = await fixtureRoot();
+		await Bun.write(join(root, "run-a.shape.json"), "{}\n");
+		await Bun.write(join(root, "run-a.build.json"), "{}\n");
+		await Bun.write(join(root, "run-a.json"), "{}\n");
+		await Bun.write(join(root, "run-a.review.json"), "{}\n");
+		await Bun.write(join(root, "run-ab.shape.json"), "{}\n");
+
+		expect(await runStageFiles(root, "run-a")).toEqual([
+			join(root, "run-a.build.json"),
+			join(root, "run-a.shape.json"),
 		]);
 	});
 

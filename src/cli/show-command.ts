@@ -7,8 +7,8 @@ import {
 	comparisonSummary,
 	groupSummary,
 	parseGroupReportSummaryRecord,
-	parseRunSummaryRecord,
 	runSummary,
+	runSummarySchema,
 } from "#benchmark/record-summary";
 import {
 	benchmarkRunPaths,
@@ -18,6 +18,7 @@ import {
 	replayRecordFile,
 	sessionAttemptPaths,
 } from "#benchmark/run-layout";
+import { stoppedStage } from "#benchmark/run-outcome";
 import { exists } from "node:fs/promises";
 import { z } from "zod";
 import { addWorktree, refExists } from "#benchmark/target";
@@ -27,13 +28,40 @@ import type { CommandOutput } from "#cli/output";
 import type { RecordId, RunRecordId } from "#cli/record-id";
 import { parseRecordId, parseRunRecordId, recordIdForms } from "#cli/record-id";
 
-function recordFileFor(id: RecordId, runsDirectory: string): string {
+/**
+ * A run that stopped at a stage never writes an artifact, so its id resolves
+ * to the stopped stage's own file instead: that file is the record that
+ * exists on disk, and printing it is what tells `show` from a run that simply
+ * has no record at all, which resolves to nothing here and is refused by
+ * `recordText` the same way an absent artifact always was.
+ */
+async function runRecordFile(
+	id: { readonly run: string },
+	runsDirectory: string,
+): Promise<string | undefined> {
+	const paths = benchmarkRunPaths(runsDirectory, id.run);
+	if (await Bun.file(paths.artifactFile).exists()) {
+		return paths.artifactFile;
+	}
+
+	const stopped = await stoppedStage(runsDirectory, id.run);
+
+	return stopped === undefined ? undefined : paths.stageFile(stopped.stage);
+}
+
+async function recordFileFor(
+	id: RecordId,
+	runsDirectory: string,
+): Promise<string> {
 	switch (id.kind) {
 		case "case": {
 			return caseDeclarationPath(id.caseId, casesRoot());
 		}
 		case "run": {
-			return benchmarkRunPaths(runsDirectory, id.run).artifactFile;
+			return (
+				(await runRecordFile(id, runsDirectory)) ??
+				benchmarkRunPaths(runsDirectory, id.run).artifactFile
+			);
 		}
 		case "checkpoint": {
 			const paths = benchmarkRunPaths(runsDirectory, id.run);
@@ -92,7 +120,9 @@ async function summaryOf(
 		return summary;
 	}
 	if (id.kind === "run") {
-		return runSummary(id.run, parseRunSummaryRecord(text));
+		const record = runSummarySchema.safeParse(JSON.parse(text));
+
+		return record.success ? runSummary(id.run, record.data) : text;
 	}
 	if (id.kind === "comparison") {
 		return comparisonSummary(id.manifestDigest, parseComparisonReport(text));
@@ -153,7 +183,7 @@ export async function runShow(
 	const id = parseRecordId(request.id);
 	const text = await recordText(
 		request.id,
-		recordFileFor(id, request.runsDirectory),
+		await recordFileFor(id, request.runsDirectory),
 	);
 
 	output.stdout(

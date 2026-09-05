@@ -278,6 +278,8 @@ export class RecordedRunsFixture {
 		lineage: "lineage-build",
 		timestamp: "2026-09-03T01-00-00.000Z",
 	};
+	public readonly stoppedRun = "2026-09-04T00-00-00.000Z";
+	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
 
 	public constructor(public readonly runsDirectory: string) {}
 
@@ -425,6 +427,53 @@ export class RecordedRunsFixture {
 			sessionAttemptPaths(this.runsDirectory, { caseId, uuid }).directory,
 			{ recursive: true },
 		);
+	}
+
+	/**
+	 * A run that stopped at a stage: its checkpoints directory and manifest
+	 * exist, an earlier stage's file holds a judged scorecard, and the stopping
+	 * stage's file holds a stop record instead of a scorecard. No artifact file
+	 * is ever written for a run that stops.
+	 */
+	public async writeStoppedRun(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.stoppedRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(paths.manifestFile, manifest(this.stoppedRun));
+		await Bun.write(
+			paths.stageFile("discuss"),
+			`${JSON.stringify(
+				{
+					stage: "discuss",
+					costUsd: 1,
+					grade: { grade: "A", verdict: "CONTINUE", dimensions: [] },
+					input: {},
+				},
+				null,
+				2,
+			)}\n`,
+		);
+		await Bun.write(
+			paths.stageFile("build"),
+			`${JSON.stringify(
+				{
+					status: "STAGE_JUDGE_FAILED",
+					stage: "build",
+					error: "build stage graded F; minimum grade is B",
+				},
+				null,
+				2,
+			)}\n`,
+		);
+	}
+
+	/**
+	 * A run that died before any stage finished: only its checkpoints directory
+	 * and manifest exist, which is what three of this repository's own runs are.
+	 */
+	public async writeNoRecordRun(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.noRecordRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(paths.manifestFile, manifest(this.noRecordRun));
 	}
 
 	public async writeUnreadableGroup(groupId: string): Promise<void> {

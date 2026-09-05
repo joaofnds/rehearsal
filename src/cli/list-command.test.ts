@@ -74,6 +74,36 @@ describe(runList.name, () => {
 		]);
 	});
 
+	it("names a run that stopped at a stage, naming the stage it stopped at", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRun();
+		const recorder = recordOutput();
+
+		await runList(
+			{ kind: "runs", runsDirectory: fixture.runsDirectory },
+			recorder.output,
+		);
+
+		expect(lines(recorder.stdout)).toContain(
+			`run:${fixture.stoppedRun}\taudit-log\tSTOPPED:build\tnot replayable`,
+		);
+	});
+
+	it("gives a run with no record of any kind a plain no-record line", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeNoRecordRun();
+		const recorder = recordOutput();
+
+		await runList(
+			{ kind: "runs", runsDirectory: fixture.runsDirectory },
+			recorder.output,
+		);
+
+		expect(lines(recorder.stdout)).toContain(
+			`run:${fixture.noRecordRun}\tno record`,
+		);
+	});
+
 	it("prints one line per checkpoint of every recorded run", async () => {
 		const fixture = await writtenFixture();
 		const recorder = recordOutput();

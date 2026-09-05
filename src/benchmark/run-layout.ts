@@ -205,6 +205,34 @@ export async function recordedRunNames(
 		.filter((name) => name !== undefined);
 }
 
+const REVIEW_SUFFIX = ".review.json";
+
+/**
+ * Every `<run>.<stage>.json` file a run wrote, the artifact and the review
+ * file excluded: a normal stage writes a judged scorecard here, and a stage
+ * that stopped the run overwrites the same path with a stop record instead,
+ * so this is where a caller looks to tell which stage stopped a run that
+ * never wrote an artifact.
+ */
+export async function runStageFiles(
+	runsDirectory: string,
+	run: string,
+): Promise<readonly string[]> {
+	const found = await entries(runsDirectory);
+	const prefix = `${run}.`;
+
+	return found
+		.filter(
+			(entry) =>
+				entry.isFile() &&
+				entry.name.startsWith(prefix) &&
+				entry.name.endsWith(RECORD_SUFFIX) &&
+				!entry.name.endsWith(REVIEW_SUFFIX) &&
+				entry.name !== `${run}${RECORD_SUFFIX}`,
+		)
+		.map((entry) => join(runsDirectory, entry.name));
+}
+
 export function confirmationGroupIds(
 	runsDirectory: string,
 ): Promise<readonly string[]> {
