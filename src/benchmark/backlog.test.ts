@@ -181,6 +181,19 @@ describe(seedTaskBoard.name, () => {
 		).toHaveLength(1);
 	});
 
+	it("reads back a card from the board it seeded", async () => {
+		const target = await testResources.createRepository();
+
+		const { taskId } = await seedTaskBoard(target.directory, seed, [
+			"To Do",
+			"Done",
+		]);
+
+		expect(await readTaskCard(target.directory, taskId)).toContain(
+			"Add an audit log",
+		);
+	});
+
 	it("leaves a target that ignores no board path clean", async () => {
 		const target = await testResources.createRepository();
 		await Bun.write(join(target.directory, ".gitignore"), "node_modules/\n");

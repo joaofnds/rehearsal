@@ -50,6 +50,21 @@ function parseTaskSeed(task: string): TaskSeed {
 	return { title: heading.slice(2).trim(), description };
 }
 
+/**
+ * Where the board lives for this target. The base configuration moves it off
+ * backlog's own default, so a reader that assumes the default finds nothing.
+ */
+async function boardDirectory(targetDir: string): Promise<string> {
+	const config = await Bun.file(join(targetDir, "backlog.config.yml"))
+		.text()
+		.catch(() => "");
+	const configured = /^backlog_directory:\s*"?(?<path>[^"\n]+)"?\s*$/mu.exec(
+		config,
+	);
+
+	return join(targetDir, configured?.groups?.["path"]?.trim() ?? "backlog");
+}
+
 async function configureBacklog(
 	targetDir: string,
 	statuses: readonly string[],
@@ -138,7 +153,7 @@ export async function readTaskCard(
 	targetDir: string,
 	taskId: string,
 ): Promise<string> {
-	const tasksDirectory = join(targetDir, "backlog", "tasks");
+	const tasksDirectory = join(await boardDirectory(targetDir), "tasks");
 	const entries = await readdir(tasksDirectory);
 	const prefix = `${taskId.toLowerCase()} -`;
 	const cardFile = entries.find((entry) =>
@@ -222,7 +237,9 @@ export async function assertPlanningStageCompleted(
 		expectedBranch,
 	);
 	const { output, view } = taskState;
-	const documentFiles = await readdir(join(targetDir, "backlog", "docs"));
+	const documentFiles = await readdir(
+		join(await boardDirectory(targetDir), "docs"),
+	);
 	const artifactFile = assertStageArtifactState(stage, view, documentFiles);
 	if (artifactFile === undefined) {
 		return { taskState: output, artifact: undefined, ...advance };
