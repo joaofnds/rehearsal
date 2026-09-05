@@ -4,10 +4,12 @@ title: make both required run flags come from the case or a default
 status: Done
 assignee: []
 created_date: '2026-09-04 02:27'
-updated_date: '2026-09-05 22:20'
+updated_date: '2026-09-05 22:21'
 labels: []
 milestone: m-2
 dependencies: []
+documentation:
+  - doc-17
 priority: high
 ordinal: 48008
 ---
