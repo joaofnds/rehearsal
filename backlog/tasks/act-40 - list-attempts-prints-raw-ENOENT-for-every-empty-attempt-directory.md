@@ -4,7 +4,7 @@ title: list attempts prints raw ENOENT for every empty attempt directory
 status: To Do
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-05 22:39'
 labels: []
 milestone: m-5
 dependencies: []
@@ -37,4 +37,10 @@ Found during triage on 2026-09-04 while confirming the board had no recorded run
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-04, assigned to m-4. Filed as a CLI defect, but the design settles how this must behave: SPEC.md requires an unreadable record to appear in place with its reason rather than as an error, and ACT-50's acceptance carries the same rule. Fixing it in the shared read path (listRecords) fixes both surfaces at once, which is the argument for doing it with the UI rather than before it.
+
+Decision (João, 2026-09-06): an attempt directory with no record is reported as an incomplete attempt, not omitted. Reason: a crashed attempt must stay visible to whoever is diagnosing the crash, and the run lister one function above already prints 'no record' rather than hiding the run. Asked 'incomplete reported or dropped?', João answered 'agree' to the recommendation to report. This settles acceptance criterion #2.
+
+Observed 2026-09-06 on this checkout: six attempt directories hold no attempt.json, not the five the card records. Three under brief-reply-40878d26, one under smoke, two under zz-symlink-probe.
+
+Note: incomplete and corrupt records both land in the unreadable block, told apart by the reason text. That satisfies criterion #3 as long as the incomplete reason is a plain sentence and not a raw filesystem message.
 <!-- SECTION:NOTES:END -->
