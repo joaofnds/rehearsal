@@ -113,4 +113,45 @@ deriveStaleness (src/benchmark/checkpoint.ts:453) compares the recorded model
 against the requested one and reports "model X is now Y" as a staleness cause,
 so a bumped declaration surfaces rather than passing quietly. This closes the
 open fork in the plan above; parseReplayArgs is no longer pending.
+
+Verified 2026-09-06, and one regression found.
+
+Working, observed directly: a case's declared model and budget resolve with no
+flags (smoke 0.2, brief-reply 3, audit-log 10); --model, --session-budget-usd,
+BENCHMARK_MODEL and BENCHMARK_SESSION_BUDGET_USD each override the declaration;
+a case declaring neither, invoked without either flag, refuses once with a
+message naming both (AC #1's second half). README and runbook commands re-run
+under the pinned Bun and work as printed (AC #4).
+
+Budget values now come from recorded runs rather than a guess. Smoke's ten
+recorded attempts each cost under 0.05 USD against 0.2. The one recorded
+brief-reply attempt cost 2.46 USD against a budget of 3. A build session had set
+the four brief-reply cases to 0.2, below what any of them has ever cost; that
+run spent 0.73 USD and still died on the cap. They are now 3.
+
+REGRESSION, open, and the reason this card is not done: `rehearsal run` with no
+arguments now reaches the paid execute path. Before this card the missing
+--model refused it with exit 2. DEFAULT_CASE_ID is audit-log, which now declares
+both knobs, so nothing stops a bare invocation. Observed by substituting a fake
+execute that throws instead of spending: it was reached. The test that catches
+this is src/cli/rehearsal-cli.test.ts's BARE_REFUSALS entry for `run`, whose own
+comment says a weaker assertion "would go on passing the day a change lets run
+proceed and start a paid session from the suite". That is exactly what happened,
+so the test is correct and the code is wrong. Do not weaken it.
+
+Two other suite failures are honest consequences, not defects. Both assert an
+ordering this card necessarily changed:
+- rehearsal-cli.test.ts "a required flag is missing" passes --target /nonexistent
+  --session-budget-usd 1 and expects the missing-model refusal; the model now
+  comes from the declaration, so it reaches the target check instead.
+- replay-command.test.ts "warns once before continuing with an explicit
+  same-family Judge" pins the self-preference warning before the missing-run
+  error. The warning needs the resolved config, which now needs the manifest, so
+  that ordering can no longer hold. The warning still prints exactly once when
+  the run resolves, observed against a real recorded run with a bad stage name.
+
+Bun note: the machine's default bun is 1.4.1 against this repo's 1.4.0 pin, so
+every CLI test fails with exit 1 unless run as `mise exec -- bun test`. That is
+ACT-84's territory, not this card's. Under the pinned Bun the suite is 1045
+pass, 3 fail, and those 3 are the ones above.
 <!-- SECTION:NOTES:END -->
