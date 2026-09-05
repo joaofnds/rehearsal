@@ -1,10 +1,10 @@
 ---
 id: ACT-72
 title: the baseline guard says which condition failed and which paths were dirty
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 23:57'
-updated_date: '2026-09-04 23:57'
+updated_date: '2026-09-05 00:19'
 labels: []
 dependencies: []
 type: bug

@@ -4,7 +4,7 @@ title: the shape agent edits the task file directly and trips the baseline guard
 status: To Do
 assignee: []
 created_date: '2026-09-04 17:38'
-updated_date: '2026-09-04 23:57'
+updated_date: '2026-09-05 00:19'
 labels: []
 milestone: m-1
 dependencies: []
@@ -45,4 +45,6 @@ So this card should be re-scoped. Its acceptance criterion still holds, but the 
 One harness defect worth separating: 'Target baseline changed unexpectedly' is raised for three distinct conditions (wrong branch, wrong SHA, dirty worktree) at two call sites, and harnessFailure records only that string. Nothing says which condition fired or which paths were dirty, so diagnosing this needed reading the source. Filed as ACT-72.
 
 Consequence: this blocks ACT-39. Without a passing shape stage there is no checkpoint, and without a checkpoint there is no replay. Grade would have been B across all four dimensions without this blocker, which is the passing minimum.
+
+Blocked on ACT-72, noted 2026-09-05. Fixing this needs to know which paths the stage left uncommitted, and nothing records them. The target repo was restored after the run, the artifact has no corpusFiles and no dirty-path list, and harnessFailure is the bare message. ACT-72 makes the guard record them, so the next run names the files instead of leaving them to be guessed.
 <!-- SECTION:NOTES:END -->
