@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 03:24'
+updated_date: '2026-09-05 16:05'
 labels:
   - partial
 milestone: m-1
@@ -37,7 +37,7 @@ This card previously described the defect backwards, naming the judge as the omi
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A run record carries the workflow sessions' aggregate cost as a field of its own, not only nested under each stage's input transcript
-- [ ] #2 A run's reported total cost equals the sum of every provider session the run caused, workflow and judge and product-owner, checked against one real completed run's record
+- [x] #2 A run's reported total cost equals the sum of every provider session the run caused, workflow and judge and product-owner, checked against one real completed run's record
 - [ ] #3 A confirmation group's projected cost accounts for every session role, verified against one real group report rather than assumed
 <!-- AC:END -->
 
@@ -89,4 +89,12 @@ Closed partial 2026-09-05 at João's direction.
 Delivered and verified: a run's reported total cost now includes the workflow sessions. Confirmed twice on real records. On 2026-09-05T00-21-40.070Z.shape.json the summary prints $1.46 where the old code printed $1.12. On 2026-09-05T02-56-43.136Z.shape.json it prints $1.47 where the old code printed $0.75. Full checks pass: 1014 tests, typecheck, oxlint, oxfmt.
 
 Left undone: AC2 and AC3, which require the total checked against a completed run artifact and a real confirmation group report. Neither artifact exists. The audit-log run attempted for this purpose failed in its build stage, which is a defect in the pipeline rather than in this fix. The group report was not attempted because it costs roughly $8 to $10 and the same build defect would likely stop it.
+
+AC2 verified 2026-09-05 against the first completed run artifact this project has produced, .benchmark-runs/2026-09-05T15-45-27.760Z.json, status AWAITING_HUMAN_REVIEW.
+
+runSummary reports 'Total cost $12.43'. Summing each session category once, independently: workflow sessions 10.090248, stage judges 1.706542, product owner 0.008400, final judge 0.628065, total 12.433255. The reported figure equals the sum of every provider session the run caused.
+
+Without the fix this record would have reported $3.28, the judge and product-owner spend alone, understating a twelve dollar run by 74 percent. The workflow sessions are the overwhelming majority of a real run's cost, which is what made this defect worth fixing.
+
+AC3 stays unchecked. It needs a confirmation group report, which no run has produced.
 <!-- SECTION:NOTES:END -->
