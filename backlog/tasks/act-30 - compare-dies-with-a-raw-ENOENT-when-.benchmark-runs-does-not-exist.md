@@ -1,10 +1,10 @@
 ---
 id: ACT-30
 title: compare dies with a raw ENOENT when .benchmark-runs does not exist
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-03 02:34'
-updated_date: '2026-09-04 01:50'
+updated_date: '2026-09-05 23:29'
 labels: []
 milestone: m-2
 dependencies: []
@@ -28,8 +28,8 @@ Found while fixing ACT-26.2's review findings; out of that card's scope because 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `rehearsal compare <manifest>` on a checkout with no .benchmark-runs directory does not exit 1 with a raw ENOENT
-- [ ] #2 A clone's first whole-suite run, in a checkout with no .benchmark-runs directory, records no failure caused by that directory's absence, observed by running the suite once on a fresh clone placed where no sibling nest/ resolves
+- [ ] #1 rehearsal compare <manifest> on a checkout with no .benchmark-runs directory does not exit 1 with a raw ENOENT/scandir error
+- [ ] #2 bun test src/benchmark/comparison-loader.test.ts passes 'writes one read-only comparison report without external execution' on a fresh clone before .benchmark-runs exists
 
 Rejudging the same discuss stage
 {
@@ -109,30 +109,46 @@ Which scope?
 Product Owner: Use the small scope
 Which scope?
 Product Owner: Use the small scope, in a checkout with no .benchmark-runs directory, records no failure caused by that directory's absence, proven by running the whole suite once on a fresh clone
+
+- [ ] #3 bun test src/cli/rehearsal-cli.test.ts passes its three compare-path tests ('prints only the report path for a valid manifest', 'prints exactly the report JSON on stdout with --json', 'delivers a record larger than the pipe buffer whole on stdout') on a fresh clone before .benchmark-runs exists
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-03: both halves re-measured on a fresh clone of this repository at 516e842 (git clone, bun install --frozen-lockfile, /tmp/act30probe).
+Shaped 2026-09-06.
 
-Criterion #1 reproduces exactly as written. `bun test src/benchmark/comparison-loader.test.ts` alone fails 'writes one read-only comparison report without external execution' with "ENOENT: no such file or directory, scandir '/private/tmp/act30probe/.benchmark-runs'", exit 1. 17 pass, 1 fail.
+Cause found: loadJudgeAgreementReport in src/benchmark/judge-agreement.ts:369
+calls readdir(runsDirectory, { withFileTypes: true }) with no .catch, unlike
+run-layout.ts's entries() helper (the established pattern: absent directory
+is nothing recorded, not a failure). writeComparisonReport calls it before
+the mkdir that creates .benchmark-runs, so any first compare on a fresh
+clone throws the raw ENOENT.
 
-Criterion #2 does not measure what the card says it measures. A whole `bun test` on that same fresh clone reports 1015 pass, 1 fail, and the comparison-loader test is NOT the failure: an earlier test creates .benchmark-runs, so the ENOENT is hidden when the suite runs together. The single fresh-clone failure is 'loadCase > resolves the declared target to a directory that exists' in case.test.ts, because cases/audit-log/case.json declares target.path '../../../nest/token' relative to the checkout, resolving to a sibling repository that a clone elsewhere does not have. That is a different defect from compare's, and it is the one ACT-26's final summary attributed to 'ACT-26.4's target test'.
+Confirmed by reproduction on a fresh clone (git clone, bun install
+--frozen-lockfile, bun test src/benchmark/comparison-loader.test.ts): fails
+'writes one read-only comparison report without external execution' with
+ENOENT: no such file or directory, scandir '<dir>/.benchmark-runs', exit 1,
+17 pass / 1 fail. Stack trace traced to judge-agreement.ts:369.
 
-ACT-26's final summary says trunk has 'five pre-existing failures' on a fresh clone. That is now one. The local checkout runs 1016 pass, 0 fail.
+The three rehearsal-cli.test.ts failures the 2026-09-04 triage listed go
+through the same call path (runCompare -> writeComparisonReport ->
+loadJudgeAgreementReport) and share this one cause; no separate work needed
+for them.
 
-Consequence for this card: criterion #2 as written can be satisfied without fixing anything in compare, and cannot be satisfied at all by compare's fix, since its failure has an unrelated cause. Recommend splitting the outside-repo target off; see the triage doc.
+Card's original criterion #2 (whole-suite fresh-clone run) is dropped: the
+2026-09-03/04 triage already found its remaining failure is ACT-34's target-
+resolution defect, unrelated to this card and unfixable by it. Acceptance
+rewritten to the four tests this card's fix actually controls.
 
-Triage 2026-09-04: the defect is wider than the card and than the 2026-09-03 note state. Measured on a fresh clone at 45c522c placed so no `nest/` sibling resolves (/tmp/deep2/a/b/c/rehearsal; the 2026-09-03 probe at /tmp/act30probe still resolved ../../../nest/template to the real one on this machine, which is why it saw fewer failures).
+Only one sane way to build it: match the existing entries() tolerance
+pattern in run-layout.ts, or wrap this one readdir in the same
+.catch(() => []). No approach survey needed.
 
-A clone's FIRST `bun test`, before .benchmark-runs exists, fails 5. Every run after fails 1. Four of the five are this card's ENOENT, not one:
-- loadComparisonEvidence > writes one read-only comparison report without external execution
-- rehearsal > prints only the report path for a valid manifest, and nothing on stdout otherwise
-- rehearsal > prints exactly the report JSON on stdout with --json
-- rehearsal > delivers a record larger than the pipe buffer whole on stdout
+First test to write: the already-failing
+'writes one read-only comparison report without external execution' in
+comparison-loader.test.ts is the reproduction; it should go green with no
+other test regressing.
 
-The fifth is ACT-34's. Reproduce with: clone to a path with no `nest/` sibling above it, `bun install --frozen-lockfile`, then `bun test` once and read the failure list; run it a second time and four of the five are gone because an earlier test created .benchmark-runs.
-
-So the cost of leaving this card is a first-run experience that fails 5 tests for a new contributor, three of them in the CLI suite the card never mentions, and all of them self-healing on the second run, which is the shape of defect that wastes the most of someone's time.
+Oversight 2026-09-06: the shape session's --ac flags appended rather than replaced, leaving the old criteria #1 and #2 beside the new ones. #2 is unmeasurable by this fix (its failure is ACT-34's) and would have blocked the Done guard. Criteria now replaced with the three the shape session settled on. Cause probed and confirmed independently: judge-agreement.ts:369 readdir with no .catch, unlike run-layout.ts entries().
 <!-- SECTION:NOTES:END -->
