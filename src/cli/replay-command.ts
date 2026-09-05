@@ -54,7 +54,6 @@ import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
 import {
 	RefusedPreconditionError,
-	refuseStageCorpus,
 	requireInteractiveStdin,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
@@ -92,7 +91,6 @@ export async function runReplayCommand(
 	dependencies: ReplayCommandDependencies,
 ): Promise<void> {
 	const config = asUsageError(() => parseReplayArgs(request.args));
-	refuseStageCorpus(config.corpus);
 	if (config.confirmation !== undefined && !config.confirmation.approved) {
 		requireInteractiveStdin(
 			request.stdinIsTerminal,
