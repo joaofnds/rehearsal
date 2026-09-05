@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { claudeArgs, readStructuredOutput } from "./claude";
 import { runCommand } from "./command";
 import type { Effort } from "./config";
-import { CLAUDE_TIMEOUT_MS, CONTROL_DIR } from "./config";
+import {
+	CLAUDE_TIMEOUT_MS,
+	CONTROL_DIR,
+	DEFAULT_MINIMUM_STAGE_GRADE,
+	STAGE_LETTER_GRADES,
+} from "./config";
 import type {
 	StageGrade,
 	StageJudgeInput,
@@ -23,7 +28,7 @@ import type { JudgeInvoker } from "./judge-attempt";
 import { runJudgeAttempts } from "./judge-attempt";
 import type { StageDefinition, StageKind } from "./pipeline";
 
-const GRADE_ORDER: readonly StageLetterGrade[] = ["A", "B", "C", "D", "F"];
+const GRADE_ORDER: readonly StageLetterGrade[] = STAGE_LETTER_GRADES;
 
 export async function captureStageJudgeInput(
 	fallback: StageJudgeInput,
@@ -331,15 +336,29 @@ export async function runStageJudge(
 export class StageQualityError extends Error {
 	public override name = "StageQualityError";
 
-	public constructor(public readonly scorecard: StageScorecard) {
+	public constructor(
+		public readonly scorecard: StageScorecard,
+		minimumGrade: StageLetterGrade,
+	) {
 		super(
-			`${scorecard.stage} stage graded ${scorecard.grade.grade}; minimum grade is B`,
+			`${scorecard.stage} stage graded ${scorecard.grade.grade}; minimum grade is ${minimumGrade}`,
 		);
 	}
 }
 
-export function assertStageGradePassed(scorecard: StageScorecard): void {
-	if (scorecard.grade.verdict === "STOP") {
-		throw new StageQualityError(scorecard);
+/**
+ * The Judge's verdict is derived against a fixed B, so a run that lowers the bar
+ * cannot read it. The gate compares the letter instead, leaving every recorded
+ * verdict comparable across runs that gated differently.
+ */
+export function assertStageGradePassed(
+	scorecard: StageScorecard,
+	minimumGrade: StageLetterGrade | undefined = DEFAULT_MINIMUM_STAGE_GRADE,
+): void {
+	if (
+		GRADE_ORDER.indexOf(scorecard.grade.grade) >
+		GRADE_ORDER.indexOf(minimumGrade)
+	) {
+		throw new StageQualityError(scorecard, minimumGrade);
 	}
 }

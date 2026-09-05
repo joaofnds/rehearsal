@@ -131,6 +131,18 @@ describe("run and replay session knobs", () => {
 			error: "Session budget must be a positive number",
 		},
 		{
+			condition: "the minimum grade is not a grade letter",
+			sessionArgs: [
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+				"--minimum-grade",
+				"pass",
+			],
+			error: "Minimum grade must be one of A, B, C, D, F",
+		},
+		{
 			condition: "the workflow effort is unsupported",
 			sessionArgs: [
 				"--model",
@@ -218,6 +230,7 @@ describe(parseArgs.name, () => {
 			judgeModel: "sonnet",
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
+			minimumStageGrade: "B",
 			pipelinePath: CASE_DEFAULTS.pipelinePath,
 			pause: false,
 		});
@@ -494,6 +507,7 @@ describe(parseReplayArgs.name, () => {
 			judgeModel: "opus",
 			judgeEffort: "high",
 			sessionBudgetUsd: 5,
+			minimumStageGrade: "B",
 		});
 	});
 

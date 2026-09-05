@@ -117,6 +117,7 @@ describe("declared commands", () => {
 			"--judge-model",
 			"--judge-effort",
 			"--session-budget-usd",
+			"--minimum-grade",
 			"--corpus",
 			"--pipeline",
 			"--pause",

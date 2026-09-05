@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import type { Effort, WorkflowStage } from "./config";
+import { STAGE_LETTER_GRADES } from "./config";
 import type { JudgeAttempt } from "./judge-attempt";
 import type { JudgeAgreementReport } from "./judge-agreement";
 import type { PipelineDefinition, StageKind } from "./pipeline";
@@ -64,7 +65,7 @@ export const productAnswerSchema = z.object({
 	answer: z.string().min(1),
 });
 
-export const stageLetterGradeSchema = z.enum(["A", "B", "C", "D", "F"]);
+export const stageLetterGradeSchema = z.enum(STAGE_LETTER_GRADES);
 
 const stageRubricItemSchema = z.object({
 	id: z.string().min(1),

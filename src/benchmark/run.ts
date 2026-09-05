@@ -43,6 +43,7 @@ import type {
 	RunArtifactEvidence,
 	StageJudgeInput,
 	StageJudgeRecord,
+	StageLetterGrade,
 	StageScorecard,
 	StageTranscript,
 } from "./contracts";
@@ -458,6 +459,7 @@ export interface StageContext {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly minimumStageGrade?: StageLetterGrade | undefined;
 	readonly productOwner: ProductOwner;
 	readonly task: string;
 	readonly productBrief: string;
@@ -757,7 +759,7 @@ export async function runGradedStages(
 				});
 			}
 		}
-		assertStageGradePassed(scorecard);
+		assertStageGradePassed(scorecard, context.minimumStageGrade);
 
 		baselineSha = session.resultSha;
 		const checkpoint = await dependencies.recordCheckpoint(
@@ -936,6 +938,7 @@ export async function runBenchmark(
 					judgeModel: config.judgeModel,
 					judgeEffort: config.judgeEffort,
 					sessionBudgetUsd: config.sessionBudgetUsd,
+					minimumStageGrade: config.minimumStageGrade,
 					productOwner,
 					task,
 					productBrief,

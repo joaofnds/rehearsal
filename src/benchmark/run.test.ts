@@ -362,6 +362,21 @@ describe(assertStageGradePassed.name, () => {
 			assertStageGradePassed(stageScorecard("PASS"));
 		}).not.toThrow();
 	});
+
+	it("continues past a grade the caller's lowered minimum accepts", () => {
+		expect(() => {
+			assertStageGradePassed(stageScorecard("FAIL"), "C");
+		}).not.toThrow();
+	});
+
+	it("names the caller's minimum when the grade falls below it", () => {
+		expect(() => {
+			assertStageGradePassed(stageScorecard("FAIL"), "C");
+		}).not.toThrow();
+		expect(() => {
+			assertStageGradePassed(stageScorecard("FAIL"), "A");
+		}).toThrow("minimum grade is A");
+	});
 });
 
 describe(runGradedStages.name, () => {

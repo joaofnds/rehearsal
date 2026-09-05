@@ -11,6 +11,17 @@ export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
 export const MAX_CONTEXT_TOTAL_BYTES = 1024 * 1024;
 
 /**
+ * The grade letters live here rather than in contracts because config is the
+ * leaf every other module imports, and contracts imports config. Contracts
+ * re-derives its schema from this list, so the letters have one definition.
+ */
+export const STAGE_LETTER_GRADES = ["A", "B", "C", "D", "F"] as const;
+
+export type StageLetterGrade = (typeof STAGE_LETTER_GRADES)[number];
+
+export const DEFAULT_MINIMUM_STAGE_GRADE: StageLetterGrade = "B";
+
+/**
  * How a path is named to a reader. Sessions paste this output onto cards that
  * other people read, and an absolute path under the control root discloses the
  * home directory for nothing: the control-relative path names the same file
@@ -49,6 +60,7 @@ interface SessionKnobs {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly minimumStageGrade?: StageLetterGrade | undefined;
 }
 
 export interface ConfirmationConfig {
@@ -205,6 +217,22 @@ function withCorpus<Config extends object>(
 	return { ...config, corpus };
 }
 
+function parseMinimumStageGrade(text: string | undefined): StageLetterGrade {
+	if (text === undefined || text === "") {
+		return DEFAULT_MINIMUM_STAGE_GRADE;
+	}
+
+	const upper = text.toUpperCase();
+	const grade = STAGE_LETTER_GRADES.find((letter) => letter === upper);
+	if (grade === undefined) {
+		throw new Error(
+			`Minimum grade must be one of ${STAGE_LETTER_GRADES.join(", ")}`,
+		);
+	}
+
+	return grade;
+}
+
 function parseSessionKnobs(
 	values: ReadonlyMap<string, string>,
 	env: Readonly<Record<string, string | undefined>>,
@@ -240,7 +268,18 @@ function parseSessionKnobs(
 		throw new Error("Session budget must be a positive number");
 	}
 
-	return { model, effort, judgeModel, judgeEffort, sessionBudgetUsd };
+	const minimumStageGrade = parseMinimumStageGrade(
+		values.get("--minimum-grade") ?? env["BENCHMARK_MINIMUM_GRADE"],
+	);
+
+	return {
+		model,
+		effort,
+		judgeModel,
+		judgeEffort,
+		sessionBudgetUsd,
+		minimumStageGrade,
+	};
 }
 
 /**

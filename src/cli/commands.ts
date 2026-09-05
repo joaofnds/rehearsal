@@ -80,6 +80,13 @@ const sessionFlags: readonly FlagDefinition[] = [
 		envVar: "BENCHMARK_SESSION_BUDGET_USD",
 		help: "Spend limit enforced for each session",
 	},
+	{
+		name: "--minimum-grade",
+		kind: "value",
+		envVar: "BENCHMARK_MINIMUM_GRADE",
+		defaultValue: "B",
+		help: "Lowest stage grade a run continues past; the Judge still grades and records as it does now",
+	},
 ];
 
 const corpusFlag: FlagDefinition = {
