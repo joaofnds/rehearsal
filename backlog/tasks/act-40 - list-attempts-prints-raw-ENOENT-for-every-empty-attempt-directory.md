@@ -4,10 +4,12 @@ title: list attempts prints raw ENOENT for every empty attempt directory
 status: Done
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-05 22:44'
+updated_date: '2026-09-05 22:45'
 labels: []
 milestone: m-5
 dependencies: []
+documentation:
+  - doc-18
 priority: medium
 ordinal: 42008
 ---
