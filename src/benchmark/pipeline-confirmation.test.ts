@@ -535,7 +535,7 @@ describe(runPipelineConfirmation.name, () => {
 
 		expect(failed?.stages[0]).toMatchObject({
 			status: "EXECUTION_FAILED",
-			error: "Worker execution failed",
+			error: "Worker execution failed: worker invocation failed",
 		});
 		expect(failed?.metrics).toEqual({
 			status: "MISSING",

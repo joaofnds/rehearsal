@@ -53,6 +53,10 @@ export interface WorkflowStageRequest {
 	readonly settingSources?: "project" | undefined;
 }
 
+function reasonOf(cause: unknown): string {
+	return cause instanceof Error ? cause.message : String(cause);
+}
+
 export class WorkflowExecutionError extends Error {
 	public readonly providerCalls: readonly ProviderCall[];
 
@@ -60,7 +64,9 @@ export class WorkflowExecutionError extends Error {
 		readonly cause: unknown;
 		readonly providerCalls: readonly ProviderCall[];
 	}) {
-		super("Worker execution failed", { cause: props.cause });
+		super(`Worker execution failed: ${reasonOf(props.cause)}`, {
+			cause: props.cause,
+		});
 		this.name = "WorkflowExecutionError";
 		this.providerCalls = props.providerCalls;
 	}

@@ -349,4 +349,38 @@ describe("workflow provider metrics", () => {
 			message: "Claude session exhausted its budget",
 		});
 	});
+	it("carries the underlying reason in the failure message", async () => {
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+
+		let failure: unknown;
+		try {
+			await runWorkflowStage(
+				{
+					targetDir: "/target",
+					model: "sonnet",
+					effort: undefined,
+					sessionBudgetUsd: 5,
+					productOwner,
+					taskId: "ACT-22.1",
+					stage: "build",
+					skill: "build",
+				},
+				() => Promise.reject(new Error("claude exited with code 143")),
+			);
+		} catch (error) {
+			failure = error;
+		}
+
+		expect(failure).toBeInstanceOf(WorkflowExecutionError);
+		expect(failure).toMatchObject({
+			message: "Worker execution failed: claude exited with code 143",
+		});
+	});
 });
