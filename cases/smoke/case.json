@@ -8,5 +8,7 @@
 	"checks": [
 		{ "kind": "word-band", "max": 1 },
 		{ "kind": "tool-calls", "max": 0 }
-	]
+	],
+	"model": "sonnet",
+	"sessionBudgetUsd": 0.2
 }

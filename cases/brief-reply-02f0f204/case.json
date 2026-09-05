@@ -22,6 +22,8 @@
 			"max": 0
 		}
 	],
+	"model": "sonnet",
+	"sessionBudgetUsd": 3,
 	"transcript": {
 		"file": "02f0f204-613d-49d2-8999-67ba79fedbb1-cut-1270.jsonl",
 		"sha256": "0503096d1d80737e5b2a8f9bba421ea6bf0e29e6f578343734776bf25655adcf",

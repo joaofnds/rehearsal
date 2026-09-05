@@ -7,5 +7,7 @@
 	"finalRubric": "rubric.md",
 	"pipeline": "pipelines/default.json",
 	"rubrics": "rubrics",
-	"target": { "path": "../../../nest/template" }
+	"target": { "path": "../../../nest/template" },
+	"model": "sonnet",
+	"sessionBudgetUsd": 10
 }
