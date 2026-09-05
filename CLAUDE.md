@@ -26,6 +26,8 @@
   `class-validator/class-transformer`.
 - **Testing**: The native `bun:test` runner. Do not install Jest. Run the suite
   with `bun test`.
+- **Benchmark runs**: Pass `--model sonnet` when running or replaying a case, so
+  the result is comparable with the recorded runs. Never pass `--model fable`.
 - **Commits**: Conventional Commits. A lowercase type, an optional scope, then a
   lowercase imperative subject: `fix: latch the signal path so it cannot kill its
 own restore`. The body says why. Commits between 2026-08-30 and 2026-08-31 omit
