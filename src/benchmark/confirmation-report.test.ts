@@ -175,6 +175,7 @@ describe(buildResourceReport.name, () => {
 						calls: [
 							{ role: "worker", metrics: metric(1, 10, 2) },
 							{ role: "stage-judge", metrics: metric(0.5, 5, 1) },
+							{ role: "product-owner", metrics: metric(0.25, 3, 1) },
 						],
 					},
 					workerTrajectorySteps: 2,
@@ -190,6 +191,7 @@ describe(buildResourceReport.name, () => {
 						calls: [
 							{ role: "worker", metrics: metric(2, 20, 4) },
 							{ role: "stage-judge", metrics: metric(1, 10, 1) },
+							{ role: "final-judge", metrics: metric(1.5, 15, 1) },
 						],
 					},
 					workerTrajectorySteps: 4,
@@ -219,7 +221,7 @@ describe(buildResourceReport.name, () => {
 			cacheReadTokens: [12, 22],
 			cacheWriteTokens: [13, 23],
 		});
-		expect(report.total.costUsd).toEqual([1.5, 3]);
+		expect(report.total.costUsd).toEqual([1.75, 4.5]);
 		expect(report.workerTurns).toEqual([2, 4]);
 		expect(report.stageElapsedMs).toEqual(
 			Object.fromEntries([
