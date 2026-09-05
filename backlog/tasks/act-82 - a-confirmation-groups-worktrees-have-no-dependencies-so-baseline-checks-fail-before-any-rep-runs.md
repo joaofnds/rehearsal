@@ -3,10 +3,10 @@ id: ACT-82
 title: >-
   a confirmation group's worktrees have no dependencies, so baseline checks fail
   before any rep runs
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-05 16:06'
-updated_date: '2026-09-05 16:06'
+updated_date: '2026-09-05 16:39'
 labels: []
 dependencies: []
 type: bug
@@ -31,5 +31,11 @@ This blocks ACT-43's last acceptance criterion, which needs a real confirmation 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A confirmation group runs its baseline checks successfully against a target whose checks need installed dependencies
+- [x] #1 A confirmation group runs its baseline checks successfully against a target whose checks need installed dependencies
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2026-09-05: the confirmation group now runs end to end. Group cdadb7d4 completed 2 reps against the audit-log case, whose pipeline declares 'bun install --frozen-lockfile' as setup. Baseline checks passed in the setup worktree and both rep worktrees.
+<!-- SECTION:NOTES:END -->

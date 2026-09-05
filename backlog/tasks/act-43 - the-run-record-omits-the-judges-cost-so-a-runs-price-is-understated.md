@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 16:06'
+updated_date: '2026-09-05 16:39'
 labels:
   - partial
 milestone: m-1
@@ -38,7 +38,7 @@ This card previously described the defect backwards, naming the judge as the omi
 <!-- AC:BEGIN -->
 - [x] #1 A run record carries the workflow sessions' aggregate cost as a field of its own, not only nested under each stage's input transcript
 - [x] #2 A run's reported total cost equals the sum of every provider session the run caused, workflow and judge and product-owner, checked against one real completed run's record
-- [ ] #3 A confirmation group's projected cost accounts for every session role, verified against one real group report rather than assumed
+- [x] #3 A confirmation group's projected cost accounts for every session role, verified against one real group report rather than assumed
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -99,4 +99,14 @@ Without the fix this record would have reported $3.28, the judge and product-own
 AC3 stays unchecked. It needs a confirmation group report, which no run has produced.
 
 AC3 blocked 2026-09-05, see ACT-82. A confirmation group cannot run against this case: its worktrees carry no node_modules, so the target's baseline typecheck fails before any rep starts. The group is the only way to produce the report AC3 needs.
+
+AC3 verified 2026-09-05 against a real confirmation group report, .benchmark-runs/confirmations/cdadb7d4-c8d9-49ba-a879-2a75d9918d0d/report.json, 2 reps both complete.
+
+All four session roles are present in resources.perRole: worker, product-owner, stage-judge, final-judge. Summing every role's values gives 3.8127684, and summing resources.total.costUsd gives 3.8127684. The projection accounts for every role.
+
+Note for a later reader: the per-role and total arrays are sorted distributions, not per-rep values, so they cannot be paired by index. Comparing them rep by rep appears to mismatch and does not.
+
+The final-judge and product-owner costs are zero in this group. Both reps stopped before the final judge ran, and the product owner was never consulted because the shape stage needed no decision. Zero is the honest figure, not a gap.
+
+This closes the card. The confirmation group only became runnable after ACT-82, which added per-worktree dependency setup.
 <!-- SECTION:NOTES:END -->
