@@ -366,7 +366,9 @@ export async function loadJudgeAgreementReport(
 		calibrationObservations(calibration),
 	);
 	let skippedCalibrations = 0;
-	const entries = await readdir(runsDirectory, { withFileTypes: true });
+	const entries = await readdir(runsDirectory, { withFileTypes: true }).catch(
+		() => [],
+	);
 	for (const entry of entries) {
 		if (!entry.isFile() || !entry.name.endsWith(".json")) {
 			continue;
