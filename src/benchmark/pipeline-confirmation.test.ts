@@ -485,6 +485,33 @@ describe(runPipelineConfirmation.name, () => {
 		expect(record.workerTrajectorySteps).toBe(CONFIRMATION_METRIC.turns);
 	});
 
+	it("runs the target's setup in every worktree before its checks", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const setup = [{ command: ["bun", "install"] }];
+		const pipeline = {
+			...CONFIRMATION_PIPELINE,
+			target: { ...CONFIRMATION_PIPELINE.target, setup },
+		};
+		const setupDirectories: string[] = [];
+		const worktrees: string[] = [];
+
+		await harness.run({ pipeline }, (dependencies) => ({
+			...dependencies,
+			addWorktree: (root, sha, path) => {
+				worktrees.push(path);
+
+				return dependencies.addWorktree(root, sha, path);
+			},
+			runSetup: (targetDir: string) => {
+				setupDirectories.push(targetDir);
+
+				return Promise.resolve();
+			},
+		}));
+
+		expect(setupDirectories.toSorted()).toEqual(worktrees.toSorted());
+	});
+
 	it("retains worker calls carried by a failed stage execution", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 

@@ -232,6 +232,7 @@ export class PipelineConfirmationHarness {
 				taskSha: await currentSha(targetDir),
 			}),
 			runChecks: () => Promise.resolve(),
+			runSetup: () => Promise.resolve(),
 			captureBaselineContext,
 			captureFileHashes,
 			addWorktree,

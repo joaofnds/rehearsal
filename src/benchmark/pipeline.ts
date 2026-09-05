@@ -58,6 +58,7 @@ const targetCheckSchema = z
 
 const targetDefinitionSchema = z
 	.object({
+		setup: z.array(targetCheckSchema).min(1).optional(),
 		checks: z.array(targetCheckSchema).min(1),
 		integrityFiles: z
 			.array(targetRelativePathSchema)

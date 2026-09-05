@@ -31,6 +31,7 @@ describe("the default pipeline", () => {
 		const env = { CONFIG_PATH: "src/config/test.yaml" };
 
 		expect(definition.target).toEqual({
+			setup: [{ command: ["bun", "install", "--frozen-lockfile"] }],
 			checks: [
 				{ command: ["bun", "run", "typecheck"], env },
 				{ command: ["bun", "run", "check"], env },
@@ -143,6 +144,27 @@ describe(parsePipeline.name, () => {
 		const parsed = parse([stageEntry(), deliveryStage]);
 
 		expect(parsed).toMatchObject({ target });
+	});
+
+	it("parses the target's optional setup commands", () => {
+		const withSetup = {
+			...target,
+			setup: [{ command: ["bun", "install", "--frozen-lockfile"] }],
+		};
+		const parsed = parsePipeline(
+			JSON.stringify({
+				statuses: ["To Do", "Done"],
+				target: withSetup,
+				stages: [stageEntry(), deliveryStage],
+			}),
+			availableRubrics,
+		);
+
+		expect(parsed).toMatchObject({ target: withSetup });
+	});
+
+	it("parses a target that declares no setup", () => {
+		expect(parse([stageEntry(), deliveryStage]).target.setup).toBeUndefined();
 	});
 
 	it("rejects a pipeline without a target definition", () => {

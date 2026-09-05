@@ -182,3 +182,20 @@ export async function captureBaselineContext(
 
 	return context;
 }
+
+/**
+ * Prepares a freshly created worktree so the target's checks can run in it. A
+ * worktree carries only tracked files, so a target whose checks need installed
+ * dependencies fails in one until its setup has run. Every rep installs its
+ * own, because reps that shared a tree would not be independent.
+ */
+export async function runSetup(
+	targetDir: string,
+	setup: readonly TargetCheck[] | undefined,
+): Promise<void> {
+	if (setup === undefined) {
+		return;
+	}
+
+	await runChecks(targetDir, "Target setup", setup);
+}

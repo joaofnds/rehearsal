@@ -19,6 +19,7 @@ import {
 	captureFileHashes,
 	captureTreatmentChecks,
 	runChecks,
+	runSetup,
 } from "#benchmark/checks";
 import type { BenchmarkCase, LoadedCase, SessionCase } from "#benchmark/case";
 import { withPipeline } from "#benchmark/case";
@@ -332,6 +333,7 @@ async function confirmRun(
 				),
 			seedTaskBoard,
 			runChecks,
+			runSetup,
 			captureBaselineContext,
 			captureFileHashes,
 			addWorktree,

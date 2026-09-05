@@ -32,7 +32,7 @@ import {
 	JudgeExecutionError,
 	JudgeOutputValidationError,
 } from "./judge-attempt";
-import type { PipelineDefinition } from "./pipeline";
+import type { PipelineDefinition, TargetCheck } from "./pipeline";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { ConfirmationRepRecord } from "./confirmation-record";
@@ -97,6 +97,10 @@ export interface PipelineConfirmationDependencies {
 	) => Promise<JudgeResult>;
 	readonly seedTaskBoard: typeof seedTaskBoard;
 	readonly runChecks: typeof runChecks;
+	readonly runSetup: (
+		targetDir: string,
+		setup: readonly TargetCheck[] | undefined,
+	) => Promise<void>;
 	readonly captureBaselineContext: typeof captureBaselineContext;
 	readonly captureFileHashes: typeof captureFileHashes;
 	readonly addWorktree: typeof addWorktree;
@@ -186,6 +190,7 @@ async function freezePipelineInputs(
 	const checkpointDirectory = join(inputsDirectory, "checkpoint");
 	let initialCheckpoint: CheckpointRecord;
 	try {
+		await dependencies.runSetup(setupWorktree, request.pipeline.target.setup);
 		await dependencies.runChecks(
 			setupWorktree,
 			"Baseline checks",
@@ -365,6 +370,11 @@ async function runPipelineRep(
 			plan.worktreePath,
 		);
 		worktreeCreated = true;
+		setupOperation = "target setup";
+		await dependencies.runSetup(
+			plan.worktreePath,
+			request.pipeline.target.setup,
+		);
 		setupOperation = "checkpoint materialization";
 		await dependencies.materializeCheckpoint(
 			frozen.checkpointDirectory,

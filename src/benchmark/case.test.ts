@@ -175,12 +175,12 @@ describe("loadCase", () => {
 		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
 
 		const before = await bytesBeforeTheMove("pipelines/default.json");
-		const rehomed: unknown = JSON.parse(
-			before.replaceAll('"rubrics/', '"cases/audit-log/rubrics/'),
+		const rehomed = pipelineDefinitionSchema.parse(
+			JSON.parse(before.replaceAll('"rubrics/', '"cases/audit-log/rubrics/')),
 		);
-		expect(benchmarkCase.pipeline).toEqual(
-			pipelineDefinitionSchema.parse(rehomed),
-		);
+		const { setup: _setup, ...target } = benchmarkCase.pipeline.target;
+
+		expect({ ...benchmarkCase.pipeline, target }).toEqual(rehomed);
 	});
 });
 
