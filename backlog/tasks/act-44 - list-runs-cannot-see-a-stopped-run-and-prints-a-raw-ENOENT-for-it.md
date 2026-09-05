@@ -1,7 +1,7 @@
 ---
 id: ACT-44
 title: list runs cannot see a stopped run and prints a raw ENOENT for it
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 02:14'
 updated_date: '2026-09-05 16:50'
@@ -42,4 +42,6 @@ Triage 2026-09-05: acceptance #1 re-verified live. `./rehearsal.ts list runs` on
 Shape 2026-09-05 (iterate, session 91811225): the card's premise is off. A stopped run never writes <id>.json at all; the stop throws past the writer. What exists is <id>.<stage>.json with status STAGE_JUDGE_FAILED, a different shape from a run record (no caseId, no top-level grade). So list and show must treat the stopped-stage file as a second legitimate run outcome, not repoint a lookup. Probed after the session, on this checkout: 8 runs on disk are in that state, 1 (02-56-43) has a passed shape file and nothing after it, and 4 (12-48, 14-49, 14-51, 15-42) have only a checkpoints directory and no json at all. All 13 print raw ENOENT from list runs. Acceptance #3 as written excludes the last five (no record exists), yet they produce the same raw error, so the fix should give them a plain 'no record' line too. The session's claim that a stop puts a stack trace in front of the operator at run time is refuted: the top-level handler prints only the message and exits 1. Whether a judged stop should exit 0 is a separate question, not this card. Open question to João: keep this card to list/show only (recommended), or widen it to the run-time exit code.
 
 João, 2026-09-05, on the open question: "agree". The card stays on list and show reading what is on disk. The run-time exit code for a judged stop is out of scope here and gets its own card only if João asks. Acceptance #3 rewritten to cover runs with no record at all, per the recommendation he agreed to.
+
+Shape 2026-09-05, second pass (iterate, session 39210a8f): judged the card shaped and named the build path: try the run record, then the stopped-stage file, then a plain no-record line for a checkpoints-only run. Existing path helpers already cover the stage file and the checkpoints entry. Moved to Build by the overseer since the session left the column unchanged.
 <!-- SECTION:NOTES:END -->
