@@ -4,8 +4,7 @@ title: >-
   a run's reported total cost omits the workflow sessions, so a run's price is
   understated
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-04 02:14'
 updated_date: '2026-09-05 02:48'
 labels: []
