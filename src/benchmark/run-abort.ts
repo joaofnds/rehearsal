@@ -100,6 +100,7 @@ export async function writeStageJudgeFailure(
 				requirements: pending.scorecard.grade.requirements,
 				dimensions: pending.scorecard.grade.dimensions,
 				summary: pending.scorecard.grade.summary,
+				costUsd: pending.scorecard.costUsd,
 			}
 		: undefined;
 	await persistence.write(

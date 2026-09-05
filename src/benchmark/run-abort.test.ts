@@ -364,6 +364,7 @@ describe(writeStageJudgeFailure.name, () => {
 			requirements: scorecard.grade.requirements,
 			dimensions: scorecard.grade.dimensions,
 			summary: scorecard.grade.summary,
+			costUsd: scorecard.costUsd,
 		});
 	});
 });
