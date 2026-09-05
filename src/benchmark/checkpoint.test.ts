@@ -110,8 +110,8 @@ describe(captureStageCorpus.name, () => {
 		rule: string,
 		body: string,
 	): Promise<void> {
-		await mkdir(join(root, "rules"), { recursive: true });
-		await Bun.write(join(root, "rules", `${rule}.md`), body);
+		await mkdir(join(root, "rulebook"), { recursive: true });
+		await Bun.write(join(root, "rulebook", `${rule}.md`), body);
 	}
 
 	async function installOutputStyle(
@@ -310,7 +310,9 @@ describe(captureStageCorpus.name, () => {
 		await installRule(roots[1], "doctrine", "the doctrine, revised");
 		const after = await captureStageCorpus("discuss", "instructions", roots);
 
-		expect(before.some(({ path }) => path === "rules/doctrine.md")).toBe(true);
+		expect(before.some(({ path }) => path === "rulebook/doctrine.md")).toBe(
+			true,
+		);
 		expect(after).not.toEqual(before);
 	});
 

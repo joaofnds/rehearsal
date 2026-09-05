@@ -165,7 +165,7 @@ async function resolveLayoutDirectory(
  * Skills every stage reads regardless of which skill it invokes, so an edit
  * to one changes every stage's corpus. A declared list: adding another global
  * skill later is one entry here. The doctrine left this list when it became a
- * rules file, which `rules` now carries whole.
+ * rules file, which `rulebook` now carries whole.
  */
 export const GLOBAL_SKILLS: readonly string[] = [];
 
@@ -180,7 +180,7 @@ export const GLOBAL_SKILLS: readonly string[] = [];
 const LAYOUT_DIRECTORY_KINDS: readonly string[] = [
 	"agents",
 	"output-styles",
-	"rules",
+	"rulebook",
 ];
 
 /**
