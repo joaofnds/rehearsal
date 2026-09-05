@@ -119,6 +119,42 @@ describe(runList.name, () => {
 		]);
 	});
 
+	describe("when a checkpoint stage directory holds no record", () => {
+		it("still prints the recorded checkpoints and names it on stderr", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeEmptyCheckpointDirectory("zz-empty");
+			const recorder = recordOutput();
+
+			await runList(
+				{ kind: "checkpoints", runsDirectory: fixture.runsDirectory },
+				recorder.output,
+			);
+
+			expect(ids(recorder.stdout)).toEqual([
+				`checkpoint:${fixture.replayableRun}/build`,
+				`checkpoint:${fixture.replayableRun}/discuss`,
+			]);
+			expect(recorder.stderr.join("")).toContain(
+				`checkpoint:${fixture.replayableRun}/zz-empty`,
+			);
+		});
+
+		it("gives the missing record a plain incomplete reason, not a raw ENOENT", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeEmptyCheckpointDirectory("zz-empty");
+			const recorder = recordOutput();
+
+			await runList(
+				{ kind: "checkpoints", runsDirectory: fixture.runsDirectory },
+				recorder.output,
+			);
+
+			const reasons = recorder.stderr.join("");
+			expect(reasons).not.toContain("ENOENT");
+			expect(reasons).toContain("incomplete");
+		});
+	});
+
 	it("prints one line per confirmation group with its case, mode, and rep count", async () => {
 		const fixture = await writtenFixture();
 		const recorder = recordOutput();
@@ -254,18 +290,14 @@ describe(runList.name, () => {
 			const root = await mkdtemp(join(CONTROL_DIR, "rehearsal-list-test-"));
 			roots.push(root);
 			const fixture = new RecordedRunsFixture(root);
-			await fixture.write();
-			await fixture.writeEmptyCheckpointDirectory("zz-empty");
+			await fixture.writeStoppedRunWithoutManifest();
 			const recorder = recordOutput();
 
-			await runList(
-				{ kind: "checkpoints", runsDirectory: root },
-				recorder.output,
-			);
+			await runList({ kind: "runs", runsDirectory: root }, recorder.output);
 
 			const reasons = recorder.stderr.join("");
 			expect(reasons).toContain(
-				`${basename(root)}/${fixture.replayableRun}.checkpoints/zz-empty`,
+				`${basename(root)}/${fixture.stoppedRun}.checkpoints/manifest.json`,
 			);
 			expect(reasons).not.toContain(homedir());
 		});

@@ -477,6 +477,27 @@ export class RecordedRunsFixture {
 	}
 
 	/**
+	 * A stopped run whose manifest never got written, so loading it to report
+	 * the stopping stage throws an error naming the missing manifest's path.
+	 */
+	public async writeStoppedRunWithoutManifest(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.stoppedRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await Bun.write(
+			paths.stageFile("build"),
+			`${JSON.stringify(
+				{
+					status: "STAGE_JUDGE_FAILED",
+					stage: "build",
+					error: "build stage graded F; minimum grade is B",
+				},
+				null,
+				2,
+			)}\n`,
+		);
+	}
+
+	/**
 	 * A run that died before any stage finished: only its checkpoints directory
 	 * and manifest exist, which is what three of this repository's own runs are.
 	 */

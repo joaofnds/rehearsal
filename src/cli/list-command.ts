@@ -195,11 +195,12 @@ async function listCheckpoints(runsDirectory: string): Promise<RecordListing> {
 		({ run, stage }) => ({ kind: "checkpoint", run, stage }),
 		async ({ run, stage }) => {
 			const paths = benchmarkRunPaths(runsDirectory, run);
-			const record = parseCheckpointRecord(
-				await Bun.file(
-					checkpointRecordFile(paths.checkpointDirectory(stage)),
-				).text(),
-			);
+			const recordFile = checkpointRecordFile(paths.checkpointDirectory(stage));
+			if (!(await Bun.file(recordFile).exists())) {
+				throw new Error("incomplete: no checkpoint.json recorded");
+			}
+
+			const record = parseCheckpointRecord(await Bun.file(recordFile).text());
 
 			return [record.stage, record.lineage];
 		},
