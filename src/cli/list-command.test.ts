@@ -226,6 +226,21 @@ describe(runList.name, () => {
 				`attempt:session:smoke/${RECORDLESS_UUID}`,
 			);
 		});
+
+		it("gives the missing record a plain incomplete reason, not a raw ENOENT", async () => {
+			const fixture = await writtenFixture();
+			await fixture.writeEmptyAttemptDirectory("smoke", RECORDLESS_UUID);
+			const recorder = recordOutput();
+
+			await runList(
+				{ kind: "attempts", runsDirectory: fixture.runsDirectory },
+				recorder.output,
+			);
+
+			const reasons = recorder.stderr.join("");
+			expect(reasons).not.toContain("ENOENT");
+			expect(reasons).toContain("incomplete");
+		});
 	});
 
 	describe("when a reason names a file under the control root", () => {
@@ -240,13 +255,18 @@ describe(runList.name, () => {
 			roots.push(root);
 			const fixture = new RecordedRunsFixture(root);
 			await fixture.write();
-			await fixture.writeEmptyAttemptDirectory("smoke", RECORDLESS_UUID);
+			await fixture.writeEmptyCheckpointDirectory("zz-empty");
 			const recorder = recordOutput();
 
-			await runList({ kind: "attempts", runsDirectory: root }, recorder.output);
+			await runList(
+				{ kind: "checkpoints", runsDirectory: root },
+				recorder.output,
+			);
 
 			const reasons = recorder.stderr.join("");
-			expect(reasons).toContain(`${basename(root)}/sessions/smoke`);
+			expect(reasons).toContain(
+				`${basename(root)}/${fixture.replayableRun}.checkpoints/zz-empty`,
+			);
 			expect(reasons).not.toContain(homedir());
 		});
 	});

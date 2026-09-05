@@ -430,6 +430,16 @@ export class RecordedRunsFixture {
 	}
 
 	/**
+	 * A checkpoint stage directory a run created and died before writing a
+	 * checkpoint.json into, so its lister's read throws a raw ENOENT naming
+	 * the file's path.
+	 */
+	public async writeEmptyCheckpointDirectory(stage: string): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+		await mkdir(paths.checkpointDirectory(stage), { recursive: true });
+	}
+
+	/**
 	 * A run that stopped at a stage: its checkpoints directory and manifest
 	 * exist, an earlier stage's file holds a judged scorecard, and the stopping
 	 * stage's file holds a stop record instead of a scorecard. No artifact file

@@ -254,10 +254,13 @@ async function listAttempts(runsDirectory: string): Promise<RecordListing> {
 		await sessionAttemptIds(runsDirectory),
 		({ caseId, uuid }) => ({ kind: "attempt:session", caseId, uuid }),
 		async (attempt) => {
+			const { recordFile } = sessionAttemptPaths(runsDirectory, attempt);
+			if (!(await Bun.file(recordFile).exists())) {
+				throw new Error("incomplete: no attempt.json recorded");
+			}
+
 			const record = parseSessionAttemptRecord(
-				await Bun.file(
-					sessionAttemptPaths(runsDirectory, attempt).recordFile,
-				).text(),
+				await Bun.file(recordFile).text(),
 			);
 
 			return [record.caseId, record.outcome, record.model];
