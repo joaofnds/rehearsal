@@ -1,10 +1,10 @@
 ---
 id: ACT-39
 title: replay one stage against an edited instruction and read the comparison
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-05 00:42'
+updated_date: '2026-09-05 01:50'
 labels: []
 milestone: m-1
 dependencies:
@@ -28,9 +28,9 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 The shape stage passes its judge once and records a stage checkpoint
-- [ ] #2 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
+- [x] #2 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
 - [x] #3 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
-- [ ] #4 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
+- [x] #4 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -129,4 +129,18 @@ So the inner loop this card exists to prove cannot run for a pipeline stage on a
 What did happen, and is worth keeping: the shape checkpoint exists, and 'rehearsal stale --corpus <edited copy>' correctly reported 'checkpoint:2026-09-05T00-21-40.070Z/shape CLAUDE.md changed'. That is acceptance criterion #3, observed, and it is the first time staleness has been demonstrated against a real edit to a real checkpoint.
 
 Criteria #2 and #4 are blocked on ACT-28. This card should depend on it.
+
+Replay ran 2026-09-05, and the card's question is answered. ACT-75 removed the blocker.
+
+The edit: one paragraph added to the corpus CLAUDE.md, telling the agent that every constraint the task or brief states explicitly is part of the work whether or not an acceptance criterion repeats it, naming trimmed non-empty strings as the example.
+
+The answer: the edit made the stage worse. The baseline run's shape stage graded CONTINUE and left a checkpoint. The replay against the edited corpus graded F with two hard blockers failing.
+
+Quoted from the replay's own scorecard summary, which is what answers criterion #4: 'it contradicts the product brief on the core contract: it fixes the accepted-request response at 201 with an id in the body, where the brief mandates 202 after enqueue with the worker generating the ID. It also omits the brief's stated validation boundaries (details as a non-null non-array JSON object; trimmed non-empty strings), so the behavior contract is incomplete.'
+
+So an edit written to make the agent honor the brief's constraints produced a card that violated the brief's constraints, including the exact ones the edit named. Worth keeping as evidence that an instruction's effect is not its intent.
+
+Two limits on that conclusion, both real. It is one rep, and the tool says so itself ('single-rep evidence, not a score'). And the comparison refused to run because the corpus differed, so both records were read by hand rather than diffed by the tool. That refusal is ACT-76.
+
+The second hard blocker was invalid-stage-delivery, a dirty worktree, which is the intermittent failure ACT-64 recorded. It is unrelated to the edit and appeared here for the third time in five runs.
 <!-- SECTION:NOTES:END -->
