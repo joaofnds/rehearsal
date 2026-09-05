@@ -20,6 +20,12 @@ const CASE_DEFAULTS: CaseDefaults = {
 	targetPath: "/declared/target",
 };
 
+const CASE_DEFAULTS_WITH_SESSION_KNOBS: CaseDefaults = {
+	...CASE_DEFAULTS,
+	model: "declared-model",
+	sessionBudgetUsd: 3,
+};
+
 interface SessionValues {
 	readonly model: string;
 	readonly effort: Effort | undefined;
@@ -333,6 +339,35 @@ describe(parseArgs.name, () => {
 		);
 
 		expect(config.sourceDir).toBe("/environment/target");
+	});
+
+	it("falls back to the model and budget the case declares", () => {
+		const config = parseArgs(
+			["--target", "./target"],
+			{},
+			CASE_DEFAULTS_WITH_SESSION_KNOBS,
+		);
+
+		expect(config.model).toBe("declared-model");
+		expect(config.sessionBudgetUsd).toBe(3);
+	});
+
+	it("lets --model and --session-budget-usd override the case's declared values", () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"./target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+			CASE_DEFAULTS_WITH_SESSION_KNOBS,
+		);
+
+		expect(config.model).toBe("sonnet");
+		expect(config.sessionBudgetUsd).toBe(5);
 	});
 
 	it("records the case the run selected", () => {

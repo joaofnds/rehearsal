@@ -93,6 +93,8 @@ export interface CaseDefaults {
 	readonly caseId: string;
 	readonly pipelinePath: string;
 	readonly targetPath: string;
+	readonly model?: string | undefined;
+	readonly sessionBudgetUsd?: number | undefined;
 }
 
 interface ParsedFlags {
@@ -233,21 +235,38 @@ function parseMinimumStageGrade(text: string | undefined): StageLetterGrade {
 	return grade;
 }
 
+interface DeclaredSessionKnobs {
+	readonly model?: string | undefined;
+	readonly sessionBudgetUsd?: number | undefined;
+}
+
 function parseSessionKnobs(
 	values: ReadonlyMap<string, string>,
 	env: Readonly<Record<string, string | undefined>>,
+	declared: DeclaredSessionKnobs = {},
 ): SessionKnobs {
-	const model = values.get("--model") ?? env["BENCHMARK_MODEL"];
+	const modelText = values.get("--model") ?? env["BENCHMARK_MODEL"];
+	const model =
+		modelText === undefined || modelText === "" ? declared.model : modelText;
 	const budgetText =
 		values.get("--session-budget-usd") ?? env["BENCHMARK_SESSION_BUDGET_USD"];
+	const sessionBudgetUsd =
+		budgetText === undefined || budgetText === ""
+			? declared.sessionBudgetUsd
+			: Number(budgetText);
 
-	if (model === undefined || model === "") {
-		throw new Error("Provide --model or BENCHMARK_MODEL");
+	if (model === undefined || sessionBudgetUsd === undefined) {
+		const missing = [
+			model === undefined ? "--model or BENCHMARK_MODEL" : undefined,
+			sessionBudgetUsd === undefined
+				? "--session-budget-usd or BENCHMARK_SESSION_BUDGET_USD"
+				: undefined,
+		].filter((flag) => flag !== undefined);
+
+		throw new Error(`Provide ${missing.join(" and ")}`);
 	}
-	if (budgetText === undefined || budgetText === "") {
-		throw new Error(
-			"Provide --session-budget-usd or BENCHMARK_SESSION_BUDGET_USD",
-		);
+	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
+		throw new Error("Session budget must be a positive number");
 	}
 
 	const judgeModel =
@@ -262,11 +281,6 @@ function parseSessionKnobs(
 		values.get("--judge-effort") ?? env["BENCHMARK_JUDGE_EFFORT"] ?? effort,
 		"Judge",
 	);
-	const sessionBudgetUsd = Number(budgetText);
-
-	if (!Number.isFinite(sessionBudgetUsd) || sessionBudgetUsd <= 0) {
-		throw new Error("Session budget must be a positive number");
-	}
 
 	const minimumStageGrade = parseMinimumStageGrade(
 		values.get("--minimum-grade") ?? env["BENCHMARK_MINIMUM_GRADE"],
@@ -313,7 +327,7 @@ export function parseArgs(
 		throw new Error("Provide --target or BENCHMARK_TARGET_DIR");
 	}
 
-	const sessionKnobs = parseSessionKnobs(values, env);
+	const sessionKnobs = parseSessionKnobs(values, env, caseDefaults);
 	const confirmation = parseConfirmation(flags);
 
 	return withConfirmation(
