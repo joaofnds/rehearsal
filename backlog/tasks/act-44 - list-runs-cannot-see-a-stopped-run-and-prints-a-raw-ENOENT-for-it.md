@@ -1,10 +1,11 @@
 ---
 id: ACT-44
 title: list runs cannot see a stopped run and prints a raw ENOENT for it
-status: Build
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 16:50'
+updated_date: '2026-09-05 16:58'
 labels: []
 milestone: m-1
 dependencies: []
@@ -29,9 +30,9 @@ Same class as ACT-40 (list attempts prints raw ENOENT for empty attempt director
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 list runs reports a run that stopped at a stage, naming the stage it stopped at
-- [ ] #2 show on that run id prints the record that exists on disk
-- [ ] #3 No raw filesystem error reaches the operator from list runs or show for any run present on disk. A run with no record of any kind (checkpoints directory only) gets a plain line saying no record exists.
+- [x] #1 list runs reports a run that stopped at a stage, naming the stage it stopped at
+- [x] #2 show on that run id prints the record that exists on disk
+- [x] #3 No raw filesystem error reaches the operator from list runs or show for any run present on disk. A run with no record of any kind (checkpoints directory only) gets a plain line saying no record exists.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -44,4 +45,10 @@ Shape 2026-09-05 (iterate, session 91811225): the card's premise is off. A stopp
 João, 2026-09-05, on the open question: "agree". The card stays on list and show reading what is on disk. The run-time exit code for a judged stop is out of scope here and gets its own card only if João asks. Acceptance #3 rewritten to cover runs with no record at all, per the recommendation he agreed to.
 
 Shape 2026-09-05, second pass (iterate, session 39210a8f): judged the card shaped and named the build path: try the run record, then the stopped-stage file, then a plain no-record line for a checkpoints-only run. Existing path helpers already cover the stage file and the checkpoints entry. Moved to Build by the overseer since the session left the column unchanged.
+
+Build 2026-09-05: fixed. list runs and show both looked only for the run artifact <id>.json; a run that stops at a stage never writes one, it overwrites the stopping stage's own <id>.<stage>.json with a status: STAGE_JUDGE_FAILED record instead. Added run-outcome.ts (stoppedStage) and run-layout.ts's runStageFiles to find that record among a run's stage files. list runs now prints STOPPED:<stage> with the caseId read from the manifest; show prints the stop record's own bytes, falling back to raw text in the non-json summary path too since the run-summary schema does not fit a stop record. A run with a checkpoints directory and manifest but no artifact and no stop record (died before any stage finished) gets a plain 'no record' line in list runs and a clean RefusedPreconditionError in show, both replacing the raw ENOENT.
+
+Verified directly against the 13 real broken runs on this checkout: all print clean lines under list runs (8 STOPPED, 5 no record, matching the shape-stage triage counts), show run:<stopped-run> and --json both print the stage's stop record, show run:<no-record-run> refuses by name with exit code 3. Full suite green (1031 tests), typecheck and lint clean.
+
+No follow-up filed. The run-time exit code for a judged stop stays out of scope per João's 2026-09-05 'agree' on the card.
 <!-- SECTION:NOTES:END -->
