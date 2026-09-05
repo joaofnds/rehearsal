@@ -1609,6 +1609,28 @@ describe(captureRunBaseline.name, () => {
 			"Baseline check failed (exit 1): bun run test:unit",
 		);
 	});
+
+	it("leaves an unrelated dependency failure unconverted, distinct from a refusal", async () => {
+		const bug = new Error(
+			"assertWorkspaceCleanAt threw for an unrelated reason",
+		);
+
+		const failure = await failureOf(
+			captureRunBaseline(
+				{
+					runChecks: () => Promise.resolve(),
+					assertWorkspaceCleanAt: () => Promise.reject(bug),
+					captureFileHashes: () => Promise.resolve(new Map()),
+					captureBaselineContext: () => Promise.resolve([]),
+				},
+				{ root: "/target", sha: "source-sha" },
+				{ checks: [], integrityFiles: [] },
+			),
+		);
+
+		expect(failure).toBe(bug);
+		expect(failure).not.toBeInstanceOf(RefusedPreconditionError);
+	});
 });
 
 describe(buildRunManifest.name, () => {
