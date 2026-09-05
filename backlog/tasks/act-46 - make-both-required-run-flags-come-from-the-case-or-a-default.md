@@ -4,7 +4,7 @@ title: make both required run flags come from the case or a default
 status: Build
 assignee: []
 created_date: '2026-09-04 02:27'
-updated_date: '2026-09-05 21:36'
+updated_date: '2026-09-05 22:19'
 labels: []
 milestone: m-2
 dependencies: []
@@ -34,10 +34,10 @@ Filed after Joao pointed out he has never been able to run this tool himself.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A run of a declared case starts with no flags beyond --case, or refuses with one message naming everything it still needs rather than one per invocation
-- [ ] #2 A case can declare its model, and that declaration is part of the lineage the record carries
-- [ ] #3 The session budget has a default or a per-case declaration, and the chosen mechanism is recorded on this card with its reason
-- [ ] #4 The README and docs/runbook.md first-run commands are re-run after the change and work as printed
+- [x] #1 A run of a declared case starts with no flags beyond --case, or refuses with one message naming everything it still needs rather than one per invocation
+- [x] #2 A case can declare its model, and that declaration is part of the lineage the record carries
+- [x] #3 The session budget has a default or a per-case declaration, and the chosen mechanism is recorded on this card with its reason
+- [x] #4 The README and docs/runbook.md first-run commands are re-run after the change and work as printed
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -129,7 +129,7 @@ brief-reply attempt cost 2.46 USD against a budget of 3. A build session had set
 the four brief-reply cases to 0.2, below what any of them has ever cost; that
 run spent 0.73 USD and still died on the cap. They are now 3.
 
-REGRESSION, open, and the reason this card is not done: `rehearsal run` with no
+REGRESSION, now fixed (see the commit that adds requireSpendAuthorization): `rehearsal run` with no
 arguments now reaches the paid execute path. Before this card the missing
 --model refused it with exit 2. DEFAULT_CASE_ID is audit-log, which now declares
 both knobs, so nothing stops a bare invocation. Observed by substituting a fake
@@ -154,4 +154,21 @@ Bun note: the machine's default bun is 1.4.1 against this repo's 1.4.0 pin, so
 every CLI test fails with exit 1 unless run as `mise exec -- bun test`. That is
 ACT-84's territory, not this card's. Under the pinned Bun the suite is 1045
 pass, 3 fail, and those 3 are the ones above.
+
+Regression closed 2026-09-06. Authorization for a paid run moved to the
+operator: name --model, or be at a terminal. --yes is not an alternative,
+because parseConfirmation rejects it without --confirm and widening that would
+change deliberate behavior to suit this guard. Both run paths are gated, the
+pipeline one and the session one, and replay with them.
+
+Observed directly, with a fake execute that throws rather than spending: a bare
+run refuses on both paths without a TTY, and proceeds with a TTY, with --model,
+or with BENCHMARK_MODEL. The suite is 1050 pass, 0 fail, stable over three
+consecutive runs under the pinned Bun. Lint, typecheck and format all pass.
+
+The two remaining test failures were resolved as honest updates, not
+weakenings. BARE_REFUSALS still holds `run` to an exact refusal before any paid
+work; only which refusal changed. The missing-knob usage error stays covered
+where parseSessionKnobs is tested, and the self-preference warning's content
+stays covered where judgeSelfPreferenceWarning is tested.
 <!-- SECTION:NOTES:END -->
