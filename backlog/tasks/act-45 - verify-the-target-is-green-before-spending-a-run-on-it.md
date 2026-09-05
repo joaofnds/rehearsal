@@ -4,10 +4,12 @@ title: verify the target is green before spending a run on it
 status: Done
 assignee: []
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 21:09'
+updated_date: '2026-09-05 21:11'
 labels: []
 milestone: m-2
 dependencies: []
+documentation:
+  - backlog/docs/doc-15 - reflection-ACT-45.md
 priority: high
 ordinal: 47008
 ---
