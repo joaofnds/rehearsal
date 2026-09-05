@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-03 23:34'
+updated_date: '2026-09-05 01:02'
 labels:
   - defect
 milestone: m-0
@@ -137,6 +137,19 @@ note fixed alongside the should-fix (stale identifier in a comment), two
 notes left as observations with no reported occurrence. Nothing blocks this
 diff's own correctness: ACT-37's gap predates and is disclosed independently
 of this diff, which neither introduces nor worsens it.
+
+Re-probed 2026-09-05 on claude 2.1.260, one version past the 2.1.258 this card's evidence was taken on. The shadowing verdict has flipped.
+
+Probe: a temporary directory holding only .claude/skills/style/SKILL.md carrying SHADOW-MARKER-9931, a marker the live style skill does not have, asked at haiku to invoke the style skill through the Skill tool and report the marker.
+
+With --setting-sources project: SHADOW-MARKER-9931. The frozen skill is delivered.
+Without the flag: NO-MARKER. The live skill wins.
+
+So the mechanism this card built works, and the card is correctly Done. What is stale is the refusal message in src/benchmark/session-corpus.ts:30-46, which still says 'ACT-28 owns the delivery mechanism, so a skill variant cannot be measured yet'. ACT-28 landed. Its own comment #1 predicted this: 'the fix is likely a per-session flag for skills rather than an on-disk overlay', and --setting-sources project is that flag.
+
+The remaining gap is not delivery, it is that the plain run and replay paths never pass the flag. src/benchmark/pipeline-confirmation.ts:412 and replay-confirmation.ts:468 set settingSources: 'project'; run.ts and the plain replay do not, and src/cli/replay-command.ts:95 refuses --corpus outright before resolving anything.
+
+Re-check trigger: this is a fact about the CLI and rots with every release. Re-run the two probes above on a version bump before trusting the result.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
