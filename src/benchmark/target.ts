@@ -205,6 +205,22 @@ export async function recordRetentionRef(
  */
 export type ExpectedBranch = string | null;
 
+function describeBranchDrift(
+	branch: string,
+	expectedBranch: ExpectedBranch,
+): string {
+	const found = branch ? `branch ${branch}` : "a detached checkout";
+	const expected = expectedBranch ?? "a detached checkout";
+
+	return `Target is on ${found}, expected ${expected}`;
+}
+
+function describeDirtyWorktree(status: string): string {
+	const paths = status.split("\n").map((line) => line.trim());
+
+	return `Target worktree is dirty: ${paths.join(", ")}`;
+}
+
 export async function assertWorkspaceCleanAt(
 	targetDir: string,
 	expectedSha: string,
@@ -219,8 +235,18 @@ export async function assertWorkspaceCleanAt(
 		"--untracked-files=all",
 	);
 
-	if (branch !== (expectedBranch ?? "") || sha !== expectedSha || status) {
-		throw new StageValidationError("Target baseline changed unexpectedly");
+	if (branch !== (expectedBranch ?? "")) {
+		throw new StageValidationError(describeBranchDrift(branch, expectedBranch));
+	}
+
+	if (sha !== expectedSha) {
+		throw new StageValidationError(
+			`Target is at commit ${sha}, expected ${expectedSha}`,
+		);
+	}
+
+	if (status) {
+		throw new StageValidationError(describeDirtyWorktree(status));
 	}
 }
 
@@ -253,8 +279,12 @@ export async function capturePlanningAdvance(
 		"--porcelain=v1",
 		"--untracked-files=all",
 	);
-	if (branch !== (expectedBranch ?? "") || status !== "") {
-		throw new StageValidationError("Target baseline changed unexpectedly");
+	if (branch !== (expectedBranch ?? "")) {
+		throw new StageValidationError(describeBranchDrift(branch, expectedBranch));
+	}
+
+	if (status !== "") {
+		throw new StageValidationError(describeDirtyWorktree(status));
 	}
 
 	const resultSha = await git(targetDir, "rev-parse", "HEAD");

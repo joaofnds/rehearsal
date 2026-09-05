@@ -237,13 +237,23 @@ describe(capturePlanningAdvance.name, () => {
 		).rejects.toThrow("rewrote or discarded task history");
 	});
 
-	it("rejects a stage that left the worktree dirty", async () => {
+	it("names the paths a stage left uncommitted", async () => {
 		const source = await testResources.createRepository();
 		await Bun.write(join(source.directory, "stray.md"), "uncommitted\n");
+		await Bun.write(join(source.directory, "GLOSSARY.md"), "audit log\n");
 
 		expect(
 			capturePlanningAdvance(source.directory, source.sha),
-		).rejects.toThrow("Target baseline changed unexpectedly");
+		).rejects.toThrow("Target worktree is dirty: ?? GLOSSARY.md, ?? stray.md");
+	});
+
+	it("names the branch a stage left the baseline for", async () => {
+		const source = await testResources.createRepository();
+		await runCommand(["git", "switch", "-c", "stray"], source.directory);
+
+		expect(
+			capturePlanningAdvance(source.directory, source.sha),
+		).rejects.toThrow("Target is on branch stray, expected main");
 	});
 });
 
@@ -274,6 +284,47 @@ describe(assertWorkspaceCleanAt.name, () => {
 		expect(
 			assertWorkspaceCleanAt(worktree, source.sha, null),
 		).rejects.toBeInstanceOf(StageValidationError);
+	});
+
+	it("names the branch a workspace left its detached checkout for", async () => {
+		const source = await testResources.createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		testResources.track(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await runCommand(["git", "switch", "-c", "stray"], worktree);
+
+		expect(assertWorkspaceCleanAt(worktree, source.sha, null)).rejects.toThrow(
+			"Target is on branch stray, expected a detached checkout",
+		);
+	});
+
+	it("names the commit a workspace moved to", async () => {
+		const source = await testResources.createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		testResources.track(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await Bun.write(join(worktree, "extra.md"), "added\n");
+		await commitAll(worktree, "chore: move ahead");
+		const moved = await currentSha(worktree);
+
+		expect(assertWorkspaceCleanAt(worktree, source.sha, null)).rejects.toThrow(
+			`Target is at commit ${moved}, expected ${source.sha}`,
+		);
+	});
+
+	it("names the paths a workspace left uncommitted", async () => {
+		const source = await testResources.createRepository();
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		testResources.track(parent);
+		const worktree = join(parent, "worktree");
+		await addWorktree(source.directory, source.sha, worktree);
+		await Bun.write(join(worktree, "stray.md"), "uncommitted\n");
+
+		expect(assertWorkspaceCleanAt(worktree, source.sha, null)).rejects.toThrow(
+			"Target worktree is dirty: ?? stray.md",
+		);
 	});
 });
 
