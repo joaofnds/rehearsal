@@ -3,10 +3,11 @@ id: ACT-43
 title: >-
   a run's reported total cost omits the workflow sessions, so a run's price is
   understated
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 02:47'
+updated_date: '2026-09-05 02:48'
 labels: []
 milestone: m-1
 dependencies: []
@@ -53,4 +54,10 @@ record-summary.ts:80 sums stageScorecards[].costUsd, productOwnerCostUsd and jud
 The run artifact has no field for the workflow sessions' aggregate cost at all (run.ts:200-222). The per-stage number exists only nested under input.transcript.
 
 So the card stands, its acceptance criteria stand, and the defect is the reverse of how the description frames it: judge cost is the part that IS recorded, and the workflow cost is what the totals drop.
+
+Shaped 2026-09-05: no unknowns remain, no survey needed. One fix: record-summary.ts's runSummarySchema and runSummary() (lines 44-85) read only stageScorecards[].costUsd, productOwnerCostUsd, judgeCostUsd. The workflow sessions' cost already exists as an array on the run artifact (RunArtifactEvidence.workflow, run.ts:211, each entry a StageTranscript with its own costUsd, contracts.ts:242-248) but the summary never reads that field. Add workflow cost to the schema and sum it into totalCost. First test: parseRunSummaryRecord + runSummary on a fixture record with a workflow array and a lower stageScorecards-only total, asserting the printed total includes the workflow figure and matches the real completed record's actual total (1.46 vs the current wrong 1.12 on .benchmark-runs/2026-09-05T00-21-40.070Z.shape.json). AC3 needs no new aggregation code: confirmation-report.ts's sumCallMetrics already sums every CallRole (worker, product-owner, stage-judge, final-judge) into resources.total.costUsd (confirmation-report.ts:228-249); AC3 is satisfied by verifying that against one real confirmation group report. No glossary terms needed.
+
+Probe 2026-09-05 by the iterate overseer, confirming the shape. RunArtifactEvidence.workflow is a readonly StageTranscript[] (contracts.ts:425), each entry carrying its own costUsd (contracts.ts:242-248), and record-summary.ts mentions 'workflow' nowhere. So the shape's fix location holds: the number exists on the artifact and the summary never reads it.
+
+One gap the shape did not name. No completed full run artifact exists on disk. .benchmark-runs holds only per-stage judge records (the one I probed, 2026-09-05T00-21-40.070Z.shape.json, has no workflow key because it is a StageJudgeRecord, not a GradedRunArtifact) and the comparisons directory is empty. AC2 asks for the total checked against one real completed run's record, and AC3 against one real confirmation group report. Neither artifact is on disk, so both need a real run produced before they can be checked. Budget that into the build step or expect it to stop there.
 <!-- SECTION:NOTES:END -->
