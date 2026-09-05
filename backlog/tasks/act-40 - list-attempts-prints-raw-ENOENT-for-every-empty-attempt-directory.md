@@ -1,10 +1,10 @@
 ---
 id: ACT-40
 title: list attempts prints raw ENOENT for every empty attempt directory
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-05 22:39'
+updated_date: '2026-09-05 22:40'
 labels: []
 milestone: m-5
 dependencies: []
@@ -36,11 +36,19 @@ Found during triage on 2026-09-04 while confirming the board had no recorded run
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-04, assigned to m-4. Filed as a CLI defect, but the design settles how this must behave: SPEC.md requires an unreadable record to appear in place with its reason rather than as an error, and ACT-50's acceptance carries the same rule. Fixing it in the shared read path (listRecords) fixes both surfaces at once, which is the argument for doing it with the UI rather than before it.
+Shaped 2026-09-06. Goal: an attempt directory with no attempt.json is reported as an incomplete attempt through the existing unreadable-record path, not a raw ENOENT.
 
-Decision (João, 2026-09-06): an attempt directory with no record is reported as an incomplete attempt, not omitted. Reason: a crashed attempt must stay visible to whoever is diagnosing the crash, and the run lister one function above already prints 'no record' rather than hiding the run. Asked 'incomplete reported or dropped?', João answered 'agree' to the recommendation to report. This settles acceptance criterion #2.
+Root cause, found by reading src/cli/list-command.ts: listAttempts's session-attempt reader (around line 256) calls Bun.file(recordFile).text() with no existence check, so a missing attempt.json throws a raw ENOENT that collect's catch block reports verbatim. listRuns one function above (line 125) already has the fix pattern: it checks Bun.file(paths.artifactFile).exists() first and returns a plain field ('no record') instead of letting the read throw. Same file, same collect() mechanism, same fix shape.
 
-Observed 2026-09-06 on this checkout: six attempt directories hold no attempt.json, not the five the card records. Three under brief-reply-40878d26, one under smoke, two under zz-symlink-probe.
+Approach: in listAttempts's session branch, check recordFile existence before parsing; when absent, throw a plain Error (e.g. 'incomplete: no attempt.json recorded') instead of returning a field directly. Routing it through a throw (not a returned field) keeps it in the unreadable list per João's decision below, and keeps it visually distinct from a parsed 'no record' run line, while still reusing collect's existing catch/unreadable plumbing. A parse failure on an existing-but-corrupt file still throws its own message unchanged, so criterion #3 holds: incomplete and corrupt both land in unreadable, told apart by reason text.
 
-Note: incomplete and corrupt records both land in the unreadable block, told apart by the reason text. That satisfies criterion #3 as long as the incomplete reason is a plain sentence and not a raw filesystem message.
+Acceptance criterion #2 is already settled on this card (João, 2026-09-06): report as incomplete, do not omit.
+
+First test to write: a listAttempts (or runList) test with an attempt directory holding no attempt.json, asserting the unreadable entry's reason is the plain incomplete sentence, not a message containing ENOENT.
+
+No open unknowns. Ready for build.
+
+Decision (João, 2026-09-06): an attempt directory with no record is reported as an incomplete attempt, not omitted. Asked 'incomplete reported or dropped?', he answered 'agree' to the recommendation to report. Reason: a crashed attempt must stay visible to whoever is diagnosing the crash. This settles acceptance criterion #2.
+
+Baseline reproduced 2026-09-06 with `mise exec -- ./rehearsal.ts list attempts`. The pinned bun must come through mise; the shell's default 1.4.1 makes the CLI refuse to start (ACT-84). Six raw ENOENT lines print above the valid records: three under brief-reply-40878d26, one under smoke, two under zz-symlink-probe. The card's description says five, which was wrong. The fix must turn these six lines into plain incomplete-attempt reasons.
 <!-- SECTION:NOTES:END -->
