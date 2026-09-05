@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 16:05'
+updated_date: '2026-09-05 16:06'
 labels:
   - partial
 milestone: m-1
@@ -97,4 +97,6 @@ runSummary reports 'Total cost $12.43'. Summing each session category once, inde
 Without the fix this record would have reported $3.28, the judge and product-owner spend alone, understating a twelve dollar run by 74 percent. The workflow sessions are the overwhelming majority of a real run's cost, which is what made this defect worth fixing.
 
 AC3 stays unchecked. It needs a confirmation group report, which no run has produced.
+
+AC3 blocked 2026-09-05, see ACT-82. A confirmation group cannot run against this case: its worktrees carry no node_modules, so the target's baseline typecheck fails before any rep starts. The group is the only way to produce the report AC3 needs.
 <!-- SECTION:NOTES:END -->
