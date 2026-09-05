@@ -3,19 +3,18 @@ id: doc-14
 title: 'reflection: ACT-44'
 type: other
 created_date: '2026-09-05 17:00'
+updated_date: '2026-09-05 17:01'
 ---
-
 # Reflection: ACT-44
 
 ## 1. What is the target condition?
 
-Milestone m-1, "prove the loop once" (doc-7). The tool has never answered its
-own question: no edit has been made, replayed, and compared. ACT-41 gates that
-chain and is Done; ACT-39 is next and has never run. ACT-44 was not on that
-critical path. Its bet, per doc-12's triage, was one of three independent m-1
-cards (ACT-42, ACT-43, ACT-44) queued alongside the ACT-41→ACT-39 gate: make
-`list runs` and `show` read what a stopped run actually wrote to disk, instead
-of throwing a raw ENOENT at the operator.
+Milestone m-1, "prove the loop once" (doc-7). ACT-41 gates the chain and is
+Done, and ACT-39 closed today at 03:50 on the first real replay. ACT-44 was
+not on that critical path. Its bet, per doc-12's triage, was one of three
+independent m-1 cards (ACT-42, ACT-43, ACT-44) queued alongside the
+ACT-41→ACT-39 gate: make `list runs` and `show` read what a stopped run
+actually wrote to disk, instead of throwing a raw ENOENT at the operator.
 
 ## 2. What is the actual condition now?
 
@@ -30,20 +29,21 @@ today confirms it holds on the current disk state, not just at build time.
 
 ## 3. What obstacles stand between here and the goal, and which one is next?
 
-None from this card. The one real obstacle on m-1 is unchanged from doc-7 and
-doc-12: ACT-39 has never run, and nothing in ACT-44 unblocks or blocks that.
-ACT-40 carries the same defect class (raw error from a lister) one call site
-over, on `list attempts`, and is deliberately parked on m-5 to land with the
-UI's shared read path per doc-12; that split was a deliberate choice, not
-something this run should undo.
+None from this card. ACT-40 carries the same defect class (raw error from a
+lister) one call site over, on `list attempts`, and is deliberately parked on
+m-5 to land with the UI's shared read path per doc-12; that split was a
+deliberate choice, not something this run should undo.
+
+The session that wrote the first draft of this doc said ACT-39 had never run
+and ACT-43 was still open. Both were already Done on the board (ACT-39 at
+03:50, ACT-43 at 18:39, both 2026-09-05). The overseer corrected this doc
+after the session returned.
 
 ## 4. What is the next step, and what do you expect from it?
 
-Continue doc-12's queue: ACT-42 and ACT-43 are the other two independent m-1
-cards still open, and ACT-39 is the gated one that actually proves the loop.
-None of the three needs a new card. Once ACT-39 runs, expect the first real
-edit-replay-compare cycle the tool has ever completed, which is what m-1 is
-actually waiting on.
+Of doc-12's three independent m-1 cards, only ACT-42 is still open. With
+ACT-39 Done, the next triage has to say whether m-1's target condition is
+met or name the card that still stands between the board and it.
 
 ## 5. When can João go and see?
 
@@ -54,8 +54,7 @@ check this card.
 ## Verdict: on track
 
 The bet held, the fix generalized past the two runs the card originally named
-to all 13 that existed by triage time plus the one added since, and the goal
-(m-1) is unaffected either way since this card was never on ACT-39's path.
+to all 13 that existed by triage time plus the one added since.
 
 ## Proposals
 
@@ -64,4 +63,7 @@ already decided.
 
 ## Kaizen candidate
 
-None.
+The reflect session read the milestone state from doc-7 and doc-12 rather than
+from the board, and reported two Done cards as open. A reflect that checks
+each card it names against `backlog task view` before writing would have
+caught it.

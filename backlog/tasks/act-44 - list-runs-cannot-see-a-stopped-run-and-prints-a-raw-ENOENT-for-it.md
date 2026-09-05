@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 17:00'
+updated_date: '2026-09-05 17:01'
 labels: []
 milestone: m-1
 dependencies: []
@@ -53,4 +53,6 @@ Verified directly against the 13 real broken runs on this checkout: all print cl
 No follow-up filed. The run-time exit code for a judged stop stays out of scope per João's 2026-09-05 'agree' on the card.
 
 Reflection 2026-09-05: doc-14. Verdict on track; goal (m-1) unaffected either way since this card was never on the ACT-39 critical path. Next: ACT-42, ACT-43, then ACT-39.
+
+Reflect 2026-09-05 (iterate, session 86a441b7): verdict on track, doc-14. Its next step named ACT-43 and ACT-39 as open; both were Done on the board before it ran (ACT-39 closed on the first real replay at 03:50, ACT-43 at 18:39). doc-14 corrected by the overseer; only ACT-42 of doc-12's three independent cards remains open.
 <!-- SECTION:NOTES:END -->
