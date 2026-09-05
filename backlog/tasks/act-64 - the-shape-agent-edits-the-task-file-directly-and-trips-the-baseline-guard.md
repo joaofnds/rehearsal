@@ -1,10 +1,10 @@
 ---
 id: ACT-64
 title: the shape agent edits the task file directly and trips the baseline guard
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 17:38'
-updated_date: '2026-09-05 00:19'
+updated_date: '2026-09-05 00:37'
 labels: []
 milestone: m-1
 dependencies: []
@@ -26,7 +26,7 @@ Not the same defect as the previous run's F. That one (record 2026-09-04T02-09-2
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A pipeline run of the audit-log case completes its shape stage without a 'Target baseline changed unexpectedly' harness failure
+- [x] #1 A pipeline run of the audit-log case completes its shape stage without a 'Target baseline changed unexpectedly' harness failure
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -47,4 +47,12 @@ One harness defect worth separating: 'Target baseline changed unexpectedly' is r
 Consequence: this blocks ACT-39. Without a passing shape stage there is no checkpoint, and without a checkpoint there is no replay. Grade would have been B across all four dimensions without this blocker, which is the passing minimum.
 
 Blocked on ACT-72, noted 2026-09-05. Fixing this needs to know which paths the stage left uncommitted, and nothing records them. The target repo was restored after the run, the artifact has no corpusFiles and no dirty-path list, and harnessFailure is the bare message. ACT-72 makes the guard record them, so the next run names the files instead of leaving them to be guessed.
+
+Closed 2026-09-05 without a code change. The run recorded at .benchmark-runs/2026-09-05T00-21-40.070Z completed its shape stage with no 'Target baseline changed unexpectedly' failure, which is this card's single acceptance criterion, observed directly.
+
+Shape graded CONTINUE and recorded a checkpoint at .benchmark-runs/2026-09-05T00-21-40.070Z.checkpoints/shape. The run went on through the build stage, where invalid-stage-delivery also passed.
+
+So the defect did not reproduce a third time. Across three failed runs it fired twice, from two different causes, and this run hit neither. Nothing here supports the card's original diagnosis, and nothing supports the uncommitted-artifacts theory either; the stage simply left the target clean this time.
+
+That makes this an intermittent stage-hygiene failure rather than a deterministic one, which is worth knowing and is why ACT-72 landed first. If it returns, the guard now names the condition and the paths, so the next occurrence is diagnosable on sight instead of by reading harness source.
 <!-- SECTION:NOTES:END -->

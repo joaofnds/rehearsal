@@ -4,7 +4,7 @@ title: replay one stage against an edited instruction and read the comparison
 status: Build
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 23:56'
+updated_date: '2026-09-05 00:37'
 labels: []
 milestone: m-1
 dependencies:
@@ -28,7 +28,7 @@ Depends on ACT-38: there is no checkpoint to replay until a run has recorded one
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The shape stage passes its judge once and records a stage checkpoint
+- [x] #1 The shape stage passes its judge once and records a stage checkpoint
 - [ ] #2 One stage is replayed from that checkpoint against a corpus with exactly one instruction file changed
 - [ ] #3 `rehearsal stale` reports the checkpoints that edit invalidated, before the replay runs
 - [ ] #4 The question 'did that edit improve the stage' is answered on this card from the two attempt records, with the sentence that answered it quoted, or recorded as unanswerable with what was missing
@@ -108,4 +108,14 @@ This is ACT-64 reproduced. That card's single acceptance criterion is precisely 
 Quality without the blocker would have been B across all four dimensions, which is the minimum grade. So the stage is one harness defect away from passing.
 
 ACT-70 verified live, which was the open item on that card. The artifact now has eight keys (status, stage, error, input, hardBlockers, requirements, dimensions, summary) where the two prior failed runs had four. The judge's findings, including the blocker's evidence, were readable straight from the artifact with no re-run. That is what made this diagnosis possible at all.
+
+Checkpoint obtained 2026-09-05, criterion #1 met. Run .benchmark-runs/2026-09-05T00-21-40.070Z, shape graded CONTINUE, checkpoint at .benchmark-runs/2026-09-05T00-21-40.070Z.checkpoints/shape.
+
+Cost: shape 0.3377, build 2.6905, so about 3.03 USD for the run and roughly 3.5 USD of the 10 approved spent across both of today's runs.
+
+The run continued into build, which graded C against a B minimum, so it stopped there. No hard blocker fired in either stage. The build judge's finding is a real corpus weakness: the zod schema uses bare z.string() without .trim()/.min(1), so the brief's trimmed non-empty rule is not enforced and nothing tests those boundaries.
+
+That finding is the natural corpus edit for this card. Criteria #2 through #4 are now reachable: edit one instruction so the build stage enforces the brief's validation rules, run stale, replay the build stage from the shape checkpoint, and read both attempts.
+
+Remaining budget is about 6.5 USD. A replay of the build stage alone should cost near the 2.69 that stage just cost.
 <!-- SECTION:NOTES:END -->
