@@ -4,9 +4,10 @@ title: >-
   a run's reported total cost omits the workflow sessions, so a run's price is
   understated
 status: Build
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-09-04 02:14'
-updated_date: '2026-09-05 02:48'
+updated_date: '2026-09-05 02:54'
 labels: []
 milestone: m-1
 dependencies: []
@@ -34,7 +35,7 @@ This card previously described the defect backwards, naming the judge as the omi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A run record carries the workflow sessions' aggregate cost as a field of its own, not only nested under each stage's input transcript
+- [x] #1 A run record carries the workflow sessions' aggregate cost as a field of its own, not only nested under each stage's input transcript
 - [ ] #2 A run's reported total cost equals the sum of every provider session the run caused, workflow and judge and product-owner, checked against one real completed run's record
 - [ ] #3 A confirmation group's projected cost accounts for every session role, verified against one real group report rather than assumed
 <!-- AC:END -->
@@ -59,4 +60,18 @@ Shaped 2026-09-05: no unknowns remain, no survey needed. One fix: record-summary
 Probe 2026-09-05 by the iterate overseer, confirming the shape. RunArtifactEvidence.workflow is a readonly StageTranscript[] (contracts.ts:425), each entry carrying its own costUsd (contracts.ts:242-248), and record-summary.ts mentions 'workflow' nowhere. So the shape's fix location holds: the number exists on the artifact and the summary never reads it.
 
 One gap the shape did not name. No completed full run artifact exists on disk. .benchmark-runs holds only per-stage judge records (the one I probed, 2026-09-05T00-21-40.070Z.shape.json, has no workflow key because it is a StageJudgeRecord, not a GradedRunArtifact) and the comparisons directory is empty. AC2 asks for the total checked against one real completed run's record, and AC3 against one real confirmation group report. Neither artifact is on disk, so both need a real run produced before they can be checked. Budget that into the build step or expect it to stop there.
+
+Build 2026-09-05. AC1 done: record-summary.ts's runSummarySchema now requires a workflow array (each entry's costUsd), and runSummary sums it into the printed total alongside stage, product-owner, and judge cost. Test-driven: record-summary.test.ts's fixture and expectation were extended first, red for the predicted reason (old total ignored the new field), then green. show-command.test.ts's hardcoded total was corrected to match (7.75 vs the old wrong 4.75). run-records-test-support.ts's fixture, which every list/show test reads, now supplies a workflow array too, since the schema field is required and every real run artifact always carries it (contracts.ts's RunArtifactEvidence.workflow is non-optional).
+
+AC3 needed no new aggregation code, confirmed by reading: confirmation-report.ts's sumCallMetrics, called with no role filter at line 325, sums every call in a rep regardless of its CallRole. Extended the existing buildResourceReport test (confirmation-report.test.ts) to add a product-owner call to one rep and a final-judge call to the other, previously only worker and stage-judge were exercised. The total column summed all four correctly on that run.
+
+Not verified: neither AC2 nor AC3 has been checked against a real completed run's record or a real confirmation group report, as their own wording requires. Checked disk directly: .benchmark-runs holds only per-stage StageJudgeRecord files (*.shape.json), no completed GradedRunArtifact, and .benchmark-runs/comparisons and any group directory are empty. Producing either means running a real pipeline case or confirmation group end to end, real spend under --model sonnet. Left both AC unchecked rather than accept the schema/unit-test evidence as a substitute for what the criteria ask for.
+
+Next action is João's call: run a real case (or point me at one already scheduled) so AC2 and AC3 get their required real-record evidence, or accept the schema-and-unit-test evidence as sufficient and I'll check both off on that basis.
+
+Verified 2026-09-05 by the iterate overseer, independently of the build session. Ran the full check set myself: 1014 tests pass, typecheck clean, oxlint clean, oxfmt clean.
+
+Direct observation of the fix on real data, not a fixture. Fed the real per-stage record's own figures through runSummary (stage judge cost 1.11871, workflow session cost 0.3377274). It printed 'Total cost $1.46' against the $1.12 the old code produced, matching the record's true spend of 1.4564374. The defect this card names is closed in the code.
+
+AC2 and AC3 remain unchecked and are correctly unchecked. Both ask for the check against a real completed run record and a real confirmation group report. Neither artifact exists on disk. Producing them means spending real money on a pipeline run under --model sonnet. That is João's call and the card waits on it.
 <!-- SECTION:NOTES:END -->
