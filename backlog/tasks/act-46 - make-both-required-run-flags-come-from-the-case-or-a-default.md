@@ -1,10 +1,10 @@
 ---
 id: ACT-46
 title: make both required run flags come from the case or a default
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-04 02:27'
-updated_date: '2026-09-05 22:19'
+updated_date: '2026-09-05 22:20'
 labels: []
 milestone: m-2
 dependencies: []
