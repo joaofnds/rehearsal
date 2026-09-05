@@ -1,10 +1,10 @@
 ---
 id: ACT-30
 title: compare dies with a raw ENOENT when .benchmark-runs does not exist
-status: Review
+status: Done
 assignee: []
 created_date: '2026-09-03 02:34'
-updated_date: '2026-09-05 23:32'
+updated_date: '2026-09-05 23:37'
 labels: []
 milestone: m-2
 dependencies: []
@@ -116,17 +116,52 @@ Product Owner: Use the small scope, in a checkout with no .benchmark-runs direct
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Fixed 2026-09-06, commit d70a596. loadJudgeAgreementReport (judge-agreement.ts:369) now wraps readdir(runsDirectory) with .catch(() => []), matching run-layout.ts's entries() tolerance pattern: an absent .benchmark-runs is nothing recorded, not a failure.
+Review 2026-09-06. Verdict: proceed, no blocking or should-fix findings.
 
-Observed directly: rm -rf .benchmark-runs, then ran 'writes one read-only comparison report without external execution' in comparison-loader.test.ts, which spawns the real 'bun run rehearsal.ts compare' subprocess. Directory was confirmed absent beforehand, the subprocess exited 0, and .benchmark-runs/comparisons was created by that run — this is the actual CLI path, not just the test harness.
+Suite: bun test under pinned Bun 1.4.0 (ambient PATH bun was 1.4.1, rejected by
+rehearsal.ts's own version gate; unrelated to this diff). 1053/1053 pass,
+typecheck/lint/fmt:check clean. Independently reverted judge-agreement.ts to
+confirm the original ENOENT crash reproduces, then restored the fix and
+confirmed all three named acceptance tests pass with .benchmark-runs absent.
 
-Verified fresh-clone-equivalent (rm -rf .benchmark-runs before each): comparison-loader.test.ts full file green (18/18), the three named rehearsal-cli.test.ts compare tests green (3/3). Full suite green (1053/1053), typecheck clean, lint clean, fmt:check clean.
+Axes run: Spec, Style/Architecture, Security, Refactoring (all four apply to a
+3-line diff). Testing axis skipped: no test file in the diff.
 
-Scope: one line in one file, matching the card's named single approach. No refactor triggered — the fix itself already conforms to the established pattern in the codebase, nothing else to extract.
+Spec: conformant. The diff takes the "treat absence as nothing recorded, exit
+0" branch the card offered as one of two valid options, matching run-layout.ts's
+documented rationale for the identical entries() helper. All three acceptance
+criteria verified directly against a fresh-clone-equivalent state.
 
-Not verified: criterion #2 of the card's original shape (whole-suite fresh-clone run) was already dropped by the shape session as unmeasurable by this fix (its remaining failure is ACT-34's target-resolution defect); not reopened here.
+Security: no defect. runsDirectory is not attacker-influenced in the shipped
+CLI path (traced from rehearsal.ts's fixed CONTROL_DIR through every call
+site); entry.name from readdir cannot carry a traversal segment.
 
-Card status set to Review per a code change.
+Findings, all notes, none change the verdict:
+- The .catch(() => []) swallows every readdir error, not just ENOENT (a
+  permissions error or a runsDirectory that's actually a file would silently
+  read as "nothing recorded"). Pre-existing: the precedent this fix matches
+  (run-layout.ts's entries()) has the same blanket catch, and the same idiom
+  already exists unconsolidated in two more files (corpus-source.ts,
+  backlog.ts) plus calibrate-command.ts. Revert test: this behavior predates
+  the change.
+- No dedicated unit test exercises loadJudgeAgreementReport against a missing
+  runsDirectory; coverage is indirect via the end-to-end CLI/loader tests
+  named in the acceptance criteria. Considered as a should-fix and downgraded:
+  the named acceptance tests already pin this exact regression at the
+  behavior boundary that matters (the CLI path), and the same indirect-only
+  coverage shape predates this change in the sibling helper.
+- The catch duplicates run-layout.ts's entries() one-liner instead of sharing
+  it. Considered as a should-fix and downgraded by the revert test: entries()
+  is module-private (unexported), so reuse would mean exporting it from a file
+  outside this fix's scope, and the idiom is already duplicated in three other
+  files this change didn't touch. Pre-existing debt, one more instance.
+- loadJudgeAgreementReport is already a ~60-line multi-branch function; this
+  change adds 2 lines to it without restructuring. Note only, friction on the
+  surrounding code, not created by this change.
 
-Oversight probe 2026-09-06: reproduction confirmed independently on a fresh clone at d70a596 with .benchmark-runs absent. The two named test files pass 65/65. Reverting only the fix commit in that clone brings back exactly the four failures the card names (comparison-loader's read-only report test and the three compare-path CLI tests); restoring it clears them. Note for anyone repeating this: rehearsal.ts gates on Bun 1.4.0, so a clone without the repo's .mise.toml trusted runs 1.4.1 and every CLI test fails on the version message rather than on anything under test.
+No card required for the duplication or the missing-directory test gap: both
+are pre-existing, spread across multiple files, and not concentrated enough to
+name a single fix target.
+
+Oversight 2026-09-06: the review session returned verdict proceed with all criteria checked and no blocking findings, but left the card in Review. Moved to Done by the overseeing session; the guard permits it (every criterion checked, no definition-of-done items, no open dependencies).
 <!-- SECTION:NOTES:END -->
