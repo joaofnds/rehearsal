@@ -31,7 +31,7 @@ import {
 	parseCommandLine,
 	topLevelHelp,
 } from "./src/cli/commands";
-import { EXIT_CODES, exitCodeFor } from "./src/cli/exit-codes";
+import { EXIT_CODES, exitCodeFor } from "./src/benchmark/exit-codes";
 import { runList } from "./src/cli/list-command";
 import { judgesFor, runCalibrate } from "./src/cli/calibrate-command";
 import { runReview } from "./src/cli/review-command";

@@ -1,6 +1,6 @@
 import { DEFAULT_CASE_ID } from "#benchmark/config";
-import type { CommandFailure } from "#cli/exit-codes";
-import { EXIT_CODES } from "#cli/exit-codes";
+import type { CommandFailure } from "#benchmark/exit-codes";
+import { EXIT_CODES } from "#benchmark/exit-codes";
 
 export interface FlagDefinition {
 	readonly name: string;

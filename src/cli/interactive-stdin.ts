@@ -1,15 +1,7 @@
 import { stageCorpusRefusal } from "#benchmark/session-corpus";
-import type { CommandFailure } from "#cli/exit-codes";
-import { EXIT_CODES } from "#cli/exit-codes";
+import { RefusedPreconditionError } from "#benchmark/exit-codes";
 
-export class RefusedPreconditionError extends Error implements CommandFailure {
-	public readonly exitCode = EXIT_CODES.refusedPrecondition;
-
-	public constructor(message: string) {
-		super(message);
-		this.name = "RefusedPreconditionError";
-	}
-}
+export { RefusedPreconditionError } from "#benchmark/exit-codes";
 
 export function requireInteractiveStdin(
 	stdinIsTerminal: boolean,

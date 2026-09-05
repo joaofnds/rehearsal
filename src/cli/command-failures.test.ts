@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { UsageError } from "#cli/commands";
-import { EXIT_CODES, exitCodeFor } from "#cli/exit-codes";
+import { EXIT_CODES, exitCodeFor } from "#benchmark/exit-codes";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 
 describe("command failures", () => {

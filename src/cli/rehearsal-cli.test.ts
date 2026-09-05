@@ -14,7 +14,7 @@ import {
 	comparisonReportPaths,
 } from "#benchmark/run-layout";
 import { COMMANDS } from "#cli/commands";
-import { EXIT_CODES } from "#cli/exit-codes";
+import { EXIT_CODES } from "#benchmark/exit-codes";
 import { PROJECT_ROOT } from "#benchmark/test-support";
 
 const PIPE_BUFFER_BYTES = 131_072;
