@@ -152,6 +152,7 @@ export interface RunManifestInputs {
 	readonly productBrief: string;
 	readonly config: BenchmarkConfig;
 	readonly pipeline: PipelineDefinition;
+	readonly baselineChecks?: LocalCheckResult | undefined;
 }
 
 export function buildRunManifest(inputs: RunManifestInputs): RunManifest {
@@ -174,6 +175,7 @@ export function buildRunManifest(inputs: RunManifestInputs): RunManifest {
 		sessionBudgetUsd: config.sessionBudgetUsd,
 		pipelinePath: config.pipelinePath,
 		pipeline: inputs.pipeline,
+		baselineChecks: inputs.baselineChecks,
 	};
 }
 
@@ -793,6 +795,7 @@ interface RunBaselineDependencies {
 interface RunBaseline {
 	readonly baselineHashes: ReadonlyMap<string, string>;
 	readonly baselineContext: readonly ContextFile[];
+	readonly baselineChecks: LocalCheckResult;
 }
 
 export async function captureRunBaseline(
@@ -811,6 +814,16 @@ export async function captureRunBaseline(
 
 		throw error;
 	}
+	const baselineChecks: LocalCheckResult = {
+		status: "PASS",
+		evidence: [
+			{
+				source: "local-checks",
+				path: target.checks.map(({ command }) => command.join(" ")).join("; "),
+				claim: "All baseline checks exited successfully",
+			},
+		],
+	};
 	await dependencies.assertWorkspaceCleanAt(source.root, source.sha);
 	const baselineHashes = await dependencies.captureFileHashes(
 		source.root,
@@ -820,7 +833,7 @@ export async function captureRunBaseline(
 		source.root,
 	);
 
-	return { baselineHashes, baselineContext };
+	return { baselineHashes, baselineContext, baselineChecks };
 }
 
 export async function runBenchmark(
@@ -866,16 +879,17 @@ export async function runBenchmark(
 		console.log(`Target: ${source.root}`);
 		console.log(`Original commit: ${source.sha}`);
 		console.log(`Workflow backup: ${workflowBackup.directory}`);
-		const { baselineHashes, baselineContext } = await captureRunBaseline(
-			{
-				runChecks,
-				assertWorkspaceCleanAt,
-				captureFileHashes,
-				captureBaselineContext,
-			},
-			source,
-			pipeline.target,
-		);
+		const { baselineHashes, baselineContext, baselineChecks } =
+			await captureRunBaseline(
+				{
+					runChecks,
+					assertWorkspaceCleanAt,
+					captureFileHashes,
+					captureBaselineContext,
+				},
+				source,
+				pipeline.target,
+			);
 		const { task, productBrief, finalRubric: rubric } = benchmarkCase;
 		const [instructions, claudeVersion] = await Promise.all([
 			liveCorpusInstructions(),
@@ -900,6 +914,7 @@ export async function runBenchmark(
 				productBrief,
 				config,
 				pipeline,
+				baselineChecks,
 			}),
 		);
 		const initialCheckpoint = await recordRetainedCheckpoint(

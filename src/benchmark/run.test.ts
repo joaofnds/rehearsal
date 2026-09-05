@@ -11,6 +11,7 @@ import type {
 	CalibrationResult,
 	GradedRunArtifact,
 	JudgeGrade,
+	LocalCheckResult,
 	StageJudgeInput,
 	StageJudgeOutput,
 	StageRubric,
@@ -1577,6 +1578,16 @@ describe(captureRunBaseline.name, () => {
 		expect(baseline).toEqual({
 			baselineHashes: hashes,
 			baselineContext: context,
+			baselineChecks: {
+				status: "PASS",
+				evidence: [
+					{
+						source: "local-checks",
+						path: "bun run custom-baseline",
+						claim: "All baseline checks exited successfully",
+					},
+				],
+			},
 		});
 	});
 
@@ -1684,6 +1695,51 @@ describe(buildRunManifest.name, () => {
 			manifest: { caseId: "audit-log", model: "sonnet", judgeModel: "opus" },
 			artifact: { caseId: "audit-log", model: "sonnet", judgeModel: "opus" },
 		});
+	});
+
+	it("carries the baseline check result a proceeding run captured", async () => {
+		const config = parseArgs(
+			[
+				"--target",
+				"/tmp/target",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"5",
+			],
+			{},
+			{
+				caseId: "audit-log",
+				pipelinePath: AUDIT_LOG_PIPELINE_PATH,
+				targetPath: "/tmp/target",
+			},
+		);
+		const pipeline = await loadDefaultPipeline();
+		const baselineChecks: LocalCheckResult = {
+			status: "PASS",
+			evidence: [
+				{
+					source: "local-checks",
+					path: "bun run test:unit",
+					claim: "All baseline checks exited successfully",
+				},
+			],
+		};
+
+		const manifest = buildRunManifest({
+			timestamp: "2026-09-02T00:00:00.000Z",
+			controlSha: "control-sha",
+			source: { root: "/tmp/target", sha: "source-sha" },
+			taskId: "TASK-1",
+			taskSha: "task-sha",
+			task: "Task",
+			productBrief: "Brief",
+			config,
+			pipeline,
+			baselineChecks,
+		});
+
+		expect(manifest.baselineChecks).toEqual(baselineChecks);
 	});
 });
 
