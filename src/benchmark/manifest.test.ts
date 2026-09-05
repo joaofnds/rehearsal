@@ -47,6 +47,16 @@ describe(loadRunManifest.name, () => {
 				],
 			},
 			pipelinePath: "pipelines/default.json",
+			baselineChecks: {
+				status: "PASS",
+				evidence: [
+					{
+						source: "local-checks",
+						path: "bun --version",
+						claim: "All baseline checks exited successfully",
+					},
+				],
+			},
 		};
 	}
 
@@ -61,6 +71,18 @@ describe(loadRunManifest.name, () => {
 
 		expect(await loadRunManifest(paths.manifestFile)).toEqual(manifest);
 		expect(manifestStats.isFile()).toBe(true);
+	});
+
+	it("reads a manifest recorded before baseline checks were captured", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		testResources.track(directory);
+		const paths = benchmarkRunPaths(directory, "run");
+		const { baselineChecks: _baselineChecks, ...legacy } = manifestFixture();
+		await Bun.write(paths.manifestFile, JSON.stringify(legacy));
+
+		const loaded = await loadRunManifest(paths.manifestFile);
+
+		expect(loaded.baselineChecks).toBeUndefined();
 	});
 
 	it("reads a manifest without a caseId as the audit-log case", async () => {

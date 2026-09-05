@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { z } from "zod";
 import { recordCheckpoint } from "./checkpoint";
+import { runChecks } from "./checks";
 import { CommandError, runCommand } from "./command";
 import { parseArgs } from "./config";
 import type {
@@ -50,6 +51,7 @@ import {
 	runGradedStages,
 } from "./run";
 import {
+	commitAll,
 	PROJECT_ROOT,
 	TEST_TARGET,
 	TestResources,
@@ -1608,6 +1610,36 @@ describe(captureRunBaseline.name, () => {
 					captureBaselineContext: () => Promise.resolve([]),
 				},
 				{ root: "/target", sha: "source-sha" },
+				{
+					checks: [{ command: ["bun", "run", "test:unit"] }],
+					integrityFiles: [],
+				},
+			),
+		);
+
+		expect(refusal).toBeInstanceOf(RefusedPreconditionError);
+		expect(refusal.message).toBe(
+			"Baseline check failed (exit 1): bun run test:unit",
+		);
+	});
+
+	it("refuses a real target repository whose declared check exits non-zero", async () => {
+		const repository = await testResources.createRepository();
+		await Bun.write(
+			join(repository.directory, "package.json"),
+			'{"scripts":{"test:unit":"exit 1"}}\n',
+		);
+		await commitAll(repository.directory, "chore: fail test:unit");
+
+		const refusal = await failureOf(
+			captureRunBaseline(
+				{
+					runChecks,
+					assertWorkspaceCleanAt: () => Promise.resolve(),
+					captureFileHashes: () => Promise.resolve(new Map()),
+					captureBaselineContext: () => Promise.resolve([]),
+				},
+				{ root: repository.directory, sha: repository.sha },
 				{
 					checks: [{ command: ["bun", "run", "test:unit"] }],
 					integrityFiles: [],
