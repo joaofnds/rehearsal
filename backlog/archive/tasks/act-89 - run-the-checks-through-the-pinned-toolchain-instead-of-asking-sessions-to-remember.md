@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-06 00:22'
-updated_date: '2026-09-06 00:22'
+updated_date: '2026-09-06 01:15'
 labels: []
 dependencies: []
 ordinal: 85008
@@ -33,4 +33,6 @@ Verified 2026-09-06: mise.toml pins bun 1.4.0 and the pin is directory-scoped. I
 Not done in the ACT-34 session because it edits build configuration beyond the instruction fix João approved. The reviewer named the mechanism and stopped short of prescribing the edit for the same reason.
 
 Bare 'bun run lint', 'bun run typecheck', and 'bun run fmt:check' all pass on 1.4.1, so only the CLI-starting commands are affected today. That is a property of the current checks, not a guarantee.
+
+Closed as a duplicate of ACT-84, 2026-09-06, and archived. ACT-84 already described this defect from the ACT-45 incident on 2026-09-05, one day before it recurred during ACT-34. This card was created without searching the board first. Its evidence and its third acceptance criterion are now on ACT-84. No work is lost by archiving it.
 <!-- SECTION:NOTES:END -->
