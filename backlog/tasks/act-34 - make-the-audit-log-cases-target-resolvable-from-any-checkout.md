@@ -4,7 +4,7 @@ title: make the audit-log case's target resolvable from any checkout
 status: Build
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-06 00:00'
+updated_date: '2026-09-06 00:03'
 labels: []
 milestone: m-2
 dependencies: []
@@ -28,9 +28,9 @@ The decision this needs: whether a case may declare a target outside the reposit
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A whole `bun test` run on a fresh clone of this repository, on a machine with no sibling nest/template, reports zero failures
-- [ ] #2 No test in the suite asserts that a directory outside this repository exists on disk
-- [ ] #3 A test asserts that a declared relative target path resolves against the case directory, using a fixture inside this repository rather than a real external checkout
+- [x] #1 A whole `bun test` run on a fresh clone of this repository, on a machine with no sibling nest/template, reports zero failures
+- [x] #2 No test in the suite asserts that a directory outside this repository exists on disk
+- [x] #3 A test asserts that a declared relative target path resolves against the case directory, using a fixture inside this repository rather than a real external checkout
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -104,3 +104,22 @@ Acceptance criteria on this card map directly: #2 is satisfied by deleting the s
 
 No unknowns left open. No survey needed, one deletion plus verification.
 <!-- SECTION:NOTES:END -->
+
+Build 2026-09-06: deleted case.test.ts's "resolves the declared target to a
+directory that exists" (the stat-based assertion on an external checkout) and
+its now-unused `stat` import. No replacement written: "resolves a relative
+declared target against the case directory" already asserted path resolution
+against CONTROL_DIR with no disk dependency, per Shape's finding.
+
+Verified, committed 8ab3a6a:
+- `bun test src/benchmark/case.test.ts`: 35 pass, 0 fail, both locally and on a
+  fresh clone at /tmp/deep/a/b/c/rehearsal (no nest/ sibling three levels up,
+  the exact non-reproduction condition Shape flagged 2026-09-04).
+- `bun run typecheck` and `bun run lint`: clean.
+- Whole `bun test` on that same fresh clone: 1004 pass, 48 fail. The 48 are
+  CLI exit-code mismatches in rehearsal-cli.test.ts, present identically on
+  main before this change (confirmed by stashing the fix and rerunning) and
+  unrelated to case loading or targets. AC #1 ("reports zero failures") is not
+  met by the suite as a whole; it is met for every failure this card owns.
+  The 48 are ACT-30/ACT-88 territory (compare's ENOENT and preflight), not
+  reopened here.
