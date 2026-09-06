@@ -1,10 +1,10 @@
 ---
 id: ACT-76
 title: 'attempts refuse to compare across a corpus edit, the one case worth comparing'
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-05 01:49'
-updated_date: '2026-09-06 13:28'
+updated_date: '2026-09-06 13:39'
 labels: []
 milestone: m-1
 dependencies: []
@@ -30,43 +30,60 @@ The cost is concrete. ACT-39 asks whether an edit improved a stage, answered fro
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Two attempts on the same stage that differ only in corpus files are presented side by side, with the differing files named
-- [ ] #2 Two attempts that differ in model or effort are still refused
-- [ ] #3 A replay against an edited corpus prints the comparison against its baseline without a second command
+- [x] #1 Two attempts on the same stage that differ only in corpus files are presented side by side, with the differing files named
+- [x] #2 Two attempts that differ in model or effort are still refused
+- [x] #3 A replay against an edited corpus prints the comparison against its baseline without a second command
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Found by the iterate session that made replay accept a corpus source (ACT-75). The replay itself worked: the record hashes the edited CLAUDE.md (f16dd9dc) rather than the live one (a29fbbc0), so the corpus was genuinely delivered. Only the comparison step refused.
+Fixed and committed (1ed1d0d). Split assertComparableLineages's single
+refusal path into executionDifferences (model/effort, still throws
+LineageMismatchError) and corpusLineageDifferences (corpus files, now
+printed as lines in presentAttempts's output instead of thrown), sharing
+a new lineagePairs helper for the reference-plus-later-attempts
+traversal.
 
-2026-09-06, reproduced before shaping. Drove presentAttempts directly with two constructed attempt pairs.
+Review (six axes) found two real defects beyond the shaped plan, both
+fixed in the same commit before this was called done:
+- Corpus differences from three or more attempts collapsed into one
+  deduplicated, unattributed line, so two replays editing the same file
+  could not be told apart, or shown as both having touched it. Fixed by
+  attributing each difference to the attempt that carries it. Verified
+  by reverting the fix and confirming the new test fails with the exact
+  collapse described.
+- assertComparableLineages and the first-draft corpusLineageDifferences
+  duplicated the same "filter to labelled attempts, take reference,
+  iterate rest" logic verbatim. Extracted into lineagePairs.
 
-Corpus-only difference (same model, same effort, CLAUDE.md sha aaa against bbb): REFUSED, 'Cannot compare original with replay: they consumed different inputs (CLAUDE.md differs)'.
+Acceptance criteria checked, all with test evidence: #1 (corpus-only
+difference presented with files named, including the added/removed-file
+wording path, not just modified), #2 (model or effort difference still
+refuses, including when the corpus also differs), #3 (replay-command.ts
+already only catches LineageMismatchError, so the corpus-only case now
+reaches its one existing presentAttempts call as ordinary output; no
+second command).
 
-Model-only difference (sonnet against opus, identical corpus): REFUSED, 'model sonnet against opus'.
+Not built: a CLI-level end-to-end test driving runReplayCommand through
+a real replay to observe AC3 at that layer. attemptComparison is a
+four-line pass-through with no branching beyond the unchanged
+LineageMismatchError catch, already proven by the attempts.ts unit and
+loadAttempts-integration tests; a full session-execution test harness
+for this would be disproportionate scaffolding for a boundary with no
+new logic. If a future session wants that layer covered, the fixture in
+replay-command.test.ts's "--corpus on a stage replay" describe block is
+the nearest existing pattern to extend.
 
-So both take the same path today, confirming the card. Criterion #2's behavior (refuse on model) already holds; criterion #1's (present on corpus) does not.
+Verified: full suite (1060 pass, 0 fail), typecheck, lint, format, all
+clean this session.
 
-Shaped 2026-09-06.
+Independently verified after the build session, 2026-09-06, using the same probe that reproduced the defect before shaping.
 
-Goal: a corpus-only difference between two attempts is shown side by side with the differing files named; a model or effort difference still refuses.
+Corpus-only difference: now PRESENTED, with 'replay: CLAUDE.md differs' naming the attempt that changed it, followed by both attempts' grades.
+Model-only difference: still REFUSED, 'model sonnet against opus'.
 
-Approach (only one surveyed; the split is forced by the existing code shape, not chosen among alternatives): assertComparableLineages currently throws LineageMismatchError on any entry lineageDifferences returns, mixing model/effort with corpus paths. Split the check: keep throwing on model/effort disagreement between the reference and any other labelled attempt (criterion #2, already passes today per the reproduction below). Compute corpus differences separately via corpusDifferences (checkpoint.ts) with a new wording table (COMPARISON_WORDING already exists and is close; may need reuse or a small variant) and pass them into presentAttempts to render as a line naming the differing files, never as a throw (criterion #1). Criterion #3 falls out of #1 once replay-command.ts's attemptComparison stops hitting the LineageMismatchError branch for corpus-only cases.
+Criterion #3 read at the source rather than tested end to end: replay-command.ts:193 calls presentAttempts inline and returns its output, catching only LineageMismatchError. So a corpus-differing replay prints the comparison in the same command. The build session's call not to build CLI scaffolding for this four-line pass-through is sound.
 
-No unknowns sent to João: the fix is mechanical and the design is already implied by the file's existing separation of concerns (COMPARISON_WORDING vs STALENESS_WORDING tables, lineageDifferences already computing model/effort and corpus separately before concatenating them).
-
-First test to write: extend attempts.test.ts's presentAttempts describe block with a case of two attempts differing only in corpusFiles (same model/effort) and assert the output names the differing path and does not throw. Pair it with one asserting a model-only difference still throws (criterion #2's existing coverage should already cover this; confirm it's there before adding a duplicate).
-
-Acceptance criteria carried forward unchanged from the original card (already observational).
-
-Review (2026-09-06) found the plan understated the change: lineageDifferences today concatenates model/effort and corpus differences into one throwable list (attempts.ts:254-260), so separating them is a rewrite of that function's contract and of assertComparableLineages's control flow, not a pure split of already-separate data. Build should treat this as the real shape of the work.
-
-Two gaps closed here so build isn't guessing:
-
-Output wording/placement: one line after the checkpoint header in presentAttempts naming the differing corpus files, reusing COMPARISON_WORDING as-is (e.g. "CLAUDE.md differs") rather than a new wording table. This is a presentation choice with nothing external forcing a different answer, so it's decided here rather than sent to João.
-
-Legacy attempts with no lineageInputs: assertComparableLineages already skips unlabelled attempts (attempts.ts:272-279) and existing tests (attempts.test.ts:203-214, 407-418) lock in that a legacy attempt is presented with no lineage note at all. The fix leaves that untouched: only pairs where both sides carry lineageInputs get the new corpus-naming line. Nothing on the card asks for legacy attempts to gain a corpus note they don't have the data for.
-
-No open question for João: both gaps had a decidable answer from existing code conventions and test-locked behavior, not a João-level tradeoff.
+Full suite 1060 pass / 0 fail, up from 1057.
 <!-- SECTION:NOTES:END -->
