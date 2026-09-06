@@ -1,10 +1,10 @@
 ---
 id: ACT-34
 title: make the audit-log case's target resolvable from any checkout
-status: Review
+status: Done
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-06 00:06'
+updated_date: '2026-09-06 00:12'
 labels: []
 milestone: m-2
 dependencies: []
@@ -109,6 +109,8 @@ Oversight verification 2026-09-06, correcting the build session's report. It rep
 Verified under mise exec -- : bun 1.4.0, suite 1052 pass 0 fail, typecheck clean, lint clean, fmt:check clean. All three acceptance criteria met. No version-pin card is needed; the earlier suggestion to loosen the pin was based on the wrong invocation and is withdrawn.
 
 Criterion 2 probed directly: no remaining test stats a path outside this repository. Every other targetPath in the suite is a literal or a harness fixture.
+
+Review 2026-09-06: four reviewers, clean, including a mutation test showing the surviving resolution test is not a tautology. The review session repeated the build session's misreading of the 48 CLI failures as a pre-existing defect; they are the Bun invocation, already corrected above. Moved to Done with all three criteria checked and the suite green under the project toolchain.
 <!-- SECTION:NOTES:END -->
 
 Build 2026-09-06: deleted case.test.ts's "resolves the declared target to a
