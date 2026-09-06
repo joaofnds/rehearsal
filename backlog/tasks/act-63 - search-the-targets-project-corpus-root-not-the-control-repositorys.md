@@ -4,7 +4,7 @@ title: 'search the target''s project corpus root, not the control repository''s'
 status: To Do
 assignee: []
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-04 23:01'
+updated_date: '2026-09-06 23:19'
 labels: []
 milestone: m-1
 dependencies: []
@@ -29,3 +29,15 @@ Exposed by ACT-41, which removed the same control-root assumption from the instr
 - [ ] #1 A stage's corpus roots for a run against a case target search that target's .claude before the user's, and never the control repository's
 - [ ] #2 corpusLayoutRoots is called with the target root at every run and replay site, with no CONTROL_DIR argument remaining
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-06, premises rechecked before shaping. All still hold, with refreshed line numbers.
+
+Latent, not active: neither /Users/joaofnds/code/rehearsal/.claude nor /Users/joaofnds/code/nest/template/.claude exists today, so every live-corpus search falls through to ~/.claude and lands on the right files.
+
+The defect stands. checkpoint.ts:120-123 still resolves a live corpus to corpusLayoutRoots(CONTROL_DIR). The CLI sites moved: run-command.ts:294 and replay-command.ts:293 (the card says 283 and 245).
+
+Worth carrying into the shaping: run.ts:671 already does corpusLayoutRoots(context.targetDir), and replay.ts:390 and 434 use corpusLayoutRoots(worktreeDir). So the correct form is already the majority in the benchmark layer, and CONTROL_DIR survives only at the two CLI entry points and in stageCorpusRoots. That narrows the design question to whether stageCorpusRoots should take a target root as an argument rather than reaching for a module constant.
+<!-- SECTION:NOTES:END -->
