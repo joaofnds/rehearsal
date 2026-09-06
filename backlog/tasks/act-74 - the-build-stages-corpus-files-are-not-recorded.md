@@ -4,7 +4,7 @@ title: a stage that fails its grade gate loses its corpus record
 status: Done
 assignee: []
 created_date: '2026-09-05 00:41'
-updated_date: '2026-09-06 23:07'
+updated_date: '2026-09-06 23:09'
 labels: []
 milestone: m-1
 dependencies: []
@@ -79,4 +79,12 @@ Not verified: no live benchmark run against a real target repo. Both fixes are
 proven at the unit/integration level with fakes; nobody has watched an actual
 `run` command produce a STAGE_JUDGE_FAILED build record with corpusFiles
 end-to-end.
+
+Verification check after the build session, 2026-09-06.
+
+Criterion #1 is properly pinned. Two tests cover the failure writer: run-abort.test.ts 'carries the stage's captured corpus files', and run.test.ts's extended abort test asserting corpusFiles in the aborted artifact. The fix itself (558ceef) threads the already-captured value into writeStageJudgeFailure, exactly the writer identified before the build.
+
+Criterion #2 is checked on inference, not observation, and the box overstates it. Every corpusFiles assertion in run.test.ts (lines 606, 614, 850, 1440, 1449) reads context.stageFile('shape'). None names a build stage. The claim rests on run.ts:734 spreading corpusFiles into StageJudgeRecord with no branch by stage or kind, which I read directly and which is true. That is sound reasoning about shared code, not a test of the build stage, and no live run has shown a build stage clearing a B gate.
+
+Leaving #2 checked, because the behavior it names does hold and the shared path is genuinely unbranched. Recording here that the evidence is the code path rather than an observation, so a later session does not mistake this for a measured result. A test naming the build stage, or one live run whose build stage clears the gate, would close it properly.
 <!-- SECTION:NOTES:END -->
