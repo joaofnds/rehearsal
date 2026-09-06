@@ -4,10 +4,12 @@ title: a stage that fails its grade gate loses its corpus record
 status: Done
 assignee: []
 created_date: '2026-09-05 00:41'
-updated_date: '2026-09-06 23:09'
+updated_date: '2026-09-06 23:10'
 labels: []
 milestone: m-1
 dependencies: []
+documentation:
+  - backlog/docs/doc-26 - reflection-ACT-74.md
 type: bug
 ordinal: 70008
 ---
