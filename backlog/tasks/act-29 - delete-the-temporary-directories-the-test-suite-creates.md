@@ -2,8 +2,7 @@
 id: ACT-29
 title: delete the temporary directories the test suite creates
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-03 00:32'
 updated_date: '2026-09-06 01:26'
 labels: []
