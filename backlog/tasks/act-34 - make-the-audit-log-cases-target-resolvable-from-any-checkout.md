@@ -1,10 +1,10 @@
 ---
 id: ACT-34
 title: make the audit-log case's target resolvable from any checkout
-status: Build
+status: Review
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-06 00:03'
+updated_date: '2026-09-06 00:06'
 labels: []
 milestone: m-2
 dependencies: []
@@ -103,6 +103,12 @@ First test to write / change: delete case.test.ts:170-175. No replacement needed
 Acceptance criteria on this card map directly: #2 is satisfied by deleting the stat-based test, #3 is already satisfied by the existing :177 test (verify it still passes after the deletion), #1 is the whole-suite check on a clone without the sibling.
 
 No unknowns left open. No survey needed, one deletion plus verification.
+
+Oversight verification 2026-09-06, correcting the build session's report. It reported '48 failures on a fresh clone, pre-existing, belonging to ACT-30/ACT-88'. That reading was wrong. All 48 were one cause: the CLI refuses to start unless Bun is exactly the pinned 1.4.0, and the sessions ran bare 'bun test' on a machine whose default bun is 1.4.1, so every CLI subprocess test saw exit 1. The pin is correct and the invocation was not. João: 'you just have to use mise exec --'.
+
+Verified under mise exec -- : bun 1.4.0, suite 1052 pass 0 fail, typecheck clean, lint clean, fmt:check clean. All three acceptance criteria met. No version-pin card is needed; the earlier suggestion to loosen the pin was based on the wrong invocation and is withdrawn.
+
+Criterion 2 probed directly: no remaining test stats a path outside this repository. Every other targetPath in the suite is a literal or a harness fixture.
 <!-- SECTION:NOTES:END -->
 
 Build 2026-09-06: deleted case.test.ts's "resolves the declared target to a
