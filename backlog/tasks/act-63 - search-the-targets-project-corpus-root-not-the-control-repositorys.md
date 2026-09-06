@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-06 23:55'
+updated_date: '2026-09-06 23:59'
 labels: []
 milestone: m-1
 dependencies: []
@@ -107,4 +107,12 @@ RECOMMENDATION
 A, today's behavior, with the CONTROL_DIR bug fixed so 'live' means the user install rather than the harness repository. B is not a symmetric alternative; it is undefined for half the command's subjects and it removes the flag the command documents as its main input. If a target's own project corpus later needs to participate, that is a separate capability (a per-run corpus source stale can be pointed at) rather than a redefinition of the default.
 
 This leaves criterion #1 as written ('never the control repository's') satisfied by fixing stageCorpusRoots to take a root argument, with stale passing the operator's resolved source as it does now.
+
+João's decision 2026-09-06 on question 1, after reading the investigation: keep today's behavior (reading A) and fix the bug under it, so 'live' means the user install rather than the harness repository. Quoted: 'go', answering that recommendation.
+
+Both design questions are now settled:
+1. stale checks every recorded run against the one corpus the operator names, defaulting to the live user install. --corpus keeps its documented meaning. stageCorpusRoots stops reaching for CONTROL_DIR and takes a root argument instead, with stale passing the source it already resolves.
+2. A replay's corpus search uses the worktree directory, matching replay.ts:390 and 434.
+
+No open questions remain. The shaping can proceed on these two answers.
 <!-- SECTION:NOTES:END -->
