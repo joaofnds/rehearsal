@@ -237,7 +237,11 @@ const COMPARISON_WORDING: CorpusDifferenceWording = {
 	missingFromLeft: (path) => `${path} present in one attempt only`,
 };
 
-function lineageDifferences(
+/**
+ * A model or effort change makes two grades measure different things; there
+ * is no reading of that disagreement worth presenting, so it stays a refusal.
+ */
+function executionDifferences(
 	reference: AttemptLineageInputs,
 	other: AttemptLineageInputs,
 ): string[] {
@@ -251,44 +255,81 @@ function lineageDifferences(
 		);
 	}
 
-	differences.push(
-		...corpusDifferences(
-			reference.corpusFiles,
-			other.corpusFiles,
-			COMPARISON_WORDING,
-		),
-	);
-
 	return differences.toSorted();
 }
 
+type LabelledAttempt = Attempt & { lineageInputs: AttemptLineageInputs };
+
+interface LineagePair {
+	readonly reference: LabelledAttempt;
+	readonly other: LabelledAttempt;
+}
+
 /**
- * Grades from different corpora measure different things, so a side-by-side
- * presentation of them would mislead rather than inform. Attempts recorded
- * before lineage inputs existed carry none and are presented as before,
- * because refusing them would break reading of every earlier run.
+ * Every other labelled attempt paired with the reference it is compared
+ * against. Attempts recorded before lineage inputs existed carry none and
+ * are excluded, because refusing or annotating them would break reading of
+ * every earlier run. There is nothing to pair when fewer than two attempts
+ * carry lineage inputs.
  */
-function assertComparableLineages(attempts: readonly Attempt[]): void {
+function lineagePairs(attempts: readonly Attempt[]): readonly LineagePair[] {
 	const labelled = attempts.filter(
-		(attempt): attempt is Attempt & { lineageInputs: AttemptLineageInputs } =>
+		(attempt): attempt is LabelledAttempt =>
 			attempt.lineageInputs !== undefined,
 	);
 	const [reference] = labelled;
 	if (!reference) {
-		return;
+		return [];
 	}
 
-	for (const attempt of labelled.slice(1)) {
-		const differences = lineageDifferences(
+	return labelled.slice(1).map((other) => ({ reference, other }));
+}
+
+/**
+ * A model or effort change still voids the comparison, unchanged from
+ * before.
+ */
+function assertComparableLineages(attempts: readonly Attempt[]): void {
+	for (const { reference, other } of lineagePairs(attempts)) {
+		const differences = executionDifferences(
 			reference.lineageInputs,
-			attempt.lineageInputs,
+			other.lineageInputs,
 		);
 		if (differences.length > 0) {
 			throw new LineageMismatchError(
-				`Cannot compare ${reference.label} with ${attempt.label}: they consumed different inputs (${differences.join("; ")})`,
+				`Cannot compare ${reference.label} with ${other.label}: they consumed different inputs (${differences.join("; ")})`,
 			);
 		}
 	}
+}
+
+interface AttributedCorpusDifference {
+	readonly label: string;
+	readonly differences: readonly string[];
+}
+
+/**
+ * A corpus edit between two attempts is the comparison's subject, not a
+ * reason to refuse it; the differing files are named in the presentation,
+ * against the attempt that carries them, so two replays editing the same
+ * file are not collapsed into one indistinguishable line.
+ */
+function corpusLineageDifferences(
+	attempts: readonly Attempt[],
+): readonly AttributedCorpusDifference[] {
+	const lines: AttributedCorpusDifference[] = [];
+	for (const { reference, other } of lineagePairs(attempts)) {
+		const differences = corpusDifferences(
+			reference.lineageInputs.corpusFiles,
+			other.lineageInputs.corpusFiles,
+			COMPARISON_WORDING,
+		);
+		if (differences.length > 0) {
+			lines.push({ label: other.label, differences });
+		}
+	}
+
+	return lines;
 }
 
 /**
@@ -303,6 +344,9 @@ export async function presentAttempts(
 ): Promise<string> {
 	assertComparableLineages(attempts);
 	const lines = [`Attempts at checkpoint ${lineage}:`];
+	for (const { label, differences } of corpusLineageDifferences(attempts)) {
+		lines.push(`  ${label}: ${differences.join("; ")}`);
+	}
 
 	for (const [index, attempt] of attempts.entries()) {
 		const dimensions = attempt.dimensions

@@ -213,7 +213,7 @@ describe(loadAttempts.name, () => {
 		expect(output).toContain("replay 2026-08-30T10:00:00.000Z");
 	});
 
-	it("refuses a loaded original and replay whose corpora differ, naming the changed file", async () => {
+	it("presents a loaded original and replay whose corpora differ, naming the changed file", async () => {
 		const paths = await attemptFixture();
 		const originalCorpus = [
 			{ path: "CLAUDE.md", sha256: "aa".repeat(32) },
@@ -239,10 +239,11 @@ describe(loadAttempts.name, () => {
 		);
 
 		const attempts = await loadAttempts(paths, "discuss", LINEAGE);
-
-		expect(presentAttempts(LINEAGE, attempts)).rejects.toThrow(
-			/skills\/discuss\/SKILL\.md/u,
+		const output = await presentAttempts(LINEAGE, attempts, () =>
+			Promise.resolve("diff"),
 		);
+
+		expect(output).toContain("skills/discuss/SKILL.md differs");
 	});
 });
 
@@ -317,7 +318,88 @@ describe(presentAttempts.name, () => {
 		expect(output).toContain("Attempts at checkpoint lineage-1:");
 	});
 
-	it("refuses attempts whose corpus differs, naming the file", () => {
+	it("presents attempts whose corpus differs, naming the file", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+				{
+					...attempt("replay r2", "A", "new\n"),
+					lineageInputs: {
+						...lineageInputs,
+						corpusFiles: [
+							{ path: "CLAUDE.md", sha256: "aa11" },
+							{ path: "skills/discuss/SKILL.md", sha256: "changed" },
+						],
+					},
+				},
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain("Attempts at checkpoint lineage-1:");
+		expect(output).toContain("replay r2: skills/discuss/SKILL.md differs");
+	});
+
+	it("names which attempt a corpus file added or removed against the reference belongs to", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+				{
+					...attempt("replay r2", "A", "new\n"),
+					lineageInputs: {
+						...lineageInputs,
+						corpusFiles: [
+							{ path: "CLAUDE.md", sha256: "aa11" },
+							{ path: "skills/discuss/SKILL.md", sha256: "bb22" },
+							{ path: "skills/discuss/reference.md", sha256: "ee55" },
+						],
+					},
+				},
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain(
+			"replay r2: skills/discuss/reference.md present in one attempt only",
+		);
+	});
+
+	it("attributes each attempt's corpus difference separately when two replays edit the same file", async () => {
+		const output = await presentAttempts(
+			"lineage-1",
+			[
+				{ ...attempt("original run run1", "B", "old\n"), lineageInputs },
+				{
+					...attempt("replay r2", "A", "mid\n"),
+					lineageInputs: {
+						...lineageInputs,
+						corpusFiles: [
+							{ path: "CLAUDE.md", sha256: "aa11" },
+							{ path: "skills/discuss/SKILL.md", sha256: "cc33" },
+						],
+					},
+				},
+				{
+					...attempt("replay r3", "A", "new\n"),
+					lineageInputs: {
+						...lineageInputs,
+						corpusFiles: [
+							{ path: "CLAUDE.md", sha256: "aa11" },
+							{ path: "skills/discuss/SKILL.md", sha256: "dd44" },
+						],
+					},
+				},
+			],
+			diffTexts,
+		);
+
+		expect(output).toContain("replay r2: skills/discuss/SKILL.md differs");
+		expect(output).toContain("replay r3: skills/discuss/SKILL.md differs");
+	});
+
+	it("refuses attempts whose model differs even when their corpus also differs", () => {
 		expect(
 			presentAttempts(
 				"lineage-1",
@@ -327,6 +409,7 @@ describe(presentAttempts.name, () => {
 						...attempt("replay r2", "A", "new\n"),
 						lineageInputs: {
 							...lineageInputs,
+							model: "opus",
 							corpusFiles: [
 								{ path: "CLAUDE.md", sha256: "aa11" },
 								{ path: "skills/discuss/SKILL.md", sha256: "changed" },
@@ -336,7 +419,7 @@ describe(presentAttempts.name, () => {
 				],
 				diffTexts,
 			),
-		).rejects.toThrow(/skills\/discuss\/SKILL\.md/u);
+		).rejects.toThrow(/model sonnet.*opus/u);
 	});
 
 	it("refuses attempts whose model differs, naming the models", () => {
