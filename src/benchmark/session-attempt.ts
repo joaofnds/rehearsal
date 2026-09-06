@@ -329,9 +329,10 @@ async function recordAttempt(
 	}
 
 	const transcript = await parseTranscriptFile(transcriptFile);
+	const cut = request.sessionCase.declaration.transcript?.cut ?? 0;
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
-		toolUses: toolUses(transcript),
+		toolUses: toolUses(transcript.slice(cut)),
 	});
 
 	return {

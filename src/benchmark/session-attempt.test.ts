@@ -57,6 +57,16 @@ function transcriptLine(sessionId: string, text: string): string {
 	});
 }
 
+function toolUseLine(sessionId: string): string {
+	return JSON.stringify({
+		type: "assistant",
+		sessionId,
+		message: {
+			content: [{ type: "tool_use", name: "Bash", input: {} }],
+		},
+	});
+}
+
 function sessionCase(
 	overrides: Immutable<Partial<SessionCase>> = {},
 ): SessionCase {
@@ -618,6 +628,31 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(await Bun.file(attempt.transcriptFile).text()).toContain("PLUMBAGO");
+	});
+
+	it("scores a tool-calls check against the turn under test, not the seeded transcript prefix", async () => {
+		const prefix = await writtenPrefix(`${toolUseLine(SOURCE_SESSION)}\n`);
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: {
+					...resumingCase(prefix.path, prefix.sha256),
+					checks: [{ kind: "tool-calls", max: 0 }],
+					declaration: {
+						...resumingCase(prefix.path, prefix.sha256).declaration,
+						checks: [{ kind: "tool-calls", max: 0 }],
+					},
+				},
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: appendingClaude(projects, "OK"),
+			}),
+		);
+
+		expect(attempt.checks).toEqual([
+			{ kind: "tool-calls", status: "PASS", detail: "0 tool calls" },
+		]);
 	});
 
 	it("refuses a transcript prefix whose bytes do not match the declared digest, naming the case and both digests", async () => {
