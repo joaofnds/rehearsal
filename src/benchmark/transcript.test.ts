@@ -9,6 +9,9 @@ import {
 	parseTranscriptFile,
 	toolUses,
 } from "#benchmark/transcript";
+import { TestResources } from "#benchmark/test-support";
+
+const testResources = TestResources.forEachTest();
 
 function line(record: JsonValue): string {
 	return JSON.stringify(record);
@@ -70,10 +73,9 @@ describe(parseTranscript.name, () => {
 
 describe(parseTranscriptFile.name, () => {
 	async function transcriptFile(lines: readonly string[]): Promise<string> {
-		const path = join(
-			await mkdtemp(join(tmpdir(), "rehearsal-transcript-")),
-			"transcript.jsonl",
-		);
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-transcript-"));
+		testResources.track(directory);
+		const path = join(directory, "transcript.jsonl");
 		await writeFile(path, `${lines.join("\n")}\n`);
 
 		return path;

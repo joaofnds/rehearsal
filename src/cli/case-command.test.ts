@@ -11,6 +11,7 @@ import {
 } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
+import { TestResources } from "#benchmark/test-support";
 import type { OutputRecorder } from "#cli/cli-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import type { CaseCaptureRequest } from "#cli/case-command";
@@ -134,6 +135,7 @@ describe(runCaseShow.name, () => {
 describe(runCaseCapture.name, () => {
 	const CAPTURE_CASE_ID = "capture-probe";
 	const SESSION_ID = "aaaaaaaa-1111-2222-3333-444444444444";
+	const resources = TestResources.forEachTest();
 
 	/**
 	 * The probe case lives in a temporary cases root, never in the control
@@ -143,6 +145,7 @@ describe(runCaseCapture.name, () => {
 	 */
 	async function probeCase(): Promise<string> {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-cases-"));
+		resources.track(root);
 		const directory = join(root, CAPTURE_CASE_ID);
 		await mkdir(directory, { recursive: true });
 		await Bun.write(
@@ -173,6 +176,7 @@ describe(runCaseCapture.name, () => {
 		...sessionIds: readonly string[]
 	): Promise<string> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-capture-cli-"));
+		resources.track(directory);
 		const slug = join(directory, "-private-tmp-probe");
 		await mkdir(slug, { recursive: true });
 		for (const sessionId of sessionIds) {

@@ -6,6 +6,9 @@ import type { SessionCase } from "#benchmark/case";
 import type { SessionSettings } from "#benchmark/claude";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { sessionLineage } from "#benchmark/session-lineage";
+import { TestResources } from "#benchmark/test-support";
+
+const testResources = TestResources.forEachTest();
 
 const settings: SessionSettings = {
 	model: "haiku",
@@ -69,6 +72,7 @@ describe(sessionLineage.name, () => {
 	 */
 	it("is unchanged when an undeclared file beside a declared corpus file changes", async () => {
 		const installed = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		testResources.track(installed);
 		const declared = join(installed, "declared.md");
 		await writeFile(declared, "declared\n");
 		const declaredCorpus = [
@@ -92,6 +96,7 @@ describe(sessionLineage.name, () => {
 
 	it("is unchanged when a file beside the fixture tree changes", async () => {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+		testResources.track(root);
 		const fixture = join(root, "fixture");
 		await mkdir(fixture, { recursive: true });
 		await writeFile(join(fixture, "declared.md"), "declared\n");
@@ -113,6 +118,7 @@ describe(sessionLineage.name, () => {
 
 	it("changes when the fixture tree's bytes change", async () => {
 		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+		testResources.track(fixture);
 		await writeFile(join(fixture, "seed.md"), "one\n");
 		const before = await sessionLineage(
 			sessionCase(fixture),

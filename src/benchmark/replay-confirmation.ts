@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
@@ -8,7 +8,7 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 } from "./checkpoint";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
-import type { ProviderCall, StageScorecard } from "./contracts";
+import type { Immutable, ProviderCall, StageScorecard } from "./contracts";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { ConfirmationRepRecord } from "./confirmation-record";
@@ -382,6 +382,29 @@ export async function runReplayConfirmation(
 	const worktreesDirectory = await mkdtemp(
 		join(tmpdir(), `rehearsal-${request.groupId}-`),
 	);
+	try {
+		return await runReplayConfirmationBody(
+			dependencies,
+			request,
+			paths,
+			frozen,
+			worktreesDirectory,
+			now,
+		);
+	} catch (error) {
+		await rm(worktreesDirectory, { force: true, recursive: true });
+		throw error;
+	}
+}
+
+async function runReplayConfirmationBody(
+	dependencies: ReplayDependencies,
+	request: ReplayConfirmationRequest,
+	paths: ReturnType<typeof confirmationGroupPaths>,
+	frozen: Immutable<FrozenReplayInputs>,
+	worktreesDirectory: string,
+	now: () => number,
+): Promise<ReplayConfirmationOutcome> {
 	const makespanStart = now();
 	const results = await runConfirmation(
 		{

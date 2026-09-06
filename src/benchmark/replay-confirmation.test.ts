@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
@@ -623,6 +623,7 @@ describe(runReplayConfirmation.name, () => {
 		const record = parseConfirmationRepRecord(
 			await Bun.file(recordFile ?? "missing").text(),
 		);
+		testResources.track(dirname(record.worktreePath));
 
 		expect(record.metrics).toEqual({
 			status: "MISSING",
@@ -1078,6 +1079,7 @@ describe(runReplayConfirmation.name, () => {
 				.toSorted((left, right) => left.localeCompare(right)),
 		);
 		const preservedPath = records[1]?.worktreePath ?? "missing";
+		testResources.track(dirname(preservedPath));
 		expect(fake.log).toContain(
 			`Replay rep confirmation-failures-rep-2 failed; evidence preserved at ${preservedPath}`,
 		);
@@ -1098,5 +1100,34 @@ describe(runReplayConfirmation.name, () => {
 			source.directory,
 			records[2]?.worktreePath ?? "missing",
 		);
+	});
+
+	it("removes its worktrees directory when the confirmation body throws", async () => {
+		const harness = new ReplayConfirmationHarness(testResources);
+		const run = await harness.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		testResources.track(corpusRoot);
+		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
+		await Bun.write(
+			join(corpusRoot, "skills", "discuss", "SKILL.md"),
+			"discuss corpus\n",
+		);
+		const groupId = "confirmation-clock-failure";
+		const execution = harness.runConfirmation(
+			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{
+				groupId,
+				now: () => {
+					throw new Error("clock unavailable");
+				},
+			},
+		);
+
+		expect(execution).rejects.toThrow("clock unavailable");
+		const entries = await readdir(tmpdir());
+		const leftover = entries.filter((entry) =>
+			entry.startsWith(`rehearsal-${groupId}-`),
+		);
+		expect(leftover).toEqual([]);
 	});
 });

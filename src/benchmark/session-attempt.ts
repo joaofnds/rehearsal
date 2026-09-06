@@ -265,31 +265,36 @@ export async function runSessionAttempt(
 	const attemptDirectory = await realpath(
 		await mkdtemp(join(tmpdir(), "rehearsal-attempt-")),
 	);
-	if (sessionCase.fixturePath !== undefined) {
-		await seedFixture(sessionCase.fixturePath, attemptDirectory);
-	}
-
-	const overlay = await installCorpusOverlay(
-		request.corpusSnapshot,
-		attemptDirectory,
-	);
-
-	const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));
-	const session = await prepareSession(sessionCase, slug);
-	const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
-
 	try {
-		const output = await request.runClaude(
-			sessionCaseArgs(sessionCase, settings, session, overlay.styleName),
+		if (sessionCase.fixturePath !== undefined) {
+			await seedFixture(sessionCase.fixturePath, attemptDirectory);
+		}
+
+		const overlay = await installCorpusOverlay(
+			request.corpusSnapshot,
 			attemptDirectory,
 		);
 
-		return await recordAttempt(request, attemptDirectory, {
-			output,
-			writtenTranscript: transcriptPath,
-		});
-	} finally {
-		await removeAttemptFiles(attemptDirectory, slug, transcriptPath);
+		const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));
+		const session = await prepareSession(sessionCase, slug);
+		const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
+
+		try {
+			const output = await request.runClaude(
+				sessionCaseArgs(sessionCase, settings, session, overlay.styleName),
+				attemptDirectory,
+			);
+
+			return await recordAttempt(request, attemptDirectory, {
+				output,
+				writtenTranscript: transcriptPath,
+			});
+		} finally {
+			await removeAttemptFiles(attemptDirectory, slug, transcriptPath);
+		}
+	} catch (error) {
+		await rm(attemptDirectory, { force: true, recursive: true });
+		throw error;
 	}
 }
 

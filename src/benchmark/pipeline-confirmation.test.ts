@@ -558,6 +558,7 @@ describe(runPipelineConfirmation.name, () => {
 			),
 		);
 		const [failed] = records;
+		testResources.track(dirname(failed?.worktreePath ?? "missing"));
 		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
 
 		expect(failed?.stages[0]).toMatchObject({
@@ -681,6 +682,7 @@ describe(runPipelineConfirmation.name, () => {
 			})
 			.parse(JSON.parse(await Bun.file(outcome.reportFile).text()));
 		const [failed] = records;
+		testResources.track(dirname(failed?.worktreePath ?? "missing"));
 		await removeWorktree(harness.sourceRoot, failed?.worktreePath ?? "missing");
 
 		expect(failed?.stages[1]).toMatchObject({
@@ -787,6 +789,7 @@ describe(runPipelineConfirmation.name, () => {
 		);
 		const [failed] = records;
 		const preservedPath = failed?.worktreePath ?? "missing";
+		testResources.track(dirname(preservedPath));
 
 		expect(failed?.stages[0]).toMatchObject({
 			status: "EXECUTION_FAILED",
@@ -834,6 +837,7 @@ describe(runPipelineConfirmation.name, () => {
 		const [firstStageFailure, laterStageFailure] = records;
 		const firstPreservedPath = firstStageFailure?.worktreePath ?? "missing";
 		const laterPreservedPath = laterStageFailure?.worktreePath ?? "missing";
+		testResources.track(dirname(firstPreservedPath));
 
 		expect(firstStageFailure?.stages).toMatchObject([
 			{
@@ -988,6 +992,7 @@ describe(runPipelineConfirmation.name, () => {
 			records.every(({ outcome: result }) => result === "UNSUCCESSFUL"),
 		).toBe(true);
 		const preservedPath = records[1]?.worktreePath ?? "missing";
+		testResources.track(dirname(preservedPath));
 		expect(harness.logs).toContain(
 			`Pipeline rep pipeline-failures-rep-2 failed; evidence preserved at ${preservedPath}`,
 		);
@@ -1014,6 +1019,25 @@ describe(runPipelineConfirmation.name, () => {
 			successful: 1,
 		});
 		await removeWorktree(harness.sourceRoot, preservedPath);
+	});
+
+	it("removes its worktrees directory when the confirmation body throws", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		let worktreesDirectory: string | undefined;
+		const execution = harness.run(
+			{ groupId: "pipeline-setup-failure" },
+			(dependencies) => ({
+				...dependencies,
+				runSetup: (worktreePath) => {
+					worktreesDirectory = dirname(worktreePath);
+					throw new Error("setup unavailable");
+				},
+			}),
+		);
+
+		expect(execution).rejects.toThrow("setup unavailable");
+		expect(worktreesDirectory).toBeDefined();
+		expect(stat(worktreesDirectory ?? "")).rejects.toThrow();
 	});
 });
 

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { seedTaskBoard } from "./backlog";
@@ -771,56 +771,61 @@ export async function runPipelineConfirmation(
 	const worktreesDirectory = await mkdtemp(
 		join(tmpdir(), `rehearsal-${request.groupId}-`),
 	);
-	const frozen = await freezePipelineInputs(
-		dependencies,
-		request,
-		paths.directory,
-		paths.inputsDirectory,
-		worktreesDirectory,
-	);
-	const makespanStart = now();
-	const results = await runConfirmation(
-		{
+	try {
+		const frozen = await freezePipelineInputs(
+			dependencies,
+			request,
+			paths.directory,
+			paths.inputsDirectory,
+			worktreesDirectory,
+		);
+		const makespanStart = now();
+		const results = await runConfirmation(
+			{
+				groupId: request.groupId,
+				reps: request.reps,
+				frozenInputs: frozen,
+				worktreePath: (repId) => join(worktreesDirectory, repId),
+			},
+			(plan) => runPipelineRep(dependencies, request, frozen, paths, plan, now),
+		);
+		const makespanMs = now() - makespanStart;
+		const repResults = results.map(({ outcome }) => {
+			if (outcome.status === "rejected") {
+				throw outcome.reason;
+			}
+
+			return outcome.value;
+		});
+
+		return await finalizeConfirmationGroup({
+			mode: "pipeline",
+			caseId: request.caseId,
 			groupId: request.groupId,
 			reps: request.reps,
-			frozenInputs: frozen,
-			worktreePath: (repId) => join(worktreesDirectory, repId),
-		},
-		(plan) => runPipelineRep(dependencies, request, frozen, paths, plan, now),
-	);
-	const makespanMs = now() - makespanStart;
-	const repResults = results.map(({ outcome }) => {
-		if (outcome.status === "rejected") {
-			throw outcome.reason;
-		}
-
-		return outcome.value;
-	});
-
-	return finalizeConfirmationGroup({
-		mode: "pipeline",
-		caseId: request.caseId,
-		groupId: request.groupId,
-		reps: request.reps,
-		declaredStages: request.pipeline.stages.map(({ name }) => name),
-		inputs: {
-			lineage: { kind: "SOURCE", sha: request.source.sha },
-			files: frozen.files,
-			model: request.model,
-			effort: request.effort,
-			judgeModel: request.judgeModel,
-			judgeEffort: request.judgeEffort,
-			sessionBudgetUsd: request.sessionBudgetUsd,
-			pipelinePath: request.pipelinePath,
-		},
-		projectedCost: request.projectedCost,
-		approvalMethod: request.approvalMethod,
-		repResults,
-		worktreesDirectory,
-		groupDirectory: paths.directory,
-		runsDirectory: request.runsDirectory,
-		groupFile: paths.groupFile,
-		reportFile: paths.reportFile,
-		makespanMs,
-	});
+			declaredStages: request.pipeline.stages.map(({ name }) => name),
+			inputs: {
+				lineage: { kind: "SOURCE", sha: request.source.sha },
+				files: frozen.files,
+				model: request.model,
+				effort: request.effort,
+				judgeModel: request.judgeModel,
+				judgeEffort: request.judgeEffort,
+				sessionBudgetUsd: request.sessionBudgetUsd,
+				pipelinePath: request.pipelinePath,
+			},
+			projectedCost: request.projectedCost,
+			approvalMethod: request.approvalMethod,
+			repResults,
+			worktreesDirectory,
+			groupDirectory: paths.directory,
+			runsDirectory: request.runsDirectory,
+			groupFile: paths.groupFile,
+			reportFile: paths.reportFile,
+			makespanMs,
+		});
+	} catch (error) {
+		await rm(worktreesDirectory, { force: true, recursive: true });
+		throw error;
+	}
 }

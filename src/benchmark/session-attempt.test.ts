@@ -136,12 +136,20 @@ class FakeClaude {
 	};
 }
 
-function projectsRoot(): Promise<string> {
-	return mkdtemp(join(tmpdir(), "rehearsal-attempt-projects-"));
+async function projectsRoot(): Promise<string> {
+	const directory = await mkdtemp(
+		join(tmpdir(), "rehearsal-attempt-projects-"),
+	);
+	resources.track(directory);
+
+	return directory;
 }
 
-function recordDirectory(): Promise<string> {
-	return mkdtemp(join(tmpdir(), "rehearsal-attempt-record-"));
+async function recordDirectory(): Promise<string> {
+	const directory = await mkdtemp(join(tmpdir(), "rehearsal-attempt-record-"));
+	resources.track(directory);
+
+	return directory;
 }
 
 function request(
@@ -395,6 +403,7 @@ describe("the corpus overlay a session attempt installs", () => {
 describe(forkTranscript.name, () => {
 	it("rewrites every occurrence of the source session id and changes nothing else", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-fork-"));
+		resources.track(directory);
 		const source = join(directory, "source.jsonl");
 		const forked = join(directory, "forked.jsonl");
 		const bytes = [
@@ -412,6 +421,7 @@ describe(forkTranscript.name, () => {
 
 	it("keeps a source that ends without a newline ending without one", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-fork-"));
+		resources.track(directory);
 		const source = join(directory, "source.jsonl");
 		const forked = join(directory, "forked.jsonl");
 		const bytes = [
@@ -447,6 +457,7 @@ function resumingCase(transcriptPath: string, sha256: string): SessionCase {
 
 async function writtenPrefix(text: string): Promise<PrefixOnDisk> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-prefix-"));
+	resources.track(directory);
 	const path = join(directory, "prefix.jsonl");
 	await writeFile(path, text);
 
@@ -504,6 +515,7 @@ describe(runSessionAttempt.name, () => {
 
 	it("seeds the attempt directory from the case's fixture tree", async () => {
 		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		resources.track(fixture);
 		await mkdir(join(fixture, "docs"), { recursive: true });
 		await writeFile(join(fixture, "docs", "note.md"), "planted\n");
 		const projects = await projectsRoot();
@@ -530,9 +542,14 @@ describe(runSessionAttempt.name, () => {
 	 */
 	it("refuses a fixture tree holding a symlink, naming it, before any provider call", async () => {
 		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		resources.track(fixture);
 		await mkdir(join(fixture, "docs"), { recursive: true });
 		await symlink("/etc/hosts", join(fixture, "docs", "escape.md"));
 		const projects = await projectsRoot();
+		const entriesBefore = await readdir(tmpdir());
+		const attemptDirectoriesBefore = new Set(
+			entriesBefore.filter((entry) => /^rehearsal-attempt-[^-]+$/u.test(entry)),
+		);
 
 		const failure = await failureOf(
 			runSessionAttempt(
@@ -547,6 +564,11 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(failure.message).toContain(join("docs", "escape.md"));
+		const entriesAfter = await readdir(tmpdir());
+		const newAttemptDirectories = entriesAfter
+			.filter((entry) => /^rehearsal-attempt-[^-]+$/u.test(entry))
+			.filter((entry) => !attemptDirectoriesBefore.has(entry));
+		expect(newAttemptDirectories).toEqual([]);
 	});
 
 	it("copies the transcript the provider wrote into the attempt record", async () => {

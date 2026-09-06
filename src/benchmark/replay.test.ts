@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { loadAttempts, presentAttempts } from "./attempts";
 import { assertPlanningStageCompleted } from "./backlog";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
@@ -567,6 +567,7 @@ describe(runReplay.name, () => {
 			line.includes("evidence preserved at"),
 		);
 		expect(preserved).toContain(fake.worktrees[0]?.path ?? "missing");
+		testResources.track(dirname(fake.worktrees[0]?.path ?? "missing"));
 	});
 
 	it("fails loudly when the run predates initial checkpoints", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CommandError, runCommand } from "./command";
@@ -429,10 +429,16 @@ describe(restoreTarget.name, () => {
 });
 
 describe(captureWorkflowBackup.name, () => {
-	it("rejects a workflow path discovery failure", async () => {
+	it("rejects a workflow path discovery failure, leaving no backup directory", async () => {
 		const source = await testResources.createRepository();
 		await mkdir(join(source.directory, "backlog"));
 		await chmod(source.directory, 0o000);
+		const entriesBefore = await readdir(tmpdir());
+		const backupsBefore = new Set(
+			entriesBefore.filter((entry) =>
+				entry.startsWith("rehearsal-workflow-backup-"),
+			),
+		);
 
 		try {
 			expect(captureWorkflowBackup(source.directory)).rejects.toThrow(
@@ -441,6 +447,12 @@ describe(captureWorkflowBackup.name, () => {
 		} finally {
 			await chmod(source.directory, 0o755);
 		}
+
+		const entriesAfter = await readdir(tmpdir());
+		const newBackups = entriesAfter
+			.filter((entry) => entry.startsWith("rehearsal-workflow-backup-"))
+			.filter((entry) => !backupsBefore.has(entry));
+		expect(newBackups).toEqual([]);
 	});
 
 	it("rejects a captured workflow tree missing from the backup", async () => {

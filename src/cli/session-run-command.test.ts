@@ -8,10 +8,13 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { projectSlug } from "#benchmark/session-capture";
 import type { ClaudeRunner } from "#benchmark/session-attempt";
+import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runSessionDebugAttempt } from "#cli/session-run-command";
+
+const testResources = TestResources.forEachTest();
 
 const config: SessionRunConfig = {
 	caseId: "smoke",
@@ -100,8 +103,11 @@ function fakeClaude(projects: string, reply: string): ClaudeRunner {
 	};
 }
 
-function temporary(prefix: string): Promise<string> {
-	return mkdtemp(join(tmpdir(), prefix));
+async function temporary(prefix: string): Promise<string> {
+	const directory = await mkdtemp(join(tmpdir(), prefix));
+	testResources.track(directory);
+
+	return directory;
 }
 
 describe(runSessionDebugAttempt.name, () => {

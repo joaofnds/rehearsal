@@ -8,7 +8,10 @@ import {
 	projectSlug,
 	resolveSessionFile,
 } from "#benchmark/session-capture";
+import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
+
+const testResources = TestResources.forEachTest();
 
 /**
  * A session file lives under a project slug directory, and the source session
@@ -17,6 +20,7 @@ import { failureOf } from "#cli/cli-test-support";
  */
 async function projectsDirectory(...names: readonly string[]): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-projects-"));
+	testResources.track(directory);
 	for (const [index, name] of names.entries()) {
 		const slug = join(directory, `-private-tmp-project-${String(index)}`);
 		await mkdir(slug, { recursive: true });
@@ -86,6 +90,7 @@ describe(resolveSessionFile.name, () => {
 describe(captureTranscriptPrefix.name, () => {
 	async function source(lines: number): Promise<string> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
+		testResources.track(directory);
 		const path = join(directory, "source.jsonl");
 		await writeFile(
 			path,
@@ -98,10 +103,10 @@ describe(captureTranscriptPrefix.name, () => {
 	}
 
 	async function destination(): Promise<string> {
-		return join(
-			await mkdtemp(join(tmpdir(), "rehearsal-capture-")),
-			"prefix.jsonl",
-		);
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-capture-"));
+		testResources.track(directory);
+
+		return join(directory, "prefix.jsonl");
 	}
 
 	it("writes exactly the source's first cut lines", async () => {

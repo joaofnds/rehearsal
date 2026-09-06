@@ -108,9 +108,14 @@ export async function captureWorkflowBackup(
 	targetDir: string,
 ): Promise<WorkflowBackup> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
-	const presentPaths = await copyWorkflowState(targetDir, directory);
+	try {
+		const presentPaths = await copyWorkflowState(targetDir, directory);
 
-	return { directory, presentPaths };
+		return { directory, presentPaths };
+	} catch (error) {
+		await rm(directory, { force: true, recursive: true });
+		throw error;
+	}
 }
 
 async function runMarkerPath(root: string): Promise<string> {
