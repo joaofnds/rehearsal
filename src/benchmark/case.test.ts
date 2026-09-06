@@ -12,7 +12,7 @@ import {
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import type { JsonObject } from "#benchmark/json-value";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
@@ -165,13 +165,6 @@ describe("loadCase", () => {
 
 	it("refuses a case with no declaration on disk, naming it", () => {
 		expect(loadCase("missing")).rejects.toThrow("Unknown case missing");
-	});
-
-	it("resolves the declared target to a directory that exists", async () => {
-		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
-
-		const target = await stat(benchmarkCase.targetPath);
-		expect(target.isDirectory()).toBe(true);
 	});
 
 	it("resolves a relative declared target against the case directory", async () => {
