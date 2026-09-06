@@ -1,10 +1,10 @@
 ---
 id: ACT-34
 title: make the audit-log case's target resolvable from any checkout
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-05 23:59'
+updated_date: '2026-09-06 00:00'
 labels: []
 milestone: m-2
 dependencies: []
@@ -89,4 +89,18 @@ That splits the card in two. This card removes the machine-dependent assertion f
 Preflight itself moves to its own card.
 
 Preflight split out to ACT-88, 2026-09-06. This card is now only the test fix.
+
+Shape 2026-09-06, working from the settled decision (no origin-URL, no skip, target is a run-time preflight concern per ACT-88):
+
+Goal: case.test.ts no longer asserts that a real directory outside this repository exists; it only asserts that a declared relative target path resolves correctly against the case directory.
+
+Found: the machine-dependent test is "loadCase > resolves the declared target to a directory that exists" (src/benchmark/case.test.ts:170), which calls stat() on benchmarkCase.targetPath, a path that leaves the repository for the audit-log case. This is the one to delete.
+
+Found: "loadCase > resolves a relative declared target against the case directory" (src/benchmark/case.test.ts:177) already does what AC #3 asks: it resolves declaration.target.path against CONTROL_DIR + the case directory using resolve(), the same logic declaredTarget() in src/benchmark/case.ts:328-335 uses, with no stat call and no dependency on anything existing on disk. This test does not need a new fixture; it already asserts against a path this repository controls (the case directory), not an external checkout.
+
+First test to write / change: delete case.test.ts:170-175. No replacement needed since :177 already covers path resolution. Run bun test src/benchmark/case.test.ts and confirm 0 fail, then a whole bun test run on this checkout and, if possible, on a clone at a path with no nest/ sibling three levels up (reproduction recipe already on this card, 2026-09-04 note) to confirm AC #1.
+
+Acceptance criteria on this card map directly: #2 is satisfied by deleting the stat-based test, #3 is already satisfied by the existing :177 test (verify it still passes after the deletion), #1 is the whole-suite check on a clone without the sibling.
+
+No unknowns left open. No survey needed, one deletion plus verification.
 <!-- SECTION:NOTES:END -->
