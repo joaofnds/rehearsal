@@ -1,10 +1,10 @@
 ---
 id: ACT-88
 title: halt a run in preflight when anything it needs is missing
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-05 23:59'
-updated_date: '2026-09-05 23:59'
+updated_date: '2026-09-06 12:09'
 labels: []
 dependencies: []
 ordinal: 84008

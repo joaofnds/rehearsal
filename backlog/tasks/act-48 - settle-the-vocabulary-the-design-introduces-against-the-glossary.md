@@ -4,7 +4,7 @@ title: settle the vocabulary the design introduces against the glossary
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:00'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-06 12:09'
 labels: []
 milestone: m-5
 dependencies: []
@@ -52,4 +52,6 @@ That sharpens this card's problem rather than settling it. Three things the card
 3. The codebase's Attempt and Rep have no word in the design at all, and the design's Step/Task/Case/Run has no room for them. A decision that only maps Step->Stage and Task->Pipeline leaves those two unplaced.
 
 The card's own recommendation (keep run and stage in code and records, treat the design's words as presentation labels mapped at the boundary) still looks right to me, and the 'task' collision with backlog cards is the strongest argument for it. But it now has to also say where Attempt and Rep sit, and it has to add glossary entries for the task-judging rule, task graph, and contribution as new concepts rather than new names.
+
+Bet, 2026-09-06: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->

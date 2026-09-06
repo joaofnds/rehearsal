@@ -1,10 +1,10 @@
 ---
 id: ACT-61
 title: record the project half of the context manifest
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-04 15:11'
+updated_date: '2026-09-06 12:09'
 labels: []
 dependencies:
   - ACT-41
