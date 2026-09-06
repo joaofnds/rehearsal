@@ -4,7 +4,7 @@ title: list labels a stopped run not replayable when its checkpoints are usable
 status: To Do
 assignee: []
 created_date: '2026-09-06 22:19'
-updated_date: '2026-09-06 22:19'
+updated_date: '2026-09-06 22:33'
 labels: []
 milestone: m-1
 dependencies: []
@@ -28,4 +28,6 @@ list-command.ts:153 returns the literal 'not replayable' for any run with a stop
 Observed on run 2026-09-06T21-58-29.508Z (audit-log, STOPPED:build). 'rehearsal list runs' calls it not replayable. Its manifest.json exists, and 'rehearsal list checkpoints' shows both an initial and a shape checkpoint with digests. A replay of its shape stage was started and did not refuse on the grounds of the run being stopped.
 
 Cost: a stopped run is the case an operator most wants to replay. The stage graded badly, and the question is whether a corpus edit moves it. The label tells them the one run worth iterating on cannot be iterated on. The command still works if they ignore the label, which makes this a wrong signal rather than a broken feature.
+
+Confirmed 2026-09-06: the shape stage of run 2026-09-06T21-58-29.508Z replayed successfully end to end while 'rehearsal list runs' labelled that run 'not replayable'. The replay produced a full graded attempt (record .benchmark-runs/replays/60758c01.../2026-09-06T22-33-15.057Z.json). So the label is wrong, not merely pessimistic.
 <!-- SECTION:NOTES:END -->
