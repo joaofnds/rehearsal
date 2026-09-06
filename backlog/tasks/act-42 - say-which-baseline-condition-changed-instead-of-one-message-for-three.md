@@ -1,10 +1,10 @@
 ---
 id: ACT-42
 title: 'say which baseline condition changed, instead of one message for three'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 02:13'
-updated_date: '2026-09-04 23:01'
+updated_date: '2026-09-06 01:18'
 labels: []
 milestone: m-1
 dependencies: []
@@ -27,14 +27,16 @@ Reproduce by running any pipeline stage that leaves an uncommitted file, or by r
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stage refused for a dirty worktree reports the changed paths
-- [ ] #2 A stage refused for the wrong branch reports the branch it found and the one it expected
-- [ ] #3 A stage refused for a moved HEAD reports both shas
-- [ ] #4 The stage judge's harness-failure evidence carries that detail, so a judge never has to infer which condition occurred
+- [x] #1 A stage refused for a dirty worktree reports the changed paths
+- [x] #2 A stage refused for the wrong branch reports the branch it found and the one it expected
+- [x] #3 A stage refused for a moved HEAD reports both shas
+- [x] #4 The stage judge's harness-failure evidence carries that detail, so a judge never has to infer which condition occurred
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-05: premise re-verified at HEAD. The two raise sites are now at target.ts:223 and :257 (were 214/248), moved by intervening commits; same two sites, same message, unchanged in substance.
+
+Triage 2026-09-06: closed as overtaken. ACT-72 (Done, commit ed10c54, 2026-09-05) rewrote both raise sites in target.ts to name the failing condition and its detail: describeBranchDrift for the branch case, a commit-mismatch message naming both SHAs, describeDirtyWorktree listing the offending paths. Verified directly against target.ts:208-299 this run; all four of ACT-42's own acceptance criteria are met by that code as it stands. ACT-42 was last updated 2026-09-04 23:01, before ACT-72 existed, and was never re-checked against it.
 <!-- SECTION:NOTES:END -->
