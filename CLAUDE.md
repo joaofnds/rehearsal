@@ -16,6 +16,9 @@
   `docs/design.md`.
 - **Stack**: TypeScript on Bun. No framework, no database, no server. State is
   files under `.benchmark-runs`.
+- **Running commands**: Prefix any command that starts the rehearsal CLI,
+  `bun test` included, with `mise exec --`. It supplies the Bun version
+  `mise.toml` pins, and the CLI refuses to start on any other.
 - **Formatting**: oxfmt. `bun run fmt` writes, `bun run fmt:check` verifies. Do
   not install ESLint, Prettier, or Biome.
 - **Linting**: oxlint with type-aware rules, every category at error. Run
