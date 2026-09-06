@@ -2,8 +2,7 @@
 id: ACT-63
 title: 'search the target''s project corpus root, not the control repository''s'
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-04 17:30'
 updated_date: '2026-09-06 23:59'
 labels: []
