@@ -4,10 +4,12 @@ title: session checks count the transcript prefix as behavior under test
 status: Done
 assignee: []
 created_date: '2026-09-06 12:44'
-updated_date: '2026-09-06 13:02'
+updated_date: '2026-09-06 13:04'
 labels: []
 milestone: m-1
 dependencies: []
+documentation:
+  - doc-24
 type: bug
 ordinal: 85008
 ---
