@@ -1,3 +1,4 @@
+import type { HashedFile } from "./checkpoint";
 import type { WorkflowStage } from "./config";
 import type {
 	FailedJudgeRunArtifact,
@@ -12,6 +13,7 @@ export interface PendingStage {
 	readonly file: string;
 	readonly stage: WorkflowStage;
 	readonly input: StageJudgeInput;
+	readonly corpusFiles?: readonly HashedFile[] | undefined;
 	readonly failure?:
 		| {
 				readonly prompt: string;
@@ -111,6 +113,7 @@ export async function writeStageJudgeFailure(
 				stage: pending.stage,
 				error: reason,
 				input: pending.input,
+				corpusFiles: pending.corpusFiles,
 				...findings,
 				...pending.failure,
 			},

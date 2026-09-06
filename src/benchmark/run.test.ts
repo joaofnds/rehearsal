@@ -793,7 +793,7 @@ describe(runGradedStages.name, () => {
 		expect(pendingStages.at(-1)?.scorecard?.grade.verdict).toBe("STOP");
 	});
 
-	it("keeps the judge's findings in the aborted stage artifact after a normal grade failure", async () => {
+	it("keeps the judge's findings and captured corpus files in the aborted stage artifact after a normal grade failure", async () => {
 		const { dependencies, scorecardFor } = fakeStageDependencies();
 		const persistence = new ControlledRunArtifactPersistence();
 		const abort = createRunAbort(
@@ -847,6 +847,12 @@ describe(runGradedStages.name, () => {
 			requirements: stoppedScorecard?.grade.requirements,
 			dimensions: stoppedScorecard?.grade.dimensions,
 			summary: stoppedScorecard?.grade.summary,
+			corpusFiles: [
+				{
+					path: "skills/shape/SKILL.md",
+					sha256: createHash("sha256").update("shape").digest("hex"),
+				},
+			],
 		});
 	});
 

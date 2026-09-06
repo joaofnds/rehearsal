@@ -341,6 +341,27 @@ describe(writeStageJudgeFailure.name, () => {
 		});
 	});
 
+	it("carries the stage's captured corpus files", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		testResources.track(directory);
+		const file = join(directory, "build.json");
+		const scorecard = stageScorecard("FAIL");
+		const corpusFiles = [{ path: "CLAUDE.md", sha256: "abc123" }];
+		const pending: PendingStage = {
+			file,
+			stage: "build",
+			input: scorecard.input,
+			scorecard,
+			corpusFiles,
+		};
+
+		await writeStageJudgeFailure(pending, "build stage graded F");
+
+		expect(JSON.parse(await Bun.file(file).text())).toMatchObject({
+			corpusFiles,
+		});
+	});
+
 	it("carries the scorecard's grade fields when a normal grade failure supplies one", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
 		testResources.track(directory);

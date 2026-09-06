@@ -1,10 +1,10 @@
 ---
 id: ACT-74
 title: a stage that fails its grade gate loses its corpus record
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-05 00:41'
-updated_date: '2026-09-06 23:01'
+updated_date: '2026-09-06 23:07'
 labels: []
 milestone: m-1
 dependencies: []
@@ -26,33 +26,57 @@ Worth separating: the build stage's input.instructions holds the global CLAUDE.m
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stage record written after the stage fails its grade gate lists the corpus files the stage captured (observed: run 2026-09-06T21-58-29.508Z build record, STAGE_JUDGE_FAILED, has no corpusFiles key while its shape record has 89)
-- [ ] #2 A build stage that clears its grade gate writes a record listing every corpus file it read, as the shape stage's record does (card's original criterion #1, filed 2026-09-05)
+- [x] #1 A stage record written after the stage fails its grade gate lists the corpus files the stage captured (observed: run 2026-09-06T21-58-29.508Z build record, STAGE_JUDGE_FAILED, has no corpusFiles key while its shape record has 89)
+- [x] #2 A build stage that clears its grade gate writes a record listing every corpus file it read, as the shape stage's record does (card's original criterion #1, filed 2026-09-05)
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Filed by the iterate session running ACT-39's replay, which worked around it by editing CLAUDE.md instead. ACT-39's replay is of the shape stage for this reason.
+Build session, 2026-09-07. Fixed both criteria.
 
-2026-09-06, reproduced the symptom against a fresh run and found the stated cause is wrong.
+Fix: added `corpusFiles?: readonly HashedFile[] | undefined` to `PendingStage`
+(run-abort.ts), populated it at the one construction site in run.ts (the value
+was already destructured in scope from the stage session result), and included
+`corpusFiles: pending.corpusFiles` in the record literal `writeStageJudgeFailure`
+builds. Closes AC#1.
 
-Run 2026-09-06T21-58-29.508Z (audit-log, sonnet). Its shape record carries corpusFiles with 89 entries; its build record has no corpusFiles key. That matches the card's observation exactly.
+AC#2 needed no code change. A new test drives the existing fake-dependencies
+harness (grades every stage CONTINUE/PASS) through a build stage and confirms
+its completed record carries corpusFiles, same as the shape stage's — this was
+already true on the normal completion path (run.ts stageRecord spread), per the
+card's own trace. Confirmed by test rather than a live model run.
 
-But the build record's other keys are status, stage, error, input, hardBlockers, requirements, dimensions, summary, costUsd, with status STAGE_JUDGE_FAILED and error 'build stage graded C; minimum grade is B'. This record was not written by the normal path at all.
+Review: six axes run (review-code skill), one round each.
+- Spec: present for both AC, but flagged should-fix — the production wiring
+  line in run.ts (the pendingStage corpusFiles field) was not exercised by any
+  test; reverting it alone left the full suite green. Verified by the reviewer
+  reverting and rerunning.
+- Testing: independently found the same gap from the other side — my first
+  draft of the AC#2 test exercised the CONTINUE/completeStage path, not the
+  STOP/writeStageJudgeFailure path the card is about, so it was a near-duplicate
+  of an existing shape-stage test and didn't guard the goal's actual target.
+- Style: no defects. Two notes: PendingStage.corpusFiles is optional though its
+  one producer always supplies it (kept optional to avoid touching unrelated
+  existing test literals, out of scope); field ordering before the spreads in
+  writeStageJudgeFailure has no collision risk (checked).
+- Architecture: no findings. One observation: the AWAITING_STAGE_JUDGE pending
+  write still omits corpusFiles, correctly out of scope (card only asks about
+  the failed and completed records).
+- Security: no findings (no untrusted input, no new sink).
+- Refactoring: no findings.
 
-The normal path is run.ts:734, which spreads corpusFiles into every StageJudgeRecord with no branching by stage or kind. captureStageCorpus is called at run.ts:540 before any stage-kind branch, so a build stage does capture its corpus. The only kind-specific branch nearby (run.ts:567) governs build-candidate capture, not corpus recording.
+Disposition: replaced the near-duplicate AC#2 test with an extension of the
+existing STOP-verdict abort test ("keeps the judge's findings ... in the
+aborted stage artifact after a normal grade failure", now also asserting
+corpusFiles). Confirmed red (stashed the two production-file changes, test
+failed with no corpusFiles key) then green (unstashed, full suite passes).
 
-The failure path is writeStageFailure in run-abort.ts:106-120. It constructs its record literal from scratch (status, stage, error, input, findings, failure) and never includes corpusFiles, though the stage had already captured them.
+Verified this session: full suite 1061 pass/0 fail, lint clean, typecheck
+clean, fmt:check clean.
 
-So: a build stage that fails its grade gate loses its corpus record. Whether a passing build stage records corpus is not shown by this run, because the build stage stopped at the gate and never reached the checkpoint write. The code says it would.
-
-That makes the card's premise ('the build stage's corpus files are not recorded') too broad, and its criterion #2 rests on it. Reshaping is needed before building: the defect to fix is the failure writer dropping corpus files, and the open question is whether a passing build stage records them, which needs a run that clears the B gate.
-
-Criteria rewritten 2026-09-06 at João's direction ('go', after being told the premise was wrong).
-
-Dropped: 'stale reports a checkpoint invalidated by an edit to a file the build stage read'. It presumed build stages record no corpus at all, which the code contradicts, and it cannot be observed until a build stage clears the gate. Once criterion #2 holds, staleness follows from the same recorded digests the shape stage already uses, so the dropped criterion tested the mechanism rather than a behavior. If a build-read edit still fails to invalidate after #2 holds, that is a new card with its own evidence.
-
-Kept and renumbered: the original criterion #1 is now #2, unchanged in substance.
-Added: #1, the failure-path defect confirmed this session.
+Not verified: no live benchmark run against a real target repo. Both fixes are
+proven at the unit/integration level with fakes; nobody has watched an actual
+`run` command produce a STAGE_JUDGE_FAILED build record with corpusFiles
+end-to-end.
 <!-- SECTION:NOTES:END -->
