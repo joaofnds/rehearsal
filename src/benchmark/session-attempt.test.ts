@@ -67,6 +67,18 @@ function toolUseLine(sessionId: string): string {
 	});
 }
 
+function readFileLine(sessionId: string, filePath: string): string {
+	return JSON.stringify({
+		type: "assistant",
+		sessionId,
+		message: {
+			content: [
+				{ type: "tool_use", name: "Read", input: { file_path: filePath } },
+			],
+		},
+	});
+}
+
 function sessionCase(
 	overrides: Immutable<Partial<SessionCase>> = {},
 ): SessionCase {
@@ -448,13 +460,18 @@ describe(forkTranscript.name, () => {
 	});
 });
 
-function resumingCase(transcriptPath: string, sha256: string): SessionCase {
-	const base = sessionCase({ transcriptPath });
+function resumingCase(
+	transcriptPath: string,
+	sha256: string,
+	overrides: Immutable<Partial<SessionCase>> = {},
+): SessionCase {
+	const base = sessionCase({ transcriptPath, ...overrides });
 
 	return {
 		...base,
 		declaration: {
 			...base.declaration,
+			checks: base.checks,
 			transcript: {
 				file: "prefix.jsonl",
 				sha256,
@@ -636,17 +653,58 @@ describe(runSessionAttempt.name, () => {
 
 		const attempt = await runSessionAttempt(
 			request({
-				sessionCase: {
-					...resumingCase(prefix.path, prefix.sha256),
+				sessionCase: resumingCase(prefix.path, prefix.sha256, {
 					checks: [{ kind: "tool-calls", max: 0 }],
-					declaration: {
-						...resumingCase(prefix.path, prefix.sha256).declaration,
-						checks: [{ kind: "tool-calls", max: 0 }],
-					},
-				},
+				}),
 				projectsDirectory: projects,
 				recordDirectory: await recordDirectory(),
 				runClaude: appendingClaude(projects, "OK"),
+			}),
+		);
+
+		expect(attempt.checks).toEqual([
+			{ kind: "tool-calls", status: "PASS", detail: "0 tool calls" },
+		]);
+	});
+
+	it("scores a files-read check against the turn under test, not a file the seeded prefix read", async () => {
+		const prefix = await writtenPrefix(
+			`${readFileLine(SOURCE_SESSION, "prefix-only.md")}\n`,
+		);
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: resumingCase(prefix.path, prefix.sha256, {
+					checks: [{ kind: "files-read", paths: ["prefix-only.md"] }],
+				}),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: appendingClaude(projects, "OK"),
+			}),
+		);
+
+		expect(attempt.checks).toEqual([
+			{
+				kind: "files-read",
+				status: "FAIL",
+				detail: "never read prefix-only.md",
+			},
+		]);
+	});
+
+	it("counts every tool use in the turn when the case declares no transcript prefix", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: sessionCase({
+					checks: [{ kind: "tool-calls", max: 0 }],
+				}),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claude.run,
 			}),
 		);
 
