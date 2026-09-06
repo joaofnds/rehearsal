@@ -4,12 +4,14 @@ title: make the audit-log case's target resolvable from any checkout
 status: Done
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-06 00:12'
+updated_date: '2026-09-06 00:13'
 labels: []
 milestone: m-2
 dependencies: []
 references:
   - ACT-30
+documentation:
+  - doc-21
 priority: medium
 ordinal: 36008
 ---
