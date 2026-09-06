@@ -4,7 +4,7 @@ title: 'attempts refuse to compare across a corpus edit, the one case worth comp
 status: Done
 assignee: []
 created_date: '2026-09-05 01:49'
-updated_date: '2026-09-06 13:40'
+updated_date: '2026-09-06 22:33'
 labels: []
 milestone: m-1
 dependencies: []
@@ -88,4 +88,19 @@ Model-only difference: still REFUSED, 'model sonnet against opus'.
 Criterion #3 read at the source rather than tested end to end: replay-command.ts:193 calls presentAttempts inline and returns its output, catching only LineageMismatchError. So a corpus-differing replay prints the comparison in the same command. The build session's call not to build CLI scaffolding for this four-line pass-through is sound.
 
 Full suite 1060 pass / 0 fail, up from 1057.
+
+Criterion #3 now verified end to end, 2026-09-06, not just read at the call site.
+
+Baseline: 'rehearsal run --case audit-log --model sonnet' (run 2026-09-06T21-58-29.508Z). It stopped at build (graded C against a B minimum) but recorded initial and shape checkpoints.
+
+Corpus: copied the live install to /tmp/act76-corpus and verified all 89 files recorded in the shape checkpoint matched by sha256, then appended one paragraph to CLAUDE.md so exactly one file differed.
+
+Replay: 'rehearsal replay --run 2026-09-06T21-58-29.508Z --stage shape --model sonnet --corpus /tmp/act76-corpus'. It printed, in the same command with no second invocation:
+
+  Attempts at checkpoint 60758c01...:
+    replay 2026-09-06T22:33:15.057Z: CLAUDE.md differs
+  1. original run 2026-09-06T21-58-29.508Z - grade A (CONTINUE), judge $0.74
+  2. replay 2026-09-06T22:33:15.057Z - grade F (STOP), judge $0.68, total $3.39
+
+So the comparison is presented rather than refused, the differing file is named against the attempt that changed it, and both grades line up for reading. That is the behavior the card was filed to get.
 <!-- SECTION:NOTES:END -->
