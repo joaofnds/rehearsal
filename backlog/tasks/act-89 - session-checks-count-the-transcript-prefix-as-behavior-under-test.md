@@ -2,8 +2,7 @@
 id: ACT-89
 title: session checks count the transcript prefix as behavior under test
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-06 12:44'
 updated_date: '2026-09-06 12:55'
 labels: []
