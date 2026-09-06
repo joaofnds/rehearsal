@@ -4,10 +4,12 @@ title: 'attempts refuse to compare across a corpus edit, the one case worth comp
 status: Done
 assignee: []
 created_date: '2026-09-05 01:49'
-updated_date: '2026-09-06 13:39'
+updated_date: '2026-09-06 13:40'
 labels: []
 milestone: m-1
 dependencies: []
+documentation:
+  - backlog/docs/doc-25 - reflection-ACT-76.md
 type: bug
 ordinal: 72008
 ---
