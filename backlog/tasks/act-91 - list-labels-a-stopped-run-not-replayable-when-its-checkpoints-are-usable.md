@@ -15,7 +15,6 @@ ordinal: 87008
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A stopped run whose manifest and stage checkpoints exist is listed as replayable (observed: run 2026-09-06T21-58-29.508Z, STOPPED:build, replayed its shape stage successfully while listed as not replayable)
-- [ ] #2 A stopped run whose manifest and stage checkpoints exist is listed as replayable
 <!-- AC:END -->
 
 ## Implementation Notes
