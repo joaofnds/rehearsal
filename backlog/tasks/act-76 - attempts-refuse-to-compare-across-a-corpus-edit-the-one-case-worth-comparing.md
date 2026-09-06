@@ -4,7 +4,7 @@ title: 'attempts refuse to compare across a corpus edit, the one case worth comp
 status: To Do
 assignee: []
 created_date: '2026-09-05 01:49'
-updated_date: '2026-09-05 21:21'
+updated_date: '2026-09-06 13:26'
 labels: []
 milestone: m-1
 dependencies: []
@@ -39,4 +39,12 @@ The cost is concrete. ACT-39 asks whether an edit improved a stage, answered fro
 
 <!-- SECTION:NOTES:BEGIN -->
 Found by the iterate session that made replay accept a corpus source (ACT-75). The replay itself worked: the record hashes the edited CLAUDE.md (f16dd9dc) rather than the live one (a29fbbc0), so the corpus was genuinely delivered. Only the comparison step refused.
+
+2026-09-06, reproduced before shaping. Drove presentAttempts directly with two constructed attempt pairs.
+
+Corpus-only difference (same model, same effort, CLAUDE.md sha aaa against bbb): REFUSED, 'Cannot compare original with replay: they consumed different inputs (CLAUDE.md differs)'.
+
+Model-only difference (sonnet against opus, identical corpus): REFUSED, 'model sonnet against opus'.
+
+So both take the same path today, confirming the card. Criterion #2's behavior (refuse on model) already holds; criterion #1's (present on corpus) does not.
 <!-- SECTION:NOTES:END -->
