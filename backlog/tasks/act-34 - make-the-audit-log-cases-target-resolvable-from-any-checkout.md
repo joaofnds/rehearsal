@@ -4,7 +4,7 @@ title: make the audit-log case's target resolvable from any checkout
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:55'
-updated_date: '2026-09-05 23:43'
+updated_date: '2026-09-05 23:59'
 labels: []
 milestone: m-2
 dependencies: []
@@ -29,8 +29,8 @@ The decision this needs: whether a case may declare a target outside the reposit
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A whole `bun test` run on a fresh clone of this repository, on a machine with no sibling nest/template, reports zero failures
-- [ ] #2 The decision on whether a pipeline case may declare a target outside the repository is recorded on this card with its reason
-- [ ] #3 A declaration whose target path is malformed or unresolvable for a reason other than the target's absence still fails rather than skipping
+- [ ] #2 No test in the suite asserts that a directory outside this repository exists on disk
+- [ ] #3 A test asserts that a declared relative target path resolves against the case directory, using a fixture inside this repository rather than a real external checkout
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -67,4 +67,26 @@ What the filesystem cannot answer: no stat-based check distinguishes an uncloned
 Decided by João, 2026-09-06: option 1. The case declaration carries where its target comes from, so absence is checked against something verifiable and a wrong path is a mismatch rather than a silence. This widens the card beyond a bare skip, and that is accepted. Option 2 (skip when the path resolves outside the repository) is rejected: the 2026-09-06 probe above shows it classifies a misspelled external path the same as a correct one, so it skips the typo it exists to catch.
 
 Shape works from this decision. AC #3 stands as written and is now closable: a declaration whose target is malformed or unresolvable for a reason other than the target's absence still fails.
+
+Directed by João, 2026-09-06, superseding the 2026-09-06 option-1 decision above and the 2026-09-03 skip decision:
+
+'I don't think we should skip. I think we should just halt. If the instructions are not clear on the benchmark, we should just not run the benchmark. And that means that before running anything, we need to validate the whole task. We should go to every referred path and instruction, and everything that we can check and check before even starting. In engineering we call this a pre-flight check. So basically what I'm saying is we should have a pre-flight check before starting a task. We should validate everything that we can necessary for the task to complete successfully, before even allowing to start the task. That also includes inputs, model selection, model availability, budget, etc...'
+
+This removes the absent-vs-malformed distinction that blocked the card twice. Nothing skips. An unresolvable target halts the run before any stage starts, with a message naming what is missing. The origin-URL design from option 1 is not needed for this and is dropped unless preflight wants it for its own reasons.
+
+Observed 2026-09-06, what already exists: assertControlReady (control repo committed) and assertSourceReady (target is a repo root, not the control repo, on main) in src/benchmark/target.ts, called from run-command. These are preflight checks that run late and only cover the target repository. The card's work is a single preflight gate that runs before the first stage and covers every declared reference, not only the target.
+
+Open for Shape: the test that fails on a clone without the sibling is a separate question from the runtime gate. A preflight that halts does not make case.test.ts pass on a fresh clone, so AC #1 still needs an answer of its own.
+
+Directed by João, 2026-09-06, settling the design:
+
+'Do you think it is a requirement to be able to start a test pointing to a remote repository??? I don't know when that was decided, but I don't think this is the way to go. I think the cloning is pre work. The task itself should be run for from a existing directory which we can instantly check. In the future, to facilitate we will have the shared tasks and benchmarks and all that, and they will probably point to repositories. And whenever we download one to rehearsal, it will probably just clone that, but that will happen at the marketplace, not at the task level. So when we run the task, the repository will be available locally already.'
+
+The origin-URL idea was this session's invention, not a requirement from anywhere. It is dropped. A case declares a local directory that already exists when the run starts. Cloning is marketplace pre-work, outside the task.
+
+That splits the card in two. This card removes the machine-dependent assertion from the suite: whether /Users/joaofnds/code/nest/template exists on disk is a property of this machine, not of the code, so no unit test asserts it. The suite checks that a declared target path resolves correctly, against a fixture it controls. Whether the real directory is present is a run-time question, answered by preflight, which halts.
+
+Preflight itself moves to its own card.
+
+Preflight split out to ACT-88, 2026-09-06. This card is now only the test fix.
 <!-- SECTION:NOTES:END -->
