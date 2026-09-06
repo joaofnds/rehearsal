@@ -4,7 +4,7 @@ title: delete the temporary directories the test suite creates
 status: To Do
 assignee: []
 created_date: '2026-09-03 00:32'
-updated_date: '2026-09-04 23:01'
+updated_date: '2026-09-06 01:26'
 labels: []
 milestone: m-2
 dependencies: []
@@ -20,20 +20,55 @@ Most test suites make their scratch directories with mkdtemp directly and never 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 bun test leaves no rehearsal-* directory behind in $TMPDIR: a test asserts the count is unchanged across a suite run, or the suites are converted and the count is observed to be zero
-- [ ] #2 Every suite that creates a temporary directory removes it, whether the test passed or threw
+- [ ] #1 pipeline-confirmation.ts and replay-confirmation.ts remove their worktrees directory even when the confirmation body throws
+- [ ] #2 every mkdtemp call in src/ either removes its own directory unconditionally (finally) or tracks it through a TestResources instance
+- [ ] #3 grep -rln 'mkdtemp' src/ | xargs grep -L 'TestResources\|finally' returns empty
+- [ ] #4 a fresh bun test run leaves the rehearsal-* count in $TMPDIR unchanged before and after
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-03: the description counts over 1500 leaked directories in $TMPDIR. `ls /tmp | grep -c '^rehearsal-'` now returns 210, because /tmp was cleaned since the observation. The leak itself is unchanged and confirmed: 45 files under src/ call mkdtemp, while 24 reference TestResources.
+Shaped 2026-09-06.
 
-Per decision-1, the counts with their commands, on 2026-09-03: `ls $TMPDIR | grep -c '^rehearsal-'` returns 210 (the leak's visible size, which a /tmp clean resets and which therefore says nothing about progress); `grep -rln 'mkdtemp' src/ | wc -l` returns 45 and `grep -rln 'TestResources' src/ | wc -l` returns 24 (the work's actual size, which only this card's fix changes). Prioritize on the second pair.
+Goal: no mkdtemp call in src/ leaks its directory, whether the caller is a
+test or the running harness.
 
-Triage 2026-09-04: re-run. The work's size is unchanged: `grep -rln 'mkdtemp' src/ | wc -l` returns 45, `grep -rln 'TestResources' src/ | wc -l` returns 24.
+The card's framing undercounts the bug. Of the 45 files calling mkdtemp
+(`grep -rln 'mkdtemp' src/ | wc -l`, 2026-09-06), 12 are not tests:
+attempts.ts, judge.ts, pipeline-confirmation.ts, pipeline-confirmation-test-support.ts,
+replay-confirmation.ts, replay-confirmation-test-support.ts, replay.ts, run.ts,
+session-attempt.ts, stage-grading.ts, target.ts, and cli/calibrate-test-support.ts.
+Nine of those twelve already remove their own directory in a finally block and
+are fine as they are (attempts.ts, judge.ts, replay.ts, run.ts, session-attempt.ts,
+stage-grading.ts, target.ts, and the two *-test-support.ts files, which are
+test-only helpers despite the missing .test.ts suffix and belong with the
+mechanical batch below).
 
-The visible leak grew from 210 to 1075 in one day (`ls /tmp | grep -c '^rehearsal-'`), which is the rate this triage's own suite runs produced. That number is not progress evidence, per the note above, but the rate is: roughly 865 directories per day of ordinary work on this repository.
+Two are a live bug, not a test artifact: pipeline-confirmation.ts:771 and
+replay-confirmation.ts:382 each mkdtemp a worktrees directory and never remove
+it, not even in a finally block. This leaks on every confirmation run,
+including real paid runs outside `bun test`. Fix these two first, with a
+finally (or try/finally around the confirmation body) that rm -rf's
+worktreesDirectory; this is the part of the task with real-world cost beyond
+disk noise in $TMPDIR.
 
-Triage 2026-09-05: re-run. mkdtemp count 44 (was 45; one site dropped, work size otherwise unchanged), TestResources count 24 unchanged. Visible leak: `ls /tmp | grep -c '^rehearsal-'` -> 1072 (was 1075). No consequence for the fix; noted per decision-1.
+The remaining ~33 files are the mechanical part the card describes: replace a
+bare mkdtemp with resources.track(path) or resources.createControlDirectory(),
+using a TestResources instance from TestResources.forEachTest(). TestResources
+(src/benchmark/test-support.ts:37) already cleans up on both pass and throw,
+because it hooks afterEach; no gap to close there. Converting every remaining
+file satisfies AC #2 by construction.
+
+No architectural unknowns and no viable second approach: mkdtemp without
+cleanup is simply a bug, and TestResources is the established fix already used
+by 24 files. Nothing to ask.
+
+First test to write: a test on pipeline-confirmation (or replay-confirmation)
+that forces one rep to throw and asserts the worktrees directory no longer
+exists afterward. It is the one behavior with no coverage today and the one
+with real cost.
+
+Order of work: fix the two live leaks first (small, real bug, easy to verify
+in isolation), then sweep the ~33 mechanical files, then verify AC #3 and #4.
 <!-- SECTION:NOTES:END -->
