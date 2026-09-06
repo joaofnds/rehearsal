@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-03 00:09'
-updated_date: '2026-09-05 01:02'
+updated_date: '2026-09-06 12:12'
 labels:
   - defect
 milestone: m-0
@@ -150,6 +150,17 @@ So the mechanism this card built works, and the card is correctly Done. What is 
 The remaining gap is not delivery, it is that the plain run and replay paths never pass the flag. src/benchmark/pipeline-confirmation.ts:412 and replay-confirmation.ts:468 set settingSources: 'project'; run.ts and the plain replay do not, and src/cli/replay-command.ts:95 refuses --corpus outright before resolving anything.
 
 Re-check trigger: this is a fact about the CLI and rots with every release. Re-run the two probes above on a version bump before trusting the result.
+
+Re-probed 2026-09-06 on claude 2.1.261, one version past the 2.1.260 the previous re-probe used. The verdict holds, unchanged.
+
+Probe: a temporary directory holding only .claude/skills/deslop/SKILL.md carrying SHADOW-MARKER-7742, a marker the live deslop skill does not have, asked at haiku to invoke the deslop skill through the Skill tool and report the marker. (The previous probes used a 'style' skill, which no longer exists in the live corpus; deslop was substituted as a skill that does.)
+
+With --setting-sources project: SHADOW-MARKER-7742. The frozen skill is delivered.
+Without the flag: NO-MARKER. The live skill wins.
+
+So the delivery mechanism still works on the current CLI, and the gap named in the 2026-09-05 note is unchanged: run.ts and the plain replay path never pass the flag, and src/cli/replay-command.ts refuses --corpus before resolving anything.
+
+Also settled on re-reading this card: the 'open question on ACT-28' that three triage runs carried forward as blocking ACT-37 and ACT-68 is not open. Joao answered it on DOT-36 and the answer is recorded in review finding 2 above (a harness-owned settings file, declared as data in the case, installed at project level, carrying the permissions deny list, effort, output style, and feature switches, no hooks). That is already ACT-37's scope. ACT-37 needs nothing further from Joao.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
