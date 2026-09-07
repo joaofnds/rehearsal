@@ -4,7 +4,7 @@ title: build the design system before the first screen
 status: Build
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-07 13:57'
+updated_date: '2026-09-07 14:34'
 labels: []
 milestone: m-5
 dependencies:
@@ -80,4 +80,25 @@ Review: adversarial-review (reviewer agent), 2026-09-07. Findings and dispositio
 Iteration stopped 2026-09-07 before build. The shaping is sound and is not what stopped it. CLAUDE.md's Stack line says 'No framework, no database, no server'; decision-3 (accepted) chooses React, Vite, Hono, and SQLite, and this card is the one that first installs a framework. Criterion 2 keeps the page server-free and nothing here adds a database, so the live collision is the framework line alone. CLAUDE.md outranks the rulebook, and decision-3 is a later and more specific statement about this exact work; nothing states which wins, so the session did not infer a ranking. Needs João's call before build installs React and Vite.
 
 Unblocked 2026-09-07: João directed the CLAUDE.md stack line to be scoped to the CLI and harness, so the UI's dependencies follow decision-3 and this card does not reargue them. Committed in this repo. The line's first draft listed four of the seven dependencies decision-3 adopts, which would have sent this card to argue for TanStack Query, Table, Router, and Radix; an independent review of the instruction edit caught that before it landed.
+
+Review 2026-09-07: review-code skill, six reviewers (spec conformance, style, architecture, security, testing, refactoring), each given the diff and this card's goal, no cross-priming. Full findings and verification commands are in each reviewer's own report (not persisted past this session); this note carries the disposition.
+
+No blocking findings from any axis. Security: nothing found (no untrusted-input path exists in a local-only presentational scaffold). Disposed, all in this task's own commits:
+- table-shell.tsx used row.join('|') as a React key (style+refactoring, both independently found it): two rows with identical or pipe-containing cells collide. Fixed: array-index key, since TableShell is a generic shell with no row identity of its own.
+- Grade's value prop was a bare string with a 'pending' string sentinel (style+architecture, both independently found it): nothing prevented a real grade letter equal to the literal 'pending'. Fixed: value is now GradeValue = { letter: string } | { pending: true }, a real discriminated union.
+- Grade accepted sizes 12 and 26px, but SPEC.md's type scale names 26px as the spend figure (weight 500), never a grade, and 12px has no grade citation at all; Grade renders every size at weight 700 unconditionally (spec). Fixed: removed both from GRADE_SIZES; only SPEC.md-cited grade sizes remain (13/19/20/22/24/30).
+- .rh-hoverable (unused) reached for --color-accent-tint-16 (the selected/pressed tint) where SPEC.md's own button-hover rule names a distinct rgba(145,132,217,.14), a value with no token (spec). Fixed: added --color-accent-tint-14, wired .rh-hoverable onto FilterPill (the one interactive component in this diff with no hover treatment, also a spec note).
+- table-shell.css and globals.css both hardcoded the same row-hover rule for the same elements (spec). Fixed: removed the duplicate from table-shell.css; globals.css's .rh-row:hover is the one owner.
+- status.css had a no-op rule restating the base color for two states (spec/refactoring note). Fixed: removed.
+- System page had no swatch for the Border, Shadow, Scrollbar, or Letter-spacing token categories SPEC.md's Design Tokens section and decision-2 point 4 both name (refactoring, a real AC #2 gap). Fixed: added all four sections; added a LETTER_SPACING_TOKENS list (also caught --color-accent-tint-14 missing from COLOR_TOKENS while wiring the parity test below).
+- bun run typecheck (root tsc --noEmit) never covered client/, so a client-side type error passed silently (architecture, verified by injecting one and confirming it wasn't caught, then confirming the fix catches it). Fixed: typecheck now runs both project configs.
+- token-names.ts and tokens.css list the same token names by hand with nothing enforcing parity (architecture). Fixed: added token-names.test.ts, a parity test that parses tokens.css's declared custom properties and checks both directions against the *_TOKENS exports. Writing it caught a real, live instance of the predicted drift: --color-accent-tint-14 (added earlier in this same review pass) was missing from COLOR_TOKENS until the test failed on it.
+- system-page.test.tsx's status-state coverage used a for loop instead of it.each, and two tests each bundled several unrelated component-presence assertions, and four assertions used unanchored substring regexes that a mutation test (run by the testing reviewer) showed pass even when the exact label text changes (testing, all three should-fix). Fixed: it.each for both status states and grade sizes, one behavior per test, exact-text matches.
+- ACT-94's card named only src/cli/rehearsal-cli.test.ts and 'every failing test goes through runCli' (spec, verified by a fresh count: 48 total, 47 there, 1 in src/benchmark/benchmark-command.test.ts:86, same root cause). Fixed: corrected ACT-94's title, AC, and notes.
+
+Not fixed, investigated and recorded as a known accepted coupling: bunfig.toml's [test] preload registers happy-dom/testing-library globally for every bun test invocation in the repo, not just client/ (architecture). Bun 1.4.0 has no per-glob or per-directory preload scoping (checked: no CLI flag, no bunfig key). Tried the alternative the reviewer proposed, a per-file side-effect import of client/test-setup.ts at the top of each client test file instead of the global preload: it does not work, because @testing-library/react's own static import (also at file top) evaluates before the side-effect import reliably wins that race in Bun's module graph, reintroducing the exact 'document has to be available' failure the preload exists to prevent (reproduced, then reverted). The global preload is therefore the only mechanism available, not a shortcut. Confirmed non-breaking: full bun test before and after this task, both runs, show the identical 48 pre-existing CLI failures (ACT-94), none of them related to fetch/document/window. Not tracked as a separate card since there is no fix to track without a Bun capability that does not exist today; revisit if a future Bun version adds scoped preloads.
+
+Not a defect: @phosphor-icons/react installed with no current call site (style). The card's own implementation notes require installing it now regardless of use ('needed the moment the system page renders any text or status glyph'), matching the fonts it's installed alongside.
+
+Not reproduced: a one-off stylelint phantom failure the refactoring reviewer saw once and could not reproduce in 20 follow-up runs (note only, no action).
 <!-- SECTION:NOTES:END -->
