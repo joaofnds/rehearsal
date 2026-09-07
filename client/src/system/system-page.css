@@ -1,0 +1,52 @@
+.rh-system-page {
+	padding: var(--space-20);
+}
+
+.rh-system-page section {
+	margin-top: var(--space-28);
+}
+
+.rh-system-page__swatches,
+.rh-system-page__space-scale,
+.rh-system-page__radius-scale,
+.rh-system-page__status-list,
+.rh-system-page__grade-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-16);
+	list-style: none;
+	padding: 0;
+}
+
+.rh-system-page__swatch {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-5);
+}
+
+.rh-system-page__swatch-color {
+	display: block;
+	width: var(--space-56);
+	height: var(--space-56);
+	border-radius: var(--radius-button);
+	border: var(--border-width-hairline) solid var(--color-border-2);
+}
+
+.rh-system-page__space-block {
+	display: block;
+	background: var(--color-accent);
+}
+
+.rh-system-page__radius-block {
+	display: block;
+	width: var(--space-36);
+	height: var(--space-36);
+	background: var(--color-accent);
+}
+
+.rh-system-page__type-scale {
+	list-style: none;
+	padding: 0;
+	color: var(--color-text);
+}
