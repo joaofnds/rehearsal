@@ -4,7 +4,7 @@ title: split each CLI command module's harness wiring from its command policy
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:16'
-updated_date: '2026-09-04 01:51'
+updated_date: '2026-09-07 16:24'
 labels: []
 dependencies:
   - ACT-26.7
@@ -37,4 +37,6 @@ Triage 2026-09-04, ranked against the project's goal. Stays Low, and deliberatel
 The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a). Until m-1 produces a comparison somebody reads, internal restructuring changes nothing an operator can observe. These three are the last work to do, not the next.
 
 One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
+
+Triage 2026-09-07 (second pass, 16:20): the card's stated blocker is stale. .oxlintrc.json:90 now sets import/prefer-default-export to off (commit bf90120, 2026-09-07), the exact rule the card blames for reverting the prior wiring-split attempt (extracted run-wiring.ts/replay-wiring.ts each exporting one function). That obstacle is gone; the split could be reattempted the way it was first tried. The card's underlying cost claim still holds and is worse: run-command.ts is now 424 lines (cited 236) and replay-command.ts 403 (cited 282), both grown since the card was written. Not closed; still Low and still queued behind ACT-26.7 per doc-28's bundle ordering, since it and ACT-31 share files.
 <!-- SECTION:NOTES:END -->

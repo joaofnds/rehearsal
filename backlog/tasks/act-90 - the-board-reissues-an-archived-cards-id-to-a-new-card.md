@@ -4,9 +4,10 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-06 13:04'
+updated_date: '2026-09-07 16:24'
 labels: []
 dependencies: []
+priority: low
 type: bug
 ordinal: 86008
 ---
