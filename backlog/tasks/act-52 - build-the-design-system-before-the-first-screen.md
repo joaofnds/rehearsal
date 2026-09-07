@@ -1,13 +1,14 @@
 ---
 id: ACT-52
 title: build the design system before the first screen
-status: Done
+status: Build
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-07 14:35'
+updated_date: '2026-09-07 15:04'
 labels: []
 milestone: m-5
 dependencies:
+  - ACT-94
   - ACT-48
 priority: high
 ordinal: 54008
@@ -101,6 +102,8 @@ Not fixed, investigated and recorded as a known accepted coupling: bunfig.toml's
 Not a defect: @phosphor-icons/react installed with no current call site (style). The card's own implementation notes require installing it now regardless of use ('needed the moment the system page renders any text or status glyph'), matching the fonts it's installed alongside.
 
 Not reproduced: a one-off stylelint phantom failure the refactoring reviewer saw once and could not reproduce in 20 follow-up runs (note only, no action).
+
+Moved back to Build 2026-09-07 on João's direction. The card was set Done with the full suite red: the client test preload this card added loads happy-dom into every test process and breaks 48 CLI tests. The design system's own work stands and its 62 tests pass. This card returns to Done once bun test is green from the repository root, which ACT-94 carries the confirmed cause and the three rejected fixes for.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
