@@ -1,2 +1,2 @@
 [test]
-pathIgnorePatterns = ["**/client/**"]
+pathIgnorePatterns = ["client/**"]

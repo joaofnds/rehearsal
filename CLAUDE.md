@@ -19,7 +19,7 @@
   UI's dependencies are settled by decision-3, so a UI card does not reargue
   them.
 - **Running commands**: Prefix any command that starts the rehearsal CLI,
-  `bun test` included, with `mise exec --`. It supplies the Bun version
+  `bun run test` included, with `mise exec --`. It supplies the Bun version
   `mise.toml` pins, and the CLI refuses to start on any other.
 - **Formatting**: oxfmt. `bun run fmt` writes, `bun run fmt:check` verifies. Do
   not install ESLint, Prettier, or Biome.
@@ -30,7 +30,8 @@
 - **Validation**: We use `zod` for everything. Do not add
   `class-validator/class-transformer`.
 - **Testing**: The native `bun:test` runner. Do not install Jest. Run the suite
-  with `bun test`.
+  with `bun run test`. A bare `bun test` skips the client's DOM tests and
+  still reports green.
 - **Benchmark runs**: Pass `--model sonnet` when running or replaying a case, so
   the result is comparable with the recorded runs. Never pass `--model fable`.
 - **Commits**: Conventional Commits. A lowercase type, an optional scope, then a

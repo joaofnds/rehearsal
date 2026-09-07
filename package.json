@@ -14,7 +14,7 @@
 		"fmt:check": "oxfmt --check",
 		"lint": "oxlint --type-aware",
 		"lint:css": "stylelint \"client/**/*.css\" \"!client/**/__fixtures__/**\"",
-		"test": "bun test && bun test --path-ignore-patterns \"\" --preload ./client/test-setup.ts ./client",
+		"test": "bun test && bun test --path-ignore-patterns \"**/node_modules/**\" --preload ./client/test-setup.ts ./client",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p client/tsconfig.json",
 		"rehearsal": "bun run rehearsal.ts",
 		"dev:client": "vite --config client/vite.config.ts"
