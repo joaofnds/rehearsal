@@ -40,7 +40,7 @@ body {
 }
 
 .rh-hoverable:hover {
-	background: var(--color-accent-tint-16);
+	background: var(--color-accent-tint-14);
 	border-color: var(--color-accent);
 }
 

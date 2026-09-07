@@ -8,10 +8,6 @@
 	font-weight: 400;
 }
 
-.rh-grade--12 {
-	font-size: var(--font-size-12);
-}
-
 .rh-grade--13 {
 	font-size: var(--font-size-13);
 }
@@ -31,10 +27,6 @@
 
 .rh-grade--24 {
 	font-size: var(--font-size-24);
-}
-
-.rh-grade--26 {
-	font-size: var(--font-size-26);
 }
 
 .rh-grade--30 {

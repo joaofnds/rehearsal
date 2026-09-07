@@ -13,7 +13,7 @@ export function FilterPill({
 	return (
 		<button
 			type="button"
-			className={`rh-filter-pill ${pressed ? "rh-filter-pill--pressed" : ""}`}
+			className={`rh-filter-pill rh-hoverable ${pressed ? "rh-filter-pill--pressed" : ""}`}
 			aria-pressed={pressed}
 			onClick={onPress}
 		>

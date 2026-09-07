@@ -22,8 +22,8 @@ export function TableShell({
 				</tr>
 			</thead>
 			<tbody>
-				{rows.map((row) => (
-					<tr key={row.join("|")} className="rh-row">
+				{rows.map((row, rowIndex) => (
+					<tr key={rowIndex} className="rh-row">
 						{row.map((cell, index) => {
 							const column = columns[index];
 							return column === undefined ? null : <td key={column}>{cell}</td>;

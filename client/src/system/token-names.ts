@@ -23,6 +23,7 @@ export const COLOR_TOKENS = [
 	"--color-accent-deep",
 	"--color-accent-deep-2",
 	"--color-accent-tint-16",
+	"--color-accent-tint-14",
 	"--color-accent-tint-10",
 	"--color-accent-tint-08",
 	"--color-diff-add",
@@ -82,4 +83,12 @@ export const RADIUS_TOKENS = [
 	"--radius-dialog",
 	"--radius-pill",
 	"--radius-circle",
+] as const;
+
+export const LETTER_SPACING_TOKENS = [
+	"--letter-spacing-tight",
+	"--letter-spacing-tight-2",
+	"--letter-spacing-table-header",
+	"--letter-spacing-wide",
+	"--letter-spacing-section-label",
 ] as const;

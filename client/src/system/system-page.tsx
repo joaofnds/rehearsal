@@ -7,6 +7,7 @@ import { TableShell } from "./components/table-shell";
 import {
 	COLOR_TOKENS,
 	FONT_SIZE_TOKENS,
+	LETTER_SPACING_TOKENS,
 	RADIUS_TOKENS,
 	SPACE_TOKENS,
 } from "./token-names";
@@ -89,6 +90,72 @@ export function SystemPage(): React.JSX.Element {
 			</section>
 
 			<section>
+				<SectionLabel>LETTER SPACING</SectionLabel>
+				<ul className="rh-system-page__type-scale">
+					{LETTER_SPACING_TOKENS.map((token) => (
+						<li key={token} style={{ letterSpacing: `var(${token})` }}>
+							{token} — the quick brown fox
+						</li>
+					))}
+				</ul>
+			</section>
+
+			<section>
+				<SectionLabel>BORDER</SectionLabel>
+				<ul className="rh-system-page__border-list">
+					<li>
+						<span
+							className="rh-system-page__border-swatch"
+							style={{
+								border:
+									"var(--border-width-hairline) solid var(--color-border-2)",
+							}}
+						/>
+						<code>--border-width-hairline</code>
+					</li>
+					<li>
+						<span
+							className="rh-system-page__border-swatch"
+							style={{
+								borderLeft:
+									"var(--border-width-evidence) solid var(--color-accent-deep-2)",
+							}}
+						/>
+						<code>--border-width-evidence</code>
+					</li>
+					<li>
+						<span
+							className="rh-system-page__border-swatch"
+							style={{
+								border:
+									"var(--border-width-hairline) var(--border-style-planned) var(--color-accent-deep-2)",
+								opacity: "var(--opacity-planned)",
+							}}
+						/>
+						<code>--border-style-planned / --opacity-planned</code>
+					</li>
+				</ul>
+			</section>
+
+			<section>
+				<SectionLabel>SHADOW</SectionLabel>
+				<span
+					className="rh-system-page__shadow-swatch"
+					style={{ boxShadow: "var(--shadow-dialog)" }}
+				/>
+				<code>--shadow-dialog</code>
+			</section>
+
+			<section>
+				<SectionLabel>SCROLLBAR</SectionLabel>
+				<p>
+					<code>--scrollbar-size</code>, <code>--scrollbar-thumb</code>,{" "}
+					<code>--scrollbar-thumb-border</code> style every scrollbar on this
+					page; scroll this page's overflow to see them.
+				</p>
+			</section>
+
+			<section>
 				<SectionLabel>STATUS</SectionLabel>
 				<ul className="rh-system-page__status-list">
 					{STATUS_STATES.map((state) => (
@@ -104,12 +171,12 @@ export function SystemPage(): React.JSX.Element {
 				<ul className="rh-system-page__grade-list">
 					{GRADE_SIZES.map((size) => (
 						<li key={size}>
-							<Grade value="A−" size={size} />
+							<Grade value={{ letter: "A−" }} size={size} />
 							<code>{size}px</code>
 						</li>
 					))}
 					<li>
-						<Grade value="pending" size="19" />
+						<Grade value={{ pending: true }} size="19" />
 						<code>pending</code>
 					</li>
 				</ul>

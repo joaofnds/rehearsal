@@ -15,7 +15,7 @@
 		"lint": "oxlint --type-aware",
 		"lint:css": "stylelint \"client/**/*.css\" \"!client/**/__fixtures__/**\"",
 		"test": "bun test",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p client/tsconfig.json",
 		"rehearsal": "bun run rehearsal.ts",
 		"dev:client": "vite --config client/vite.config.ts"
 	},

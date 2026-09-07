@@ -35,7 +35,3 @@
 	vertical-align: top;
 	border-top: var(--border-width-hairline) solid var(--color-border-subtle);
 }
-
-.rh-table-shell tbody tr:hover {
-	background: var(--color-row-hover);
-}
