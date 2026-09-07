@@ -15,7 +15,7 @@
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",
 		"lint": "oxlint --type-aware",
-		"lint:css": "stylelint \"client/**/*.css\" \"!client/**/__fixtures__/**\"",
+		"lint:css": "stylelint \"client/**/*.css\" \"!client/**/__fixtures__/**\" \"!client/dist/**\"",
 		"test": "bun test && bun test --path-ignore-patterns \"**/node_modules/**\" --preload ./client/test-setup.ts ./client",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p client/tsconfig.json",
 		"rehearsal": "bun run rehearsal.ts",
