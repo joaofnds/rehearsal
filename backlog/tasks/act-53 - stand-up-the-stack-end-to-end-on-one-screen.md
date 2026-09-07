@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 21:43'
+updated_date: '2026-09-07 21:45'
 labels: []
 milestone: m-5
 dependencies:
@@ -111,4 +111,6 @@ Suite run before review: `mise exec -- bun run test` — 1142 pass, 0 fail (serv
 
 **Note, tracked as a follow-up, not fixed here (pre-existing, not created by this commit):**
 - [refactoring] The same double-caption defect this commit fixes is still live at client/src/system/system-page.tsx:201-203 (SectionLabel>TABLE SHELL immediately followed by TableShell caption="DURABLE RECORDS", the design-system gallery page itself). Confirmed by reading table-shell.tsx's `<caption>` rendering against system-page.tsx directly. Revert test: this bug predates 19024c2 and isn't touched by it, so it's this card's tracked note rather than this commit's blocker.
+
+Iteration stopped here, 2026-09-07. Review is clean across every commit on this card and recommends Done. The board guard blocks that move: AC #9 is unchecked, and the card carries no 'partial' or 'abandoned' label. AC #9 is unfalsifiable on this card by its own wording, since it defers confirmation to whichever card builds the second screen (ACT-50 or ACT-51). Closing it needs a direction: either label this card 'partial' with AC #9 named as the deferred item, or move AC #9 onto ACT-50/ACT-51 as their criterion and close this card whole. Not decided in this session.
 <!-- SECTION:NOTES:END -->
