@@ -291,7 +291,7 @@ export function buildConfirmationRequest(
 		instructions: inputs.instructions,
 		finalRubric: benchmarkCase.finalRubric,
 		stageRubrics: benchmarkCase.stageRubrics,
-		corpusRoots: corpusLayoutRoots(CONTROL_DIR),
+		corpusRoots: corpusLayoutRoots(inputs.source.root),
 		model: config.model,
 		effort: config.effort,
 		judgeModel: config.judgeModel,

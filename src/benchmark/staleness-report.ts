@@ -75,7 +75,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
 	const corpus = new Map<string, readonly HashedFile[]>();
-	const roots = stageCorpusRoots(source);
+	const roots = stageCorpusRoots(source, manifest.sourceRoot);
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {

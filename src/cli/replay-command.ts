@@ -160,6 +160,21 @@ async function declaredSessionKnobs(manifestFile: string): Promise<{
 	}
 }
 
+/**
+ * A replay's project-level corpus search is the target the replayed run
+ * recorded, not the control repository: `replay.ts` already searches the
+ * worktree it builds from that same source once one exists, so the
+ * confirmation path's pre-worktree corpus freeze resolves the identical root
+ * from the run's manifest.
+ */
+export async function replayCorpusRoots(
+	manifestFile: string,
+): Promise<readonly string[]> {
+	const manifest = await loadRunManifest(manifestFile);
+
+	return corpusLayoutRoots(manifest.sourceRoot);
+}
+
 async function reportOutcome(
 	request: ReplayCommandRequest,
 	config: ReplayCliConfig,
@@ -290,7 +305,7 @@ export async function executeReplay(
 			runConfirmed: (confirmationRequest) =>
 				runReplayConfirmation(replayDependencies, confirmationRequest),
 			groupId: randomUUID,
-			corpusRoots: corpusLayoutRoots(CONTROL_DIR),
+			corpusRoots: await replayCorpusRoots(paths.manifestFile),
 		});
 	} finally {
 		questioner.close();

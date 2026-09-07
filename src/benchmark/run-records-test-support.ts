@@ -31,6 +31,7 @@ import {
 } from "./run-layout";
 
 const CASE_ID = "audit-log";
+const SOURCE_ROOT = "/sources/template";
 const CORPUS_DIGEST = "a".repeat(64);
 const COMPARISON_DIGEST = "c".repeat(64);
 
@@ -56,12 +57,12 @@ function serialize(record: Immutable<WrittenRecord>): string {
 	return `${JSON.stringify(record, null, 2)}\n`;
 }
 
-function manifest(timestamp: string): RunManifest {
+function manifest(timestamp: string, sourceRoot: string): RunManifest {
 	return {
 		caseId: CASE_ID,
 		timestamp,
 		controlSha: "1".repeat(40),
-		sourceRoot: "/sources/template",
+		sourceRoot,
 		sourceSha: "2".repeat(40),
 		taskId: "ACT-1",
 		taskSha: "3".repeat(40),
@@ -281,7 +282,10 @@ export class RecordedRunsFixture {
 	public readonly stoppedRun = "2026-09-04T00-00-00.000Z";
 	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
 
-	public constructor(public readonly runsDirectory: string) {}
+	public constructor(
+		public readonly runsDirectory: string,
+		private readonly sourceRoot: string = SOURCE_ROOT,
+	) {}
 
 	public get stageAttemptFile(): string {
 		return replayRecordFile(
@@ -309,7 +313,7 @@ export class RecordedRunsFixture {
 		const instructions = await Bun.file(
 			resolveCorpusFile(source, "CLAUDE.md"),
 		).text();
-		const roots = stageCorpusRoots(source);
+		const roots = stageCorpusRoots(source, this.sourceRoot);
 
 		for (const stage of this.stages) {
 			const corpusFiles = await captureStageCorpus(stage, instructions, roots);
@@ -448,7 +452,10 @@ export class RecordedRunsFixture {
 	public async writeStoppedRun(): Promise<void> {
 		const paths = benchmarkRunPaths(this.runsDirectory, this.stoppedRun);
 		await mkdir(paths.checkpointsDirectory, { recursive: true });
-		await writeRunManifest(paths.manifestFile, manifest(this.stoppedRun));
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.stoppedRun, this.sourceRoot),
+		);
 		await Bun.write(
 			paths.stageFile("discuss"),
 			`${JSON.stringify(
@@ -504,7 +511,10 @@ export class RecordedRunsFixture {
 	public async writeNoRecordRun(): Promise<void> {
 		const paths = benchmarkRunPaths(this.runsDirectory, this.noRecordRun);
 		await mkdir(paths.checkpointsDirectory, { recursive: true });
-		await writeRunManifest(paths.manifestFile, manifest(this.noRecordRun));
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.noRecordRun, this.sourceRoot),
+		);
 	}
 
 	public async writeUnreadableGroup(groupId: string): Promise<void> {
@@ -516,7 +526,10 @@ export class RecordedRunsFixture {
 	private async writeReplayableRun(): Promise<void> {
 		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
 		await mkdir(paths.checkpointsDirectory, { recursive: true });
-		await writeRunManifest(paths.manifestFile, manifest(this.replayableRun));
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.replayableRun, this.sourceRoot),
+		);
 
 		for (const stage of this.stages) {
 			const directory = paths.checkpointDirectory(stage);

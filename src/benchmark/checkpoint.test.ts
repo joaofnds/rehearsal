@@ -17,7 +17,6 @@ import {
 	snapshotStageCorpus,
 	stageCorpusRoots,
 } from "./checkpoint";
-import { CONTROL_DIR } from "./config";
 import { liveCorpusRoot } from "./corpus-file";
 import { TestResources } from "./test-support";
 
@@ -828,14 +827,17 @@ describe(corpusLayoutRoots.name, () => {
 
 describe(stageCorpusRoots.name, () => {
 	it("searches project level before user level for the live install", () => {
-		expect(stageCorpusRoots({ kind: "live", root: liveCorpusRoot() })).toEqual(
-			corpusLayoutRoots(CONTROL_DIR),
-		);
+		expect(
+			stageCorpusRoots({ kind: "live", root: liveCorpusRoot() }, "/target"),
+		).toEqual(corpusLayoutRoots("/target"));
 	});
 
 	it("searches only the resolved root for a directory corpus", () => {
 		expect(
-			stageCorpusRoots({ kind: "directory", root: "/variants/brief" }),
+			stageCorpusRoots(
+				{ kind: "directory", root: "/variants/brief" },
+				"/target",
+			),
 		).toEqual(["/variants/brief"]);
 	});
 });

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BenchmarkCase, SessionCase } from "#benchmark/case";
+import { corpusLayoutRoots } from "#benchmark/checkpoint";
 import type { BenchmarkConfig } from "#benchmark/config";
 import { parseArgs } from "#benchmark/config";
 import type { PipelineDefinition } from "#benchmark/pipeline";
@@ -472,6 +473,31 @@ describe(buildConfirmationRequest.name, () => {
 		});
 
 		expect(request.caseId).toBe("audit-log-follow-up");
+	});
+
+	it("searches the target's corpus layout, not the control repository's", () => {
+		const request = buildConfirmationRequest({
+			benchmarkCase: auditLogCase,
+			config: parseArgs(
+				args,
+				{},
+				{
+					caseId: "audit-log",
+					pipelinePath: auditLogCase.pipelinePath,
+					targetPath: auditLogCase.targetPath,
+				},
+			),
+			confirmation: {
+				reps: 2,
+				projectedCost: { reps: 2, perRepMaximumUsd: 1, totalMaximumUsd: 2 },
+				approvalMethod: "yes",
+			},
+			controlSha: "a".repeat(40),
+			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
+			instructions: "Frozen instructions\n",
+		});
+
+		expect(request.corpusRoots).toEqual(corpusLayoutRoots("/target"));
 	});
 });
 

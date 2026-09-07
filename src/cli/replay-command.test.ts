@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTROL_DIR, parseArgs } from "#benchmark/config";
+import { corpusLayoutRoots } from "#benchmark/checkpoint";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { buildRunManifest } from "#benchmark/run";
 import { writeRunManifest } from "#benchmark/manifest";
@@ -16,7 +17,7 @@ import {
 } from "#benchmark/test-support";
 import { loadPipeline } from "#benchmark/pipeline";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
-import { runReplayCommand } from "#cli/replay-command";
+import { replayCorpusRoots, runReplayCommand } from "#cli/replay-command";
 
 const sessionArgs = [
 	"--model",
@@ -205,6 +206,20 @@ describe(runReplayCommand.name, () => {
 
 		expect(stdout.join("")).toBe(recordText);
 		expect(stdout.join("")).toBe(await Bun.file(recordPath).text());
+	});
+});
+
+describe(replayCorpusRoots.name, () => {
+	it("searches the replayed run's own target, not the control repository's", async () => {
+		const manifestFile = await writeManifestFor("any-name-corpus-roots");
+
+		try {
+			expect(await replayCorpusRoots(manifestFile)).toEqual(
+				corpusLayoutRoots("/tmp/target"),
+			);
+		} finally {
+			await rm(manifestFile, { force: true });
+		}
 	});
 });
 

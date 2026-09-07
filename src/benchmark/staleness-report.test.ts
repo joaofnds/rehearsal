@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CASES_DIRECTORY } from "./case";
 import { CONTROL_DIR } from "./config";
+import { liveCorpusRoot } from "./corpus-file";
 import { resolveCorpusSource } from "./corpus-source";
 import {
 	directorySource,
@@ -100,6 +101,52 @@ describe(staleCheckpoints.name, () => {
 			);
 
 			expect(stale).toEqual([]);
+		});
+
+		it("compares against the recorded run's own target, not this repository", async () => {
+			const targetRoot = await temporaryDirectory("rehearsal-stale-target-");
+			await mkdir(join(targetRoot, ".claude", "skills", "build"), {
+				recursive: true,
+			});
+			await mkdir(join(targetRoot, ".claude", "skills", "discuss"), {
+				recursive: true,
+			});
+			await mkdir(join(targetRoot, ".claude", "skills", "doctrine"), {
+				recursive: true,
+			});
+			await Bun.write(
+				join(targetRoot, ".claude", "CLAUDE.md"),
+				"the instructions\n",
+			);
+			await Bun.write(
+				join(targetRoot, ".claude", "skills", "build", "SKILL.md"),
+				"build skill\n",
+			);
+			await Bun.write(
+				join(targetRoot, ".claude", "skills", "discuss", "SKILL.md"),
+				"discuss skill\n",
+			);
+			await Bun.write(
+				join(targetRoot, ".claude", "skills", "doctrine", "principles.md"),
+				"the doctrine\n",
+			);
+			const root = await temporaryDirectory("rehearsal-stale-");
+			const fixture = new RecordedRunsFixture(root, targetRoot);
+			await fixture.write();
+			const liveSource = { kind: "live" as const, root: liveCorpusRoot() };
+			await fixture.recordCorpusFrom(liveSource);
+
+			await Bun.write(
+				join(targetRoot, ".claude", "skills", "build", "SKILL.md"),
+				"build skill, edited\n",
+			);
+
+			const stale = await staleCheckpoints(fixture.runsDirectory, liveSource);
+
+			expect(stale.map(({ id }) => id)).toEqual([
+				`checkpoint:${fixture.replayableRun}/build`,
+			]);
+			expect(stale.at(0)?.causes.join(" ")).toContain("skills/build/SKILL.md");
 		});
 	});
 
