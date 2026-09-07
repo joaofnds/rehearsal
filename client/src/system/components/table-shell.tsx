@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import "./table-shell.css";
 
 export function TableShell({
@@ -7,7 +8,7 @@ export function TableShell({
 }: {
 	readonly caption: string;
 	readonly columns: readonly string[];
-	readonly rows: readonly (readonly string[])[];
+	readonly rows: readonly (readonly ReactNode[])[];
 }): React.JSX.Element {
 	return (
 		<table className="rh-table-shell">

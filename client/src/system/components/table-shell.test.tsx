@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { render, screen } from "@testing-library/react";
+import { Status } from "./status";
 import { TableShell } from "./table-shell";
 
 describe(TableShell.name, () => {
@@ -52,5 +53,17 @@ describe(TableShell.name, () => {
 		expect(rows).toHaveLength(3);
 		expect(screen.getByText("r-0148")).toBeInTheDocument();
 		expect(screen.getByText("doc-rewrite")).toBeInTheDocument();
+	});
+
+	it("renders a component cell rather than only a string", () => {
+		render(
+			<TableShell
+				caption="DURABLE RECORDS"
+				columns={["Run", "Outcome"]}
+				rows={[["r-0148", <Status key="status" state="accepted" />]]}
+			/>,
+		);
+
+		expect(screen.getByText("accepted")).toBeInTheDocument();
 	});
 });
