@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 23:48'
+updated_date: '2026-09-07 23:49'
 labels: []
 milestone: m-7
 dependencies:
@@ -82,4 +82,14 @@ Scope decisions, 2026-09-07. Each was put to an independent advisor given the fa
 There is no recorded comparison on disk (.benchmark-runs/comparisons is empty), so the comparison screen will be verified against fixtures unless someone spends a compare run.
 
 Direction, 2026-09-07, on the one deviation held open above: 'I agree, no "range C+ - A-"'. The arm band does not render a plus/minus grade range. It renders what the five-letter scale in STAGE_LETTER_GRADES supports. The grade scale itself is not changed by this card, and plus/minus notation is not carried forward as a question.
+
+Answers to shaping's two questions, 2026-09-07.
+
+1. PATH EXPOSURE. Show the corpus root unredacted in the corpus screen's success response, as the design draws it. redactAbsolutePaths exists because an error can carry a path the operator never asked to see, from a corpus root or target repo outside CONTROL_DIR. This is the opposite case: the path is the screen's subject, the operator declared it, and the server is theirs on their own machine. Redaction stays on the error path, unchanged.
+
+2. THE TWO DIGESTS. Give them different names, because they are different quantities and neither is currently named at all (verified: GLOSSARY.md defines no term for either, and run-history.ts:140 digests checkpoint.corpusFiles, the files one stage read).
+
+   'corpus@<hash>' keeps its existing meaning on run history: what a stage actually read. The corpus screen's digest is over the whole live tree, including files no stage ever read, and it renders as 'corpus root@<hash>'.
+
+   Both terms go into GLOSSARY.md as part of this card, since decision-5 makes the glossary where this vocabulary is settled and a term used on two screens with two meanings is exactly what it exists to prevent.
 <!-- SECTION:NOTES:END -->
