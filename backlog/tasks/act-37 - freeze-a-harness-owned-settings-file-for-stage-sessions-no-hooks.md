@@ -123,6 +123,12 @@ Architecture: the two parallel call chains (run vs. replay, each independently u
 Refactoring (advisory): three notes, same duplication observation as Architecture, a plausible-but-not-yet-real Divergent Change risk on lineageKey, and 1-2 line growth on already-hundreds-of-lines functions. No action recommended.
 
 Full check after every fix: 1086 pass, 0 fail, typecheck/lint/format clean.
+Joao, 2026-09-07: signed off on the default `stage-settings.json` deny list as
+built. The build session picked its content itself (blocking `git branch`,
+`checkout -b`, `switch -c`, and `worktree add`, and disabling bundled skills),
+traced to the worktree-escape defect ACT-3 recorded, and no acceptance
+criterion covered that choice. It only narrows a stage session's authority.
+Kept as is; not an open question any longer.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
