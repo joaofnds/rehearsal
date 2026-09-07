@@ -1,10 +1,10 @@
 ---
 id: ACT-50
 title: build the comparison and corpus screens
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 23:49'
+updated_date: '2026-09-07 23:54'
 labels: []
 milestone: m-7
 dependencies:
@@ -35,14 +35,38 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Run history renders every recorded run from a real .benchmark-runs directory, including the stopped run recorded on 2026-09-04
-- [ ] #2 A run whose record is missing or unparseable appears in place with its reason, and no raw filesystem error reaches the screen
-- [ ] #3 A stopped run renders as a recorded outcome, visually distinct from an error, matching the design
-- [ ] #4 Every screen has the empty state the design specifies, observed on a checkout with no records at all
-- [ ] #5 A record id that would escape the runs directory is refused, proven by a test over the served routes
-- [ ] #6 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
-- [ ] #7 Building the comparison screen touched only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction on ACT-53 AC #9 and confirmed or corrected here (moved from ACT-53 on João's direction, 2026-09-07: 'I agree' to closing ACT-53 whole by moving AC #9 onto ACT-50)
+- [ ] #1 Comparison screen, Attempt-pairs presentation: rows are cases (caseDeltas), not attempt pairs; each row shows the case id and the per-arm reading available today (source: sourceRepSchema carries no per-rep grade, comparison-record.ts:142-146, .strict())
+- [ ] #2 Comparison screen, Attempt-pairs presentation: each arm band renders that arm's gradeDistribution as a count per letter grade, never a synthesized median or a plus/minus range (source: reliabilitySummarySchema has no median/range field, comparison-record.ts:148-163; STAGE_LETTER_GRADES has no plus/minus, config.ts:18; direction 2026-09-07 'I agree, no "range C+ - A-"')
+- [ ] #3 Comparison screen: the segmented switcher offers Attempt pairs (built) and What moved; What moved renders under the PLANNED/dashed-border/disabled vocabulary SPEC.md section 6 defines for planned features, never as a working tab (source: SPEC.md section 5b needs a per-measure interval and reading verdict that PairedEstimate cannot supply; deferred whole to ACT-104)
+- [ ] #4 Comparison screen: an attribution claim between two named arms names differing files by deduplicating corpusDifferences(reps[arm].executedCorpus, reps[otherArm].executedCorpus) across every stage pair by file path first, so one file edited once counts once even though it is read at every stage that declares it; the claim renders only when that deduplicated set is empty, and a refusal lists the deduplicated differing paths otherwise, never a silent claim (source: corpusDifferences is called per-stage keyed on record.stage, checkpoint.ts:454-479; SPEC.md section 5b: 'Attribution is only legitimate when exactly one file hash differs... refuse the attribution claim'; subtlety pinned in this card's 2026-09-07 notes: 'one edited file appears once per stage')
+- [ ] #5 Comparison screen: loading a comparison record through a crafted id whose segment escapes the runs directory is refused, reusing the existing route-level test (source: api.test.ts:134, 'refuses a record id whose segment escapes the runs directory, without a 500')
+- [ ] #6 Corpus screen renders three columns from data already on disk: Path, Hash, Last edited (via stat), and Read by (a fold over checkpoint corpus-file records); no fourth Invalidated column (source: staleness-report.ts:217 stat() precedent; ACT-110 not yet landed)
+- [ ] #7 Corpus screen's success response includes the corpus root's real absolute path unredacted (source: direction 2026-09-07, answer to shaping question 1: 'Show the corpus root unredacted... Redaction stays on the error path, unchanged'; redactAbsolutePaths is called only from api.ts's error branches, redact-path.ts, api.ts:56,62,85)
+- [ ] #8 Corpus screen's header digest is labeled 'corpus root@<hash>' and computed by corpusDigest() over every file in the live corpus tree; run history's existing 'corpus@<hash>' label and meaning (what one stage read) are unchanged; both terms are added to GLOSSARY.md (source: direction 2026-09-07, answer to shaping question 2; corpusDigest is a reusable function over any HashedFile[], corpus-digest.ts; run-history.ts:140 calls it over checkpoint.corpusFiles; GLOSSARY.md defines neither term today, checked 2026-09-08)
+- [ ] #9 Corpus screen renders the design's dashed-border/reduced-opacity/PLANNED-pill block for the disabled edit-instruction workflow as a design-system component, not inline markup (source: SPEC.md section 6, 'the established vocabulary for planned features... never show a planned control as live'; system-page.tsx:20 already lists 'Planned-feature block, neededBy: ACT-50')
+- [ ] #10 Both new screens render the design's empty state, observed on a checkout with no records at all (source: card description, 'every screen has the empty state the design specifies')
+- [ ] #11 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system (source: decision-2)
+- [ ] #12 Building the comparison screen touches only a new Router route file, its page component, and any new files under client/src/system/components/ -- a prediction from ACT-53 AC #9, confirmed or corrected here (source: direction 2026-09-07, João: 'I agree' to moving ACT-53 AC #9 onto ACT-50; router.tsx has exactly two routes today, /  and /system, checked 2026-09-08)
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Goal: ship the comparison screen (attempt-pairs presentation) and the corpus screen, both reading only what the harness already persists on disk, per the four scope decisions and two path/digest answers already signed off in this card's implementation notes (2026-09-07).
+
+First test to write: a server route test asserting corpusDifferences called over two named arms' executedCorpus lists returns empty for a genuinely identical pair and lists the differing files otherwise (covers AC #4) -- write it before the attribution UI, since it fixes the contract the component renders against.
+
+Sequencing:
+1. Comparison screen, attempt-pairs table over caseDeltas + gradeDistribution bands (AC #1, #2).
+2. Attribution card wired to corpusDifferences (AC #4), with its refusal path tested first.
+3. What-moved switcher tab rendered PLANNED/disabled (AC #3).
+4. Record-id route refusal test reused against the comparison fetch path (AC #5).
+5. Corpus screen: three-column table from stat + checkpoint corpus-file fold (AC #6), unredacted root path in the success body (AC #7), corpus root@<hash> header plus the GLOSSARY.md entries for both digest terms (AC #8), planned-feature-block component (AC #9, already listed as needed in system-page.tsx).
+6. Empty states for both screens (AC #10).
+7. Confirm AC #12's file-touch prediction once both screens exist; correct it here if wrong.
+
+No comparison record exists on disk today (.benchmark-runs/comparisons is empty), so the comparison screen is built and tested against fixtures unless a real compare run is produced first.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -92,4 +116,30 @@ Answers to shaping's two questions, 2026-09-07.
    'corpus@<hash>' keeps its existing meaning on run history: what a stage actually read. The corpus screen's digest is over the whole live tree, including files no stage ever read, and it renders as 'corpus root@<hash>'.
 
    Both terms go into GLOSSARY.md as part of this card, since decision-5 makes the glossary where this vocabulary is settled and a term used on two screens with two meanings is exactly what it exists to prevent.
+
+Shaped 2026-09-08. This card's own 2026-09-07 notes already carried four signed-off scope decisions and both shaping-question answers; nothing here reopens them. All load-bearing code claims re-verified this session: comparison-record.ts's sourceRepSchema/reliabilitySummarySchema/executedCorpus, .strict() on both; checkpoint.ts:396 corpusDifferences returns sorted per-path diffs; run-history.ts:140 and corpus-digest.ts confirm corpus@<hash> is reusable over any file list for corpus root@<hash>; staleness-report.ts:217 stat() precedent; system-page.tsx:20 already lists the Planned-feature block as owed to this card; redact-path.ts confirms redaction is error-path only; api.test.ts:134 is the existing record-id-escape refusal test AC #5 reuses. router.tsx today has exactly two routes (/, /system), consistent with AC #12's prediction of one new route file.
+
+Rewrote ACs #1-6 (stale, predating the 2026-09-04 triage that narrowed this card off run history onto comparisons + corpus) into 9 criteria against the two screens this card actually builds, each carrying its source. Kept the file-touch prediction (was #7) as #12. Corrected two artifacts of an --ac/--acceptance-criteria mixup mid-session: an accidental append duplicated criteria, fixed by a single --acceptance-criteria replace to the correct final 12.
+
+No new unknowns found worth sending back; the plan sequences the six ACs against SPEC.md sections 5 and 6.
+
+Adversarial review 2026-09-08 (reviewer agent, unprimed). Findings and disposition:
+
+BLOCKING #1 (no AC carried its required trailing parenthetical source, per backlog-board.md) -- fixed: all 12 criteria rewritten with a (source: ...) clause each, citing the code line, SPEC.md section, direction quote, or decision it rests on.
+
+BLOCKING #2 (AC #4's attribution rule did not state the per-stage dedup the notes themselves flagged as needing pinning) -- fixed: AC #4 now states the rule explicitly (dedupe corpusDifferences results across every stage pair by file path before counting), re-verified against checkpoint.ts:454-479, which calls corpusDifferences once per stage keyed on record.stage.
+
+SHOULD-FIX #3 (AC #1/#2 read as governing the whole comparison screen, not just the built Attempt-pairs tab, risking a build session over-scoping them against the deferred What-moved presentation) -- fixed: both now open with 'Comparison screen, Attempt-pairs presentation:'.
+
+SHOULD-FIX #4 (AC #12 predicts file-touch scope, not an observable product behavior) -- not fixed, disposition: kept as-is. It was moved onto this card by explicit direction with the quote sitting beside it ('moved from ACT-53 on João's direction... I agree'), which is exactly the board rule's carve-out for a criterion that names an approach because a direction asked for it: quote it and let the direction's author correct it, rather than the session rewriting it into a behavior no one asked for.
+
+NOTE #5 (all load-bearing code claims re-verified independently, none found wrong) -- no action needed, confirms this session's own re-verification.
+
+NOTE #6 (GLOSSARY.md confirmed to define neither corpus@<hash> nor corpus root@<hash> today) -- no action needed.
+
+NOTE #7 (plan's first-test choice confirmed as the cheapest gating step) -- no action needed.
+
+NOTE #8 (sign-off provenance, 'per João's direction,' is not independently verifiable by any tool) -- not fixed, disposition: accepted as an inherent limit. The quoted direction is the only record of it and is already quoted rather than asserted as fact; no tool in this repository can verify authorship of a prior conversation turn.
+
+One round run, no second round needed: both blocking findings were fixed and re-verified against the same code the review cited (checkpoint.ts:454-479 for #4; the AC text itself for #1).
 <!-- SECTION:NOTES:END -->
