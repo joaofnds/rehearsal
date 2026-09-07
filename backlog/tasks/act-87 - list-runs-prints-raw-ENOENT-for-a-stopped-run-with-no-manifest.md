@@ -1,9 +1,10 @@
 ---
 id: ACT-87
 title: list runs prints raw ENOENT for a stopped run with no manifest
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-05 23:09'
+updated_date: '2026-09-07 13:18'
 labels: []
 dependencies: []
 ordinal: 83008
@@ -25,3 +26,9 @@ Fix shape is the same as the previous two: check existence first, throw a plain 
 - [ ] #2 the missing-manifest case is reported as incomplete through the existing unreadable-record path, matching ACT-40 and ACT-85
 - [ ] #3 the control-root redaction test still fails when controlRelative is removed
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Shape skipped 2026-09-07: the shape session found no design choice left and recommended going straight to build. This is the third instance of a fix pattern ACT-40 and ACT-85 already settled (check existence, throw a plain 'incomplete' reason through collect's unreadable path). Confirmed before build: list-command.ts already carries that exact reason shape at lines 200 and 260, both with no path in the text. The redaction test at list-command.test.ts:313 asserts the reason contains the manifest path, and today only the raw ENOENT supplies it, so following the precedent verbatim breaks that test. Criterion 3 is what forces it to be resolved rather than dropped.
+<!-- SECTION:NOTES:END -->
