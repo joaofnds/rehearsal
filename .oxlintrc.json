@@ -70,7 +70,13 @@
 			{
 				"treatMethodsAsReadonly": true,
 				"ignoreInferredTypes": true,
-				"allow": ["ZodType", "BunFile", "Subprocess", "ReactNode"]
+				"allow": [
+					"ZodType",
+					"BunFile",
+					"Subprocess",
+					"ReactNode",
+					"RouterHistory"
+				]
 			}
 		],
 		"eslint/no-duplicate-imports": "off",
