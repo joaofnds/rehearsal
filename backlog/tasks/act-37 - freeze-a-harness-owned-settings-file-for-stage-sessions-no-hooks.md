@@ -4,10 +4,12 @@ title: 'freeze a harness-owned settings file for stage sessions, no hooks'
 status: Done
 assignee: []
 created_date: '2026-09-03 23:33'
-updated_date: '2026-09-07 11:46'
+updated_date: '2026-09-07 11:49'
 labels:
   - defect
 dependencies: []
+documentation:
+  - backlog/docs/doc-29 - reflection-ACT-37.md
 priority: high
 ordinal: 39008
 ---
