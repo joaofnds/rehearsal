@@ -1,10 +1,10 @@
 ---
 id: ACT-63
 title: 'search the target''s project corpus root, not the control repository''s'
-status: Review
+status: Done
 assignee: []
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-07 01:22'
+updated_date: '2026-09-07 01:29'
 labels: []
 milestone: m-1
 dependencies: []
@@ -33,72 +33,44 @@ Exposed by ACT-41, which removed the same control-root assumption from the instr
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-2026-09-07, code review of commit d6a6662 (the revert to reading A).
+2026-09-07, code review of the delta since commit 7d51198 (this review's own prior fix), covering c6c4d14 and the board-record commits da3b433/4a9b497/45f3705.
 
-All six axes run. Suite: 1063 pass / 0 fail (one flaky rerun on an unrelated
-snapshot test, second run clean, not touched by this diff). Typecheck, lint,
-format all clean.
+All five applicable axes ran (testing skipped: no test file in this delta). Suite:
+1063 pass / 0 fail, typecheck/lint/format clean.
 
-Spec, security, refactoring: no blocking findings.
+Spec confirmed the fix in c6c4d14 correct (verified stageCorpusRoots(source,
+undefined) resolved to a real path, not the ~/.claude/.claude dead path 7d51198
+produced) and both acceptance criteria still met. Security: nothing found, no
+untrusted input reaches the changed parameter. Style: nothing found.
 
-Style and architecture independently found the same defect: currentStageCorpus
-called node:os's homedir() directly instead of corpus-file.ts's existing
-liveCorpusRoot() (the named seam for exactly this value, already used by
-resolveCorpusSource to build the same source this function receives).
-Architecture traced this to semantic coupling across three sites (corpus-file.ts,
-checkpoint.ts's corpusLayoutRoots, and this call site) with no guard against them
-drifting apart, and confirmed via git history that corpus-file.ts is not a stable
-target (11 commits in the past year). Fixed in commit 7d51198: currentStageCorpus
-now calls liveCorpusRoot(). Full check passes.
+Architecture and refactoring independently converged on the same defect:
+stageCorpusRoots's new optional targetRoot gave it two purposes selected by a
+caller-chosen sentinel (undefined for stale's "no target" case, a real string
+for every other caller's "resolve against my target" case), and the undefined
+branch's [liveCorpusRoot()] duplicated corpusLayoutRoots's own inlined
+join(homedir(), ".claude") a few lines above as a second, unlinked expression
+of the same fact.
 
-Testing found the commit's own stated reason for deleting the pinning test is
-factually wrong, verified by reinstating the deleted test against current code:
-it does discriminate the two readings (it throws, searching for the discuss
-skill under the collapsed duplicate root), contradicting the commit message's
-claim that a directory-source test "cannot distinguish" them. The real reason to
-distrust that test was different: it depended on the real ~/.claude on whatever
-machine ran it. Refactoring independently confirmed the same fact by diffing the
-pre-image. This is a documentation-accuracy defect in commit d6a6662's own
-message, already on main; noted here rather than rewritten in place.
+Fixed in commit f1d8314: stageCorpusRoots reverted to requiring a real
+targetRoot, single-purpose. corpusLayoutRoots now calls liveCorpusRoot()
+instead of re-deriving the same path inline, closing the duplication.
+staleness-report.ts's currentStageCorpus no longer calls stageCorpusRoots at
+all; it states [source.root] directly, since a live CorpusRoot's own root
+field is already liveCorpusRoot(). Verified 'rehearsal stale' output
+unchanged. Full check passes after the fix: 1063 pass / 0 fail, typecheck,
+lint, format clean.
 
-Testing proposed a hermetic fix: inject HOME so os.homedir() resolves to a
-controlled temp directory, record a checkpoint against a distinct target root,
-and assert staleness is judged against the injected home. I built this test and
-it fails to even reach its assertions: Bun's os.homedir() on macOS ignores
-process.env.HOME entirely and reads the system passwd entry regardless (verified
-directly: setting HOME before importing node:os and calling homedir() still
-returns the real account home). So this specific seam does not exist on this
-runtime. Reverted the test attempt; not committed.
+Both should-fix findings closed. Nothing else from this round is open. ACT-93
+(the untested live-corpus branch, independently reconfirmed by spec and
+refactoring this round) remains open as its own card, unaffected by this fix.
 
-Disposition: currentStageCorpus's live branch (the exact behavior this whole
-card's back-and-forth was about) remains unpinned by any test, and no cheap
-hermetic fix is available given how homedir() behaves on this platform. A real
-fix needs an injectable home-resolver threaded into stageCorpusRoots or
-currentStageCorpus, a signature change beyond a bug fix's scope. Escalating
-this as a follow-up task rather than closing it here, same shape as ACT-92
-already split off this card for the replayCorpusRoots gap.
+Second review round, 2026-09-06. Two axes independently found that my sentinel design gave stageCorpusRoots two purposes selected by an undefined argument, and duplicated a path expression. Fixed in f1d8314 by reverting stageCorpusRoots to single-purpose and letting stale build [source.root] directly.
 
-Refactoring also noted (not fixed, cross-file, outside this diff's scope):
-RecordedRunsFixture's sourceRoot constructor parameter, added by the build to
-let the now-deleted test pass a distinct target root, has no remaining caller
-supplying a non-default value anywhere in the codebase. Speculative Generality,
-trivial, left for whoever next touches that file.
+Verified independently: a live source already carries root '/Users/joaofnds/.claude', so [source.root] resolves to exactly what stale wants, with no target root and no sentinel. That is simpler than my version and reaches the same place. Confirmed by resolving the live source and by running the command.
 
-Post-review correction, 2026-09-06. The Final Summary above is stale on one point: it says staleness-report.ts compares against each run's manifest.sourceRoot. That was reverted at João's direction before the review ran. stale compares against the operator's named corpus, reading A.
+Suite 1063 pass / 0 fail, lint, typecheck, format clean. Both acceptance criteria hold: no CONTROL_DIR remains at any corpus-root call site, and run and replay still search the target's .claude first.
 
-The review committed 7d51198, swapping homedir() for liveCorpusRoot() at that call site. That was wrong in a way neither the review nor I caught at first: stageCorpusRoots's parameter is a repository directory that corpusLayoutRoots appends '.claude' to, so passing ~/.claude produced ~/.claude/.claude as the project-level entry. That path cannot exist.
-
-It was never observable. The user-level entry corpusLayoutRoots hardcodes is the one stale wants, and resolution takes the first hit. I confirmed by running 'rehearsal stale' against both versions: byte-identical output. So this was not a live regression, and my first reading of it as one was wrong.
-
-Fixed in the follow-up commit by making the absence explicit: stageCorpusRoots now takes targetRoot as string | undefined and returns [liveCorpusRoot()] alone when there is none. stale passes undefined, which is true of stale. run and replay pass their target and are unchanged. Verified: stale resolves to ['~/.claude'], replay to ['<target>/.claude', '~/.claude'].
-
-On the review's claim that my earlier commit stated a false reason for deleting the test: the review is right that the test can distinguish the two readings, and my stated reason ('a directory-source test cannot distinguish them') was wrong as written. What is true is narrower. The deleted test used a live source, not a directory source, and it depended on the fixture's discuss and build skills resolving out of the real ~/.claude. That is why it could not survive as a hermetic test, and it is why I removed rather than inverted it.
-
-The behavior remains unpinned either way. Both the review and I reached that conclusion independently, and the review additionally showed that injecting HOME does not work, because Bun's homedir() on macOS reads the account record rather than the environment. Closing it needs an injectable home-resolver.
-
-Suite 1063 pass / 0 fail, lint, typecheck and format clean after the follow-up commit. 'rehearsal stale' currently reports nine corpus files changed against the shape checkpoint; that is correct, because ~/code/dotfiles has uncommitted edits to those instruction files applied at 02:48 today, unrelated to this card.
-
-The untested live-corpus branch is split off as ACT-93 at João's direction ('agree'). Nothing else from the review remains open on this card.
+Note on the stale output while reading this card: it lists twelve corpus files changed against the shape checkpoint, up from nine earlier in the session. That is correct and unrelated to the code. ~/code/dotfiles has uncommitted instruction-file edits being made during this session.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
