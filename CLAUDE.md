@@ -14,8 +14,10 @@
   wiring is in `src/cli/` and the harness in `src/benchmark/`. Domain terms are in
   [GLOSSARY.md](GLOSSARY.md); the direction is in `docs/vision.md` and
   `docs/design.md`.
-- **Stack**: TypeScript on Bun. No framework, no database, no server. State is
-  files under `.benchmark-runs`.
+- **Stack**: TypeScript on Bun. The CLI and the harness use no framework, no
+  database, and no server. Their state is files under `.benchmark-runs`. The
+  UI's dependencies are settled by decision-3, so a UI card does not reargue
+  them.
 - **Running commands**: Prefix any command that starts the rehearsal CLI,
   `bun test` included, with `mise exec --`. It supplies the Bun version
   `mise.toml` pins, and the CLI refuses to start on any other.
