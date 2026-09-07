@@ -85,7 +85,7 @@ describe(runList.name, () => {
 		);
 
 		expect(lines(recorder.stdout)).toContain(
-			`run:${fixture.stoppedRun}\taudit-log\tSTOPPED:build\tnot replayable`,
+			`run:${fixture.stoppedRun}\taudit-log\tSTOPPED:build\treplayable`,
 		);
 	});
 

@@ -150,7 +150,7 @@ async function listRuns(runsDirectory: string): Promise<RecordListing> {
 
 			const { caseId } = await loadRunManifest(paths.manifestFile);
 
-			return [caseId, `STOPPED:${stopped.stage}`, "not replayable"];
+			return [caseId, `STOPPED:${stopped.stage}`, "replayable"];
 		},
 	);
 }
