@@ -4,9 +4,11 @@ title: halt a run in preflight when anything it needs is missing
 status: Done
 assignee: []
 created_date: '2026-09-05 23:59'
-updated_date: '2026-09-07 18:09'
+updated_date: '2026-09-07 18:11'
 labels: []
 dependencies: []
+documentation:
+  - backlog/docs/doc-35 - reflection-ACT-88.md
 ordinal: 84008
 ---
 
