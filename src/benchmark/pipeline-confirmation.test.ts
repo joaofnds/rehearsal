@@ -228,7 +228,7 @@ describe(runPipelineConfirmation.name, () => {
 	it("hashes the declared settings file's digest into every checkpoint's own lineage field", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 
-		const outcome = await harness.run({ settingsFile: declaredSettings });
+		const outcome = await harness.run({ loadedSettings: declaredSettings });
 		const group = parseConfirmationGroupRecord(
 			await Bun.file(outcome.groupRecordFile).text(),
 		);
@@ -253,7 +253,7 @@ describe(runPipelineConfirmation.name, () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const overlays: (string | undefined)[] = [];
 
-		await harness.run({ settingsFile: declaredSettings }, (dependencies) => ({
+		await harness.run({ loadedSettings: declaredSettings }, (dependencies) => ({
 			...dependencies,
 			stageSession: {
 				...dependencies.stageSession,

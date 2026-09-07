@@ -136,7 +136,7 @@ export interface PipelineConfirmationRequest {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
-	readonly settingsFile?: LoadedStageSettings | undefined;
+	readonly loadedSettings?: LoadedStageSettings | undefined;
 	readonly now?: (() => number) | undefined;
 }
 
@@ -220,7 +220,7 @@ async function freezePipelineInputs(
 				},
 				request.model,
 				request.effort,
-				request.settingsFile?.hashed,
+				request.loadedSettings?.hashed,
 			),
 		);
 		await dependencies.recordRetentionRef(
@@ -423,7 +423,7 @@ async function runPipelineRep(
 					commitSubjectPattern: request.pipeline.commitSubjectPattern,
 					corpusRoots: [join(plan.worktreePath, ".claude")],
 					settingSources: "project",
-					settingsOverlay: request.settingsFile?.json,
+					settingsOverlay: request.loadedSettings?.json,
 					log: dependencies.log,
 				},
 				definition,
@@ -522,7 +522,7 @@ async function runPipelineRep(
 					artifacts: hashArtifacts(
 						currentSession.artifact ? [currentSession.artifact] : [],
 					),
-					settingsFile: request.settingsFile?.hashed,
+					settingsFile: request.loadedSettings?.hashed,
 				},
 			);
 			upstream = checkpoint.lineage;

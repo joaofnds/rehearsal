@@ -388,7 +388,7 @@ describe(runReplay.name, () => {
 
 		await runReplay(fake.dependencies, {
 			...request(run, "build"),
-			settingsFile: {
+			loadedSettings: {
 				json: '{"disableAllHooks":true}',
 				hashed: { path: "stage-settings.json", sha256: "a".repeat(64) },
 			},

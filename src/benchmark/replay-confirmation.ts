@@ -130,7 +130,7 @@ async function freezeReplayInputs(
 	const staleness = deriveStaleness(plan.chain, corpusByStage, {
 		model: request.model,
 		effort: request.effort,
-		settingsFile: request.settingsFile?.hashed,
+		settingsFile: request.loadedSettings?.hashed,
 	}).filter(({ stale }) => stale);
 	const rubric = await dependencies.loadStageRubric(plan.definition);
 	const files: FrozenFile[] = [
@@ -490,7 +490,7 @@ async function runReplayConfirmationBody(
 						commitSubjectPattern: frozen.manifest.pipeline.commitSubjectPattern,
 						corpusRoots: [join(plan.worktreePath, ".claude")],
 						settingSources: "project",
-						settingsOverlay: request.settingsFile?.json,
+						settingsOverlay: request.loadedSettings?.json,
 						log: dependencies.log,
 					},
 					frozen.plan.definition,

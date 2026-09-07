@@ -184,7 +184,7 @@ describe(runReplayConfirmation.name, () => {
 		await fake.runConfirmation(
 			{ paths: run.paths, corpusRoots: [corpusRoot] },
 			{
-				settingsFile: {
+				loadedSettings: {
 					json: '{"disableAllHooks":true}',
 					hashed: { path: "stage-settings.json", sha256: "a".repeat(64) },
 				},

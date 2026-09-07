@@ -265,7 +265,7 @@ export interface ConfirmationRequestInputs {
 	readonly controlSha: string;
 	readonly source: SourceBaseline;
 	readonly instructions: string;
-	readonly settingsFile: LoadedStageSettings;
+	readonly loadedSettings: LoadedStageSettings;
 }
 
 /**
@@ -300,7 +300,7 @@ export function buildConfirmationRequest(
 		judgeModel: config.judgeModel,
 		judgeEffort: config.judgeEffort,
 		sessionBudgetUsd: config.sessionBudgetUsd,
-		settingsFile: inputs.settingsFile,
+		loadedSettings: inputs.loadedSettings,
 	};
 }
 
@@ -310,7 +310,7 @@ async function confirmRun(
 	confirmation: ConfirmationApproval,
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
-	const [controlSha, source, instructions, settingsFile] = await Promise.all([
+	const [controlSha, source, instructions, loadedSettings] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
 		liveCorpusInstructions(),
@@ -369,7 +369,7 @@ async function confirmRun(
 			controlSha,
 			source,
 			instructions,
-			settingsFile,
+			loadedSettings,
 		}),
 	);
 }

@@ -147,7 +147,7 @@ export interface ReplayRequest {
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly settingSources?: "project" | undefined;
-	readonly settingsFile?: LoadedStageSettings | undefined;
+	readonly loadedSettings?: LoadedStageSettings | undefined;
 	readonly corpusDirectory?: string | undefined;
 }
 
@@ -397,7 +397,7 @@ export async function runReplay(
 			{
 				model: request.model,
 				effort: request.effort,
-				settingsFile: request.settingsFile?.hashed,
+				settingsFile: request.loadedSettings?.hashed,
 			},
 		).filter(({ stale }) => stale);
 		if (staleness.length === 0) {
@@ -441,7 +441,7 @@ export async function runReplay(
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
 				corpusRoots: corpusLayoutRoots(worktreeDir),
 				settingSources: request.settingSources,
-				settingsOverlay: request.settingsFile?.json,
+				settingsOverlay: request.loadedSettings?.json,
 				log: dependencies.log,
 			},
 			plan.definition,
@@ -474,10 +474,10 @@ export async function runReplay(
 				corpusFiles: session.corpusFiles,
 				model: request.model,
 				effort: request.effort,
-				settingsFile: request.settingsFile?.hashed,
+				settingsFile: request.loadedSettings?.hashed,
 			}),
 			corpusFiles: session.corpusFiles,
-			settingsFile: request.settingsFile?.hashed,
+			settingsFile: request.loadedSettings?.hashed,
 			model: request.model,
 			effort: request.effort,
 			judgeModel: request.judgeModel,

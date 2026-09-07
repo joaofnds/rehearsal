@@ -305,7 +305,7 @@ export async function executeReplay(
 			output.stderr(`${message}\n`);
 		},
 	};
-	const [corpus, settingsFile] = await Promise.all([
+	const [corpus, loadedSettings] = await Promise.all([
 		replayCorpus(config.corpus),
 		replaySettingsFile(paths.manifestFile),
 	]);
@@ -314,7 +314,7 @@ export async function executeReplay(
 		stage: config.stage,
 		instructions: corpus.instructions,
 		settingSources: corpus.settingSources,
-		settingsFile,
+		loadedSettings,
 		corpusDirectory: corpus.directory,
 		controlSha: await currentControlSha(),
 		model: config.model,

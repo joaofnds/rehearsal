@@ -439,7 +439,7 @@ describe(runRunCommand.name, () => {
 });
 
 describe(buildConfirmationRequest.name, () => {
-	const settingsFile = {
+	const loadedSettings = {
 		json: "{}",
 		hashed: { path: "/control/stage-settings.json", sha256: "a".repeat(64) },
 	};
@@ -476,7 +476,7 @@ describe(buildConfirmationRequest.name, () => {
 			controlSha: "a".repeat(40),
 			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
 			instructions: "Frozen instructions\n",
-			settingsFile,
+			loadedSettings,
 		});
 
 		expect(request.caseId).toBe("audit-log-follow-up");
@@ -502,7 +502,7 @@ describe(buildConfirmationRequest.name, () => {
 			controlSha: "a".repeat(40),
 			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
 			instructions: "Frozen instructions\n",
-			settingsFile,
+			loadedSettings,
 		});
 
 		expect(request.corpusRoots).toEqual(corpusLayoutRoots("/target"));
@@ -533,10 +533,10 @@ describe(buildConfirmationRequest.name, () => {
 			controlSha: "a".repeat(40),
 			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
 			instructions: "Frozen instructions\n",
-			settingsFile: declaredSettings,
+			loadedSettings: declaredSettings,
 		});
 
-		expect(request.settingsFile).toEqual(declaredSettings);
+		expect(request.loadedSettings).toEqual(declaredSettings);
 	});
 });
 
