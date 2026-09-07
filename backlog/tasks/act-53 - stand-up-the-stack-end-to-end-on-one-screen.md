@@ -1,11 +1,11 @@
 ---
 id: ACT-53
 title: stand up the stack end to end on one screen
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 20:52'
+updated_date: '2026-09-07 21:32'
 labels: []
 milestone: m-5
 dependencies:
@@ -36,14 +36,14 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Running `bun rehearsal.ts list runs` against the checked-in .benchmark-runs shows run:2026-09-06T21-58-29.508Z as STOPPED:build; the same row renders in the browser as a stopped outcome using the Status component (not hand-rolled markup), and the row's corpus cell shows a corpus digest computed from that run's own corpusFiles (proven by a test that changes one byte of a fixture corpus file and asserts the rendered digest changes)
-- [ ] #2 The stale checkpoint checkpoint:2026-09-06T21-58-29.508Z/shape renders with a stale badge computed by the server calling staleCheckpoints (src/benchmark/staleness-report.ts) on every request, not from a cached or startup-computed value -- proven by a test that edits a corpus file between two requests to the same route and asserts the second response's staleness differs from the first
-- [ ] #3 Pointing the server at an empty temp directory (no records) renders the empty-state block from SPEC.md section 1, not a blank table or a client error
-- [ ] #4 A request for a record id containing a path segment that escapes the runs directory (e.g. a checkpoint stage of ../../etc/passwd) gets a non-500 refusal from the route, proven by a test that calls the route handler directly, not by manual inspection
-- [ ] #5 No absolute filesystem path reaches the browser from any route failure: a malformed JSON fixture renders its row with the reason string list-command.ts's controlRelative already produces (existing path), and a test separately drives an error from the route's own new code (e.g. recordFileFor thrown against a missing file) and asserts that response body also carries no absolute path (new path, since controlRelative only wraps listRecords's own try/catch and nothing sanitizes a route-level throw today)
-- [ ] #6 The read API's JSON response shape for a run-history row is written down in this card or in code as the single place that owns it (per the card's prior Direction note, question 1: 'no other card owns it'), naming its fields in decision-5's code vocabulary (stage, pipeline, run), never the design's task/step labels
-- [ ] #7 Run history's table, status cells, grade column, corpus cells, and filter bar are built from ACT-52's six named components (Status, Grade, CorpusPill, SectionLabel, FilterPill, TableShell) by import, not by new markup that happens to look similar -- proven by grepping the new screen's source for each component name
-- [ ] #8 mise exec -- bun run typecheck, lint, fmt:check, and test all exit 0 with client/ and the new server code in the tree; a test CSS file with a bare hex color or bare px spacing value in the new server-facing client code fails bun run lint:css (reusing ACT-52's stylelint config, not a new one)
+- [x] #1 Running `bun rehearsal.ts list runs` against the checked-in .benchmark-runs shows run:2026-09-06T21-58-29.508Z as STOPPED:build; the same row renders in the browser as a stopped outcome using the Status component (not hand-rolled markup), and the row's corpus cell shows a corpus digest computed from that run's own corpusFiles (proven by a test that changes one byte of a fixture corpus file and asserts the rendered digest changes)
+- [x] #2 The stale checkpoint checkpoint:2026-09-06T21-58-29.508Z/shape renders with a stale badge computed by the server calling staleCheckpoints (src/benchmark/staleness-report.ts) on every request, not from a cached or startup-computed value -- proven by a test that edits a corpus file between two requests to the same route and asserts the second response's staleness differs from the first
+- [x] #3 Pointing the server at an empty temp directory (no records) renders the empty-state block from SPEC.md section 1, not a blank table or a client error
+- [x] #4 A request for a record id containing a path segment that escapes the runs directory (e.g. a checkpoint stage of ../../etc/passwd) gets a non-500 refusal from the route, proven by a test that calls the route handler directly, not by manual inspection
+- [x] #5 No absolute filesystem path reaches the browser from any route failure: a malformed JSON fixture renders its row with the reason string list-command.ts's controlRelative already produces (existing path), and a test separately drives an error from the route's own new code (e.g. recordFileFor thrown against a missing file) and asserts that response body also carries no absolute path (new path, since controlRelative only wraps listRecords's own try/catch and nothing sanitizes a route-level throw today)
+- [x] #6 The read API's JSON response shape for a run-history row is written down in this card or in code as the single place that owns it (per the card's prior Direction note, question 1: 'no other card owns it'), naming its fields in decision-5's code vocabulary (stage, pipeline, run), never the design's task/step labels
+- [x] #7 Run history's table, status cells, grade column, corpus cells, and filter bar are built from ACT-52's six named components (Status, Grade, CorpusPill, SectionLabel, FilterPill, TableShell) by import, not by new markup that happens to look similar -- proven by grepping the new screen's source for each component name
+- [x] #8 mise exec -- bun run typecheck, lint, fmt:check, and test all exit 0 with client/ and the new server code in the tree; a test CSS file with a bare hex color or bare px spacing value in the new server-facing client code fails bun run lint:css (reusing ACT-52's stylelint config, not a new one)
 - [ ] #9 After this card, building a second screen is verified to touch only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction here and confirmed or corrected on the card that builds screen two (ACT-50 or ACT-51), rather than asserted as already true of a route that does not exist yet
 <!-- AC:END -->
 
@@ -65,4 +65,25 @@ Should-fix, folded into the AC set above (old six-AC set replaced outright, now 
 - Decision-5's vocabulary mapping had no per-field AC forcing the new API/route code to use code-side words (stage, pipeline, run) rather than the design's task/step labels. Folded into new AC #6's wording rather than a separate AC, since both are the same read-API-shape surface.
 
 Note, no action: controlRelative strips only the repository root, not the full home directory; this doesn't affect the fix above since runsDirectory is repo-relative in every test and production path here. Glossary "corpus digest" naming re-checked against the reviewer's independent grep of GLOSSARY.md's corpus-adjacent entries: no collision found (reviewer flagged this as not independently re-verified past the corpusFiles/hash search; re-run here: `grep -in "corpus digest" GLOSSARY.md` returns nothing).
+Adversarial code review (6 reviewer agents, one per axis: spec, style, architecture, security, testing, refactoring), 2026-09-07, on this session's implementation commits (b784409..753b795).
+
+Suite run before review: `mise exec -- bun run test` — 1141 pass, 0 fail (server) + 76 pass, 0 fail (client). typecheck/lint/fmt:check/lint:css all exit 0.
+
+**Blocking, fixed and verified (commit 542a8c4):**
+- [correctness, security] `runHistoryRows` threw straight out of its per-run loop instead of collecting a failing run (list-command.ts's `collect()` precedent), so one malformed run.json or one missing-skill-directory throw from `staleCheckpoints` took the whole `/api/runs` response down with a 500. `controlRelative` only strips `CONTROL_DIR`, so a path from the corpus root or the target repository (neither ever under `CONTROL_DIR`) reached the browser verbatim. Reproduced live before the fix: a run missing its build skill returned `searched /var/folders/.../probe-corpus` in the response body. Independently found by spec, architecture, and security axes. Fixed: `runHistoryRows` → `runHistoryReport`, returning `{ rows, unreadable }`; every route-level sanitization point now uses `redact-path.ts`'s `redactAbsolutePaths` (redacts any absolute path, anchored so it doesn't eat a relative record id or corpus path).
+- [testing] Two of three "no absolute path" assertions in api.test.ts were vacuous: fixtures never place data under `CONTROL_DIR`, so `.not.toContain(CONTROL_DIR)` couldn't see the real leak and passed even with sanitization removed (confirmed by removing it and re-running). Fixed: replaced with a pattern assertion; added a fourth test reproducing the `staleCheckpoints` throw directly.
+
+**Should-fix, fixed and verified:**
+- [testing, commit 542a8c4] `router.test.tsx` restored `globalThis.fetch` only at the end of each test body; a failing assertion skipped it and leaked the stub into later tests (confirmed by forcing a failure). Moved to `afterEach`.
+- [testing, commit 542a8c4] No test for the "Stopped" filter's actual narrowing behavior. Added; confirmed it kills the mutant `matchesFilter -> return true`.
+- [spec + architecture, commit ac11a96] Client hand-declared the wire schema (`run-history-row.ts`'s zod schema) instead of using Hono's RPC client, which decision-3 names as the specific reason for choosing Hono ("its RPC client shares types with the server rather than having the record shapes redefined by hand in the client"). Fixed: api.ts's routes are one unbroken chain from `new Hono()` exporting `ApiRoutes`; client fetches via `hc<ApiRoutes>()` in `client/src/api-client.ts`; `RunHistoryRow` is now `InferResponseType`-derived, not a second declaration. `run-history-row.ts` deleted.
+- [architecture + refactoring, commit 753b795] A stopped run with no manifest was silently dropped from `/api/runs` (both `rows` and `unreadable`), where `list runs` reports it unreadable by id and reason (existing `writeStoppedRunWithoutManifest` coverage there). Fixed: `statusAndCaseId` now throws the matching message in that case, collected by the existing per-run try/catch.
+
+**Notes, no action (advisory or pre-existing, revert-test does not implicate this change):**
+- [refactoring] `run-history.ts`'s `statusAndCaseId` still duplicates `list-command.ts`'s `listRuns` closure structurally (same three-step recipe), though the behavioral divergence that made it a defect is now fixed. Extracting a shared function is a genuine cross-cutting change (touches the CLI too) — tracked as a follow-up, not done in this session.
+- [architecture] Two full directory passes per `/api/runs` request (`staleCheckpoints` + the row loop) — pre-existing, deliberate per this card's own AC #2 (live per-request staleness).
+- [style] `columns={[...COLUMNS]}` allocates unnecessarily (`COLUMNS` directly satisfies `TableShell`'s prop). Cosmetic.
+- [style] Empty-state's "Declare a case" button is a bare `<button>`; no Button component exists yet in the design system to compose from instead, and AC #7 doesn't name it.
+- [security] `record-id.ts`'s traversal guard checks `.`, `..`, `/` but not `\` — POSIX-only concern (this repo's dev/CI platform), not exploitable here.
+- [security] `Bun.serve` binds with no explicit hostname — unverified belief, out of this card's stated scope (id-traversal, path-leak).
 <!-- SECTION:NOTES:END -->
