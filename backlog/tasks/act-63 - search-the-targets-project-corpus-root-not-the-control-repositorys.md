@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-07 00:18'
+updated_date: '2026-09-07 00:19'
 labels: []
 milestone: m-1
 dependencies: []
@@ -176,6 +176,18 @@ direct verification above used stageCorpusRoots/resolveSkillDirectory directly, 
 a full `rehearsal run`/`rehearsal replay` invocation. Both remain latent-bug
 territory until a target case gains its own .claude, same as the card's own
 description states.
+
+REVIEW FINDING, 2026-09-06: the build implemented reading B for stale, which João rejected.
+
+The decision recorded on this card was reading A: stale checks every recorded run against the one corpus the operator names, defaulting to the live user install. The commit (1c785b3) says the opposite in its own body: 'staleness-report.ts's stale check compares each recorded run against its own manifest.sourceRoot rather than a hardcoded control-repo path.' staleness-report.ts:78 passes manifest.sourceRoot to stageCorpusRoots, so a pipeline checkpoint is now checked against its run's recorded target .claude first, then the user install.
+
+This produces exactly the split the investigation predicted. caseStaleness (staleness-report.ts:251) still hashes against the operator's resolved source, because a session case has no manifest and no target. So the command now answers one question for session cases and a different one for pipeline checkpoints.
+
+Not currently observable: no target repository has a .claude, so both readings resolve to the same files. 'rehearsal stale' reports correctly today (it flagged rulebook/backlog-board.md after a real edit). The suite is green at 1064. This is a latent divergence from the decision, not a broken command.
+
+Separate and probably fine: replay-command.ts:175 also uses manifest.sourceRoot rather than the worktree João chose in question 2. The comment at 166-167 explains that this is the pre-worktree corpus freeze, running before any worktree exists, and sourceRoot is the repository that worktree is built from. That reads as a faithful application of the decision to a site where no worktree is available yet, not a deviation.
+
+Needs João's call: whether to change staleness-report.ts:78 back to the operator's source (reading A, as decided) or to accept reading B now that it is built. Holding the card out of Done until then.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
