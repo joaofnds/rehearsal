@@ -1,10 +1,10 @@
 ---
 id: ACT-49
 title: name what the design shows that the harness cannot yet supply
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 16:33'
+updated_date: '2026-09-07 16:34'
 labels: []
 milestone: m-5
 dependencies:
