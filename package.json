@@ -8,7 +8,8 @@
 	"imports": {
 		"#benchmark/*": "./src/benchmark/*.ts",
 		"#cli/*": "./src/cli/*.ts",
-		"#server/*": "./src/server/*.ts"
+		"#server/*": "./src/server/*.ts",
+		"#client/*": "./client/src/*"
 	},
 	"scripts": {
 		"fmt": "oxfmt",

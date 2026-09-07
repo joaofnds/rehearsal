@@ -18,7 +18,10 @@
 		"target": "esnext",
 		"moduleResolution": "bundler",
 		"jsx": "react-jsx",
-		"types": ["vite/client", "bun-types"]
+		"types": ["vite/client", "bun-types"],
+		"paths": {
+			"#client/*": ["./src/*"]
+		}
 	},
 	"include": ["src", "test-setup.ts", "vite.config.ts"]
 }
