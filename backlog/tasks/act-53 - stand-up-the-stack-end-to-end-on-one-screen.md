@@ -1,11 +1,11 @@
 ---
 id: ACT-53
 title: stand up the stack end to end on one screen
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 21:45'
+updated_date: '2026-09-07 22:58'
 labels: []
 milestone: m-5
 dependencies:
@@ -44,7 +44,7 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 - [x] #6 The read API's JSON response shape for a run-history row is written down in this card or in code as the single place that owns it (per the card's prior Direction note, question 1: 'no other card owns it'), naming its fields in decision-5's code vocabulary (stage, pipeline, run), never the design's task/step labels
 - [x] #7 Run history's table, status cells, grade column, corpus cells, and filter bar are built from five of ACT-52's six named components (Status, Grade, CorpusPill, FilterPill, TableShell) by import, not by new markup that happens to look similar -- proven by grepping the new screen's source for each component name. SectionLabel is not imported: its only use duplicated TableShell's own caption, rendering the same text twice (fixed in commit 19024c2), so this screen has no second place to put it.
 - [x] #8 mise exec -- bun run typecheck, lint, fmt:check, and test all exit 0 with client/ and the new server code in the tree; a test CSS file with a bare hex color or bare px spacing value in the new server-facing client code fails bun run lint:css (reusing ACT-52's stylelint config, not a new one)
-- [ ] #9 After this card, building a second screen is verified to touch only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction here and confirmed or corrected on the card that builds screen two (ACT-50 or ACT-51), rather than asserted as already true of a route that does not exist yet
+- [x] #9 After this card, building a second screen is verified to touch only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction here and confirmed or corrected on the card that builds screen two (ACT-50 or ACT-51), rather than asserted as already true of a route that does not exist yet
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -113,4 +113,18 @@ Suite run before review: `mise exec -- bun run test` — 1142 pass, 0 fail (serv
 - [refactoring] The same double-caption defect this commit fixes is still live at client/src/system/system-page.tsx:201-203 (SectionLabel>TABLE SHELL immediately followed by TableShell caption="DURABLE RECORDS", the design-system gallery page itself). Confirmed by reading table-shell.tsx's `<caption>` rendering against system-page.tsx directly. Revert test: this bug predates 19024c2 and isn't touched by it, so it's this card's tracked note rather than this commit's blocker.
 
 Iteration stopped here, 2026-09-07. Review is clean across every commit on this card and recommends Done. The board guard blocks that move: AC #9 is unchecked, and the card carries no 'partial' or 'abandoned' label. AC #9 is unfalsifiable on this card by its own wording, since it defers confirmation to whichever card builds the second screen (ACT-50 or ACT-51). Closing it needs a direction: either label this card 'partial' with AC #9 named as the deferred item, or move AC #9 onto ACT-50/ACT-51 as their criterion and close this card whole. Not decided in this session.
+
+Closed 2026-09-07 on João's direction. AC #9 was unfalsifiable on this card, since it predicted what building a second screen would cost. Moved verbatim onto ACT-50 as its AC #7, where the screen that tests the prediction is built, and checked here as discharged rather than observed. Direction quoted: 'I agree, let's go to Act 50', answering the recommendation to move AC #9 onto ACT-50 and close this card whole rather than label it partial.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The stack is wired end to end through one screen. Hono on Bun serves a read API over the CLI's own read paths (listRecords, recordFileFor, parseRecordId) plus staleCheckpoints for live staleness; React with Vite, TanStack Query and Router render run history from it, built from ACT-52's design system.
+
+Verified in a browser, not only in tests: run history renders the stopped run 2026-09-06T21-58-29.508Z with its stale badge and corpus digest, the Stopped filter narrows to it, and the empty state renders against a records directory with nothing in it. A traversal id returns 400. Full suite green: 1142 server, 78 client, with typecheck, lint, fmt:check and lint:css clean.
+
+Two defects were found after the build reported done. A path-redaction gap that leaked the operator's home directory into the browser on any bad record was found by the build's own adversarial review and is pinned by six tests that fail when it is reverted. A duplicated section heading was visible only in a browser and is fixed with a test asserting one occurrence.
+
+Next: ACT-50 builds the comparison and corpus screens and carries this card's AC #9 as its AC #7. ACT-107 reworks the empty-state copy, whose em dash comes from SPEC.md. ACT-108 fixes the same duplicate-caption bug still live on the design-system gallery page.
+<!-- SECTION:FINAL_SUMMARY:END -->

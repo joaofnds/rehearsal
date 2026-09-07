@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 13:36'
+updated_date: '2026-09-07 22:58'
 labels: []
 milestone: m-7
 dependencies:
@@ -41,6 +41,7 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 - [ ] #4 Every screen has the empty state the design specifies, observed on a checkout with no records at all
 - [ ] #5 A record id that would escape the runs directory is refused, proven by a test over the served routes
 - [ ] #6 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
+- [ ] #7 Building the comparison screen touched only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction on ACT-53 AC #9 and confirmed or corrected here (moved from ACT-53 on João's direction, 2026-09-07: 'I agree' to closing ACT-53 whole by moving AC #9 onto ACT-50)
 <!-- AC:END -->
 
 ## Implementation Notes
