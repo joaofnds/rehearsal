@@ -112,3 +112,9 @@ averaged) is not new: the harness already grades a pipeline this way, from
 `confirmation-record.ts`), independent of per-stage grades. ACT-50 and later
 run-detail work read this existing record rather than building new grading
 logic.
+
+## Acceptance
+
+João accepted this mapping on 2026-09-07, on the card's own terms ("for João
+to accept or overturn"). The session that drafted it proposed it; the
+acceptance is his.
