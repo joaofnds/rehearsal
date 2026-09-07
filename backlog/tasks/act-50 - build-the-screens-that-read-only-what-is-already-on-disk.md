@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 22:58'
+updated_date: '2026-09-07 22:59'
 labels: []
 milestone: m-7
 dependencies:
@@ -54,4 +54,8 @@ Run history now belongs to ACT-53, which builds it as the walking skeleton for t
 What is left here is the pair that answers the product's own question: comparisons, and the corpus screen that says which recorded results an edit invalidated. Those two together are what m-7 is for.
 
 Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+
+Criteria conflict, noted 2026-09-07 before shaping. ACs #1 through #6 predate the 2026-09-04 triage that narrowed this card to comparisons and corpus. AC #1 names run history, which ACT-53 built and closed. AC #4 says 'every screen', which under the narrowed scope means these two. Shaping rewrites them against the two screens this card actually builds, per SPEC.md sections 5 (Comparisons) and 6 (Corpus). Not rewritten here, because the shaping stage decides what the criteria become.
+
+ACT-104 (comparison spread as an interval with a per-measure reading verdict) is a backend gap feeding this card's comparison screen and carries no dependency link to it. Shaping decides whether it lands first, inside this card, or after.
 <!-- SECTION:NOTES:END -->
