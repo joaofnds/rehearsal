@@ -3,7 +3,9 @@ import { corpusDigest } from "./corpus-digest";
 
 describe("corpusDigest", () => {
 	test("is a 6-character lowercase hex string", () => {
-		const digest = corpusDigest([{ path: "CLAUDE.md", sha256: "a".repeat(64) }]);
+		const digest = corpusDigest([
+			{ path: "CLAUDE.md", sha256: "a".repeat(64) },
+		]);
 
 		expect(digest).toMatch(/^[0-9a-f]{6}$/u);
 	});
@@ -23,6 +25,6 @@ describe("corpusDigest", () => {
 			{ path: "skills/build.md", sha256: "b".repeat(64) },
 		];
 
-		expect(corpusDigest(files)).toBe(corpusDigest([...files].reverse()));
+		expect(corpusDigest(files)).toBe(corpusDigest(files.toReversed()));
 	});
 });

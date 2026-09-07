@@ -6,6 +6,7 @@ import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
 	checkpointRecordFile,
+	checkpointStageNames,
 	comparisonDigests,
 	confirmationGroupIds,
 	confirmationGroupPaths,
@@ -272,6 +273,25 @@ describe("recorded record enumeration", () => {
 			join(root, "run-a.build.json"),
 			join(root, "run-a.shape.json"),
 		]);
+	});
+
+	it("names every checkpoint stage a run recorded, sorted", async () => {
+		const root = await fixtureRoot();
+		await mkdir(join(root, "run-a.checkpoints", "build"), { recursive: true });
+		await mkdir(join(root, "run-a.checkpoints", "initial"), {
+			recursive: true,
+		});
+
+		expect(await checkpointStageNames(root, "run-a")).toEqual([
+			"build",
+			"initial",
+		]);
+	});
+
+	it("reads a run with no checkpoints directory as no stages recorded", async () => {
+		const root = await fixtureRoot();
+
+		expect(await checkpointStageNames(root, "absent-run")).toEqual([]);
 	});
 
 	it.each([

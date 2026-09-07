@@ -233,6 +233,19 @@ export async function runStageFiles(
 		.map((entry) => join(runsDirectory, entry.name));
 }
 
+/**
+ * Every stage a run recorded a checkpoint for, sorted. A run with no
+ * checkpoints directory recorded nothing, not a failure.
+ */
+export function checkpointStageNames(
+	runsDirectory: string,
+	run: string,
+): Promise<readonly string[]> {
+	return directoryNames(
+		benchmarkRunPaths(runsDirectory, run).checkpointsDirectory,
+	);
+}
+
 export function confirmationGroupIds(
 	runsDirectory: string,
 ): Promise<readonly string[]> {
