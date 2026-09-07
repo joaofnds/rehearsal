@@ -1,0 +1,11 @@
+{
+	"permissions": {
+		"deny": [
+			"Bash(git branch *)",
+			"Bash(git checkout -b *)",
+			"Bash(git switch -c *)",
+			"Bash(git worktree add *)"
+		]
+	},
+	"disableBundledSkills": true
+}

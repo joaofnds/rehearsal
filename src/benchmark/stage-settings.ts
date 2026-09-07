@@ -6,6 +6,15 @@ export class StageSettingsError extends Error {
 }
 
 /**
+ * Where the harness-owned settings file lives when a case declares none of
+ * its own, relative to the control repository root: committed, versioned
+ * data the harness ships, the same way `CLAUDE.md` at the root is corpus the
+ * harness ships. A case names its own file to override this one; neither is
+ * ever a copy of the operator's live `~/.claude/settings.json`.
+ */
+export const DEFAULT_STAGE_SETTINGS_FILE = "stage-settings.json";
+
+/**
  * Every key a stage session's settings file may carry: the permissions deny
  * list and the boolean feature switches the harness has an opinion on. No
  * `hooks` key exists here, and `.strict()` refuses any key this schema does

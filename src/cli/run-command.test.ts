@@ -76,6 +76,7 @@ const auditLogCase: BenchmarkCase = {
 	pipeline,
 	stageRubrics: {},
 	targetPath: "/declared/target",
+	settingsFilePath: "/control/stage-settings.json",
 };
 
 interface CaseLoader {

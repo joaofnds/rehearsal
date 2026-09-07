@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
+import { DEFAULT_STAGE_SETTINGS_FILE } from "#benchmark/stage-settings";
 import { PROJECT_ROOT, TestResources } from "#benchmark/test-support";
 
 /**
@@ -214,6 +215,35 @@ describe("loadCase", () => {
 		const { setup: _setup, ...target } = benchmarkCase.pipeline.target;
 
 		expect({ ...benchmarkCase.pipeline, target }).toEqual(rehomed);
+	});
+
+	it("resolves the harness-owned default settings file when the case declares none", async () => {
+		const benchmarkCase = requirePipelineCase(await loadCase("audit-log"));
+
+		expect(benchmarkCase.settingsFilePath).toBe(
+			join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
+		);
+	});
+
+	it("carries a declared settingsFile on the pipeline declaration", () => {
+		const id = "audit-log";
+		const declared = parseCaseDeclaration(
+			id,
+			JSON.stringify({
+				id,
+				kind: "pipeline",
+				title: "Audit log",
+				task: "backlog-seed.md",
+				productBrief: "product-brief.md",
+				finalRubric: "rubric.md",
+				pipeline: "pipelines/default.json",
+				rubrics: "rubrics",
+				target: { path: "../../../nest/template" },
+				settingsFile: "settings.json",
+			}),
+		);
+
+		expect(declared).toMatchObject({ settingsFile: "settings.json" });
 	});
 });
 

@@ -11,6 +11,7 @@ import { loadPipeline } from "./pipeline";
 import type { Check } from "./session-check";
 import { checkSchema } from "./session-check";
 import { loadStageRubric } from "./stage-grading";
+import { DEFAULT_STAGE_SETTINGS_FILE } from "./stage-settings";
 
 export const CASES_DIRECTORY = "cases";
 
@@ -62,6 +63,7 @@ export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 			pipeline: caseRelativePathSchema,
 			rubrics: caseRelativePathSchema,
 			target: z.object({ path: z.string().min(1) }).strict(),
+			settingsFile: caseRelativePathSchema.optional(),
 			model: declaredModelSchema,
 			sessionBudgetUsd: declaredSessionBudgetUsdSchema,
 		})
@@ -115,6 +117,7 @@ export interface BenchmarkCase {
 	readonly pipeline: PipelineDefinition;
 	readonly stageRubrics: Readonly<Record<string, LoadedStageRubric>>;
 	readonly targetPath: string;
+	readonly settingsFilePath: string;
 }
 
 /**
@@ -334,6 +337,21 @@ function declaredTarget(declaration: PipelineCaseDeclaration): string {
 	return resolve(caseDirectory(declaration.id), path);
 }
 
+/**
+ * The settings file is harness-owned data, not a copy of anything live, so a
+ * case that names none gets the harness's own default rather than an absent
+ * settings surface: every stage session has one to read.
+ */
+function declaredSettingsFilePath(
+	declaration: PipelineCaseDeclaration,
+): string {
+	if (declaration.settingsFile === undefined) {
+		return join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE);
+	}
+
+	return caseRelative(declaration, declaration.settingsFile);
+}
+
 async function loadPipelineCase(
 	declaration: PipelineCaseDeclaration,
 ): Promise<BenchmarkCase> {
@@ -361,6 +379,7 @@ async function loadPipelineCase(
 		pipeline,
 		stageRubrics,
 		targetPath: declaredTarget(declaration),
+		settingsFilePath: declaredSettingsFilePath(declaration),
 	};
 }
 
