@@ -88,7 +88,7 @@ async function statusAndCaseId(
 	}
 
 	if (!(await Bun.file(paths.manifestFile).exists())) {
-		return undefined;
+		throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
 	}
 
 	const manifest = await loadRunManifest(paths.manifestFile);
