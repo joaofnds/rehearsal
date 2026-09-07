@@ -1,10 +1,11 @@
 ---
 id: ACT-50
 title: build the comparison and corpus screens
-status: Shape
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 23:54'
+updated_date: '2026-09-07 23:55'
 labels: []
 milestone: m-7
 dependencies:
