@@ -1,10 +1,11 @@
 ---
 id: ACT-91
 title: list labels a stopped run not replayable when its checkpoints are usable
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-06 22:19'
-updated_date: '2026-09-06 22:33'
+updated_date: '2026-09-07 12:33'
 labels: []
 milestone: m-1
 dependencies: []
@@ -29,4 +30,6 @@ Observed on run 2026-09-06T21-58-29.508Z (audit-log, STOPPED:build). 'rehearsal 
 Cost: a stopped run is the case an operator most wants to replay. The stage graded badly, and the question is whether a corpus edit moves it. The label tells them the one run worth iterating on cannot be iterated on. The command still works if they ignore the label, which makes this a wrong signal rather than a broken feature.
 
 Confirmed 2026-09-06: the shape stage of run 2026-09-06T21-58-29.508Z replayed successfully end to end while 'rehearsal list runs' labelled that run 'not replayable'. The replay produced a full graded attempt (record .benchmark-runs/replays/60758c01.../2026-09-06T22-33-15.057Z.json). So the label is wrong, not merely pessimistic.
+
+Shaped 2026-09-07: fix confirmed as a one-line change. list-command.ts:153 hardcodes 'not replayable'; line 151's loadRunManifest(paths.manifestFile) call already succeeds by that point, proving the manifest exists, the same fact the non-stopped branch (line 137) uses to decide replayable. Fix: replace the literal with 'replayable' (or reuse the same ternary as line 137, now redundant since the load already proves existence). No design choice remains, first test: rerun 'rehearsal list runs' against the run recorded in the AC (2026-09-06T21-58-29.508Z) and confirm it now prints 'replayable'; add/adjust a unit test on listRuns for a stopped run with a manifest present.
 <!-- SECTION:NOTES:END -->
