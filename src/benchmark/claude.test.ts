@@ -232,4 +232,30 @@ describe(claudeArgs.name, () => {
 
 		expect(command).not.toContain("--setting-sources");
 	});
+
+	it("passes the declared settings JSON through --settings", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+			settingsOverlay: '{"disableAllHooks":true}',
+		});
+
+		expect(command).toContain("--settings");
+		expect(command[command.indexOf("--settings") + 1]).toBe(
+			'{"disableAllHooks":true}',
+		);
+	});
+
+	it("omits --settings when the invocation carries no settings overlay", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
+
+		expect(command).not.toContain("--settings");
+	});
 });

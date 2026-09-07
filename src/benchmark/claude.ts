@@ -22,11 +22,19 @@ export interface ClaudeInvocation {
 		| { readonly id: string; readonly resume: boolean }
 		| undefined;
 	readonly settingSources?: "project" | undefined;
+	readonly settingsOverlay?: string | undefined;
 }
 
 export function claudeArgs(invocation: ClaudeInvocation): string[] {
-	const { settings, schema, access, systemPrompt, session, settingSources } =
-		invocation;
+	const {
+		settings,
+		schema,
+		access,
+		systemPrompt,
+		session,
+		settingSources,
+		settingsOverlay,
+	} = invocation;
 
 	return [
 		"claude",
@@ -53,6 +61,7 @@ export function claudeArgs(invocation: ClaudeInvocation): string[] {
 		...(settingSources === undefined
 			? []
 			: ["--setting-sources", settingSources]),
+		...(settingsOverlay === undefined ? [] : ["--settings", settingsOverlay]),
 	];
 }
 
