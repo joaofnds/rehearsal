@@ -1,10 +1,10 @@
 ---
 id: ACT-52
 title: build the design system before the first screen
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-07 14:34'
+updated_date: '2026-09-07 14:35'
 labels: []
 milestone: m-5
 dependencies:
@@ -44,12 +44,12 @@ Do not build this speculatively wide. Build the tokens in full, since they are e
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every token in SPEC.md's Design Tokens section is defined once as a CSS custom property with a semantic name, and a screen references it by name rather than a raw value (decision-3: tokens are CSS custom properties, not Tailwind)
-- [ ] #2 A standalone page under client/, run with vite dev, renders every token swatch and every component in every state SPEC.md and decision-2 name, viewable in a browser from a local checkout with no server running
-- [ ] #3 One status component renders every state SPEC.md's status vocabulary lists (accepted, running, queued, stopped, interrupted, fired, clear, stale, pending, checkpoint present/absent) as glyph plus word, and nothing outside that component composes the pair
-- [ ] #4 The focus ring (2px solid accent, 2px offset, on :focus-visible) and the pulse animation with its prefers-reduced-motion static-glyph replacement are defined once in the system's CSS and used by reference, not redefined per component
-- [ ] #5 A stylelint run over client/ fails on a hex color written outside the token custom-property definitions (via color-no-hex) and on a bare px/rem length written on a spacing- or sizing-accepting property outside them (via declaration-property-unit-disallowed-list), and passes on the system page and every component (decision-3's 'one rule over CSS files', read as one rule set)
-- [ ] #6 Only the components Run history (ACT-53) needs are built: status glyph+word, grade display, corpus pill, section label, filter pill, table shell -- the six the card's own description names that Run history's columns and filter bar use. The other five the card names (evidence disclosure, step node card, stat card, planned-feature block, dialog shell) are tokens-and-states documented on the system page as not yet built, each against the screen card that will need it first
+- [x] #1 Every token in SPEC.md's Design Tokens section is defined once as a CSS custom property with a semantic name, and a screen references it by name rather than a raw value (decision-3: tokens are CSS custom properties, not Tailwind)
+- [x] #2 A standalone page under client/, run with vite dev, renders every token swatch and every component in every state SPEC.md and decision-2 name, viewable in a browser from a local checkout with no server running
+- [x] #3 One status component renders every state SPEC.md's status vocabulary lists (accepted, running, queued, stopped, interrupted, fired, clear, stale, pending, checkpoint present/absent) as glyph plus word, and nothing outside that component composes the pair
+- [x] #4 The focus ring (2px solid accent, 2px offset, on :focus-visible) and the pulse animation with its prefers-reduced-motion static-glyph replacement are defined once in the system's CSS and used by reference, not redefined per component
+- [x] #5 A stylelint run over client/ fails on a hex color written outside the token custom-property definitions (via color-no-hex) and on a bare px/rem length written on a spacing- or sizing-accepting property outside them (via declaration-property-unit-disallowed-list), and passes on the system page and every component (decision-3's 'one rule over CSS files', read as one rule set)
+- [x] #6 Only the components Run history (ACT-53) needs are built: status glyph+word, grade display, corpus pill, section label, filter pill, table shell -- the six the card's own description names that Run history's columns and filter bar use. The other five the card names (evidence disclosure, step node card, stat card, planned-feature block, dialog shell) are tokens-and-states documented on the system page as not yet built, each against the screen card that will need it first
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -102,3 +102,17 @@ Not a defect: @phosphor-icons/react installed with no current call site (style).
 
 Not reproduced: a one-off stylelint phantom failure the refactoring reviewer saw once and could not reproduce in 20 follow-up runs (note only, no action).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Built the design system: tokens.css (every value in SPEC.md's Design Tokens section, plus two gaps the spec's screen prose named but its table omitted, --color-accent-border and --color-accent-tint-14, both documented in place), six components (status, grade, corpus pill, section label, filter pill, table shell), a stylelint config enforcing no-raw-values with a test-first fixture proving both rules fire, and a system viewer page under client/ served by vite dev, rendering every token category (color, type scale, space, radius, letter-spacing, border, shadow, scrollbar) and every component in every state, plus the five deferred components each named against the screen card that needs it first (ACT-51 x3, ACT-50, an unfiled run-detail card).
+
+Reviewed by six independent reviewers (spec, style, architecture, security, testing, refactoring) against the diff and this card's own acceptance criteria; full disposition is in the card's notes. Security found nothing. Every should-fix finding with an available fix is fixed and verified (typecheck, oxlint, stylelint, and the client test suite all pass clean, 62/62). One coupling (a global bun test preload for the client's DOM shim) was investigated and left as a documented, accepted limitation: Bun 1.4.0 has no mechanism to scope it, and the alternative was tried and reverted because it does not work.
+
+Verified this session, directly: vite dev serves the page and every module at 200; vite build produces a clean production bundle with fonts self-hosted; bun run typecheck, bun run lint, bun run lint:css, bun run fmt:check all pass; bun test shows 1102 pass against the same 48 pre-existing CLI-subprocess failures (ACT-94, corrected during this review to name both affected files) that predate this card, confirmed via git stash before any client/ file existed.
+
+Not verified: the page has not been opened in an actual browser (no headless browser available on this machine), so DOM mounting and visual layout are unverified beyond the jsdom-backed component tests and the clean Vite module graph.
+
+Two cards this work unblocks: ACT-50, ACT-51, ACT-53 can now build their screens against a real component layer instead of bespoke styles.
+<!-- SECTION:FINAL_SUMMARY:END -->
