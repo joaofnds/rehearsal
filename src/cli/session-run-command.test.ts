@@ -350,6 +350,9 @@ describe("running a session case against a corpus source", () => {
 	 * Every smoke attempt recorded before --corpus existed carries this lineage.
 	 * A change to it would mean the flag silently rewrote what a run absent the
 	 * flag measures, which is the one thing this card promised it would not do.
+	 * ACT-37 added a fifth, settings-file field to lineageKey's hashed shape; a
+	 * session case never sets it, so the pin moved once, deliberately, to the
+	 * hash of the same four fields plus an always-absent fifth.
 	 */
 	it("records the lineage the smoke case carried before --corpus existed", async () => {
 		const projects = await temporary("rehearsal-projects-");
@@ -363,7 +366,7 @@ describe("running a session case against a corpus source", () => {
 		});
 
 		expect(outcome.record.lineage).toBe(
-			"d875e2ac2844c6af8c60bff300d74ec72b0f07b592da123276c571ce78cac2ba",
+			"1122487029704150f0b0d7cbde1cee199b41f8f62c3a2cf4c3dc5951a8e378d1",
 		);
 	});
 

@@ -63,11 +63,31 @@ describe(lineageKey.name, () => {
 			lineageKey({ ...base, model: "opus" }),
 			lineageKey({ ...base, effort: "low" }),
 			lineageKey({ ...base, effort: undefined }),
+			lineageKey({
+				...base,
+				settingsFile: { path: "stage-settings.json", sha256: "ee55" },
+			}),
 		];
 
 		expect(new Set([lineageKey(base), ...variants]).size).toBe(
 			variants.length + 1,
 		);
+	});
+
+	it("does not fold the settings file's digest into corpusFiles", () => {
+		const withSettings = lineageKey({
+			...base,
+			settingsFile: { path: "stage-settings.json", sha256: "ee55" },
+		});
+		const asCorpusFile = lineageKey({
+			...base,
+			corpusFiles: [
+				...base.corpusFiles,
+				{ path: "stage-settings.json", sha256: "ee55" },
+			],
+		});
+
+		expect(withSettings).not.toBe(asCorpusFile);
 	});
 });
 
@@ -579,6 +599,7 @@ describe(deriveStaleness.name, () => {
 		stage: string,
 		upstream: string,
 		corpusFiles: readonly { readonly path: string; readonly sha256: string }[],
+		settingsFile?: HashedFile,
 	): CheckpointRecord {
 		const inputs = {
 			stage,
@@ -588,6 +609,7 @@ describe(deriveStaleness.name, () => {
 			effort: "high",
 			corpusFiles,
 			artifacts: [],
+			settingsFile,
 		} as const;
 
 		return {
@@ -658,6 +680,43 @@ describe(deriveStaleness.name, () => {
 		]);
 		expect(staleness[1]?.causes).toEqual(["skills/shape/SKILL.md changed"]);
 		expect(staleness[2]?.causes).toEqual(["upstream stage shape is stale"]);
+	});
+
+	it("marks a checkpoint stale when the settings file's digest no longer matches", () => {
+		const settingsFile = { path: "stage-settings.json", sha256: "ff66" };
+		const withInitial = checkpoint("initial", "root-key", [], settingsFile);
+		const nextStage = checkpoint(
+			"shape",
+			withInitial.lineage,
+			[claudeMd, doctrine, { path: "skills/shape/SKILL.md", sha256: "bb22" }],
+			settingsFile,
+		);
+		const withSettings = [withInitial, nextStage];
+
+		const staleness = deriveStaleness(withSettings, currentCorpus(), {
+			...request,
+			settingsFile: { ...settingsFile, sha256: "changed" },
+		});
+
+		expect(staleness.map(({ stage, stale }) => [stage, stale])).toEqual([
+			["initial", true],
+			["shape", true],
+		]);
+		expect(staleness[0]?.causes).toEqual([
+			"stage settings file stage-settings.json changed",
+		]);
+	});
+
+	it("does not fold the settings file into a corpus file's own staleness cause", () => {
+		const settingsFile = { path: "stage-settings.json", sha256: "ff66" };
+		const withSettings = [checkpoint("initial", "root-key", [], settingsFile)];
+
+		const staleness = deriveStaleness(withSettings, currentCorpus(), {
+			...request,
+			settingsFile,
+		});
+
+		expect(staleness[0]?.stale).toBe(false);
 	});
 
 	it("blames the first stale stage, not the nearest, further down the chain", () => {

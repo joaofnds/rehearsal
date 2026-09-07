@@ -20,6 +20,7 @@ export interface LineageInputs {
 	readonly corpusFiles: readonly HashedFile[];
 	readonly model: string;
 	readonly effort?: Effort | undefined;
+	readonly settingsFile?: HashedFile | undefined;
 }
 
 export interface RootLineageInputs {
@@ -63,6 +64,7 @@ export function lineageKey(inputs: LineageInputs): string {
 			corpusFiles: canonicalFiles(inputs.corpusFiles),
 			model: inputs.model,
 			effort: inputs.effort ?? null,
+			settingsFile: inputs.settingsFile ?? null,
 		}),
 	);
 }
@@ -348,6 +350,7 @@ export function rootLineage(inputs: RootLineageInputs): string {
 export interface StalenessRequest {
 	readonly model: string;
 	readonly effort?: Effort | undefined;
+	readonly settingsFile?: HashedFile | undefined;
 }
 
 export interface CheckpointStaleness {
@@ -459,6 +462,11 @@ export function deriveStaleness(
 				`effort ${record.effort ?? "none"} is now ${request.effort ?? "none"}`,
 			);
 		}
+		if (record.settingsFile?.sha256 !== request.settingsFile?.sha256) {
+			const path =
+				record.settingsFile?.path ?? request.settingsFile?.path ?? "none";
+			causes.push(`stage settings file ${path} changed`);
+		}
 
 		const currentCorpus = current.get(record.stage);
 		if (currentCorpus !== undefined) {
@@ -512,6 +520,7 @@ const checkpointRecordSchema = z
 		corpusFiles: z.array(hashedFileSchema),
 		artifacts: z.array(hashedFileSchema),
 		workflowState: z.array(hashedFileSchema),
+		settingsFile: hashedFileSchema.optional(),
 	})
 	.strict();
 
@@ -531,6 +540,7 @@ export interface CheckpointInputs {
 	readonly effort?: Effort | undefined;
 	readonly corpusFiles: readonly HashedFile[];
 	readonly artifacts: readonly HashedFile[];
+	readonly settingsFile?: HashedFile | undefined;
 }
 
 const RECORD_FILE = "checkpoint.json";
@@ -571,6 +581,7 @@ export async function recordCheckpoint(
 		corpusFiles: canonicalFiles(inputs.corpusFiles),
 		artifacts: canonicalFiles(inputs.artifacts),
 		workflowState: canonicalFiles(workflowState),
+		settingsFile: inputs.settingsFile,
 	};
 	await Bun.write(
 		join(directory, RECORD_FILE),

@@ -5,12 +5,14 @@ import type { SessionSettings } from "./claude";
 import type { ResolvedCorpusFile } from "./corpus-file";
 
 /**
- * `lineageKey` hashes exactly upstream, corpus files, model, and effort, and
- * nothing may enter that object. Everything frozen about a session attempt that
- * is not corpus — the transcript digest, the fixture tree, the prompt, and the
- * tool and settings overlays — is hashed into the one upstream string, so the
- * key keeps its four fields and a corpus edit still invalidates through
- * corpusFiles.
+ * `lineageKey` hashes upstream, corpus files, model, effort, and a stage
+ * checkpoint's settings file; nothing else may enter that object. A session
+ * case has no settings file of its own — that surface is ACT-37's, for stage
+ * checkpoints only — so it never sets that field and always hashes it as
+ * absent. Everything else frozen about a session attempt that is not corpus
+ * — the transcript digest, the fixture tree, the prompt, and the tool and
+ * settings overlays — is hashed into the one upstream string, so a corpus
+ * edit still invalidates through corpusFiles.
  */
 export async function sessionUpstreamDigest(
 	sessionCase: SessionCase,
