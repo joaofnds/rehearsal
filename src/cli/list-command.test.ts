@@ -74,7 +74,7 @@ describe(runList.name, () => {
 		]);
 	});
 
-	it("names a run that stopped at a stage, naming the stage it stopped at", async () => {
+	it("names a run that stopped at a stage, naming the stage and listing it replayable", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRun();
 		const recorder = recordOutput();
@@ -87,6 +87,20 @@ describe(runList.name, () => {
 		expect(lines(recorder.stdout)).toContain(
 			`run:${fixture.stoppedRun}\taudit-log\tSTOPPED:build\treplayable`,
 		);
+	});
+
+	it("reports a stopped run without a manifest as unreadable rather than replayable", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRunWithoutManifest();
+		const recorder = recordOutput();
+
+		await runList(
+			{ kind: "runs", runsDirectory: fixture.runsDirectory },
+			recorder.output,
+		);
+
+		expect(ids(recorder.stdout)).not.toContain(`run:${fixture.stoppedRun}`);
+		expect(recorder.stderr.join("")).toContain(`run:${fixture.stoppedRun}:`);
 	});
 
 	it("gives a run with no record of any kind a plain no-record line", async () => {
