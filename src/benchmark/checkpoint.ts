@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
 import type { CorpusRoot } from "./corpus-file";
+import { liveCorpusRoot } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import { statIfExists } from "./file-presence";
 import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
@@ -116,12 +117,22 @@ export function corpusLayoutRoots(targetDir: string): string[] {
  * install is the pair `corpusLayoutRoots` already searches against the
  * target under test, project level first; a resolved directory or render is
  * the whole corpus, so nothing outside it may shadow what it holds.
+ *
+ * `targetRoot` is a repository directory, the one whose `.claude` takes
+ * precedence, not a corpus root itself. A caller with no target under test
+ * passes `undefined` and gets the user install alone.
  */
 export function stageCorpusRoots(
 	source: CorpusRoot,
-	targetRoot: string,
+	targetRoot: string | undefined,
 ): readonly string[] {
-	return source.kind === "live" ? corpusLayoutRoots(targetRoot) : [source.root];
+	if (source.kind !== "live") {
+		return [source.root];
+	}
+
+	return targetRoot === undefined
+		? [liveCorpusRoot()]
+		: corpusLayoutRoots(targetRoot);
 }
 
 export async function resolveSkillDirectory(
