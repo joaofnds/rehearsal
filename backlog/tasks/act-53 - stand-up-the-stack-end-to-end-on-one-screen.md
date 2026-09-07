@@ -1,11 +1,11 @@
 ---
 id: ACT-53
 title: stand up the stack end to end on one screen
-status: Shape
+status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 20:51'
+updated_date: '2026-09-07 20:52'
 labels: []
 milestone: m-5
 dependencies:
