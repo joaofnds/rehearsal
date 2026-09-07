@@ -4,7 +4,7 @@ title: 'search the target''s project corpus root, not the control repository''s'
 status: Review
 assignee: []
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-07 00:56'
+updated_date: '2026-09-07 01:22'
 labels: []
 milestone: m-1
 dependencies: []
@@ -97,6 +97,8 @@ On the review's claim that my earlier commit stated a false reason for deleting 
 The behavior remains unpinned either way. Both the review and I reached that conclusion independently, and the review additionally showed that injecting HOME does not work, because Bun's homedir() on macOS reads the account record rather than the environment. Closing it needs an injectable home-resolver.
 
 Suite 1063 pass / 0 fail, lint, typecheck and format clean after the follow-up commit. 'rehearsal stale' currently reports nine corpus files changed against the shape checkpoint; that is correct, because ~/code/dotfiles has uncommitted edits to those instruction files applied at 02:48 today, unrelated to this card.
+
+The untested live-corpus branch is split off as ACT-93 at João's direction ('agree'). Nothing else from the review remains open on this card.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
