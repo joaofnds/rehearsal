@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { CorpusPill } from "#client/system/components/corpus-pill";
+import { FilterPill } from "#client/system/components/filter-pill";
+import type { GradeValue } from "#client/system/components/grade";
+import { Grade } from "#client/system/components/grade";
 import { SectionLabel } from "#client/system/components/section-label";
 import { Status } from "#client/system/components/status";
 import { TableShell } from "#client/system/components/table-shell";
@@ -8,7 +12,14 @@ import { runHistoryResponseSchema } from "./run-history-row";
 import { runStatusState } from "./run-status";
 import "./run-history-page.css";
 
-const COLUMNS = ["Run", "Case", "Outcome", "Corpus"] as const;
+const COLUMNS = ["Run", "Case", "Outcome", "Grade", "Corpus"] as const;
+
+const FILTERS = ["All", "Stopped"] as const;
+type Filter = (typeof FILTERS)[number];
+
+function matchesFilter(row: RunHistoryRow, filter: Filter): boolean {
+	return filter === "All" || row.status.startsWith("STOPPED:");
+}
 
 async function fetchRunHistoryRows(): Promise<readonly RunHistoryRow[]> {
 	const response = await fetch("/api/runs");
@@ -39,6 +50,37 @@ function corpusCell(row: RunHistoryRow): React.JSX.Element {
 	);
 }
 
+function gradeCell(row: RunHistoryRow): React.JSX.Element {
+	const value: GradeValue =
+		row.grade === undefined ? { pending: true } : { letter: row.grade };
+
+	return <Grade value={value} size="13" />;
+}
+
+function FilterBar({
+	active,
+	onSelect,
+}: {
+	readonly active: Filter;
+	readonly onSelect: (filter: Filter) => void;
+}): React.JSX.Element {
+	return (
+		<div className="rh-run-history__filters">
+			{FILTERS.map((filter) => (
+				<FilterPill
+					key={filter}
+					pressed={filter === active}
+					onPress={() => {
+						onSelect(filter);
+					}}
+				>
+					{filter}
+				</FilterPill>
+			))}
+		</div>
+	);
+}
+
 function EmptyState(): React.JSX.Element {
 	return (
 		<div className="rh-run-history__empty">
@@ -55,16 +97,18 @@ function EmptyState(): React.JSX.Element {
 }
 
 export function RunHistoryPage(): React.JSX.Element {
+	const [filter, setFilter] = useState<Filter>("All");
 	const query = useQuery({
 		queryKey: ["run-history"],
 		queryFn: fetchRunHistoryRows,
 	});
 
-	const rows = query.data ?? [];
+	const rows = (query.data ?? []).filter((row) => matchesFilter(row, filter));
 
 	return (
 		<main className="rh-run-history">
 			<h1>Run history</h1>
+			<FilterBar active={filter} onSelect={setFilter} />
 
 			{query.isLoading ? <p>Loading…</p> : null}
 			{query.isError ? <p role="alert">Could not load run history.</p> : null}
@@ -81,6 +125,7 @@ export function RunHistoryPage(): React.JSX.Element {
 							row.run,
 							row.caseId,
 							outcomeCell(row),
+							gradeCell(row),
 							corpusCell(row),
 						])}
 					/>

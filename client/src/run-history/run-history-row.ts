@@ -6,6 +6,7 @@ export const runHistoryRowSchema = z
 		caseId: z.string(),
 		status: z.string(),
 		stage: z.string().optional(),
+		grade: z.string().optional(),
 		corpus: z.object({ digest: z.string() }).readonly().optional(),
 		stale: z.boolean(),
 		staleCauses: z.array(z.string()).readonly(),
