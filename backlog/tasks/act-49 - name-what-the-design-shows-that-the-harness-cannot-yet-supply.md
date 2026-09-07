@@ -4,7 +4,7 @@ title: name what the design shows that the harness cannot yet supply
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 16:26'
+updated_date: '2026-09-07 16:33'
 labels: []
 milestone: m-5
 dependencies:
@@ -34,34 +34,21 @@ This card produces the inventory, not the fixes. Each real gap becomes its own c
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every screen in the committed design is walked, and each piece of data it displays is marked as recorded today, derivable from what is recorded, or not recorded at all
-- [ ] #2 Each not-recorded item names the card that would supply it, existing or newly filed
-- [ ] #3 The live-run gap states specifically what a UI would have to read to show a run in progress, since nothing on disk answers that today
+- [x] #1 Every screen in the committed design is walked, and each piece of data it displays is marked as recorded today, derivable from what is recorded, or not recorded at all
+- [x] #2 Each not-recorded item names the card that would supply it, existing or newly filed
+- [x] #3 The live-run gap states specifically what a UI would have to read to show a run in progress, since nothing on disk answers that today
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage 2026-09-04, after ACT-47 landed the export. This card was written from screenshots of one screen and says so ("the three run-detail layouts and the two comparison layouts were not inspectable"). docs/design-handoff/SPEC.md now specifies all nine screens in text, so the inventory can be complete rather than partial.
+Correction 2026-09-07, from an adversarial review of the inventory above.
 
-Gaps the spec names that this card could not see. Not a replacement for the card's own list, an addition to it:
+The review found no blocking findings; the inventory's RECORDED/DERIVABLE/GAP calls held up against the actual source for every item it checked, and none of the ten new cards duplicates existing scope or drifts into prescribing a fix. Two should-fix findings, folded:
 
-- Judge cost per step, shown as "independent session · $0.08" in the judge pane. This is ACT-43, and the spec makes it visible rather than merely recorded, which raises its priority.
-- A per-file read manifest per step, with each instruction file's ROLE: project instructions / step skill / judge rubric / read for context, plus its hash and whether it changed since the run. The harness records corpus files with hashes; the role classification does not exist.
-- Cited evidence with a source kind (transcript / diff / instruction), a locator that opens the file (session.jsonl:1284, src/auth/tokens.ts +38 -12, skills/implement.md:43), and the quoted span itself. The spec stores only cited spans and links out for the rest.
-- Contribution phrases per step ("brief the later steps read", "named 2 files to touch").
-- Culprit analysis: an agent reading the recorded steps and naming a probable cause, carrying its own cost, duration, and timestamp, explicitly labeled as opinion rather than measurement. Does not exist in any form.
-- Per-dimension judge drift ("judge +0.7 steps", "agrees") on the calibration screen. Judge-vs-human agreement accumulates from ACT-7; whether it resolves per dimension is unverified.
-- Word count per attempt, shown beside cost in the comparison arm cards. The spec says this placement is deliberate: it is how verbosity gets caught.
-- Wall-clock per run and per step.
-- Checkpoint ids in the form ckpt-0148-s1.
-- Spread across attempts rendered as an interval, and a "reading" verdict per measure (inside rerun noise / fires less often / clearest movement).
+1. Calibration screen's "per-dimension judge drift... DERIVABLE" was wrong. judge-agreement.ts's stageDecision (line 213) collapses a dimension's letter grade to a binary PASS/FAIL before it reaches JudgeAgreementObservation, so the letter-grade distance a signed "judge +0.7 steps" value needs is already discarded at the point of accumulation. This is a GAP, not a DERIVABLE: producing that figure needs a wider observation than judge-agreement.ts persists today, capturing both grades' letters rather than their reduced PASS/FAIL decision. No new card filed for this alone; it sits with whoever builds the calibration screen's drift column to decide whether widening JudgeAgreementObservation is worth it against the existing agreement/kappa figures that ARE recorded per dimension.
 
-Two spec rules that constrain how a gap may be closed, worth carrying into the inventory:
-- A task that stopped early is NOT gradable at task level. Show a dash with the reason, never a zero and never an error.
-- An attribution claim is legitimate only when exactly one instruction file hash differs between arms. If more than one differs, the UI must say so and refuse the claim.
+2. ACT-105 corrected in place: durationMs/apiDurationMs are optional fields (contracts.ts:188-189, tracing to the optional duration_ms/duration_api_ms on the provider envelope), so "a sum over providerCalls" could silently undercount a chain with a missing value. Added AC3 requiring the aggregate to mark itself incomplete rather than produce a number indistinguishable from a complete sum.
 
-Triage 2026-09-07: the card's own description cites ACT-43 as an open gap ('the artifact carries only the workflow session cost and omits the judge entirely'). ACT-43 is Done, verified against a real run artifact ($12.43 total matching the sum of every session role), so that specific line item is closed. Everything else in the inventory is unaffected; this note corrects the one stale citation.
-
-Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+One wording defect in the inventory itself, not a factual error: the AC disposition line says "done, all nine screens above; screens 6-8, 10-11 stated as already covered by ACT-50's read-existing-data scope" as though those four screens sat outside the nine sections walked. They don't — sections 6 through 9 in the body above are exactly screens 6 through 11 (7/8 and 10/11 share a section each because they're thin and similar). All eleven screens get at least one line of disposition; the sentence just counted sections instead of screens. Restating for a future reader: nine numbered sections above cover all eleven design screens, with two sections each covering a pair.
 <!-- SECTION:NOTES:END -->
