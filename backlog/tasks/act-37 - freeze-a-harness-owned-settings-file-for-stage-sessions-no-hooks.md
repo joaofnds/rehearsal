@@ -61,4 +61,22 @@ So: real, correctly scoped, and waiting. Reconsider when m-1 has produced a comp
 Triage 2026-09-07: the open-question block above is stale. ACT-28's own notes (2026-09-06) state plainly that the question three prior triage runs carried forward as blocking this card 'is not open': João answered it on DOT-36, and decision-4 (2026-09-05, accepted) is that exact answer, declared and live corpus both first-class, this card's harness-owned settings file being the mechanism decision-4 names for it. Nothing further is needed from João. Restoring priority to High (doc-6's demotion to medium was explicitly because of this same open question) and moving it into the ready queue.
 
 Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+Shape 2026-09-07, probed by the overseeing session before the questions went up:
+
+- Confirmed: a stage session already gets effort as its own `--effort` flag
+  (`claude.ts:39`), and `lineageKey` hashes effort as a field of its own beside
+  model, separate from `corpusFiles` (`checkpoint.ts:59-67`). A settings-file
+  `effort` key would be a second path to an already-frozen, already-hashed knob.
+- Confirmed: stage sessions have no output-style surface at all. `--settings` is
+  used only on the session-case path (`session-attempt.ts:131`), never in
+  `claudeArgs`, so the stage invocation has no settings overlay of any kind
+  today. Adding one is new behavior, not a gap-fill.
+- Confirmed: `--settings` takes an arbitrary JSON string and the session-case
+  path already passes one, so the flag needs no new mechanism to accept a path.
+- Refuted: the shape stage read AC1's "a pipeline or replay case can declare"
+  as leaving per-case versus shared open. The description settles it. A case
+  "declares it directly rather than the harness discovering it", and the file is
+  the harness's own surface, not a copy of anything live. Per-case declaration
+  of a harness-owned file, with a shared default, is what the card already says.
+  Not a question for João.
 <!-- SECTION:NOTES:END -->
