@@ -34,7 +34,7 @@ import {
 } from "#benchmark/config";
 import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
-import type { assertPipelinePreflight } from "#benchmark/preflight";
+import type { PipelinePreflightInputs } from "#benchmark/preflight";
 import { asRefusedPrecondition } from "#benchmark/preflight";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
@@ -94,9 +94,7 @@ export type RunOutcome =
 export interface RunCommandDependencies {
 	readonly output: CommandOutput;
 	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
-	readonly assertPreflight: (
-		inputs: Parameters<typeof assertPipelinePreflight>[0],
-	) => Promise<void>;
+	readonly assertPreflight: (inputs: PipelinePreflightInputs) => Promise<void>;
 	readonly probeModel: (model: string) => Promise<void>;
 	readonly execute: (
 		config: BenchmarkConfig,

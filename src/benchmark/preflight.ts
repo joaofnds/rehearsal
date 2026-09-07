@@ -178,11 +178,11 @@ export async function assertPipelinePreflight(
 /**
  * The target checks throw a plain `Error` naming what is wrong with the
  * repository (not the repository root, not on main, dirty, unrestored from a
- * previous run): every one of those is a precondition the run refuses, so the
- * gate reports it the same way as every other missing or invalid reference.
- * A `git` or filesystem call inside those checks can also fail on its own
- * account (`CommandError`, a missing directory's `ENOENT`), and that failure
- * already carries its own meaning and, for `CommandError`, its own exit code:
+ * previous run, or a missing directory's `ENOENT`, itself a plain `Error`):
+ * every one of those is a precondition the run refuses, so the gate reports
+ * it the same way as every other missing or invalid reference. A `git` call
+ * inside those checks can also fail on its own account (`CommandError`), and
+ * that failure already carries its own meaning and its own exit code:
  * relabeling it a refused precondition would discard both, so only a bare
  * `Error` is converted here.
  */

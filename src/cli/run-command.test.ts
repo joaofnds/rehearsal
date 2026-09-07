@@ -253,6 +253,41 @@ describe(runRunCommand.name, () => {
 		expect(targets).toEqual(["/declared/target"]);
 	});
 
+	it("preflights the case's target, settings file, and model before the run starts", async () => {
+		const preflighted: Parameters<
+			RunCommandDependencies["assertPreflight"]
+		>[0][] = [];
+		const { output } = recordOutput();
+
+		await runRunCommand(
+			{ args, json: false, stdinIsTerminal: true },
+			{
+				output,
+				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: (inputs) => {
+					preflighted.push(inputs);
+
+					return Promise.resolve();
+				},
+				probeModel: passingProbe,
+				executeSession: neverASession,
+				execute: () =>
+					Promise.resolve({
+						kind: "debug" as const,
+						recordFile: "/runs/2026.json",
+					}),
+			},
+		);
+
+		expect(preflighted).toEqual([
+			{
+				sourceDir: "/nonexistent-target",
+				settingsFilePath: "/control/stage-settings.json",
+				model: "sonnet",
+			},
+		]);
+	});
+
 	it("hands the run the case it loaded, with the case's own pipeline", async () => {
 		const executed: BenchmarkCase[] = [];
 		const { output } = recordOutput();
