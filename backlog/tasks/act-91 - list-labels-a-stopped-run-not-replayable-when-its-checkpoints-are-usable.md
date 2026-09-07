@@ -4,10 +4,12 @@ title: list labels a stopped run not replayable when its checkpoints are usable
 status: Done
 assignee: []
 created_date: '2026-09-06 22:19'
-updated_date: '2026-09-07 12:48'
+updated_date: '2026-09-07 12:50'
 labels: []
 milestone: m-1
 dependencies: []
+documentation:
+  - doc-30
 type: bug
 ordinal: 87008
 ---
