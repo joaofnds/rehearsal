@@ -13,20 +13,30 @@
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",
 		"lint": "oxlint --type-aware",
+		"lint:css": "stylelint \"client/**/*.css\"",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
-		"rehearsal": "bun run rehearsal.ts"
+		"rehearsal": "bun run rehearsal.ts",
+		"dev:client": "vite --config client/vite.config.ts"
 	},
 	"dependencies": {
-		"zod": "^4.4.3"
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
+		"zod": "^4.4.3",
+		"@phosphor-icons/react": "^2.1.10"
 	},
 	"devDependencies": {
 		"@oxlint/plugins": "1.80.0",
 		"@types/bun": "^1.4.0",
+		"@types/react": "^19.2.18",
+		"@types/react-dom": "^19.2.7",
+		"@vitejs/plugin-react": "^6.1.1",
 		"oxfmt": "^0.65.0",
 		"oxlint": "^1.80.0",
 		"oxlint-tsgolint": "^7.0.2001",
-		"typescript": "^7.0.2"
+		"stylelint": "^17.0.0",
+		"typescript": "^7.0.2",
+		"vite": "^8.2.2"
 	},
 	"packageManager": "bun@1.4.0"
 }

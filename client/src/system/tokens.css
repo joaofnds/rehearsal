@@ -1,0 +1,108 @@
+:root {
+	/* Color */
+	--color-canvas: #161826;
+	--color-surface: #1a1c28;
+	--color-surface-2: #1c1e2b;
+	--color-surface-alt: #181a26;
+	--color-sidebar: #14161f;
+	--color-row-hover: #1c1e2b;
+	--color-border-subtle: #232532;
+	--color-border: #292b31;
+	--color-border-2: #2f3140;
+	--color-border-strong: #3f424d;
+	--color-border-strong-2: #595d6c;
+	--color-text: #e9e9ed;
+	--color-text-bright: #e4e7f5;
+	--color-text-secondary: #b2b6ca;
+	--color-text-muted: #9397ab;
+	--color-text-dim: #75798c;
+	--color-text-faint: #4a4d5c;
+	--color-text-faint-2: #595d6c;
+	--color-accent: #9184d9;
+	--color-accent-light: #b5abfc;
+	--color-accent-pale: #d2cefd;
+	--color-accent-deep: #796cbf;
+	--color-accent-deep-2: #5d5294;
+	--color-accent-tint-16: rgba(145, 132, 217, 0.16);
+	--color-accent-tint-10: rgba(145, 132, 217, 0.1);
+	--color-accent-tint-08: rgba(145, 132, 217, 0.08);
+	--color-diff-add: #1f2b2a;
+	--color-diff-remove: #2b2136;
+
+	/* Type */
+	--font-ui: Inter, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, monospace;
+	--font-size-base: 13px;
+	--line-height-base: 1.45;
+	--font-size-9: 9px;
+	--font-size-10: 10px;
+	--font-size-10-5: 10.5px;
+	--font-size-11: 11px;
+	--font-size-11-5: 11.5px;
+	--font-size-12: 12px;
+	--font-size-12-5: 12.5px;
+	--font-size-13: 13px;
+	--font-size-14: 14px;
+	--font-size-15: 15px;
+	--font-size-17: 17px;
+	--font-size-19: 19px;
+	--font-size-20: 20px;
+	--font-size-22: 22px;
+	--font-size-24: 24px;
+	--font-size-26: 26px;
+	--font-size-30: 30px;
+	--letter-spacing-section-label: 0.09em;
+
+	/* Space */
+	--space-2: 2px;
+	--space-3: 3px;
+	--space-4: 4px;
+	--space-5: 5px;
+	--space-6: 6px;
+	--space-7: 7px;
+	--space-8: 8px;
+	--space-9: 9px;
+	--space-10: 10px;
+	--space-11: 11px;
+	--space-12: 12px;
+	--space-14: 14px;
+	--space-16: 16px;
+	--space-18: 18px;
+	--space-20: 20px;
+	--space-22: 22px;
+	--space-28: 28px;
+	--space-36: 36px;
+	--space-56: 56px;
+
+	/* Radius */
+	--radius-focus: 3px;
+	--radius-chip: 4px;
+	--radius-5: 5px;
+	--radius-button: 6px;
+	--radius-card: 7px;
+	--radius-section: 8px;
+	--radius-dialog: 10px;
+	--radius-pill: 99px;
+	--radius-circle: 50%;
+
+	/* Border */
+	--border-width-hairline: 1px;
+	--border-width-evidence: 2px;
+	--border-style-planned: dashed;
+	--opacity-planned: 0.62;
+
+	/* Shadow */
+	--shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.65);
+
+	/* Scrollbar */
+	--scrollbar-size: 11px;
+	--scrollbar-thumb: #3f424d;
+	--scrollbar-thumb-border: 3px;
+
+	/* Focus ring */
+	--focus-ring-width: 2px;
+	--focus-ring-offset: 2px;
+
+	/* Pulse animation */
+	--pulse-duration: 1.4s;
+}
