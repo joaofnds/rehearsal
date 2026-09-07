@@ -1,10 +1,10 @@
 ---
 id: ACT-52
 title: build the design system before the first screen
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-07 13:50'
+updated_date: '2026-09-07 13:57'
 labels: []
 milestone: m-5
 dependencies:
@@ -78,4 +78,6 @@ Approach: only one way to build this survives -- decision-2 and decision-3 alrea
 Review: adversarial-review (reviewer agent), 2026-09-07. Findings and disposition -- blocking: none. Should-fix, all folded: "table shell" citation was wrong (decision-2 has ten, not eleven; the eleventh is the card's own text, not decision-2's) -- fixed above; stylelint mechanism only caught one of colors/spacing -- fixed above with the two-rule pair; ACs #1-5 were left in place alongside the corrected #6-10, giving the card ten overlapping criteria for five behaviors -- fixed by replacing the criteria field outright rather than appending, board rule per backlog-board.md ("every value flag... replaces its field"); the "Scope of components" paragraph was mislabeled as documenting AC #6 when it documents the components AC (now AC #6 after the replacement, so the mislabel is resolved by the renumbering). Note-level, folded: fonts/icons/Phosphor were unaddressed -- fixed above; Radix's omission was correct but unstated -- now stated with its reason.
 
 Iteration stopped 2026-09-07 before build. The shaping is sound and is not what stopped it. CLAUDE.md's Stack line says 'No framework, no database, no server'; decision-3 (accepted) chooses React, Vite, Hono, and SQLite, and this card is the one that first installs a framework. Criterion 2 keeps the page server-free and nothing here adds a database, so the live collision is the framework line alone. CLAUDE.md outranks the rulebook, and decision-3 is a later and more specific statement about this exact work; nothing states which wins, so the session did not infer a ranking. Needs João's call before build installs React and Vite.
+
+Unblocked 2026-09-07: João directed the CLAUDE.md stack line to be scoped to the CLI and harness, so the UI's dependencies follow decision-3 and this card does not reargue them. Committed in this repo. The line's first draft listed four of the seven dependencies decision-3 adopts, which would have sent this card to argue for TanStack Query, Table, Router, and Radix; an independent review of the instruction edit caught that before it landed.
 <!-- SECTION:NOTES:END -->
