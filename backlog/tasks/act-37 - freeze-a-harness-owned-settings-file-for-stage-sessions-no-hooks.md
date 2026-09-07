@@ -4,7 +4,7 @@ title: 'freeze a harness-owned settings file for stage sessions, no hooks'
 status: To Do
 assignee: []
 created_date: '2026-09-03 23:33'
-updated_date: '2026-09-07 10:44'
+updated_date: '2026-09-07 10:46'
 labels:
   - defect
 dependencies: []
@@ -59,4 +59,6 @@ It also sits behind an open direction question. João's comment #5 on ACT-28 ask
 So: real, correctly scoped, and waiting. Reconsider when m-1 has produced a comparison somebody has read, which is when it becomes possible to say whether the settings divergence actually changed a score.
 
 Triage 2026-09-07: the open-question block above is stale. ACT-28's own notes (2026-09-06) state plainly that the question three prior triage runs carried forward as blocking this card 'is not open': João answered it on DOT-36, and decision-4 (2026-09-05, accepted) is that exact answer, declared and live corpus both first-class, this card's harness-owned settings file being the mechanism decision-4 names for it. Nothing further is needed from João. Restoring priority to High (doc-6's demotion to medium was explicitly because of this same open question) and moving it into the ready queue.
+
+Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->
