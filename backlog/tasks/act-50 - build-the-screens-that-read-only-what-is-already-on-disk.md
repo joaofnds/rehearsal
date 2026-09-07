@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-07 13:36'
 labels: []
 milestone: m-7
 dependencies:
@@ -51,4 +51,6 @@ Triage 2026-09-04: narrowed. This card said 'every screen whose data the harness
 Run history now belongs to ACT-53, which builds it as the walking skeleton for the stack. Run detail, tasks, cases, and calibration are each worth their own card once m-5 has shown what the first screen taught us about the wiring; filing them now would be planning six screens against a design nobody has used yet.
 
 What is left here is the pair that answers the product's own question: comparisons, and the corpus screen that says which recorded results an edit invalidated. Those two together are what m-7 is for.
+
+Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
 <!-- SECTION:NOTES:END -->

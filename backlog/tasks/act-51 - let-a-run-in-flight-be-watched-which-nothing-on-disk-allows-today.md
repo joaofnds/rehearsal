@@ -4,7 +4,7 @@ title: 'let a run in flight be watched, which nothing on disk allows today'
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-07 13:36'
 labels: []
 milestone: m-6
 dependencies:
@@ -39,3 +39,9 @@ Depends on the gap inventory, which is what establishes the real scope.
 - [ ] #4 Harness progress no longer goes to stdout as prose, satisfying ACT-26.7 or superseding it explicitly
 - [ ] #5 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+<!-- SECTION:NOTES:END -->

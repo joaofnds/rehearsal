@@ -4,7 +4,7 @@ title: stand up the stack end to end on one screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-07 13:36'
 labels: []
 milestone: m-5
 dependencies:
@@ -42,3 +42,9 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 - [ ] #5 typecheck, lint, fmt:check, and bun test all pass with the client and server in the tree, and the lint rule from ACT-52 fails the build on a raw colour or spacing value
 - [ ] #6 A second screen needs a route and components only, with no further wiring; state on the card what a reader would have to add
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+<!-- SECTION:NOTES:END -->

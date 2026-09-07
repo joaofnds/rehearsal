@@ -4,7 +4,7 @@ title: build the design system before the first screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-07 13:36'
 labels: []
 milestone: m-5
 dependencies:
@@ -50,3 +50,9 @@ Do not build this speculatively wide. Build the tokens in full, since they are e
 - [ ] #4 The focus ring and the reduced-motion pulse replacement are defined in the system, not per screen
 - [ ] #5 A check fails the build when a raw colour or spacing value appears outside the token definitions
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+<!-- SECTION:NOTES:END -->

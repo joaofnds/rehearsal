@@ -43,7 +43,10 @@
   check passes.
 - **Confirmation run** — an explicitly requested group of at least two reps over
   one frozen input set, used by the outer loop to produce a score; defaults to
-  five reps.
+  five reps. The UI's design calls this a **group** and counts it in plural
+  **attempts** (`group · 6 attempts`, the `×1/×3/×6/×12` replay control, the
+  Cases screen's **Run group** action); the word in code, records, and this
+  glossary stays confirmation run (decision-5).
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
   `compare`, `review`, `calibrate`, `list`, `show`, `stale`, `case list`,
   `case show`, `case capture`), declaring its own flags with their defaults, environment
@@ -64,6 +67,13 @@
   every benchmark case.
 - **Benchmark case** — one frozen task with its source or checkpoint and all
   non-corpus inputs; the independent unit on which comparison arms are paired.
+- **Case** (design usage) — the UI design's phrase for a task plus the
+  corpus, judges, and thresholds it runs under. It overlaps with this
+  glossary's benchmark case without matching field for field: the case
+  declaration pins task, product brief, final rubric, per-stage rubrics,
+  pipeline, and target, but has no case-level `corpus` field (corpus is
+  chosen per run by `--corpus`) and no case-level threshold field (a minimum
+  grade lives inside stage grading, not on the case) (decision-5).
 - **Case declaration** — the committed `case.json` that states a benchmark case
   as data: its id, kind, title, and the case-relative inputs the kind needs. It
   is parsed once at the boundary into a value that cannot name a file outside
@@ -78,6 +88,13 @@
   case cannot carry another kind's inputs.
 - **Control repository** — this repository: harness, corpus under evaluation,
   rubrics, and run artifacts.
+- **Contribution** — one of the three run-detail UI layouts. It grades a run's
+  outcome on its own, from recorded evidence, then has an agent (not a
+  deterministic computation) name a likely culprit stage among those that
+  ran. The agent's reading is disclosed as an opinion, never as a
+  measurement, and is provisional until the run ends. It is not an ablation:
+  ablation needs a rerun per node and is a separate planned feature
+  (decision-5).
 - **Context manifest** — the complete set of instruction and context inputs one
   attempt actually loaded, each named, classified by tier, and hashed where the
   harness can resolve its bytes. It has two halves: the corpus half, the
@@ -190,7 +207,11 @@
   writes the preliminary artifact, retains the candidate, restores the target,
   and exits, leaving the review and the calibration to their own commands.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
-  data.
+  data. The UI's design calls this a **task** (decision-5); the word in code,
+  records, and this glossary stays pipeline. Graded as a whole, a pipeline's
+  grade is computed from its first input and its last artifact only, never by
+  averaging stage grades, and a pipeline that stopped early is not gradable as
+  a whole.
 - **Pipeline definition** — the declared, user-authored data the harness reads
   to know which stages to run, in what order, and with what skill, expected
   artifact, and rubric.
@@ -219,7 +240,9 @@
   a comparison its paired deltas beside the control arm. It is never a second
   record shape: `--json` still prints the strict record's own bytes.
 - **Rep** — one repetition of a run; scores are distributions over reps, never
-  a single rep.
+  a single rep. The UI's design's singular **attempt** already matches this
+  glossary's Attempt entry and needs no mapping; the design's plural
+  **attempts** inside a group is this glossary's rep (decision-5).
 - **Rep outcome** — one binary reliability observation. A declared stage
   succeeds with Judge grade A or B; the final outcome succeeds with Judge PASS;
   a session case's rep succeeds when every check in its check list passes. A
@@ -266,7 +289,8 @@
   that select the workflow and Judge models and efforts and set the per-session
   spend limit.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
-  artifacts and emitting its own.
+  artifacts and emitting its own. The UI's design calls this a **step**
+  (decision-5); the word in code, records, and this glossary stays stage.
 - **Stage commit history** — oldest-first subjects of the commits a stage added
   after its baseline; absent when the stage did not advance the target history.
 - **Stage scorecard** — persisted Judge result for one stage: its frozen input
@@ -289,6 +313,12 @@
   kept at a stable baseline, that tasks run against.
 - **Target check** — one command declared by the pipeline and run against the
   target repository both at baseline and after delivery.
+- **Task graph** — the UI's horizontal chain of stage-node cards (grade,
+  status, live tool call, checkpoint, contribution phrase, in/out counts of
+  instruction files loaded and artifacts produced) shown on the live monitor
+  and, in reduced form, as "the map" on the run-detail Contribution layout.
+  A UI concept only; nothing in the harness computes or stores a graph
+  (decision-5).
 - **Trajectory step** — one workflow-agent turn reported by the provider. PO and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.

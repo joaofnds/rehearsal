@@ -1,10 +1,10 @@
 ---
 id: ACT-48
 title: settle the vocabulary the design introduces against the glossary
-status: To Do
+status: Review
 assignee: []
 created_date: '2026-09-04 13:00'
-updated_date: '2026-09-06 12:09'
+updated_date: '2026-09-07 13:32'
 labels: []
 milestone: m-5
 dependencies: []
@@ -30,9 +30,9 @@ Whatever is decided, GLOSSARY.md gains entries for task graph and contribution, 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A decision is recorded on the board naming which vocabulary the code uses and which the UI displays, with its reason
-- [ ] #2 GLOSSARY.md carries an entry for every term the design introduces that survives the decision
-- [ ] #3 If the words differ between UI and code, the mapping is written down in one place that the UI cards reference
+- [x] #1 A decision is recorded on the board naming which vocabulary the code uses and which the UI displays, with its reason
+- [x] #2 GLOSSARY.md carries an entry for every term the design introduces that survives the decision
+- [x] #3 If the words differ between UI and code, the mapping is written down in one place that the UI cards reference
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -54,4 +54,6 @@ That sharpens this card's problem rather than settling it. Three things the card
 The card's own recommendation (keep run and stage in code and records, treat the design's words as presentation labels mapped at the boundary) still looks right to me, and the 'task' collision with backlog cards is the strongest argument for it. But it now has to also say where Attempt and Rep sit, and it has to add glossary entries for the task-judging rule, task graph, and contribution as new concepts rather than new names.
 
 Bet, 2026-09-06: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Settled 2026-09-07 as decision-5. Code/records/glossary keep run and stage; design's task/step are UI labels mapped at the boundary, written once in GLOSSARY.md and decision-5's table, referenced by ACT-50/51/52/53. Case: design's Case and the codebase's case declaration are the same concept, glossary amended to say so. Attempt/Rep: the design's own text already says 'attempt' for the stage-checkpoint unit, so no mapping was needed, contrary to the card's open question 3. Pipeline gains the task-judging rule (grade from first input and last artifact only, never averaged) as an added constraint, which ACT-50/run-detail work must implement, not just label. Task graph and contribution added to GLOSSARY.md as new UI-only concepts.
 <!-- SECTION:NOTES:END -->
