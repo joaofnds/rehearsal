@@ -7,13 +7,13 @@ import type {
 } from "#benchmark/case";
 import {
 	caseDeclarationPath,
-	CaseDeclarationError,
 	casesRoot,
 	listCases,
 	loadCase,
 	readCaseDeclaration,
 	transcriptPrefixPath,
 } from "#benchmark/case";
+import { asRefusedPrecondition } from "#benchmark/preflight";
 import {
 	captureTranscriptPrefix,
 	CaptureError,
@@ -22,25 +22,6 @@ import {
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-
-/**
- * A case named by a well-formed flag that does not exist is a precondition the
- * command refuses, not a malformed command line, so it exits 3 like the other
- * named-but-absent inputs rather than 2.
- */
-async function asRefusedPrecondition<Loaded>(
-	load: () => Promise<Loaded>,
-): Promise<Loaded> {
-	try {
-		return await load();
-	} catch (error) {
-		if (error instanceof CaseDeclarationError) {
-			throw new RefusedPreconditionError(error.message);
-		}
-
-		throw error;
-	}
-}
 
 export function requireCase(caseId: string): Promise<LoadedCase> {
 	return asRefusedPrecondition(() => loadCase(caseId));

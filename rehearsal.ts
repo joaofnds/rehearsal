@@ -32,6 +32,10 @@ import {
 	topLevelHelp,
 } from "./src/cli/commands";
 import { EXIT_CODES, exitCodeFor } from "./src/benchmark/exit-codes";
+import {
+	assertPipelinePreflight,
+	defaultProbeModel,
+} from "./src/benchmark/preflight";
 import { runList } from "./src/cli/list-command";
 import { judgesFor, runCalibrate } from "./src/cli/calibrate-command";
 import { runReview } from "./src/cli/review-command";
@@ -124,8 +128,11 @@ async function dispatch(
 					json: commandLine.json,
 					confirmRejudge: commandLine.flags.includes("--confirm-rejudge"),
 				},
-				judgesFor,
-				processOutput,
+				{
+					buildJudges: judgesFor,
+					output: processOutput,
+					probeModel: defaultProbeModel,
+				},
 			);
 
 			return EXIT_CODES.completed;
@@ -149,7 +156,12 @@ async function dispatch(
 					json: commandLine.json,
 					stdinIsTerminal: process.stdin.isTTY,
 				},
-				{ output: processOutput, resolveRunDirectory, execute: executeReplay },
+				{
+					output: processOutput,
+					resolveRunDirectory,
+					probeModel: defaultProbeModel,
+					execute: executeReplay,
+				},
 			);
 
 			return EXIT_CODES.completed;
@@ -164,6 +176,8 @@ async function dispatch(
 				{
 					output: processOutput,
 					requireCase,
+					assertPreflight: assertPipelinePreflight,
+					probeModel: defaultProbeModel,
 					execute: executeRun,
 					executeSession: executeSessionRun,
 				},

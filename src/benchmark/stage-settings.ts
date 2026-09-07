@@ -52,7 +52,9 @@ export async function loadStageSettings(
 ): Promise<LoadedStageSettings> {
 	const file = Bun.file(path);
 	if (!(await file.exists())) {
-		throw new StageSettingsError(`No stage settings file at ${path}`);
+		throw new StageSettingsError(
+			`No stage settings file at ${path}; add it or correct the declared settingsFile`,
+		);
 	}
 
 	const bytes = await file.bytes();

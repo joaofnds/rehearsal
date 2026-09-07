@@ -27,6 +27,12 @@ const args = [
 const neverASession: RunCommandDependencies["executeSession"] = () =>
 	Promise.reject(new Error("a session attempt must not start"));
 
+const passingPreflight: RunCommandDependencies["assertPreflight"] = () =>
+	Promise.resolve();
+
+const passingProbe: RunCommandDependencies["probeModel"] = () =>
+	Promise.resolve();
+
 const smokeCase: SessionCase = {
 	kind: "session",
 	declaration: {
@@ -117,6 +123,8 @@ describe(runRunCommand.name, () => {
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
+					assertPreflight: passingPreflight,
+					probeModel: passingProbe,
 					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
@@ -138,6 +146,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: (config) => {
 					executed.push(config);
@@ -160,6 +170,8 @@ describe(runRunCommand.name, () => {
 		const dependencies = {
 			output,
 			requireCase: loader.requireCase,
+			assertPreflight: passingPreflight,
+			probeModel: passingProbe,
 			executeSession: neverASession,
 			execute: () =>
 				Promise.resolve({
@@ -198,6 +210,8 @@ describe(runRunCommand.name, () => {
 					output,
 					requireCase: (id) =>
 						Promise.reject(new RefusedPreconditionError(`Unknown case ${id}`)),
+					assertPreflight: passingPreflight,
+					probeModel: passingProbe,
 					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
@@ -222,6 +236,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: (config) => {
 					targets.push(config.sourceDir);
@@ -246,6 +262,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: (_config, _commandOutput, benchmarkCase) => {
 					executed.push(benchmarkCase);
@@ -278,6 +296,8 @@ describe(runRunCommand.name, () => {
 						...auditLogCase,
 						pipelinePath: "cases/audit-log/pipelines/other.json",
 					}),
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: (config) => {
 					recorded.push(config.pipelinePath);
@@ -293,6 +313,37 @@ describe(runRunCommand.name, () => {
 		expect(recorded).toEqual(["cases/audit-log/pipelines/other.json"]);
 	});
 
+	it("refuses a --pipeline naming a file that is not there, before the run starts", async () => {
+		const { output, stdout, stderr } = recordOutput();
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [
+						...args,
+						"--pipeline",
+						"cases/audit-log/pipelines/missing.json",
+					],
+					json: false,
+					stdinIsTerminal: true,
+				},
+				{
+					output,
+					requireCase: loadsAuditLog().requireCase,
+					assertPreflight: passingPreflight,
+					probeModel: passingProbe,
+					executeSession: neverASession,
+					execute: () => Promise.reject(new Error("run must not start")),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("missing.json");
+		expect(stdout).toEqual([]);
+		expect(stderr).toEqual([]);
+	});
+
 	it("runs the confirmation group without a terminal when --yes answers the approval", async () => {
 		const { output, stdout } = recordOutput();
 
@@ -305,6 +356,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: () =>
 					Promise.resolve({
@@ -330,6 +383,8 @@ describe(runRunCommand.name, () => {
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
+					assertPreflight: passingPreflight,
+					probeModel: passingProbe,
 					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},
@@ -347,6 +402,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: (_config, commandOutput) => {
 					commandOutput.stderr("Target: /nonexistent-target\n");
@@ -398,6 +455,8 @@ describe(runRunCommand.name, () => {
 						declaration: { ...auditLogCase.declaration, id },
 					});
 				},
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: () =>
 					Promise.resolve({
@@ -427,6 +486,8 @@ describe(runRunCommand.name, () => {
 			{
 				output,
 				requireCase: loadsAuditLog().requireCase,
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				executeSession: neverASession,
 				execute: () => Promise.resolve({ kind: "debug" as const, recordFile }),
 			},
@@ -559,6 +620,8 @@ describe("runRunCommand for a session case", () => {
 			{
 				output,
 				requireCase: loadsSmoke(),
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				execute: () => Promise.reject(new Error("no pipeline here")),
 				executeSession: () =>
 					Promise.resolve({
@@ -569,6 +632,33 @@ describe("runRunCommand for a session case", () => {
 		);
 
 		expect(stdout.join("")).toBe("/runs/attempt.json\n");
+	});
+
+	it("halts before the session attempt when the declared model is not available", async () => {
+		const { output } = recordOutput();
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: ["--case", "smoke", ...sessionArgs],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: loadsSmoke(),
+					assertPreflight: passingPreflight,
+					probeModel: () =>
+						Promise.reject(
+							new RefusedPreconditionError("Model haiku is not available"),
+						),
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: neverASession,
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 	});
 
 	it.each(["--target", "--pipeline"])(
@@ -586,6 +676,8 @@ describe("runRunCommand for a session case", () => {
 					{
 						output,
 						requireCase: loadsSmoke(),
+						assertPreflight: passingPreflight,
+						probeModel: passingProbe,
 						execute: () => Promise.reject(new Error("no pipeline here")),
 						executeSession: neverASession,
 					},
@@ -611,6 +703,8 @@ describe("runRunCommand for a session case", () => {
 			{
 				output,
 				requireCase: loadsSmoke(),
+				assertPreflight: passingPreflight,
+				probeModel: passingProbe,
 				execute: () => Promise.reject(new Error("no pipeline here")),
 				executeSession: () =>
 					Promise.resolve({
@@ -644,6 +738,8 @@ describe("--corpus on a pipeline case", () => {
 				{
 					output,
 					requireCase: loadsAuditLog().requireCase,
+					assertPreflight: passingPreflight,
+					probeModel: passingProbe,
 					executeSession: neverASession,
 					execute: () => Promise.reject(new Error("run must not start")),
 				},

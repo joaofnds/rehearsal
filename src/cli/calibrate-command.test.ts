@@ -6,7 +6,11 @@ import { CalibrationIncompleteError } from "#benchmark/calibration";
 import { CONTROL_DIR } from "#benchmark/config";
 import { calibratableArtifactSchema } from "#benchmark/calibration-record";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
-import type { CurrentControlSources, JudgeKnobs } from "#cli/calibrate-command";
+import type {
+	CalibrateDependencies,
+	CurrentControlSources,
+	JudgeKnobs,
+} from "#cli/calibrate-command";
 import { readControlSources, runCalibrate } from "#cli/calibrate-command";
 import type { RunFixture } from "#cli/calibrate-test-support";
 import {
@@ -21,6 +25,8 @@ import {
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
+
+const passingProbe = (): Promise<void> => Promise.resolve();
 
 const directories: string[] = [];
 
@@ -76,7 +82,7 @@ async function fixtureWithEditedStageRubric(): Promise<
 	return fixture;
 }
 
-function rejudgingStage(): Parameters<typeof runCalibrate>[1] {
+function rejudgingStage(): CalibrateDependencies["buildJudges"] {
 	return () => ({
 		stageJudge: (_scorecard, source) =>
 			Promise.resolve({
@@ -128,6 +134,44 @@ describe(readControlSources.name, () => {
 });
 
 describe(runCalibrate.name, () => {
+	it("halts before rejudging when the recorded Judge model is not available", async () => {
+		const fixture = await writeRunFixture();
+		directories.push(fixture.runsDirectory);
+		await writeReview(fixture.reviewFile, []);
+		const { output } = recordOutput();
+		const built: unknown[] = [];
+
+		const failure = await failureOf(
+			runCalibrate(
+				{
+					id: RUN_NAME,
+					runsDirectory: fixture.runsDirectory,
+					json: false,
+					confirmRejudge: false,
+					readCurrentSources: unchangedControlSources,
+				},
+				{
+					buildJudges: (knobs) => {
+						built.push(knobs);
+
+						return {
+							stageJudge: () => Promise.reject(new Error("no provider call")),
+							finalJudge: () => Promise.reject(new Error("no provider call")),
+						};
+					},
+					output,
+					probeModel: () =>
+						Promise.reject(
+							new RefusedPreconditionError("Model sonnet is not available"),
+						),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(built).toEqual([]);
+	});
+
 	it("refuses a rejudge without --confirm-rejudge and writes nothing", async () => {
 		const fixture = await fixtureWithEditedStageRubric();
 		const before = await Bun.file(fixture.artifactFile).text();
@@ -142,8 +186,11 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: false,
 					readCurrentSources: unchangedControlSources,
 				},
-				rejudgingStage(),
-				output,
+				{
+					buildJudges: rejudgingStage(),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -165,8 +212,11 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: true,
 				readCurrentSources: unchangedControlSources,
 			},
-			rejudgingStage(),
-			output,
+			{
+				buildJudges: rejudgingStage(),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const artifact = artifactSchema.parse(
@@ -193,13 +243,16 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: false,
 				readCurrentSources: unchangedControlSources,
 			},
-			() => ({
-				stageJudge: () =>
-					Promise.reject(new Error("no stage rejudge was needed")),
-				finalJudge: () =>
-					Promise.reject(new Error("no final rejudge was needed")),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () =>
+						Promise.reject(new Error("no stage rejudge was needed")),
+					finalJudge: () =>
+						Promise.reject(new Error("no final rejudge was needed")),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const artifact = artifactSchema.parse(
@@ -227,8 +280,11 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: true,
 					readCurrentSources: unchangedControlSources,
 				},
-				rejudgingStage(),
-				output,
+				{
+					buildJudges: rejudgingStage(),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -254,11 +310,14 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: true,
 					readCurrentSources: unchangedControlSources,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -281,11 +340,14 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: true,
 					readCurrentSources: unchangedControlSources,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -320,33 +382,36 @@ describe(runCalibrate.name, () => {
 						finalRubric: controlRubric,
 					}),
 			},
-			() => ({
-				stageJudge: () => Promise.reject(new Error("no stage rejudge")),
-				finalJudge: () =>
-					Promise.resolve({
-						prompt: "revised prompt",
-						attempts: [],
-						costUsd: 0,
-						grade: {
-							requirements: [
-								{
-									id: "worker-metadata",
-									status: "FAIL",
-									evidence: [
-										{
-											source: "diff",
-											path: "src/audit/worker.ts",
-											claim: "metadata missing",
-										},
-									],
-								},
-							],
-							verdict: "FAIL",
-							summary: "revised",
-						},
-					}),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () => Promise.reject(new Error("no stage rejudge")),
+					finalJudge: () =>
+						Promise.resolve({
+							prompt: "revised prompt",
+							attempts: [],
+							costUsd: 0,
+							grade: {
+								requirements: [
+									{
+										id: "worker-metadata",
+										status: "FAIL",
+										evidence: [
+											{
+												source: "diff",
+												path: "src/audit/worker.ts",
+												claim: "metadata missing",
+											},
+										],
+									},
+								],
+								verdict: "FAIL",
+								summary: "revised",
+							},
+						}),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const artifact = artifactSchema.parse(
@@ -374,8 +439,11 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: true,
 				readCurrentSources: unchangedControlSources,
 			},
-			rejudgingStage(),
-			output,
+			{
+				buildJudges: rejudgingStage(),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const record = z
@@ -411,12 +479,15 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: true,
 				readCurrentSources: unchangedControlSources,
 			},
-			(recorded) => {
-				knobs.push(recorded);
+			{
+				buildJudges: (recorded) => {
+					knobs.push(recorded);
 
-				return rejudgingStage()(recorded);
+					return rejudgingStage()(recorded);
+				},
+				output,
+				probeModel: passingProbe,
 			},
-			output,
 		);
 
 		expect(knobs).toEqual([
@@ -444,11 +515,14 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: false,
 				readCurrentSources: unchangedControlSources,
 			},
-			() => ({
-				stageJudge: () => Promise.reject(new Error("no provider call")),
-				finalJudge: () => Promise.reject(new Error("no provider call")),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const record = z
@@ -485,11 +559,14 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: false,
 				readCurrentSources: unchangedControlSources,
 			},
-			() => ({
-				stageJudge: () => Promise.reject(new Error("no provider call")),
-				finalJudge: () => Promise.reject(new Error("no provider call")),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const postCard = calibratableArtifactSchema.parse(
@@ -524,11 +601,14 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: false,
 					readCurrentSources: unchangedControlSources,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -581,11 +661,14 @@ describe(runCalibrate.name, () => {
 						confirmRejudge: false,
 						readCurrentSources: unchangedControlSources,
 					},
-					() => ({
-						stageJudge: () => Promise.reject(new Error("no provider call")),
-						finalJudge: () => Promise.reject(new Error("no provider call")),
-					}),
-					output,
+					{
+						buildJudges: () => ({
+							stageJudge: () => Promise.reject(new Error("no provider call")),
+							finalJudge: () => Promise.reject(new Error("no provider call")),
+						}),
+						output,
+						probeModel: passingProbe,
+					},
 				),
 			);
 
@@ -609,11 +692,14 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: false,
 					readCurrentSources: unchangedControlSources,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -640,11 +726,14 @@ describe(runCalibrate.name, () => {
 					json: false,
 					confirmRejudge: false,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 
@@ -690,11 +779,14 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: false,
 				readCurrentSources: unchangedControlSources,
 			},
-			() => ({
-				stageJudge: () => Promise.reject(new Error("no provider call")),
-				finalJudge: () => Promise.reject(new Error("no provider call")),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const completed = z
@@ -723,11 +815,14 @@ describe(runCalibrate.name, () => {
 				confirmRejudge: false,
 				readCurrentSources: unchangedControlSources,
 			},
-			() => ({
-				stageJudge: () => Promise.reject(new Error("no provider call")),
-				finalJudge: () => Promise.reject(new Error("no provider call")),
-			}),
-			output,
+			{
+				buildJudges: () => ({
+					stageJudge: () => Promise.reject(new Error("no provider call")),
+					finalJudge: () => Promise.reject(new Error("no provider call")),
+				}),
+				output,
+				probeModel: passingProbe,
+			},
 		);
 
 		const failure = await failureOf(
@@ -739,11 +834,14 @@ describe(runCalibrate.name, () => {
 					confirmRejudge: false,
 					readCurrentSources: unchangedControlSources,
 				},
-				() => ({
-					stageJudge: () => Promise.reject(new Error("no provider call")),
-					finalJudge: () => Promise.reject(new Error("no provider call")),
-				}),
-				output,
+				{
+					buildJudges: () => ({
+						stageJudge: () => Promise.reject(new Error("no provider call")),
+						finalJudge: () => Promise.reject(new Error("no provider call")),
+					}),
+					output,
+					probeModel: passingProbe,
+				},
 			),
 		);
 

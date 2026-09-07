@@ -7,6 +7,7 @@ import type { CaseDeclaration } from "#benchmark/case";
 import {
 	caseDeclarationSchema,
 	CASES_DIRECTORY,
+	casesRoot,
 	transcriptPrefixPath,
 } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
@@ -15,7 +16,12 @@ import { TestResources } from "#benchmark/test-support";
 import type { OutputRecorder } from "#cli/cli-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import type { CaseCaptureRequest } from "#cli/case-command";
-import { runCaseCapture, runCaseList, runCaseShow } from "#cli/case-command";
+import {
+	requireCase,
+	runCaseCapture,
+	runCaseList,
+	runCaseShow,
+} from "#cli/case-command";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 
@@ -26,6 +32,39 @@ function printedDeclarations(text: string): readonly CaseDeclaration[] {
 function printedDeclaration(text: string): CaseDeclaration {
 	return caseDeclarationSchema.parse(z.json().parse(JSON.parse(text)));
 }
+
+describe(requireCase.name, () => {
+	const resources = TestResources.forEachTest();
+
+	it("refuses a case whose declared pipeline is not there, naming it", async () => {
+		const id = "zz-missing-pipeline-probe";
+		const directory = join(casesRoot(), id);
+		resources.track(directory);
+		await mkdir(directory, { recursive: true });
+		await Bun.write(join(directory, "backlog-seed.md"), "Task");
+		await Bun.write(join(directory, "product-brief.md"), "Brief");
+		await Bun.write(join(directory, "rubric.md"), "Rubric");
+		await Bun.write(
+			join(directory, "case.json"),
+			JSON.stringify({
+				id,
+				kind: "pipeline",
+				title: "Missing pipeline",
+				task: "backlog-seed.md",
+				productBrief: "product-brief.md",
+				finalRubric: "rubric.md",
+				pipeline: "pipelines/missing.json",
+				rubrics: "rubrics",
+				target: { path: "/tmp/does-not-matter" },
+			}),
+		);
+
+		const failure = await failureOf(requireCase(id));
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("pipelines/missing.json");
+	});
+});
 
 describe(runCaseList.name, () => {
 	it("prints one line per declared case with its id and title", async () => {

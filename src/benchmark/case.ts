@@ -354,6 +354,28 @@ export function declaredSettingsFilePath(
 	return caseRelative(declaration, declaration.settingsFile);
 }
 
+/**
+ * Every declared file this reads is untrusted data a case author can get
+ * wrong, so a missing one is reported for the field that named it rather than
+ * reaching the loader as a bare filesystem error with no fix a reader can act
+ * on.
+ */
+async function readDeclaredFile(
+	declaration: PipelineCaseDeclaration,
+	field: string,
+	relativePath: string,
+): Promise<string> {
+	const path = caseRelative(declaration, relativePath);
+	const file = Bun.file(path);
+	if (!(await file.exists())) {
+		throw new CaseDeclarationError(
+			`Case ${declaration.id} declares ${field} at ${relativePath}, but no file is there; add it or correct the declaration`,
+		);
+	}
+
+	return file.text();
+}
+
 async function loadPipelineCase(
 	declaration: PipelineCaseDeclaration,
 ): Promise<BenchmarkCase> {
@@ -364,9 +386,9 @@ async function loadPipelineCase(
 	const [{ pipeline, stageRubrics }, task, productBrief, finalRubric] =
 		await Promise.all([
 			loadPipelineWithRubrics(declaration, pipelinePath),
-			Bun.file(caseRelative(declaration, declaration.task)).text(),
-			Bun.file(caseRelative(declaration, declaration.productBrief)).text(),
-			Bun.file(caseRelative(declaration, declaration.finalRubric)).text(),
+			readDeclaredFile(declaration, "task", declaration.task),
+			readDeclaredFile(declaration, "productBrief", declaration.productBrief),
+			readDeclaredFile(declaration, "finalRubric", declaration.finalRubric),
 		]);
 
 	return {

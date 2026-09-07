@@ -100,6 +100,7 @@ export interface ReplayCommandRequest {
 export interface ReplayCommandDependencies {
 	readonly output: CommandOutput;
 	readonly resolveRunDirectory: (runName: string) => Promise<string>;
+	readonly probeModel: (model: string) => Promise<void>;
 	readonly execute: (
 		config: ReplayCliConfig,
 		paths: BenchmarkRunPaths,
@@ -132,6 +133,8 @@ export async function runReplayCommand(
 	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
+
+	await dependencies.probeModel(config.model);
 
 	const outcome = await dependencies.execute(
 		config,

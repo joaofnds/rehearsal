@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
 	CASES_DIRECTORY,
+	CaseDeclarationError,
+	casesRoot,
 	caseRelative,
 	listCases,
 	loadCase,
@@ -244,6 +246,62 @@ describe("loadCase", () => {
 		);
 
 		expect(declared).toMatchObject({ settingsFile: "settings.json" });
+	});
+
+	it("names the missing file and the fix when a declared file is absent", async () => {
+		const resources = TestResources.forEachTest();
+		const id = "zz-missing-task-probe";
+		const directory = join(casesRoot(), id);
+		resources.track(directory);
+		await mkdir(join(directory, "rubrics"), { recursive: true });
+		await Bun.write(join(directory, "product-brief.md"), "Brief");
+		await Bun.write(join(directory, "rubric.md"), "Rubric");
+		await Bun.write(
+			join(directory, "rubrics/build.json"),
+			JSON.stringify({
+				hardBlockers: [
+					{ id: "invalid-stage-delivery", description: "d" },
+					{ id: "false-test-safety", description: "d" },
+					{ id: "unfinished-delivery", description: "d" },
+				],
+				requirements: [],
+				dimensions: [],
+			}),
+		);
+		await Bun.write(
+			join(directory, "pipeline.json"),
+			JSON.stringify({
+				statuses: ["To Do", "Build", "Done"],
+				target: {
+					checks: [{ command: ["true"] }],
+					integrityFiles: ["base.txt"],
+				},
+				stages: [
+					{ name: "build", kind: "delivery", skill: "build", rubric: "b" },
+				],
+			}),
+		);
+		await Bun.write(
+			join(directory, "case.json"),
+			JSON.stringify({
+				id,
+				kind: "pipeline",
+				title: "Missing task",
+				task: "backlog-seed.md",
+				productBrief: "product-brief.md",
+				finalRubric: "rubric.md",
+				pipeline: "pipeline.json",
+				rubrics: "rubrics",
+				target: { path: "/tmp/does-not-matter" },
+			}),
+		);
+
+		const failure = loadCase(id);
+
+		expect(failure).rejects.toBeInstanceOf(CaseDeclarationError);
+		expect(failure).rejects.toThrow(
+			`Case ${id} declares task at backlog-seed.md, but no file is there; add it or correct the declaration`,
+		);
 	});
 });
 

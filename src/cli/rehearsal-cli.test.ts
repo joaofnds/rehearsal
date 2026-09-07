@@ -359,9 +359,10 @@ describe("rehearsal", () => {
 
 	/**
 	 * The terminal gate belongs to `--pause` alone now, so a run without it
-	 * reaches the work and fails on the state it finds rather than on a pause it
-	 * never asked for. What the run then fails on depends on the machine, so
-	 * only the refusal it must not make is asserted.
+	 * reaches the work and fails on the state it finds (here, the preflight gate
+	 * refusing a target that is not there) rather than on a pause it never asked
+	 * for. What the run then fails on depends on the machine, so only the
+	 * refusal it must not make is asserted.
 	 */
 	it("passes the terminal gate without --pause", async () => {
 		const result = await runCli([
@@ -376,7 +377,6 @@ describe("rehearsal", () => {
 
 		expect(result.stdout).toBe("");
 		expect(result.stderr).not.toContain("stdin is not a terminal");
-		expect(result.exitCode).not.toBe(EXIT_CODES.refusedPrecondition);
 	});
 
 	it.each([

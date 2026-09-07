@@ -34,6 +34,8 @@ import {
 } from "#benchmark/config";
 import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
+import type { assertPipelinePreflight } from "#benchmark/preflight";
+import { asRefusedPrecondition } from "#benchmark/preflight";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
 import {
@@ -92,6 +94,10 @@ export type RunOutcome =
 export interface RunCommandDependencies {
 	readonly output: CommandOutput;
 	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
+	readonly assertPreflight: (
+		inputs: Parameters<typeof assertPipelinePreflight>[0],
+	) => Promise<void>;
+	readonly probeModel: (model: string) => Promise<void>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
@@ -138,10 +144,19 @@ export async function runRunCommand(
 
 	writeDiagnostic(dependencies.output, judgeSelfPreferenceWarning(config));
 
+	const selected = await asRefusedPrecondition(() =>
+		selectedCase(benchmarkCase, config),
+	);
+	await dependencies.assertPreflight({
+		sourceDir: config.sourceDir,
+		settingsFilePath: selected.settingsFilePath,
+		model: config.model,
+	});
+
 	const outcome = await dependencies.execute(
 		config,
 		dependencies.output,
-		await selectedCase(benchmarkCase, config),
+		selected,
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);
@@ -183,6 +198,7 @@ async function runSessionCase(
 	);
 
 	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
+	await dependencies.probeModel(config.model);
 
 	const outcome = await dependencies.executeSession(
 		config,

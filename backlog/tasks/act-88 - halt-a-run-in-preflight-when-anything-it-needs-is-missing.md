@@ -1,10 +1,10 @@
 ---
 id: ACT-88
 title: halt a run in preflight when anything it needs is missing
-status: Build
+status: Review
 assignee: []
 created_date: '2026-09-05 23:59'
-updated_date: '2026-09-07 17:12'
+updated_date: '2026-09-07 17:58'
 labels: []
 dependencies: []
 ordinal: 84008
@@ -12,16 +12,16 @@ ordinal: 84008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Running a case whose declared target directory is absent halts before the first stage, naming the missing path
-- [ ] #2 Running a case whose declared task, product brief, rubric, or pipeline file is absent halts before the first stage, naming the missing file
-- [ ] #3 Running a case halts before the first stage when the requested model is unavailable
-- [ ] #4 Running a case halts before the first stage when the declared session budget is absent or not a positive amount
-- [ ] #5 Every preflight failure names what is missing and what would fix it, and no stage runs after one
-- [ ] #6 A run whose every declared reference resolves proceeds unchanged
-- [ ] #7 Replay and calibrate halt before spending anything when the model they would run under is unavailable, the same as run
-- [ ] #8 The model check reads the CLI result envelope rather than the process exit code, which is 0 on an unrecognized model
-- [ ] #9 A pipeline case whose declared settingsFile is absent halts before the first stage on a plain run, not only under --confirm or replay
-- [ ] #10 A session case whose declared fixture, transcript prefix, or corpus file is absent halts before the session starts, naming the missing path
+- [x] #1 Running a case whose declared target directory is absent halts before the first stage, naming the missing path
+- [x] #2 Running a case whose declared task, product brief, rubric, or pipeline file is absent halts before the first stage, naming the missing file
+- [x] #3 Running a case halts before the first stage when the requested model is unavailable
+- [x] #4 Running a case halts before the first stage when the declared session budget is absent or not a positive amount
+- [x] #5 Every preflight failure names what is missing and what would fix it, and no stage runs after one
+- [x] #6 A run whose every declared reference resolves proceeds unchanged
+- [x] #7 Replay and calibrate halt before spending anything when the model they would run under is unavailable, the same as run
+- [x] #8 The model check reads the CLI result envelope rather than the process exit code, which is 0 on an unrecognized model
+- [x] #9 A pipeline case whose declared settingsFile is absent halts before the first stage on a plain run, not only under --confirm or replay
+- [x] #10 A session case whose declared fixture, transcript prefix, or corpus file is absent halts before the session starts, naming the missing path
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -163,4 +163,82 @@ means and are not this session's call.
 Two scope questions raised by the 2026-09-07 shape review are settled here rather than sent back, because the directive above already answers both. 'Go to every referred path and instruction, and everything that we can check' covers a declared settings file and a session case's declared inputs; excluding either would contradict the direction that created the card.
 
 Verified 2026-09-07 against the source. settingsFile is declared optional at src/benchmark/case.ts:66 and resolved at case.ts:350-354, and it is checked only on --confirm and replay, so a plain run can start on an absent settings file. Session cases declare fixture (case.ts:76), transcript (case.ts:78), and corpusFiles (case.ts:82), and no acceptance criterion on this card covered any of them before AC #10, since every earlier criterion is pipeline-shaped. Both are now criteria, not open questions.
+
+Implemented and verified 2026-09-07.
+
+What changed: a single gate, src/benchmark/preflight.ts, called from run (both
+pipeline and session branches), replay, and calibrate before any stage, worktree,
+or provider call. assertPipelinePreflight checks target readiness, the settings
+file, then the model, in that order, fail-fast, for a pipeline case; a bare
+probeModel call covers replay, calibrate, and session-case run, none of which
+touch a target or settings file. case.ts's loadPipelineCase now wraps a missing
+task/productBrief/finalRubric as CaseDeclarationError naming the field and the
+fix; the pre-existing PipelineDefinitionError (missing pipeline or per-stage
+rubric) and StageSettingsError (missing settings file) already named the path,
+and are now caught and converted to RefusedPreconditionError (exit 3) by the
+same shared asRefusedPrecondition preflight.ts exports, which case-command.ts's
+requireCase/runCaseList/runCaseShow/runCaseCapture now import instead of keeping
+a local copy that only caught CaseDeclarationError.
+
+Model probe: one throwaway `claude` CLI call ($0.02 budget cap, sealed access,
+no tools, prompt "hi"), read through readClaudeEnvelope's is_error flag, never
+the process exit code. Observed directly this session: on CLI 2.1.263 an
+unrecognized model exits 1 (not 0, as the shape session's note claimed after
+observing an earlier CLI build) but still writes the rejection envelope to
+stdout; defaultModelProbe reads that stdout off CommandError regardless of
+which exit code the CLI uses, so the check does not depend on which one is
+correct today.
+
+Adversarial review this session (6 reviewers: spec, style, architecture,
+security, testing, refactoring) found and I fixed 5 real defects before calling
+this done, all verified with a fresh red/green cycle and a direct production
+probe, not just the added unit test:
+- Session-case run never called the model probe at all (three reviewers caught
+  this independently) -- a session case could spend its budget against an
+  unavailable model with no preflight. Fixed: RunCommandDependencies gained a
+  probeModel field, called in runSessionCase before executeSession.
+- asTargetPrecondition wrapped ANY thrown error, including CommandError from a
+  git-binary failure on a non-repo directory, as RefusedPreconditionError
+  (exit 3), discarding CommandError's own meaningful exit code (git's own,
+  e.g. 128) and silently changing exit-code semantics for infra failures.
+  Fixed with a shared isBareError(error) check (error.constructor === Error):
+  only wrap the four named plain-Error conditions, let CommandError/ENOENT
+  propagate on their own account.
+- probeModelAvailable mislabeled any readClaudeEnvelope failure, including a
+  JSON parse or zod schema failure on a malformed response, as "model is not
+  available" with misleading remediation advice. Same isBareError fix.
+- runCalibrate had grown to 4 positional parameters (request, buildJudges,
+  output, probeModel), unlike run/replay's single dependencies-object pattern,
+  and every existing call site needed editing again for the 4th param -- the
+  same shotgun-surgery shape that caused the defect below. Restructured to
+  runCalibrate(request, { buildJudges, output, probeModel }).
+- case-command.ts's widened error-catching (now via the shared helper) had no
+  test proving PipelineDefinitionError/StageSettingsError actually convert to
+  a refusal through requireCase specifically. Added one.
+Also closed on review: the settings-file-missing message named the path but
+not a fix (unlike every other new message this task added); it now reads
+"...; add it or correct the declared settingsFile".
+
+Deferred, not fixed: assertControlReady/assertSourceReady now run twice on a
+plain run (once in the new preflight gate, once again inside runBenchmark) and
+three times under --confirm (again in confirmRun). Not wrong -- both are cheap,
+idempotent git calls, and the second still throws its own class of error if the
+state changed between the two checks -- but it is duplicate I/O this gate was
+meant to make redundant. Closing it means threading assertPipelinePreflight's
+SourceBaseline/controlSha into runBenchmark and confirmRun instead of letting
+them re-derive it, which changes runBenchmark's signature in src/benchmark/run.ts,
+a file this task never otherwise touches. Left as a card, not fixed inline,
+since it's a cross-cutting signature change rather than a small reversible
+edit.
+
+Verified this session, directly: full suite (bun run test) green, 1111+62
+tests; typecheck/lint/fmt clean; four hand-run probes against the real
+production wiring (not just fakes) confirming exit 3 with the fix named for:
+a missing target directory, an unavailable model on a pipeline run, a missing
+settings file, and an unavailable model on a session-case run. Not verified:
+an actual paid run against a real target repository end to end (would cost
+real money and this machine's control repo is mid-diff/dirty), and the
+deferred double-check item above.
+
+Deferred cleanup split into ACT-106.
 <!-- SECTION:NOTES:END -->

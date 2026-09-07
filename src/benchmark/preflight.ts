@@ -1,0 +1,201 @@
+import { z } from "zod";
+import { CaseDeclarationError } from "./case";
+import { claudeArgs, readClaudeEnvelope } from "./claude";
+import { CommandError, runCommand } from "./command";
+import { CONTROL_DIR } from "./config";
+import { RefusedPreconditionError } from "./exit-codes";
+import { PipelineDefinitionError } from "./pipeline";
+import type { LoadedStageSettings } from "./stage-settings";
+import { loadStageSettings, StageSettingsError } from "./stage-settings";
+import { assertControlReady, assertSourceReady } from "./target";
+import type { SourceBaseline } from "./target";
+
+const DECLARED_REFERENCE_ERRORS = [
+	CaseDeclarationError,
+	PipelineDefinitionError,
+	StageSettingsError,
+] as const;
+
+/**
+ * A bare `Error`, as opposed to one of its subclasses: several checks in this
+ * module throw a plain `Error` for the one condition they name and let a
+ * subclassed failure (`CommandError`, `SyntaxError`, a zod error) from a
+ * collaborator they call propagate on its own account, so relabeling that
+ * collaborator's failure as this check's own would discard what it already
+ * says.
+ */
+function isBareError(error: Readonly<Error>): boolean {
+	return error.constructor === Error;
+}
+
+/**
+ * A declared reference a case names but the loader cannot resolve — an
+ * unreadable case, a missing pipeline, a missing stage settings file — is a
+ * precondition the command refuses rather than a bug in the loader, so it
+ * exits 3 with the loader's own message, which already names the path.
+ */
+export async function asRefusedPrecondition<Loaded>(
+	load: () => Promise<Loaded>,
+): Promise<Loaded> {
+	try {
+		return await load();
+	} catch (error) {
+		if (DECLARED_REFERENCE_ERRORS.some((kind) => error instanceof kind)) {
+			throw new RefusedPreconditionError(
+				error instanceof Error ? error.message : String(error),
+			);
+		}
+
+		throw error;
+	}
+}
+
+export type ModelProbe = () => Promise<string>;
+
+const MODEL_PROBE_PROMPT = "hi";
+const MODEL_PROBE_BUDGET_USD = 0.02;
+const modelProbeSchema = z.object({}).loose();
+
+export type CommandRunner = (
+	command: readonly string[],
+	cwd: string,
+	options: { readonly input: string },
+) => Promise<string>;
+
+/**
+ * The provider still writes the envelope to stdout on a rejected model, so a
+ * `CommandError` here is read for that stdout rather than treated as the
+ * probe's own failure; a failure with no stdout to read (the CLI missing
+ * entirely) is not this precondition and is rethrown.
+ */
+export function defaultModelProbe(
+	model: string,
+	run: CommandRunner = runCommand,
+): ModelProbe {
+	return async () => {
+		try {
+			return await run(
+				claudeArgs({
+					settings: { model, budgetUsd: MODEL_PROBE_BUDGET_USD },
+					schema: modelProbeSchema,
+					access: "sealed",
+				}),
+				CONTROL_DIR,
+				{ input: MODEL_PROBE_PROMPT },
+			);
+		} catch (error) {
+			if (error instanceof CommandError) {
+				return error.stdout;
+			}
+
+			throw error;
+		}
+	};
+}
+
+/**
+ * A throwaway completion under the declared model, read through the envelope
+ * rather than the process exit code: an unrecognized or unentitled model still
+ * exits the CLI process in a way that varies by release, but the envelope's
+ * `is_error` is the one signal `readClaudeEnvelope` already commits to reading.
+ * `readClaudeEnvelope` throws a bare `Error` only for that signal; a malformed
+ * response throws `SyntaxError` or a zod error instead, and those name a probe
+ * or provider problem, not an unavailable model, so only the bare `Error` is
+ * relabeled here.
+ */
+export async function probeModelAvailable(
+	model: string,
+	invoke: ModelProbe,
+): Promise<void> {
+	const output = await invoke();
+	try {
+		readClaudeEnvelope(output);
+	} catch (error) {
+		if (!(error instanceof Error) || !isBareError(error)) {
+			throw error;
+		}
+
+		throw new RefusedPreconditionError(
+			`Model ${model} is not available: ${error.message}. Re-declare a model this session can run, or check your entitlement for it.`,
+		);
+	}
+}
+
+/**
+ * `run`'s full gate composes the probe with the target and settings checks
+ * below; `replay` and `calibrate` spend under a declared model with neither of
+ * those, so they call this composition directly.
+ */
+export function defaultProbeModel(
+	model: string,
+	run?: CommandRunner,
+): Promise<void> {
+	return probeModelAvailable(model, defaultModelProbe(model, run));
+}
+
+export interface PipelinePreflightInputs {
+	readonly sourceDir: string;
+	readonly settingsFilePath: string;
+	readonly model: string;
+}
+
+export interface PipelinePreflightDependencies {
+	readonly assertControlReady: () => Promise<string>;
+	readonly assertSourceReady: (sourceDir: string) => Promise<SourceBaseline>;
+	readonly loadStageSettings: (path: string) => Promise<LoadedStageSettings>;
+	readonly probeModel: (model: string) => Promise<void>;
+}
+
+const defaultPipelinePreflightDependencies: PipelinePreflightDependencies = {
+	assertControlReady,
+	assertSourceReady,
+	loadStageSettings,
+	probeModel: defaultProbeModel,
+};
+
+/**
+ * Everything a pipeline run, replay, or confirmation would spend on before the
+ * first stage: the target repository, the settings file every stage session
+ * reads, and the model itself, checked last because it is the only step that
+ * costs anything. Each check fails fast, so a target that is not ready is
+ * reported without a wasted provider call for a model that was never going to
+ * run against it.
+ */
+export async function assertPipelinePreflight(
+	inputs: PipelinePreflightInputs,
+	dependencies: PipelinePreflightDependencies = defaultPipelinePreflightDependencies,
+): Promise<void> {
+	await asTargetPrecondition(() => dependencies.assertControlReady());
+	await asTargetPrecondition(() =>
+		dependencies.assertSourceReady(inputs.sourceDir),
+	);
+	await asRefusedPrecondition(() =>
+		dependencies.loadStageSettings(inputs.settingsFilePath),
+	);
+	await dependencies.probeModel(inputs.model);
+}
+
+/**
+ * The target checks throw a plain `Error` naming what is wrong with the
+ * repository (not the repository root, not on main, dirty, unrestored from a
+ * previous run): every one of those is a precondition the run refuses, so the
+ * gate reports it the same way as every other missing or invalid reference.
+ * A `git` or filesystem call inside those checks can also fail on its own
+ * account (`CommandError`, a missing directory's `ENOENT`), and that failure
+ * already carries its own meaning and, for `CommandError`, its own exit code:
+ * relabeling it a refused precondition would discard both, so only a bare
+ * `Error` is converted here.
+ */
+async function asTargetPrecondition<Value>(
+	check: () => Promise<Value>,
+): Promise<Value> {
+	try {
+		return await check();
+	} catch (error) {
+		if (error instanceof Error && isBareError(error)) {
+			throw new RefusedPreconditionError(error.message);
+		}
+
+		throw error;
+	}
+}

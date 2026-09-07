@@ -416,11 +416,17 @@ function judgeKnobsOf(record: Readonly<CalibratableRecord>): JudgeKnobs {
  * inputs the rejudge already reads, so it would buy nothing a third read
  * does not.
  */
+export interface CalibrateDependencies {
+	readonly output: CommandOutput;
+	readonly buildJudges: (knobs: Readonly<JudgeKnobs>) => CalibrateJudges;
+	readonly probeModel: (model: string) => Promise<void>;
+}
+
 export async function runCalibrate(
 	request: Readonly<CalibrateRequest>,
-	buildJudges: (knobs: Readonly<JudgeKnobs>) => CalibrateJudges,
-	output: CommandOutput,
+	dependencies: Readonly<CalibrateDependencies>,
 ): Promise<void> {
+	const { buildJudges, output, probeModel } = dependencies;
 	if (request.id === undefined) {
 		throw new UsageError(
 			"Provide the run: rehearsal calibrate <run:name|name>",
@@ -434,7 +440,9 @@ export async function runCalibrate(
 	const frozen = frozenEvidence(record);
 	const current = await currentSources(request, frozen, recordedCaseId(record));
 
-	const judges = buildJudges(judgeKnobsOf(record));
+	const knobs = judgeKnobsOf(record);
+	await probeModel(knobs.judgeModel);
+	const judges = buildJudges(knobs);
 	const calibration = await reportIncomplete(output, () =>
 		calibrate(frozen, current, review, {
 			stageJudge: judges.stageJudge,

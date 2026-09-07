@@ -33,6 +33,8 @@ const sessionArgs = [
 	"1",
 ];
 
+const passingProbe = (): Promise<void> => Promise.resolve();
+
 /**
  * Replay now reads the run's own manifest to find the case it replayed, so a
  * test claiming a run named "any-name" resolved must leave a real manifest at
@@ -106,6 +108,7 @@ describe(runReplayCommand.name, () => {
 
 						return Promise.resolve("/runs/any-name");
 					},
+					probeModel: passingProbe,
 					execute: () => Promise.reject(new Error("replay must not run")),
 				},
 			),
@@ -143,6 +146,7 @@ describe(runReplayCommand.name, () => {
 
 						return Promise.reject(new Error(`No replayable run named ${name}`));
 					},
+					probeModel: passingProbe,
 					execute: () => Promise.reject(new Error("replay must not run")),
 				},
 			),
@@ -171,6 +175,7 @@ describe(runReplayCommand.name, () => {
 
 						return Promise.reject(new Error(`No replayable run named ${name}`));
 					},
+					probeModel: passingProbe,
 					execute: () => Promise.reject(new Error("replay must not run")),
 				},
 			),
@@ -178,6 +183,48 @@ describe(runReplayCommand.name, () => {
 
 		expect(failure).not.toBeInstanceOf(RefusedPreconditionError);
 		expect(resolved).toEqual(["any-name"]);
+	});
+
+	it("halts before executing when the declared model is not available", async () => {
+		const executed: string[] = [];
+		const { output } = recordOutput();
+		const manifestFile = await writeManifestFor("any-name-bad-model");
+
+		try {
+			const failure = await failureOf(
+				runReplayCommand(
+					{
+						args: [
+							"--run",
+							"any-name-bad-model",
+							"--stage",
+							"shape",
+							...sessionArgs,
+						],
+						json: false,
+						stdinIsTerminal: true,
+					},
+					{
+						output,
+						resolveRunDirectory: () => Promise.resolve("/runs/any-name"),
+						probeModel: () =>
+							Promise.reject(
+								new RefusedPreconditionError("Model sonnet is not available"),
+							),
+						execute: () => {
+							executed.push("executed");
+
+							return Promise.reject(new Error("replay must not run"));
+						},
+					},
+				),
+			);
+
+			expect(failure).toBeInstanceOf(RefusedPreconditionError);
+			expect(executed).toEqual([]);
+		} finally {
+			await rm(manifestFile, { force: true });
+		}
 	});
 
 	it("prints the replay record's exact bytes on stdout with --json", async () => {
@@ -198,6 +245,7 @@ describe(runReplayCommand.name, () => {
 			{
 				output,
 				resolveRunDirectory: () => Promise.resolve("/runs/any-name"),
+				probeModel: passingProbe,
 				execute: (_config, _paths, commandOutput) => {
 					commandOutput.stderr("Replay progress\n");
 
@@ -273,6 +321,7 @@ describe("--corpus on a stage replay", () => {
 				{
 					output,
 					resolveRunDirectory: () => Promise.resolve("/runs/any-name"),
+					probeModel: passingProbe,
 					execute: (config) => {
 						corpora.push(config.corpus);
 
