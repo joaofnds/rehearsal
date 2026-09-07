@@ -224,6 +224,47 @@ describe("workflow provider metrics", () => {
 		expect(commands[0]).not.toContain("--setting-sources");
 	});
 
+	it("passes a declared settings overlay through to the session", async () => {
+		const commands: string[][] = [];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+
+		await runWorkflowStage(
+			{
+				targetDir: "/target",
+				model: "sonnet",
+				effort: undefined,
+				sessionBudgetUsd: 5,
+				productOwner,
+				taskId: "ACT-28",
+				stage: "shape",
+				skill: "shape",
+				settingsOverlay: '{"disableAllHooks":true}',
+			},
+			(command) => {
+				commands.push([...command]);
+
+				return Promise.resolve(
+					JSON.stringify({
+						session_id: "worker-session",
+						structured_output: { status: "COMPLETE", message: "Shaped" },
+					}),
+				);
+			},
+		);
+
+		expect(commands[0]).toContain("--settings");
+		expect(commands[0]?.[commands[0].indexOf("--settings") + 1]).toBe(
+			'{"disableAllHooks":true}',
+		);
+	});
+
 	it.each([
 		{
 			boundary: "invocation",

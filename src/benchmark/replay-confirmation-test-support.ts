@@ -62,6 +62,7 @@ export class ReplayConfirmationHarness {
 		readonly roots: readonly string[];
 	}[] = [];
 	public readonly settingSources: (string | undefined)[] = [];
+	public readonly settingsOverlays: (string | undefined)[] = [];
 	public readonly corpusInstalls: {
 		readonly snapshotDirectory: string;
 		readonly targetDirectory: string;
@@ -235,9 +236,15 @@ export class ReplayConfirmationHarness {
 		return {
 			createProductOwner,
 			stageSession: {
-				runWorkflowStage: ({ targetDir, stage, settingSources }) => {
+				runWorkflowStage: ({
+					targetDir,
+					stage,
+					settingSources,
+					settingsOverlay,
+				}) => {
 					this.stageDirs.push(targetDir);
 					this.settingSources.push(settingSources);
+					this.settingsOverlays.push(settingsOverlay);
 
 					return Promise.resolve({
 						stage,

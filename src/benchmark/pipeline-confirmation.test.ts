@@ -220,6 +220,29 @@ describe(runPipelineConfirmation.name, () => {
 		expect(frozenPipeline).toMatchObject({ target });
 	});
 
+	it("passes a declared settings overlay to every stage session", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const overlays: (string | undefined)[] = [];
+
+		await harness.run(
+			{ settingsOverlay: '{"disableAllHooks":true}' },
+			(dependencies) => ({
+				...dependencies,
+				stageSession: {
+					...dependencies.stageSession,
+					runWorkflowStage: (request) => {
+						overlays.push(request.settingsOverlay);
+
+						return dependencies.stageSession.runWorkflowStage(request);
+					},
+				},
+			}),
+		);
+
+		expect(overlays).toEqual(overlays.map(() => '{"disableAllHooks":true}'));
+		expect(overlays.length).toBeGreaterThan(0);
+	});
+
 	it("stops when a pipeline baseline check fails", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const events: string[] = [];

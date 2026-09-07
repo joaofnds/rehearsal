@@ -382,6 +382,27 @@ describe(runReplay.name, () => {
 		expect(fake.settingSources).toEqual(["project"]);
 	});
 
+	it("passes a declared settings overlay through to the stage session", async () => {
+		const run = await recordedRun();
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		await runReplay(fake.dependencies, {
+			...request(run, "build"),
+			settingsOverlay: '{"disableAllHooks":true}',
+		});
+
+		expect(fake.settingsOverlays).toEqual(['{"disableAllHooks":true}']);
+	});
+
+	it("leaves the settings overlay unset when none is given", async () => {
+		const run = await recordedRun();
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		await runReplay(fake.dependencies, request(run, "build"));
+
+		expect(fake.settingsOverlays).toEqual([undefined]);
+	});
+
 	it("installs the corpus snapshot into the worktree before the stage runs", async () => {
 		const run = await recordedRun();
 		const fake = new ReplayConfirmationHarness(testResources);

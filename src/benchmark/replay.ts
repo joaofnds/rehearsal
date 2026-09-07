@@ -146,6 +146,7 @@ export interface ReplayRequest {
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly settingSources?: "project" | undefined;
+	readonly settingsOverlay?: string | undefined;
 	readonly corpusDirectory?: string | undefined;
 }
 
@@ -433,6 +434,7 @@ export async function runReplay(
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
 				corpusRoots: corpusLayoutRoots(worktreeDir),
 				settingSources: request.settingSources,
+				settingsOverlay: request.settingsOverlay,
 				log: dependencies.log,
 			},
 			plan.definition,

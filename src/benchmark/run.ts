@@ -512,6 +512,7 @@ export interface StageSessionEnvironment {
 	readonly commitSubjectPattern?: string | undefined;
 	readonly corpusRoots: readonly string[];
 	readonly settingSources?: "project" | undefined;
+	readonly settingsOverlay?: string | undefined;
 	readonly log: (message: string) => void;
 }
 
@@ -553,6 +554,7 @@ export async function executeStageSession(
 		stage,
 		skill: definition.skill,
 		settingSources: environment.settingSources,
+		settingsOverlay: environment.settingsOverlay,
 	});
 
 	const currentTaskOutput = await dependencies.readTaskOutput(

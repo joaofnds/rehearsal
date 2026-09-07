@@ -170,6 +170,28 @@ describe(runReplayConfirmation.name, () => {
 		]);
 	});
 
+	it("passes a declared settings overlay to every confirmed stage session", async () => {
+		const fake = new ReplayConfirmationHarness(testResources);
+		const run = await fake.recordedRun();
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		testResources.track(corpusRoot);
+		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
+		await Bun.write(
+			join(corpusRoot, "skills", "discuss", "SKILL.md"),
+			"discuss\n",
+		);
+
+		await fake.runConfirmation(
+			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{ settingsOverlay: '{"disableAllHooks":true}', reps: 2 },
+		);
+
+		expect(fake.settingsOverlays).toEqual([
+			'{"disableAllHooks":true}',
+			'{"disableAllHooks":true}',
+		]);
+	});
+
 	it("runs three frozen stage replay reps concurrently without changing the primary checkout", async () => {
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-confirmed-replay-"));
 		testResources.track(parent);

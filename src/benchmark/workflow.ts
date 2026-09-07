@@ -51,6 +51,7 @@ export interface WorkflowStageRequest {
 	readonly stage: WorkflowStage;
 	readonly skill: string;
 	readonly settingSources?: "project" | undefined;
+	readonly settingsOverlay?: string | undefined;
 }
 
 function reasonOf(cause: unknown): string {
@@ -168,6 +169,7 @@ export async function runWorkflowStage(
 		stage,
 		skill,
 		settingSources,
+		settingsOverlay,
 	} = request;
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
@@ -192,6 +194,7 @@ export async function runWorkflowStage(
 						access: "unrestricted",
 						session: { id: sessionId, resume: turn > 0 },
 						settingSources,
+						settingsOverlay,
 					}),
 					prompt,
 				],

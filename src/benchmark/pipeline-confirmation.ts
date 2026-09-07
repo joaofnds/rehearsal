@@ -135,6 +135,7 @@ export interface PipelineConfirmationRequest {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
+	readonly settingsOverlay?: string | undefined;
 	readonly now?: (() => number) | undefined;
 }
 
@@ -420,6 +421,7 @@ async function runPipelineRep(
 					commitSubjectPattern: request.pipeline.commitSubjectPattern,
 					corpusRoots: [join(plan.worktreePath, ".claude")],
 					settingSources: "project",
+					settingsOverlay: request.settingsOverlay,
 					log: dependencies.log,
 				},
 				definition,

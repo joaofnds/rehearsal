@@ -489,6 +489,7 @@ async function runReplayConfirmationBody(
 						commitSubjectPattern: frozen.manifest.pipeline.commitSubjectPattern,
 						corpusRoots: [join(plan.worktreePath, ".claude")],
 						settingSources: "project",
+						settingsOverlay: request.settingsOverlay,
 						log: dependencies.log,
 					},
 					frozen.plan.definition,
