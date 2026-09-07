@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 function renderAt(path: string): void {
-	stubFetch({ rows: [] });
+	stubFetch({ rows: [], unreadable: [] });
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});

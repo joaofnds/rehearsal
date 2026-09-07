@@ -13,7 +13,7 @@ import { corpusDigest } from "./corpus-digest";
 import { redactAbsolutePaths } from "./redact-path";
 
 /**
- * One run-history row, in decision-5's code vocabulary (`run`, `pipeline`,
+ * One run-history row, in decision-5's code vocabulary (`run`, `caseId`,
  * `stage`), never the design's task/step labels. This is the single place
  * that owns the read API's response shape for a run-history row: no other
  * card owns it.

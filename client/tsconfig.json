@@ -20,7 +20,8 @@
 		"jsx": "react-jsx",
 		"types": ["vite/client", "bun-types"],
 		"paths": {
-			"#client/*": ["./src/*"]
+			"#client/*": ["./src/*"],
+			"#server/*": ["../src/server/*"]
 		}
 	},
 	"include": ["src", "test-setup.ts", "vite.config.ts"]

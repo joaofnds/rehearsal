@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { z } from "zod";
+import type { InferResponseType } from "hono/client";
+import type { apiClient } from "#client/api-client";
 import { stubFetch } from "#client/test-support/fetch-stub";
 import { RunHistoryPage } from "./run-history-page";
-import type { runHistoryResponseSchema } from "./run-history-row";
 
-type RunHistoryResponseBody = z.input<typeof runHistoryResponseSchema>;
+type RunHistoryResponseBody = InferResponseType<typeof apiClient.api.runs.$get>;
 
 const originalFetch = globalThis.fetch;
 
@@ -31,7 +31,7 @@ function renderPage(): void {
 
 describe(RunHistoryPage.name, () => {
 	it("renders the empty-state block when no runs are recorded", async () => {
-		respondingWith({ rows: [] });
+		respondingWith({ rows: [], unreadable: [] });
 
 		renderPage();
 
@@ -54,6 +54,7 @@ describe(RunHistoryPage.name, () => {
 					staleCauses: ["CLAUDE.md changed"],
 				},
 			],
+			unreadable: [],
 		});
 
 		renderPage();
@@ -82,6 +83,7 @@ describe(RunHistoryPage.name, () => {
 					staleCauses: [],
 				},
 			],
+			unreadable: [],
 		});
 
 		renderPage();
@@ -93,7 +95,7 @@ describe(RunHistoryPage.name, () => {
 	});
 
 	it("renders a filter bar built from FilterPill, all pressed by default", async () => {
-		respondingWith({ rows: [] });
+		respondingWith({ rows: [], unreadable: [] });
 
 		renderPage();
 
@@ -130,6 +132,7 @@ describe(RunHistoryPage.name, () => {
 					staleCauses: [],
 				},
 			],
+			unreadable: [],
 		});
 
 		renderPage();
@@ -155,11 +158,13 @@ describe(RunHistoryPage.name, () => {
 					caseId: "audit-log",
 					status: "STOPPED:discuss",
 					stage: undefined,
+					grade: undefined,
 					corpus: undefined,
 					stale: false,
 					staleCauses: [],
 				},
 			],
+			unreadable: [],
 		});
 
 		renderPage();

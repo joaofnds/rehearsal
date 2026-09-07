@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import type { InferResponseType } from "hono/client";
+import { apiClient } from "#client/api-client";
 import { CorpusPill } from "#client/system/components/corpus-pill";
 import { FilterPill } from "#client/system/components/filter-pill";
 import type { GradeValue } from "#client/system/components/grade";
@@ -7,10 +9,17 @@ import { Grade } from "#client/system/components/grade";
 import { SectionLabel } from "#client/system/components/section-label";
 import { Status } from "#client/system/components/status";
 import { TableShell } from "#client/system/components/table-shell";
-import type { RunHistoryRow } from "./run-history-row";
-import { runHistoryResponseSchema } from "./run-history-row";
 import { runStatusState } from "./run-status";
 import "./run-history-page.css";
+
+/**
+ * The row shape comes from the server's own route type via Hono's RPC
+ * client, `apiClient.api.runs.$get`, rather than a hand-declared schema
+ * repeating what `src/server/run-history.ts`'s `RunHistoryRow` already
+ * states (decision-3's stated reason for choosing Hono).
+ */
+type RunHistoryResponse = InferResponseType<typeof apiClient.api.runs.$get>;
+type RunHistoryRow = RunHistoryResponse["rows"][number];
 
 const COLUMNS = ["Run", "Case", "Outcome", "Grade", "Corpus"] as const;
 
@@ -22,10 +31,10 @@ function matchesFilter(row: RunHistoryRow, filter: Filter): boolean {
 }
 
 async function fetchRunHistoryRows(): Promise<readonly RunHistoryRow[]> {
-	const response = await fetch("/api/runs");
-	const body: unknown = await response.json();
+	const response = await apiClient.api.runs.$get();
+	const body = await response.json();
 
-	return runHistoryResponseSchema.parse(body).rows;
+	return body.rows;
 }
 
 function outcomeCell(row: RunHistoryRow): React.JSX.Element {

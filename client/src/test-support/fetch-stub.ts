@@ -1,7 +1,7 @@
-import type { z } from "zod";
-import type { runHistoryResponseSchema } from "#client/run-history/run-history-row";
+import type { InferResponseType } from "hono/client";
+import type { apiClient } from "#client/api-client";
 
-type RunHistoryResponseBody = z.input<typeof runHistoryResponseSchema>;
+type RunHistoryResponseBody = InferResponseType<typeof apiClient.api.runs.$get>;
 
 /**
  * A one-shot `fetch` stub for the `/api/runs` response shape, typed to

@@ -13,42 +13,60 @@ export interface ApiDependencies {
 	readonly corpusSource: CorpusRoot;
 }
 
-export function createApiApp(dependencies: ApiDependencies): Hono {
-	const app = new Hono();
+/**
+ * Chained (`.get().get()`) rather than two separate `app.get()` statements,
+ * because Hono's RPC type inference builds `AppType` off the chain: a caller
+ * using `hc<AppType>()` gets `/api/runs`'s response type from this
+ * declaration itself, so the client never redeclares the row shape by hand
+ * (decision-3's stated reason for choosing Hono over an alternative with no
+ * RPC client). `createApiApp` builds and returns this chain directly, rather
+ * than through a helper taking a mutable `Hono` parameter, since the RPC
+ * type only survives an unbroken method chain from `new Hono()`. That chain
+ * is exactly the return type `ApiRoutes` below names, so an explicit
+ * annotation here would have to be `ApiRoutes` itself, which is circular:
+ * no other spelling of this type exists to write by hand.
+ */
+// oxlint-disable-next-line typescript/explicit-function-return-type, typescript/explicit-module-boundary-types
+export const createApiApp = (dependencies: ApiDependencies) => {
+	const app = new Hono()
+		.get("/api/runs", async (context) => {
+			const report = await runHistoryReport(
+				dependencies.runsDirectory,
+				dependencies.corpusSource,
+			);
 
-	app.get("/api/runs", async (context) => {
-		const report = await runHistoryReport(
-			dependencies.runsDirectory,
-			dependencies.corpusSource,
-		);
+			return context.json(report);
+		})
+		.get("/api/records/:id", async (context) => {
+			try {
+				const id = parseRecordId(context.req.param("id"));
+				const file = await recordFileFor(id, dependencies.runsDirectory);
+				if (!(await Bun.file(file).exists())) {
+					throw new RefusedPreconditionError(
+						`No record ${context.req.param("id")} at ${displayPath(file)}`,
+					);
+				}
 
-		return context.json(report);
-	});
+				return context.body(await Bun.file(file).text(), 200, {
+					"content-type": "application/json",
+				});
+			} catch (error) {
+				if (error instanceof UsageError) {
+					return context.json(
+						{ error: redactAbsolutePaths(error.message) },
+						400,
+					);
+				}
+				if (error instanceof RefusedPreconditionError) {
+					return context.json(
+						{ error: redactAbsolutePaths(error.message) },
+						404,
+					);
+				}
 
-	app.get("/api/records/:id", async (context) => {
-		try {
-			const id = parseRecordId(context.req.param("id"));
-			const file = await recordFileFor(id, dependencies.runsDirectory);
-			if (!(await Bun.file(file).exists())) {
-				throw new RefusedPreconditionError(
-					`No record ${context.req.param("id")} at ${displayPath(file)}`,
-				);
+				throw error;
 			}
-
-			return context.body(await Bun.file(file).text(), 200, {
-				"content-type": "application/json",
-			});
-		} catch (error) {
-			if (error instanceof UsageError) {
-				return context.json({ error: redactAbsolutePaths(error.message) }, 400);
-			}
-			if (error instanceof RefusedPreconditionError) {
-				return context.json({ error: redactAbsolutePaths(error.message) }, 404);
-			}
-
-			throw error;
-		}
-	});
+		});
 
 	/**
 	 * No route-level throw reaches the browser with an absolute path: a route
@@ -68,4 +86,6 @@ export function createApiApp(dependencies: ApiDependencies): Hono {
 	});
 
 	return app;
-}
+};
+
+export type ApiRoutes = ReturnType<typeof createApiApp>;
