@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
@@ -108,7 +107,7 @@ export async function hashDirectory(
  * falling back to whatever is live at user level.
  */
 export function corpusLayoutRoots(targetDir: string): string[] {
-	return [join(targetDir, ".claude"), join(homedir(), ".claude")];
+	return [join(targetDir, ".claude"), liveCorpusRoot()];
 }
 
 /**
@@ -117,22 +116,12 @@ export function corpusLayoutRoots(targetDir: string): string[] {
  * install is the pair `corpusLayoutRoots` already searches against the
  * target under test, project level first; a resolved directory or render is
  * the whole corpus, so nothing outside it may shadow what it holds.
- *
- * `targetRoot` is a repository directory, the one whose `.claude` takes
- * precedence, not a corpus root itself. A caller with no target under test
- * passes `undefined` and gets the user install alone.
  */
 export function stageCorpusRoots(
 	source: CorpusRoot,
-	targetRoot: string | undefined,
+	targetRoot: string,
 ): readonly string[] {
-	if (source.kind !== "live") {
-		return [source.root];
-	}
-
-	return targetRoot === undefined
-		? [liveCorpusRoot()]
-		: corpusLayoutRoots(targetRoot);
+	return source.kind === "live" ? corpusLayoutRoots(targetRoot) : [source.root];
 }
 
 export async function resolveSkillDirectory(
