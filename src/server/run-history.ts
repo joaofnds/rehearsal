@@ -22,6 +22,7 @@ export interface RunHistoryRow {
 	readonly caseId: string;
 	readonly status: string;
 	readonly stage: string | undefined;
+	readonly grade: string | undefined;
 	readonly corpus: { readonly digest: string } | undefined;
 	readonly stale: boolean;
 	readonly staleCauses: readonly string[];
@@ -52,17 +53,32 @@ async function latestCheckpointStage(
 	return ordered.at(-1);
 }
 
+interface RunIdentity {
+	readonly status: string;
+	readonly caseId: string;
+	readonly gradeByStage: ReadonlyMap<string, string>;
+}
+
 async function statusAndCaseId(
 	runsDirectory: string,
 	run: string,
-): Promise<{ readonly status: string; readonly caseId: string } | undefined> {
+): Promise<RunIdentity | undefined> {
 	const paths = benchmarkRunPaths(runsDirectory, run);
 	if (await Bun.file(paths.artifactFile).exists()) {
 		const record = parseRunSummaryRecord(
 			await Bun.file(paths.artifactFile).text(),
 		);
 
-		return { status: record.status, caseId: record.caseId };
+		return {
+			status: record.status,
+			caseId: record.caseId,
+			gradeByStage: new Map(
+				record.stageScorecards.map((scorecard) => [
+					scorecard.stage,
+					scorecard.grade.grade,
+				]),
+			),
+		};
 	}
 
 	const stopped = await stoppedStage(runsDirectory, run);
@@ -76,7 +92,11 @@ async function statusAndCaseId(
 
 	const manifest = await loadRunManifest(paths.manifestFile);
 
-	return { status: `STOPPED:${stopped.stage}`, caseId: manifest.caseId };
+	return {
+		status: `STOPPED:${stopped.stage}`,
+		caseId: manifest.caseId,
+		gradeByStage: new Map(),
+	};
 }
 
 async function rowFor(
@@ -89,12 +109,15 @@ async function rowFor(
 		return undefined;
 	}
 
+	const { status, caseId, gradeByStage } = identity;
 	const stage = await latestCheckpointStage(runsDirectory, run);
 	if (stage === undefined) {
 		return {
 			run,
-			...identity,
+			status,
+			caseId,
 			stage: undefined,
+			grade: undefined,
 			corpus: undefined,
 			stale: false,
 			staleCauses: [],
@@ -109,8 +132,10 @@ async function rowFor(
 
 	return {
 		run,
-		...identity,
+		status,
+		caseId,
 		stage,
+		grade: gradeByStage.get(stage),
 		corpus: { digest: corpusDigest(checkpoint.corpusFiles) },
 		stale: causes.length > 0,
 		staleCauses: causes,

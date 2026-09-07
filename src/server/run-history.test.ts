@@ -59,6 +59,7 @@ describe(runHistoryRows.name, () => {
 			caseId: "audit-log",
 			status: "COMPLETE",
 			stage: "build",
+			grade: "B",
 		});
 		expect(row?.corpus?.digest).toMatch(/^[0-9a-f]{6}$/u);
 	});
@@ -136,6 +137,7 @@ describe(runHistoryRows.name, () => {
 		expect(row).toMatchObject({ status: "STOPPED:build" });
 		expect(row?.corpus).toBeUndefined();
 		expect(row?.stale).toBe(false);
+		expect(row?.grade).toBeUndefined();
 	});
 
 	it("reads an empty runs directory as no rows, not an error", async () => {
