@@ -6,7 +6,6 @@ import { CorpusPill } from "#client/system/components/corpus-pill";
 import { FilterPill } from "#client/system/components/filter-pill";
 import type { GradeValue } from "#client/system/components/grade";
 import { Grade } from "#client/system/components/grade";
-import { SectionLabel } from "#client/system/components/section-label";
 import { Status } from "#client/system/components/status";
 import { TableShell } from "#client/system/components/table-shell";
 import { runStatusState } from "./run-status";
@@ -125,20 +124,17 @@ export function RunHistoryPage(): React.JSX.Element {
 			{query.isSuccess && rows.length === 0 ? <EmptyState /> : null}
 
 			{rows.length > 0 ? (
-				<>
-					<SectionLabel>DURABLE RECORDS</SectionLabel>
-					<TableShell
-						caption="DURABLE RECORDS"
-						columns={[...COLUMNS]}
-						rows={rows.map((row) => [
-							row.run,
-							row.caseId,
-							outcomeCell(row),
-							gradeCell(row),
-							corpusCell(row),
-						])}
-					/>
-				</>
+				<TableShell
+					caption="DURABLE RECORDS"
+					columns={[...COLUMNS]}
+					rows={rows.map((row) => [
+						row.run,
+						row.caseId,
+						outcomeCell(row),
+						gradeCell(row),
+						corpusCell(row),
+					])}
+				/>
 			) : null}
 		</main>
 	);

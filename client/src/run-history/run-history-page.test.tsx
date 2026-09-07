@@ -69,6 +69,31 @@ describe(RunHistoryPage.name, () => {
 		expect(screen.getByText("B")).toBeInTheDocument();
 	});
 
+	it("names the records table once, so the caption is not doubled by a heading", async () => {
+		respondingWith({
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "STOPPED:build",
+					stage: "shape",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: true,
+					staleCauses: ["CLAUDE.md changed"],
+				},
+			],
+			unreadable: [],
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByRole("table")).toHaveAccessibleName("DURABLE RECORDS");
+		});
+		expect(screen.getAllByText("DURABLE RECORDS")).toHaveLength(1);
+	});
+
 	it("renders a pending grade cell for a row with no recorded grade", async () => {
 		respondingWith({
 			rows: [
