@@ -103,6 +103,21 @@ describe(runList.name, () => {
 		expect(recorder.stderr.join("")).toContain(`run:${fixture.stoppedRun}:`);
 	});
 
+	it("gives a stopped run without a manifest a plain incomplete reason, not a raw ENOENT", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRunWithoutManifest();
+		const recorder = recordOutput();
+
+		await runList(
+			{ kind: "runs", runsDirectory: fixture.runsDirectory },
+			recorder.output,
+		);
+
+		const reasons = recorder.stderr.join("");
+		expect(reasons).not.toContain("ENOENT");
+		expect(reasons).toContain("incomplete");
+	});
+
 	it("gives a run with no record of any kind a plain no-record line", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeNoRecordRun();

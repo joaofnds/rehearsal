@@ -120,7 +120,9 @@ async function listDeclaredCases(): Promise<RecordListing> {
  * minimum, not a failure to report as unreadable: the stage it stopped at,
  * read from the stop record that stage's file holds, replaces the artifact's
  * status. A run that also has no stop record and no artifact died before any
- * stage finished; it gets a plain line saying so rather than a raw ENOENT.
+ * stage finished; it gets a plain line saying so rather than a raw ENOENT. A
+ * stopped run whose manifest was never written is reported unreadable rather
+ * than replayable.
  */
 async function listRuns(runsDirectory: string): Promise<RecordListing> {
 	const names = await recordedRunNames(runsDirectory);
@@ -148,7 +150,13 @@ async function listRuns(runsDirectory: string): Promise<RecordListing> {
 				return ["no record"];
 			}
 
-			const { caseId } = await loadRunManifest(paths.manifestFile);
+			const { caseId } = await loadRunManifest(paths.manifestFile).catch(
+				(): never => {
+					throw new Error(
+						`incomplete: no manifest.json at ${paths.manifestFile}`,
+					);
+				},
+			);
 
 			return [caseId, `STOPPED:${stopped.stage}`, "replayable"];
 		},
