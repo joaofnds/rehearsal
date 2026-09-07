@@ -4,11 +4,11 @@ title: 'freeze a harness-owned settings file for stage sessions, no hooks'
 status: To Do
 assignee: []
 created_date: '2026-09-03 23:33'
-updated_date: '2026-09-04 01:50'
+updated_date: '2026-09-07 10:44'
 labels:
   - defect
 dependencies: []
-priority: medium
+priority: high
 ordinal: 39008
 ---
 
@@ -57,4 +57,6 @@ The reflection on ACT-28 named this the next card. Against the goal João stated
 It also sits behind an open direction question. João's comment #5 on ACT-28 asks whether freezing corpus bytes into the local live install is the right mechanism at all, given a second provider is a stated future requirement. This card continues that mechanism one setting-source further. Building it before that question is answered risks building the wrong thing, and the reflection said so.
 
 So: real, correctly scoped, and waiting. Reconsider when m-1 has produced a comparison somebody has read, which is when it becomes possible to say whether the settings divergence actually changed a score.
+
+Triage 2026-09-07: the open-question block above is stale. ACT-28's own notes (2026-09-06) state plainly that the question three prior triage runs carried forward as blocking this card 'is not open': João answered it on DOT-36, and decision-4 (2026-09-05, accepted) is that exact answer, declared and live corpus both first-class, this card's harness-owned settings file being the mechanism decision-4 names for it. Nothing further is needed from João. Restoring priority to High (doc-6's demotion to medium was explicitly because of this same open question) and moving it into the ready queue.
 <!-- SECTION:NOTES:END -->

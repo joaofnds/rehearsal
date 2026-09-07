@@ -4,8 +4,9 @@ title: carry rules/ in the corpus layout
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-04 15:11'
+updated_date: '2026-09-07 10:44'
 labels: []
+milestone: m-3
 dependencies:
   - ACT-59
 documentation:
@@ -37,3 +38,9 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 - [ ] #3 An edit to a rule file the corpus carries makes a checkpoint that consumed it stale, shown by rehearsal stale
 - [ ] #4 A corpus source holding only rules/ is accepted as a corpus rather than refused as holding no layout entry
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-07: assigned m-3, same basis as ACT-59/71.
+<!-- SECTION:NOTES:END -->

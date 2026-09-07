@@ -4,8 +4,9 @@ title: a failed stage run records the model and effort it used
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:48'
-updated_date: '2026-09-04 23:49'
+updated_date: '2026-09-07 10:44'
 labels: []
+milestone: m-3
 dependencies: []
 type: bug
 ordinal: 67008
@@ -33,4 +34,6 @@ This is the same shape of gap as ACT-70 and the same fix seam. It matters for co
 
 <!-- SECTION:NOTES:BEGIN -->
 Filed by the iterate session that hit this while trying to reproduce ACT-38's run settings. Not urgent on its own, but it is a precondition for trusting any comparison across runs.
+
+Triage 2026-09-07: assigned m-3, same basis as ACT-59/60.
 <!-- SECTION:NOTES:END -->

@@ -4,7 +4,7 @@ title: stop sessions overwriting a card's notes with backlog task edit --notes
 status: To Do
 assignee: []
 created_date: '2026-09-05 22:48'
-updated_date: '2026-09-05 22:59'
+updated_date: '2026-09-07 10:44'
 labels: []
 dependencies: []
 type: chore
@@ -47,4 +47,6 @@ The fix puts one sentence in the shape and build skills, at the sentence that te
 An unprimed reviewer called for cutting both lines as a duplicate of the board rule, on the grounds that the routing rule guarantees the board file is loaded alongside. The transcripts refute that premise, so the lines stand. Its wording findings were applied: plain 'keeps what an earlier session recorded' in place of 'destroying', and the shape copy moved below the content rule it had split. It verified the flag names against the CLI and confirmed the overwrite behavior on a throwaway board.
 
 This is prose, which is the mechanism that already failed once. It is weaker than the hook João ruled out. Whether it holds is only observable by watching a future shape or build session write a card. Criterion #1 is therefore not checkable yet.
+
+Triage 2026-09-07: the claim above ('landed 2026-09-06 as dotfiles commit e33c7abf') is false. Verified directly: commit e33c7abf does not exist in ~/code/dotfiles history, and neither skills/shape/SKILL.md nor skills/build/SKILL.md names --append-notes at the point each tells a session to write the record (checked both source files under ~/.agents/skills). The prose fix described was never made. Criterion #1 is therefore unverifiable as claimed and the mechanism this card settled on is not yet in place.
 <!-- SECTION:NOTES:END -->

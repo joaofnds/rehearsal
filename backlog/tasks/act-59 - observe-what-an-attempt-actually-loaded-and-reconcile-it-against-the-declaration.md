@@ -6,8 +6,9 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-04 15:11'
+updated_date: '2026-09-07 10:44'
 labels: []
+milestone: m-3
 dependencies: []
 documentation:
   - backlog/docs/doc-9 - context-manifest-design.md
@@ -45,3 +46,9 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 - [ ] #4 The manifest is built from records already on disk and needs no provider call, shown by a test over a committed transcript fixture
 - [ ] #5 A transcript record type the parser does not recognize yields no manifest entry rather than a failed attempt
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-07: assigned m-3, per doc-16/doc-22/doc-23's unopposed recommendation carried across three prior triage runs.
+<!-- SECTION:NOTES:END -->
