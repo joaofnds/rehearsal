@@ -1,2 +1,2 @@
 [test]
-preload = ["./client/test-setup.ts"]
+pathIgnorePatterns = ["**/client/**"]

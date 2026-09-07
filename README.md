@@ -466,7 +466,7 @@ bun install --frozen-lockfile
 bun run typecheck
 bun run fmt:check
 bun run lint
-bun test
+bun run test
 
 bun run rehearsal case list
 bun run rehearsal case show audit-log --json
