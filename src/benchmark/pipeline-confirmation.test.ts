@@ -220,27 +220,55 @@ describe(runPipelineConfirmation.name, () => {
 		expect(frozenPipeline).toMatchObject({ target });
 	});
 
+	const declaredSettings = {
+		json: '{"disableAllHooks":true}',
+		hashed: { path: "stage-settings.json", sha256: "a".repeat(64) },
+	};
+
+	it("hashes the declared settings file's digest into every checkpoint's own lineage field", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+
+		const outcome = await harness.run({ settingsFile: declaredSettings });
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(outcome.groupRecordFile).text(),
+		);
+		const initialCheckpointFile = group.inputs.files.find(
+			({ kind }) => kind === "checkpoint",
+		);
+		if (initialCheckpointFile === undefined) {
+			throw new Error("Expected a frozen initial checkpoint");
+		}
+		const initialCheckpoint: unknown = JSON.parse(
+			await Bun.file(
+				join(dirname(outcome.groupRecordFile), initialCheckpointFile.path),
+			).text(),
+		);
+
+		expect(initialCheckpoint).toMatchObject({
+			settingsFile: { sha256: declaredSettings.hashed.sha256 },
+		});
+	});
+
 	it("passes a declared settings overlay to every stage session", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const overlays: (string | undefined)[] = [];
 
-		await harness.run(
-			{ settingsOverlay: '{"disableAllHooks":true}' },
-			(dependencies) => ({
-				...dependencies,
-				stageSession: {
-					...dependencies.stageSession,
-					runWorkflowStage: (request) => {
-						overlays.push(request.settingsOverlay);
+		await harness.run({ settingsFile: declaredSettings }, (dependencies) => ({
+			...dependencies,
+			stageSession: {
+				...dependencies.stageSession,
+				runWorkflowStage: (request) => {
+					overlays.push(request.settingsOverlay);
 
-						return dependencies.stageSession.runWorkflowStage(request);
-					},
+					return dependencies.stageSession.runWorkflowStage(request);
 				},
-			}),
-		);
+			},
+		}));
 
-		expect(overlays).toEqual(overlays.map(() => '{"disableAllHooks":true}'));
 		expect(overlays.length).toBeGreaterThan(0);
+		expect(overlays.every((overlay) => overlay === declaredSettings.json)).toBe(
+			true,
+		);
 	});
 
 	it("stops when a pipeline baseline check fails", async () => {

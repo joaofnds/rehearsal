@@ -388,7 +388,10 @@ describe(runReplay.name, () => {
 
 		await runReplay(fake.dependencies, {
 			...request(run, "build"),
-			settingsOverlay: '{"disableAllHooks":true}',
+			settingsFile: {
+				json: '{"disableAllHooks":true}',
+				hashed: { path: "stage-settings.json", sha256: "a".repeat(64) },
+			},
 		});
 
 		expect(fake.settingsOverlays).toEqual(['{"disableAllHooks":true}']);

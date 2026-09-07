@@ -319,6 +319,7 @@ export function initialCheckpointInputs(
 	root: RootLineageInputs,
 	model: string,
 	effort?: Effort,
+	settingsFile?: HashedFile,
 ): CheckpointInputs {
 	return {
 		stage: INITIAL_CHECKPOINT_STAGE,
@@ -328,6 +329,7 @@ export function initialCheckpointInputs(
 		effort,
 		corpusFiles: [],
 		artifacts: [],
+		settingsFile,
 	};
 }
 

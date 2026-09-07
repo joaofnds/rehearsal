@@ -15,6 +15,7 @@ import {
 	initialCheckpointInputs,
 	snapshotStageCorpus,
 } from "./checkpoint";
+import type { LoadedStageSettings } from "./stage-settings";
 import type {
 	captureBaselineContext,
 	captureFileHashes,
@@ -135,7 +136,7 @@ export interface PipelineConfirmationRequest {
 	readonly judgeModel: string;
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
-	readonly settingsOverlay?: string | undefined;
+	readonly settingsFile?: LoadedStageSettings | undefined;
 	readonly now?: (() => number) | undefined;
 }
 
@@ -219,6 +220,7 @@ async function freezePipelineInputs(
 				},
 				request.model,
 				request.effort,
+				request.settingsFile?.hashed,
 			),
 		);
 		await dependencies.recordRetentionRef(
@@ -421,7 +423,7 @@ async function runPipelineRep(
 					commitSubjectPattern: request.pipeline.commitSubjectPattern,
 					corpusRoots: [join(plan.worktreePath, ".claude")],
 					settingSources: "project",
-					settingsOverlay: request.settingsOverlay,
+					settingsOverlay: request.settingsFile?.json,
 					log: dependencies.log,
 				},
 				definition,
@@ -520,6 +522,7 @@ async function runPipelineRep(
 					artifacts: hashArtifacts(
 						currentSession.artifact ? [currentSession.artifact] : [],
 					),
+					settingsFile: request.settingsFile?.hashed,
 				},
 			);
 			upstream = checkpoint.lineage;

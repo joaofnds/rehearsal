@@ -8,6 +8,7 @@ import type {
 	installStageCorpusSnapshot,
 	materializeCheckpoint,
 } from "./checkpoint";
+import type { LoadedStageSettings } from "./stage-settings";
 import {
 	deriveStaleness,
 	hashArtifacts,
@@ -146,7 +147,7 @@ export interface ReplayRequest {
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly settingSources?: "project" | undefined;
-	readonly settingsOverlay?: string | undefined;
+	readonly settingsFile?: LoadedStageSettings | undefined;
 	readonly corpusDirectory?: string | undefined;
 }
 
@@ -163,6 +164,7 @@ export interface ReplayRecord {
 	readonly baseSha: string;
 	readonly lineage: string;
 	readonly corpusFiles: readonly HashedFile[];
+	readonly settingsFile?: HashedFile | undefined;
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
@@ -203,6 +205,7 @@ export const replayRecordSchema = z
 		baseSha: z.string().min(1),
 		lineage: z.string().min(1),
 		corpusFiles: z.array(hashedFileSchema),
+		settingsFile: hashedFileSchema.optional(),
 		model: z.string().min(1),
 		effort: effortSchema.optional(),
 		judgeModel: z.string().min(1),
@@ -391,7 +394,11 @@ export async function runReplay(
 				corpusLayoutRoots(worktreeDir),
 				dependencies.stageSession.captureStageCorpus,
 			),
-			{ model: request.model, effort: request.effort },
+			{
+				model: request.model,
+				effort: request.effort,
+				settingsFile: request.settingsFile?.hashed,
+			},
 		).filter(({ stale }) => stale);
 		if (staleness.length === 0) {
 			dependencies.log("Checkpoint chain is fresh");
@@ -434,7 +441,7 @@ export async function runReplay(
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
 				corpusRoots: corpusLayoutRoots(worktreeDir),
 				settingSources: request.settingSources,
-				settingsOverlay: request.settingsOverlay,
+				settingsOverlay: request.settingsFile?.json,
 				log: dependencies.log,
 			},
 			plan.definition,
@@ -467,8 +474,10 @@ export async function runReplay(
 				corpusFiles: session.corpusFiles,
 				model: request.model,
 				effort: request.effort,
+				settingsFile: request.settingsFile?.hashed,
 			}),
 			corpusFiles: session.corpusFiles,
+			settingsFile: request.settingsFile?.hashed,
 			model: request.model,
 			effort: request.effort,
 			judgeModel: request.judgeModel,

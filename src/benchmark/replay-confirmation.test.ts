@@ -183,7 +183,13 @@ describe(runReplayConfirmation.name, () => {
 
 		await fake.runConfirmation(
 			{ paths: run.paths, corpusRoots: [corpusRoot] },
-			{ settingsOverlay: '{"disableAllHooks":true}', reps: 2 },
+			{
+				settingsFile: {
+					json: '{"disableAllHooks":true}',
+					hashed: { path: "stage-settings.json", sha256: "a".repeat(64) },
+				},
+				reps: 2,
+			},
 		);
 
 		expect(fake.settingsOverlays).toEqual([

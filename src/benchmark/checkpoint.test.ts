@@ -543,6 +543,18 @@ describe(initialCheckpointInputs.name, () => {
 		expect(inputs.effort).toBe("high");
 	});
 
+	it("carries the settings file the run declared", () => {
+		const settingsFile = { path: "stage-settings.json", sha256: "ff66" };
+		const inputs = initialCheckpointInputs(
+			root,
+			"sonnet",
+			"high",
+			settingsFile,
+		);
+
+		expect(inputs.settingsFile).toEqual(settingsFile);
+	});
+
 	it("serializes without an effort key when the run declared none", () => {
 		const inputs = initialCheckpointInputs(root, "sonnet");
 
