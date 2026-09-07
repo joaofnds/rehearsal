@@ -2,10 +2,9 @@
 id: ACT-91
 title: list labels a stopped run not replayable when its checkpoints are usable
 status: Build
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-06 22:19'
-updated_date: '2026-09-07 12:34'
+updated_date: '2026-09-07 12:43'
 labels: []
 milestone: m-1
 dependencies: []
