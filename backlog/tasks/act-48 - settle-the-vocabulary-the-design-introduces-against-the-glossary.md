@@ -1,10 +1,10 @@
 ---
 id: ACT-48
 title: settle the vocabulary the design introduces against the glossary
-status: Review
+status: Done
 assignee: []
 created_date: '2026-09-04 13:00'
-updated_date: '2026-09-07 13:32'
+updated_date: '2026-09-07 13:37'
 labels: []
 milestone: m-5
 dependencies: []
@@ -56,4 +56,6 @@ The card's own recommendation (keep run and stage in code and records, treat the
 Bet, 2026-09-06: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 
 Settled 2026-09-07 as decision-5. Code/records/glossary keep run and stage; design's task/step are UI labels mapped at the boundary, written once in GLOSSARY.md and decision-5's table, referenced by ACT-50/51/52/53. Case: design's Case and the codebase's case declaration are the same concept, glossary amended to say so. Attempt/Rep: the design's own text already says 'attempt' for the stage-checkpoint unit, so no mapping was needed, contrary to the card's open question 3. Pipeline gains the task-judging rule (grade from first input and last artifact only, never averaged) as an added constraint, which ACT-50/run-detail work must implement, not just label. Task graph and contribution added to GLOSSARY.md as new UI-only concepts.
+
+Reviewed by adversarial-review (reviewer agent). Three should-fix findings, all folded into the same commit: the design's plural 'attempts'/'group' case-kind label (a fifth vocabulary pair distinct from singular Attempt) had no mapping, now added for Rep/Confirmation run; the Case amendment overclaimed equivalence where the case declaration actually has no corpus or threshold field, now stated as overlap-with-mismatch; the claim that ACT-50/51/52/53 already reference GLOSSARY.md was false, now made true by adding that reference to each card. One note-level finding self-corrected during the fold: the task-judging rule is not new harness behavior, the pipeline already computes finalOutcome (JUDGED/NOT_REACHED/EXECUTION_FAILED/NOT_APPLICABLE) from finalRubric independent of stage grades. Committed as 710c111.
 <!-- SECTION:NOTES:END -->
