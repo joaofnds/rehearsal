@@ -1,5 +1,4 @@
 import { stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import type { CaseDeclaration, SessionCaseDeclaration } from "./case";
 import { listCases } from "./case";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
@@ -16,6 +15,7 @@ import type { CorpusRoot } from "./corpus-file";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
+	liveCorpusRoot,
 	readCorpusInstructions,
 } from "./corpus-file";
 import { loadRunManifest } from "./manifest";
@@ -85,7 +85,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
 	const corpus = new Map<string, readonly HashedFile[]>();
-	const roots = stageCorpusRoots(source, homedir());
+	const roots = stageCorpusRoots(source, liveCorpusRoot());
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
