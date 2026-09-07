@@ -73,7 +73,7 @@ reason to change m-5's goal.
 
 ## Proposals for triage
 
-- Reconcile ACT-50 (m-7), ACT-51 (m-6), and ACT-53 (m-7) against ACT-48's own
+- Reconcile ACT-50 (m-7) and ACT-51 (m-6) against ACT-48's own
   milestone (m-5): either move them into m-5 so "finish the UI three" tracks
   one milestone at a time as doc-6 intended, or confirm the split was
   deliberate and update doc-6/doc-7's ordering to say so. Whichever way,
