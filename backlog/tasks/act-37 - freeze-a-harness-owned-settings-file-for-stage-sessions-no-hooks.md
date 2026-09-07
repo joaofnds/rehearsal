@@ -79,4 +79,18 @@ Shape 2026-09-07, probed by the overseeing session before the questions went up:
   the harness's own surface, not a copy of anything live. Per-case declaration
   of a harness-owned file, with a shared default, is what the card already says.
   Not a question for João.
+Answered by Joao, 2026-09-07, all three as recommended:
+
+1. The settings file carries the permissions deny list and feature switches
+   only. Drop `effort` and `outputStyle` from its keys. Effort stays on the
+   existing `--effort` flag and keeps its own lineage field; a stage session
+   gets no output style.
+2. Reach the session through the existing `--settings` flag with the file's
+   path, not a new on-disk overlay in the worktree.
+3. Hash the file's bytes into a new lineage field of its own, beside model and
+   effort, not into `corpusFiles`, so `list stale` does not report a settings
+   change as a corpus edit.
+
+AC1 is superseded on its key list by answer 1 and should be rewritten to name
+the deny list and feature switches only.
 <!-- SECTION:NOTES:END -->
