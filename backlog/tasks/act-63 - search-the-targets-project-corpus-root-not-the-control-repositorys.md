@@ -2,10 +2,9 @@
 id: ACT-63
 title: 'search the target''s project corpus root, not the control repository''s'
 status: Review
-assignee:
-  - '@claude'
+assignee: []
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-07 00:32'
+updated_date: '2026-09-07 00:43'
 labels: []
 milestone: m-1
 dependencies: []
