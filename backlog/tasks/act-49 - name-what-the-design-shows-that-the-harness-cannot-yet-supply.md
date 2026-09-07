@@ -4,7 +4,7 @@ title: name what the design shows that the harness cannot yet supply
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 10:44'
+updated_date: '2026-09-07 16:26'
 labels: []
 milestone: m-5
 dependencies:
@@ -62,4 +62,6 @@ Two spec rules that constrain how a gap may be closed, worth carrying into the i
 - An attribution claim is legitimate only when exactly one instruction file hash differs between arms. If more than one differs, the UI must say so and refuse the claim.
 
 Triage 2026-09-07: the card's own description cites ACT-43 as an open gap ('the artifact carries only the workflow session cost and omits the judge entirely'). ACT-43 is Done, verified against a real run artifact ($12.43 total matching the sum of every session role), so that specific line item is closed. Everything else in the inventory is unaffected; this note corrects the one stale citation.
+
+Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->
