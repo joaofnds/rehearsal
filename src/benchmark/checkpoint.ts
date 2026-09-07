@@ -37,7 +37,7 @@ function sha256(content: string): string {
 // Codepoint order, never locale collation: the lineage key must hash the
 // same bytes on every machine, and locale-aware sorting varies with the
 // host's collation rules.
-function canonicalFiles(files: readonly HashedFile[]): HashedFile[] {
+export function canonicalFiles(files: readonly HashedFile[]): HashedFile[] {
 	return files
 		.toSorted((left, right) => {
 			if (left.path < right.path) {
