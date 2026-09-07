@@ -4,7 +4,7 @@ title: stand up the stack end to end on one screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 13:36'
+updated_date: '2026-09-07 20:29'
 labels: []
 milestone: m-5
 dependencies:
@@ -47,4 +47,6 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 
 <!-- SECTION:NOTES:BEGIN -->
 Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+
+Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->

@@ -4,9 +4,11 @@ title: render comparison spread as an interval with a per-measure reading verdic
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:29'
+updated_date: '2026-09-07 20:29'
 labels: []
 dependencies:
   - ACT-49
+priority: medium
 ordinal: 100008
 ---
 
