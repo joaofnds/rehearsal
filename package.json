@@ -19,7 +19,9 @@
 		"test": "bun test && bun test --path-ignore-patterns \"**/node_modules/**\" --preload ./client/test-setup.ts ./client",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p client/tsconfig.json",
 		"rehearsal": "bun run rehearsal.ts",
-		"dev:client": "vite --config client/vite.config.ts"
+		"dev:client": "vite --config client/vite.config.ts",
+		"build:client": "vite build --config client/vite.config.ts",
+		"serve": "bun run src/server/serve.ts"
 	},
 	"dependencies": {
 		"@fontsource/inter": "^5.3.0",
