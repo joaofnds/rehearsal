@@ -43,16 +43,18 @@ export interface LoadedStageSettings {
 }
 
 /**
- * The file's own bytes are what lineage hashes and what `--settings` carries
- * verbatim, so the schema only gates the file at load time; a value the
- * schema accepts is re-serialized from the parsed value, not from the raw
- * text, so a settings file with insignificant whitespace still produces one
- * canonical lineage hash.
+ * Lineage hashes the same re-serialized JSON that reaches `--settings`, not
+ * the file's raw bytes, so a settings file with insignificant whitespace
+ * still produces one canonical lineage hash.
  */
 export async function loadStageSettings(
 	path: string,
 ): Promise<LoadedStageSettings> {
 	const file = Bun.file(path);
+	if (!(await file.exists())) {
+		throw new StageSettingsError(`No stage settings file at ${path}`);
+	}
+
 	const bytes = await file.bytes();
 
 	let document: unknown;
@@ -73,11 +75,13 @@ export async function loadStageSettings(
 		);
 	}
 
+	const json = JSON.stringify(parsed.data);
+
 	return {
-		json: JSON.stringify(parsed.data),
+		json,
 		hashed: {
 			path,
-			sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+			sha256: new Bun.CryptoHasher("sha256").update(json).digest("hex"),
 		},
 	};
 }

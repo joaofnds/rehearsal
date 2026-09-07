@@ -46,10 +46,25 @@ describe(loadStageSettings.name, () => {
 
 		expect(JSON.parse(loaded.json)).toEqual(content);
 		expect(loaded.hashed.sha256).toBe(
-			new Bun.CryptoHasher("sha256")
-				.update(await Bun.file(path).bytes())
-				.digest("hex"),
+			new Bun.CryptoHasher("sha256").update(loaded.json).digest("hex"),
 		);
+	});
+
+	it("hashes the same digest for two files that differ only in whitespace", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		testResources.track(directory);
+		const compact = join(directory, "compact.json");
+		const spaced = join(directory, "spaced.json");
+		const content = { permissions: { deny: ["Bash(rm *)"] } };
+		await Bun.write(compact, JSON.stringify(content));
+		await Bun.write(spaced, JSON.stringify(content, null, 2));
+
+		const [loadedCompact, loadedSpaced] = await Promise.all([
+			loadStageSettings(compact),
+			loadStageSettings(spaced),
+		]);
+
+		expect(loadedSpaced.hashed.sha256).toBe(loadedCompact.hashed.sha256);
 	});
 
 	it("refuses a settings file that fails the schema", async () => {
@@ -68,5 +83,15 @@ describe(loadStageSettings.name, () => {
 		await Bun.write(path, "not json");
 
 		expect(loadStageSettings(path)).rejects.toThrow(/not valid JSON/u);
+	});
+
+	it("refuses a path with no file, naming it", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		testResources.track(directory);
+		const path = join(directory, "missing.json");
+
+		expect(loadStageSettings(path)).rejects.toThrow(
+			new RegExp(`No stage settings file at ${path}`, "u"),
+		);
 	});
 });

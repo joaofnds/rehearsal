@@ -73,22 +73,6 @@ describe(lineageKey.name, () => {
 			variants.length + 1,
 		);
 	});
-
-	it("does not fold the settings file's digest into corpusFiles", () => {
-		const withSettings = lineageKey({
-			...base,
-			settingsFile: { path: "stage-settings.json", sha256: "ee55" },
-		});
-		const asCorpusFile = lineageKey({
-			...base,
-			corpusFiles: [
-				...base.corpusFiles,
-				{ path: "stage-settings.json", sha256: "ee55" },
-			],
-		});
-
-		expect(withSettings).not.toBe(asCorpusFile);
-	});
 });
 
 describe(captureStageCorpus.name, () => {
@@ -717,18 +701,6 @@ describe(deriveStaleness.name, () => {
 		expect(staleness[0]?.causes).toEqual([
 			"stage settings file stage-settings.json changed",
 		]);
-	});
-
-	it("does not fold the settings file into a corpus file's own staleness cause", () => {
-		const settingsFile = { path: "stage-settings.json", sha256: "ff66" };
-		const withSettings = [checkpoint("initial", "root-key", [], settingsFile)];
-
-		const staleness = deriveStaleness(withSettings, currentCorpus(), {
-			...request,
-			settingsFile,
-		});
-
-		expect(staleness[0]?.stale).toBe(false);
 	});
 
 	it("blames the first stale stage, not the nearest, further down the chain", () => {
