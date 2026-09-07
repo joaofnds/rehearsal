@@ -1,0 +1,82 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--color-canvas);
+	color: var(--color-text);
+	font-family: var(--font-ui);
+	font-size: var(--font-size-base);
+	line-height: var(--line-height-base);
+	-webkit-font-smoothing: antialiased;
+}
+
+#root {
+	min-height: 100vh;
+}
+
+:focus-visible {
+	outline: var(--focus-ring-width) solid var(--color-accent);
+	outline-offset: var(--focus-ring-offset);
+	border-radius: var(--radius-focus);
+}
+
+/* No hover-only information: hover restyles, it never reveals content that wasn't already there. */
+.rh-row:hover {
+	background: var(--color-row-hover);
+}
+
+.rh-hoverable:hover {
+	background: var(--color-accent-tint-16);
+	border-color: var(--color-accent);
+}
+
+@keyframes rh-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0.28;
+	}
+}
+
+.rh-live {
+	animation: rh-pulse var(--pulse-duration) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.rh-live {
+		animation: none;
+		opacity: 1;
+	}
+}
+
+::-webkit-scrollbar {
+	width: var(--scrollbar-size);
+	height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: var(--scrollbar-thumb);
+	border-radius: var(--radius-button);
+	border: var(--scrollbar-thumb-border) solid var(--color-canvas);
+}

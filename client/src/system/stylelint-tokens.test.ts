@@ -14,7 +14,9 @@ describe("stylelint raw-value rules", () => {
 		});
 
 		const warnings = result.results[0]?.warnings ?? [];
-		expect(warnings.some((warning) => warning.rule === "color-no-hex")).toBe(true);
+		expect(warnings.some((warning) => warning.rule === "color-no-hex")).toBe(
+			true,
+		);
 	});
 
 	it("reports a bare px padding outside the token definitions", async () => {
@@ -27,7 +29,10 @@ describe("stylelint raw-value rules", () => {
 
 		const warnings = result.results[0]?.warnings ?? [];
 		expect(
-			warnings.some((warning) => warning.rule === "declaration-property-unit-disallowed-list"),
+			warnings.some(
+				(warning) =>
+					warning.rule === "declaration-property-unit-disallowed-list",
+			),
 		).toBe(true);
 	});
 

@@ -17,7 +17,8 @@
 		"module": "esnext",
 		"target": "esnext",
 		"moduleResolution": "bundler",
-		"types": ["bun-types"]
+		"jsx": "react-jsx",
+		"types": ["vite/client", "bun-types"]
 	},
-	"exclude": ["docs/recovered", "client"]
+	"include": ["src", "test-setup.ts", "vite.config.ts"]
 }

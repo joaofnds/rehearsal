@@ -36,9 +36,14 @@ function hasSafetyComment(
 		) {
 			return true;
 		}
+		if (current.parent.type === "Program") return false;
+		// A comment directly before `export const x = ...` attaches to the
+		// ExportNamedDeclaration, not the VariableDeclaration it wraps: keep
+		// climbing through the export wrapper before stopping at an owner kind.
 		if (
-			commentOwnerKinds.has(current.type) ||
-			current.parent.type === "Program"
+			commentOwnerKinds.has(current.type) &&
+			current.parent.type !== "ExportNamedDeclaration" &&
+			current.parent.type !== "ExportDefaultDeclaration"
 		)
 			return false;
 		current = current.parent;

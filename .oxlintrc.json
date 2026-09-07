@@ -90,6 +90,16 @@
 		"import/group-exports": "off",
 		"import/exports-last": "off",
 		"import/no-nodejs-modules": "off",
+		"import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+		"import/no-namespace": [
+			"error",
+			{ "ignore": ["@testing-library/jest-dom/matchers"] }
+		],
+		"typescript/no-empty-interface": ["error", { "allowSingleExtends": true }],
+		"typescript/no-empty-object-type": [
+			"error",
+			{ "allowWithName": "^Matchers$" }
+		],
 		"import/max-dependencies": "off",
 		"node/no-top-level-await": "off",
 		"typescript/parameter-properties": "off",
@@ -105,5 +115,13 @@
 				"allowHigherOrderFunctions": true
 			}
 		]
-	}
+	},
+	"overrides": [
+		{
+			"files": ["client/vite.config.ts"],
+			"rules": {
+				"import/no-default-export": "off"
+			}
+		}
+	]
 }
