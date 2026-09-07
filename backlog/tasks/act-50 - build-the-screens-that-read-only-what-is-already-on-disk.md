@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 22:59'
+updated_date: '2026-09-07 23:09'
 labels: []
 milestone: m-7
 dependencies:
@@ -58,4 +58,26 @@ Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLO
 Criteria conflict, noted 2026-09-07 before shaping. ACs #1 through #6 predate the 2026-09-04 triage that narrowed this card to comparisons and corpus. AC #1 names run history, which ACT-53 built and closed. AC #4 says 'every screen', which under the narrowed scope means these two. Shaping rewrites them against the two screens this card actually builds, per SPEC.md sections 5 (Comparisons) and 6 (Corpus). Not rewritten here, because the shaping stage decides what the criteria become.
 
 ACT-104 (comparison spread as an interval with a per-measure reading verdict) is a backend gap feeding this card's comparison screen and carries no dependency link to it. Shaping decides whether it lands first, inside this card, or after.
+
+Scope decisions, 2026-09-07. Each was put to an independent advisor given the facts and options but not the recommendation, and every load-bearing claim below was re-verified in code by the deciding session.
+
+1. COMPARISON SCREEN, ATTEMPT PAIRS. Build it, rendering what the report actually persists, and accept a documented deviation from SPEC.md 5a. The design's table has one row per paired attempt with a grade per arm; the report cannot feed that. reliabilitySummarySchema (src/benchmark/comparison-record.ts) persists only gradeDistribution as a count map, and sourceRepSchema carries path, sha256, repId, ordinal with no grade. Both schemas are .strict(). Filed as ACT-109. Until it lands, table rows are cases, which is the unit the harness actually pairs on (caseDeltas, keyed by caseId), and the arm band renders gradeDistribution rather than a median and range. Median and range themselves are about an hour's work and are ACT-102; they were never the blocker.
+
+   Deviation needing João's sign-off, since the card says to build against the committed design: SPEC 5a's arm band reads 'range C+ - A-', and STAGE_LETTER_GRADES (src/benchmark/config.ts:18) is five letters with no plus or minus, so that string is unsatisfiable under any option. If the notation is meant literally it changes the grade scale every recorded grade and rubric depends on, which is its own card.
+
+2. COMPARISON SCREEN, WHAT MOVED. Not in this card. It needs an interval and a per-measure reading verdict, which is ACT-104 word for word. A 95% interval is a routine default, since docs/research.md adopts that error-bar framing and both terms exist. The verdict is not: three of SPEC 5b's five phrases cannot be derived from a single PairedEstimate under any threshold, because 'clearest movement' ranks measures against each other and blocker rows are counted rather than graded. Ship Attempt pairs only; render the second switcher option under the PLANNED vocabulary SPEC section 6 already defines.
+
+3. ATTRIBUTION CLAIM. Build it here. executedCorpus is persisted per arm as {path, sha256} (comparison-record.ts:234), and corpusDifferences (src/benchmark/checkpoint.ts:396) already takes exactly that shape, so this is a call plus a branch, not a new capture path.
+
+   Four subtleties the criteria must pin, all verified: snapshotStageCorpus writes a full corpus copy per stage, so one edited file appears once per stage and a naive 'exactly one entry differs' check refuses a genuine single-file edit; the baseline arm is defined by a REMOVAL, so treating 'modified' as the only difference makes a stripped-skill baseline read as identical; the claim is about a named pair of arms, and computing one pair while labelling it another is a false claim; a refusal should list the differing files, since corpusDifferences already returns them sorted.
+
+   Out of scope: SPEC 5's 'See the diff between arms' button needs file text, which the report does not carry. Its own card if wanted.
+
+4. CORPUS SCREEN. Build it with three of the design's columns, not one. Verified derivable from data already on disk: last-edited via stat, with staleness-report.ts:217 as the in-repo precedent, and read-by as a fold over the corpus paths every checkpoint records (a checkpoint on disk carries 89). Only the invalidated count is split out, as ACT-110, because deriving it today means parsing three English cause wordings plus two error shapes, and because nothing on disk defines 'the last edit' its header card counts against.
+
+   Two calls for shaping, neither decided here. The screen would put an absolute corpus root path in a SUCCESSFUL response body, and redactAbsolutePaths only wraps errors today; the design shows the path deliberately, so this is a product call. And a corpus-screen 'corpus@<hash>' digests the whole live corpus while run history's digests what one stage read, so two screens would show different values for what a reader takes to be the same corpus; make the distinction visible or the numbers will be read as a bug.
+
+   Also owed: client/src/system/system-page.tsx already lists a 'Planned-feature block' component as needed by this card's corpus screen, and it does not exist. AC #6 requires it in the design system rather than inline.
+
+There is no recorded comparison on disk (.benchmark-runs/comparisons is empty), so the comparison screen will be verified against fixtures unless someone spends a compare run.
 <!-- SECTION:NOTES:END -->
