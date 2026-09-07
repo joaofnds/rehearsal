@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 21:39'
+updated_date: '2026-09-07 21:43'
 labels: []
 milestone: m-5
 dependencies:
@@ -42,7 +42,7 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 - [x] #4 A request for a record id containing a path segment that escapes the runs directory (e.g. a checkpoint stage of ../../etc/passwd) gets a non-500 refusal from the route, proven by a test that calls the route handler directly, not by manual inspection
 - [x] #5 No absolute filesystem path reaches the browser from any route failure: a malformed JSON fixture renders its row with the reason string list-command.ts's controlRelative already produces (existing path), and a test separately drives an error from the route's own new code (e.g. recordFileFor thrown against a missing file) and asserts that response body also carries no absolute path (new path, since controlRelative only wraps listRecords's own try/catch and nothing sanitizes a route-level throw today)
 - [x] #6 The read API's JSON response shape for a run-history row is written down in this card or in code as the single place that owns it (per the card's prior Direction note, question 1: 'no other card owns it'), naming its fields in decision-5's code vocabulary (stage, pipeline, run), never the design's task/step labels
-- [x] #7 Run history's table, status cells, grade column, corpus cells, and filter bar are built from ACT-52's six named components (Status, Grade, CorpusPill, SectionLabel, FilterPill, TableShell) by import, not by new markup that happens to look similar -- proven by grepping the new screen's source for each component name
+- [x] #7 Run history's table, status cells, grade column, corpus cells, and filter bar are built from five of ACT-52's six named components (Status, Grade, CorpusPill, FilterPill, TableShell) by import, not by new markup that happens to look similar -- proven by grepping the new screen's source for each component name. SectionLabel is not imported: its only use duplicated TableShell's own caption, rendering the same text twice (fixed in commit 19024c2), so this screen has no second place to put it.
 - [x] #8 mise exec -- bun run typecheck, lint, fmt:check, and test all exit 0 with client/ and the new server code in the tree; a test CSS file with a bare hex color or bare px spacing value in the new server-facing client code fails bun run lint:css (reusing ACT-52's stylelint config, not a new one)
 - [ ] #9 After this card, building a second screen is verified to touch only a new Router route file, its page component, and any new files under client/src/system/components/ -- stated as a prediction here and confirmed or corrected on the card that builds screen two (ACT-50 or ACT-51), rather than asserted as already true of a route that does not exist yet
 <!-- AC:END -->
@@ -95,9 +95,20 @@ Verified directly, not taken from the build session's report:
 - The live server serves the stopped run with stale:true and the corpus digest, matching what the CLI's 'list runs' and 'stale' report. A traversal id returns 400, not 500.
 - The rendered page was checked in a browser, which the build session could not do. Run history renders the stopped run, the stale badge, corpus@a3a62f, and the Stopped filter narrows correctly. The empty state renders against a records directory with no records.
 
-One defect the DOM tests could not see, found only in the browser and fixed in its own commit: TableShell renders its own caption, and the page also rendered a SectionLabel with the same text, so 'DURABLE RECORDS' appeared twice. getByText passes on either copy, so no test caught it. The caption was kept as the table's accessible name. A test now asserts one occurrence and the table's accessible name.
+One defect the DOM tests could not see, found only in the browser and fixed in its own commit: TableShell renders its own caption, and the page also rendered a SectionLabel with the same text, so 'DURABLE RECORDS' appeared twice. No test queried that text before this fix, so none could have caught it (corrected here: this note previously said getByText passed on either copy; @testing-library/dom 10.4.1, the version installed, throws on multiple matches instead, per commit 19024c2's own review below). The caption was kept as the table's accessible name. A test now asserts one occurrence and the table's accessible name.
 
 Left for ACT-107: the empty-state sentence carries an em dash, copied faithfully from SPEC.md section 1, which AC #3 requires the empty state to match. Rewording is a change to what the card builds, so it is a card rather than a fix folded in here.
 
 Two stray files appeared at the repository root during the stage sessions, referenced by nothing in the tree: claude-hook-api-report.md (317 lines of hook API probes) and wp-fs.md (2 bytes). Neither is a product of this card. Both moved to /tmp/rehearsal-stash/ rather than deleted.
+
+Adversarial code review (6 reviewer agents, one per axis: spec, style, architecture, security, testing, refactoring), 2026-09-07, on commit 19024c2 alone (the duplicate-caption fix found by the oversight pass above), the one commit not covered by the six-axis pass on b784409..753b795 or by the oversight probes themselves.
+
+Suite run before review: `mise exec -- bun run test` — 1142 pass, 0 fail (server) + 78 pass, 0 fail (client). No blocking or should-fix findings against the commit's own diff; the fix is minimal and correctly scoped, and the new test is a real regression guard (verified: reverting the fix would make `getAllByText("DURABLE RECORDS")` return 2, and `@testing-library/dom` 10.4.1's `getByRole`/`toHaveAccessibleName` pin is genuine, not a re-derivation of the subject).
+
+**Should-fix, disposed on this card's record:**
+- [spec] AC #7 still named SectionLabel as one of the six required components and was still checked, though this commit removes SectionLabel's only use from the screen. Fixed: AC #7 reworded above to five components, with the reason (SectionLabel's only use duplicated TableShell's own caption).
+- [testing] This card's own oversight note (above) claimed the bug went undetected because "getByText passes on either copy". Verified false: `@testing-library/dom` 10.4.1 (the version installed) throws `getMultipleElementsFoundError` on multiple matches, and `git show 19024c2^:.../run-history-page.test.tsx` shows no prior test queried "DURABLE RECORDS" at all. The real reason is simpler: nothing looked at that text before. Corrected in place above.
+
+**Note, tracked as a follow-up, not fixed here (pre-existing, not created by this commit):**
+- [refactoring] The same double-caption defect this commit fixes is still live at client/src/system/system-page.tsx:201-203 (SectionLabel>TABLE SHELL immediately followed by TableShell caption="DURABLE RECORDS", the design-system gallery page itself). Confirmed by reading table-shell.tsx's `<caption>` rendering against system-page.tsx directly. Revert test: this bug predates 19024c2 and isn't touched by it, so it's this card's tracked note rather than this commit's blocker.
 <!-- SECTION:NOTES:END -->
