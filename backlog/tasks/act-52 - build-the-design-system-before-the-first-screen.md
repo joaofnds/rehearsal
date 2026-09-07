@@ -1,10 +1,10 @@
 ---
 id: ACT-52
 title: build the design system before the first screen
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-04 13:22'
-updated_date: '2026-09-07 15:04'
+updated_date: '2026-09-07 16:00'
 labels: []
 milestone: m-5
 dependencies:
@@ -104,6 +104,10 @@ Not a defect: @phosphor-icons/react installed with no current call site (style).
 Not reproduced: a one-off stylelint phantom failure the refactoring reviewer saw once and could not reproduce in 20 follow-up runs (note only, no action).
 
 Moved back to Build 2026-09-07 on João's direction. The card was set Done with the full suite red: the client test preload this card added loads happy-dom into every test process and breaks 48 CLI tests. The design system's own work stands and its 62 tests pass. This card returns to Done once bun test is green from the repository root, which ACT-94 carries the confirmed cause and the three rejected fixes for.
+
+Returned to Done 2026-09-07. The card was held in Build only by the red suite its test preload caused, which ACT-94 fixed in 0c5e1a3 and cc775ee. That card's own note set the condition for this move: "returns to Done once bun test is green from the repository root". Observed this session: `mise exec -- bun run test` gives 1088 pass / 0 fail then 62 pass / 0 fail, exit 0, and bare `bun test` gives 1088 pass / 0 fail. This card's six acceptance criteria were already checked and none was reopened.
+
+The accepted coupling recorded above, that a global preload was the only mechanism available, no longer holds. bunfig.toml now excludes client/ from the default run and the test script re-includes it with the preload in a second process. ACT-94 carries the reasoning and the rejected alternatives.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
