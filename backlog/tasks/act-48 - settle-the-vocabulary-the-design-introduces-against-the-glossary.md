@@ -4,10 +4,12 @@ title: settle the vocabulary the design introduces against the glossary
 status: Done
 assignee: []
 created_date: '2026-09-04 13:00'
-updated_date: '2026-09-07 13:40'
+updated_date: '2026-09-07 13:41'
 labels: []
 milestone: m-5
 dependencies: []
+documentation:
+  - backlog/docs/doc-32 - reflection-ACT-48.md
 priority: high
 ordinal: 50008
 ---
