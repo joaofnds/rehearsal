@@ -4,7 +4,7 @@ title: build the comparison and corpus screens
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 23:09'
+updated_date: '2026-09-07 23:48'
 labels: []
 milestone: m-7
 dependencies:
@@ -80,4 +80,6 @@ Scope decisions, 2026-09-07. Each was put to an independent advisor given the fa
    Also owed: client/src/system/system-page.tsx already lists a 'Planned-feature block' component as needed by this card's corpus screen, and it does not exist. AC #6 requires it in the design system rather than inline.
 
 There is no recorded comparison on disk (.benchmark-runs/comparisons is empty), so the comparison screen will be verified against fixtures unless someone spends a compare run.
+
+Direction, 2026-09-07, on the one deviation held open above: 'I agree, no "range C+ - A-"'. The arm band does not render a plus/minus grade range. It renders what the five-letter scale in STAGE_LETTER_GRADES supports. The grade scale itself is not changed by this card, and plus/minus notation is not carried forward as a question.
 <!-- SECTION:NOTES:END -->
