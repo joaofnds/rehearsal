@@ -28,6 +28,9 @@
 	--color-accent-tint-08: rgba(145, 132, 217, 0.08);
 	--color-diff-add: #1f2b2a;
 	--color-diff-remove: #2b2136;
+	/* Not in SPEC.md's Design Tokens table; used for the corpus pill, the run-id
+	   link underline, and the live tool-call chip border in the screen sections. */
+	--color-accent-border: #423a6a;
 
 	/* Type */
 	--font-ui: Inter, system-ui, sans-serif;
@@ -51,6 +54,10 @@
 	--font-size-24: 24px;
 	--font-size-26: 26px;
 	--font-size-30: 30px;
+	--letter-spacing-tight: -0.01em;
+	--letter-spacing-tight-2: -0.02em;
+	--letter-spacing-table-header: 0.08em;
+	--letter-spacing-wide: 0.04em;
 	--letter-spacing-section-label: 0.09em;
 
 	/* Space */

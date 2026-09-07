@@ -70,7 +70,7 @@
 			{
 				"treatMethodsAsReadonly": true,
 				"ignoreInferredTypes": true,
-				"allow": ["ZodType", "BunFile", "Subprocess"]
+				"allow": ["ZodType", "BunFile", "Subprocess", "ReactNode"]
 			}
 		],
 		"eslint/no-duplicate-imports": "off",
@@ -87,6 +87,7 @@
 		"unicorn/max-nested-calls": "off",
 		"unicorn/consistent-function-scoping": "off",
 		"import/no-named-export": "off",
+		"import/prefer-default-export": "off",
 		"import/group-exports": "off",
 		"import/exports-last": "off",
 		"import/no-nodejs-modules": "off",
