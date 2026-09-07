@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import {
 	loadAttempts,
 	LineageMismatchError,
@@ -21,7 +22,11 @@ import {
 	captureFileHashes,
 	captureTreatmentChecks,
 } from "#benchmark/checks";
-import { CaseDeclarationError, readCaseDeclaration } from "#benchmark/case";
+import {
+	CaseDeclarationError,
+	declaredSettingsFilePath,
+	readCaseDeclaration,
+} from "#benchmark/case";
 import { runCommand } from "#benchmark/command";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {
@@ -51,6 +56,11 @@ import {
 	recordedRunNames,
 } from "#benchmark/run-layout";
 import { loadStageRubric, runStageJudge } from "#benchmark/stage-grading";
+import {
+	DEFAULT_STAGE_SETTINGS_FILE,
+	loadStageSettings,
+} from "#benchmark/stage-settings";
+import type { LoadedStageSettings } from "#benchmark/stage-settings";
 import {
 	addWorktree,
 	assertBuildCommitted,
@@ -158,6 +168,31 @@ async function declaredSessionKnobs(manifestFile: string): Promise<{
 
 		throw error;
 	}
+}
+
+/**
+ * The settings file the replayed run's case declares today, the same path a
+ * fresh run of that case would resolve. A case that no longer loads, renamed
+ * or deleted since the run, or that is not a pipeline case, falls back to
+ * the harness's own default rather than refusing the replay: the same
+ * tolerance `declaredSessionKnobs` applies to model and budget.
+ */
+export async function replaySettingsFile(
+	manifestFile: string,
+): Promise<LoadedStageSettings> {
+	const manifest = await loadRunManifest(manifestFile);
+	try {
+		const declaration = await readCaseDeclaration(manifest.caseId);
+		if (declaration.kind === "pipeline") {
+			return await loadStageSettings(declaredSettingsFilePath(declaration));
+		}
+	} catch (error) {
+		if (!(error instanceof CaseDeclarationError)) {
+			throw error;
+		}
+	}
+
+	return loadStageSettings(join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE));
 }
 
 /**
@@ -270,12 +305,16 @@ export async function executeReplay(
 			output.stderr(`${message}\n`);
 		},
 	};
-	const corpus = await replayCorpus(config.corpus);
+	const [corpus, settingsFile] = await Promise.all([
+		replayCorpus(config.corpus),
+		replaySettingsFile(paths.manifestFile),
+	]);
 	const replayRequest: ReplayRequest = {
 		paths,
 		stage: config.stage,
 		instructions: corpus.instructions,
 		settingSources: corpus.settingSources,
+		settingsFile,
 		corpusDirectory: corpus.directory,
 		controlSha: await currentControlSha(),
 		model: config.model,

@@ -43,6 +43,8 @@ import {
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { runStageJudge } from "#benchmark/stage-grading";
+import type { LoadedStageSettings } from "#benchmark/stage-settings";
+import { loadStageSettings } from "#benchmark/stage-settings";
 import {
 	addWorktree,
 	assertBuildCommitted,
@@ -263,6 +265,7 @@ export interface ConfirmationRequestInputs {
 	readonly controlSha: string;
 	readonly source: SourceBaseline;
 	readonly instructions: string;
+	readonly settingsFile: LoadedStageSettings;
 }
 
 /**
@@ -297,6 +300,7 @@ export function buildConfirmationRequest(
 		judgeModel: config.judgeModel,
 		judgeEffort: config.judgeEffort,
 		sessionBudgetUsd: config.sessionBudgetUsd,
+		settingsFile: inputs.settingsFile,
 	};
 }
 
@@ -306,10 +310,11 @@ async function confirmRun(
 	confirmation: ConfirmationApproval,
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
-	const [controlSha, source, instructions] = await Promise.all([
+	const [controlSha, source, instructions, settingsFile] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
 		liveCorpusInstructions(),
+		loadStageSettings(benchmarkCase.settingsFilePath),
 	]);
 	validateRubricDefinition(benchmarkCase.finalRubric);
 
@@ -364,6 +369,7 @@ async function confirmRun(
 			controlSha,
 			source,
 			instructions,
+			settingsFile,
 		}),
 	);
 }

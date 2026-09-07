@@ -17,7 +17,12 @@ import {
 } from "#benchmark/test-support";
 import { loadPipeline } from "#benchmark/pipeline";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
-import { replayCorpusRoots, runReplayCommand } from "#cli/replay-command";
+import {
+	replayCorpusRoots,
+	replaySettingsFile,
+	runReplayCommand,
+} from "#cli/replay-command";
+import { DEFAULT_STAGE_SETTINGS_FILE } from "#benchmark/stage-settings";
 
 const sessionArgs = [
 	"--model",
@@ -216,6 +221,22 @@ describe(replayCorpusRoots.name, () => {
 		try {
 			expect(await replayCorpusRoots(manifestFile)).toEqual(
 				corpusLayoutRoots("/tmp/target"),
+			);
+		} finally {
+			await rm(manifestFile, { force: true });
+		}
+	});
+});
+
+describe(replaySettingsFile.name, () => {
+	it("loads the settings file the replayed run's case declares today", async () => {
+		const manifestFile = await writeManifestFor("any-name-settings-file");
+
+		try {
+			const settingsFile = await replaySettingsFile(manifestFile);
+
+			expect(settingsFile.hashed.path).toBe(
+				join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
 			);
 		} finally {
 			await rm(manifestFile, { force: true });

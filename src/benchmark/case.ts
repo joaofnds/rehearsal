@@ -340,9 +340,11 @@ function declaredTarget(declaration: PipelineCaseDeclaration): string {
 /**
  * The settings file is harness-owned data, not a copy of anything live, so a
  * case that names none gets the harness's own default rather than an absent
- * settings surface: every stage session has one to read.
+ * settings surface: every stage session has one to read. Exported so replay,
+ * which reads a case declaration directly rather than loading a full
+ * BenchmarkCase, resolves the same path a run would.
  */
-function declaredSettingsFilePath(
+export function declaredSettingsFilePath(
 	declaration: PipelineCaseDeclaration,
 ): string {
 	if (declaration.settingsFile === undefined) {

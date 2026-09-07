@@ -439,6 +439,11 @@ describe(runRunCommand.name, () => {
 });
 
 describe(buildConfirmationRequest.name, () => {
+	const settingsFile = {
+		json: "{}",
+		hashed: { path: "/control/stage-settings.json", sha256: "a".repeat(64) },
+	};
+
 	it("names the case the loaded case declares", () => {
 		const followUp: BenchmarkCase = {
 			...auditLogCase,
@@ -471,6 +476,7 @@ describe(buildConfirmationRequest.name, () => {
 			controlSha: "a".repeat(40),
 			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
 			instructions: "Frozen instructions\n",
+			settingsFile,
 		});
 
 		expect(request.caseId).toBe("audit-log-follow-up");
@@ -496,9 +502,41 @@ describe(buildConfirmationRequest.name, () => {
 			controlSha: "a".repeat(40),
 			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
 			instructions: "Frozen instructions\n",
+			settingsFile,
 		});
 
 		expect(request.corpusRoots).toEqual(corpusLayoutRoots("/target"));
+	});
+
+	it("carries the loaded settings file through to the confirmation request", () => {
+		const declaredSettings = {
+			json: '{"disableAllHooks":true}',
+			hashed: { path: "/control/stage-settings.json", sha256: "a".repeat(64) },
+		};
+
+		const request = buildConfirmationRequest({
+			benchmarkCase: auditLogCase,
+			config: parseArgs(
+				args,
+				{},
+				{
+					caseId: "audit-log",
+					pipelinePath: auditLogCase.pipelinePath,
+					targetPath: auditLogCase.targetPath,
+				},
+			),
+			confirmation: {
+				reps: 2,
+				projectedCost: { reps: 2, perRepMaximumUsd: 1, totalMaximumUsd: 2 },
+				approvalMethod: "yes",
+			},
+			controlSha: "a".repeat(40),
+			source: { root: "/target", sha: "b".repeat(40), origin: undefined },
+			instructions: "Frozen instructions\n",
+			settingsFile: declaredSettings,
+		});
+
+		expect(request.settingsFile).toEqual(declaredSettings);
 	});
 });
 
