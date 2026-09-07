@@ -1,11 +1,11 @@
 ---
 id: ACT-94
 title: 'the client test preload breaks the CLI''s subprocess tests, failing 48'
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-07 14:03'
-updated_date: '2026-09-07 15:17'
+updated_date: '2026-09-07 16:00'
 labels: []
 dependencies: []
 type: bug
@@ -14,10 +14,10 @@ ordinal: 90008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 the project's documented test command runs every test in src, tools, and client and reports 1150 pass / 0 fail (measured 2026-09-07: 1088 pass across 67 files, then 62 pass across 9 files, chained)
-- [ ] #2 bare 'bun test' at the repository root reports 0 failures, so the command README.md:469 tells a reader to type is never a silently passing subset (measured 2026-09-07: 1088 pass / 0 fail with pathIgnorePatterns set; 1093 pass / 57 fail without it)
-- [ ] #3 the CLI's subprocess tests in src/cli/rehearsal-cli.test.ts and src/benchmark/benchmark-command.test.ts pass while the client's DOM tests also run, since Bun.spawn's stdio contract was never the cause (probe 2026-09-07: emptying bunfig.toml turns 47 failures into 47 passes)
-- [ ] #4 README's check sequence names the command that runs all 1150 tests (source: README.md:469 currently tells a reader to type 'bun test')
+- [x] #1 the project's documented test command runs every test in src, tools, and client and reports 1150 pass / 0 fail (measured 2026-09-07: 1088 pass across 67 files, then 62 pass across 9 files, chained)
+- [x] #2 bare 'bun test' at the repository root reports 0 failures, so the command README.md:469 tells a reader to type is never a silently passing subset (measured 2026-09-07: 1088 pass / 0 fail with pathIgnorePatterns set; 1093 pass / 57 fail without it)
+- [x] #3 the CLI's subprocess tests in src/cli/rehearsal-cli.test.ts and src/benchmark/benchmark-command.test.ts pass while the client's DOM tests also run, since Bun.spawn's stdio contract was never the cause (probe 2026-09-07: emptying bunfig.toml turns 47 failures into 47 passes)
+- [x] #4 README's check sequence names the command that runs all 1150 tests (source: README.md:469 currently tells a reader to type 'bun test')
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -117,4 +117,28 @@ The real reason is ES module hoisting. All static imports of a module are evalua
 Criterion 1 says "src, tools, and client". `tools/` currently contains no test files (find tools -type f, 2026-09-07: 20 files, none matching .test/.spec). The criterion is not wrong, since `bun test` collects the directory and finds nothing, but do not hunt for missing tools tests.
 
 The `&&` chain means a first-half failure skips the client half, so a broken CLI test hides whether the client also broke. Accepted: the alternative is running both unconditionally and reporting a combined exit code, which needs a shell script for what is currently one line. Revisit if it bites.
+
+## Built 2026-09-07, commits 0c5e1a3 and cc775ee
+
+What changed. bunfig.toml swaps the [test] preload for pathIgnorePatterns = ["client/**"]. package.json's test script runs `bun test && bun test --path-ignore-patterns "**/node_modules/**" --preload ./client/test-setup.ts ./client`. README, CLAUDE.md, and tools/orchestration/worker-agent.json name `bun run test` instead of `bun test`.
+
+Observed directly, this session, with mise exec:
+- Before: bare `bun test` gave 1102 pass / 48 fail across 76 files.
+- After: `bun run test` gives 1088 pass / 0 fail across 67 files, then 62 pass / 0 fail across 9 files. Exit 0. That is criterion 1, 1150 green.
+- After: bare `bun test` gives 1088 pass / 0 fail. Criterion 2.
+- `bun test src/cli/rehearsal-cli.test.ts src/benchmark/benchmark-command.test.ts` gives 49 pass / 0 fail, no stdio error. Criterion 3.
+- README.md:469 reads `bun run test`. Criterion 4.
+- typecheck, lint, lint:css, fmt:check all clean.
+
+The shaped approach changed twice under review, both times correctly. The card's original pick used path arguments (`bun test ./src ./tools`); an independent reviewer found --path-ignore-patterns, which also works as a bunfig key and leaves bare `bun test` green by default rather than a 57-failure trap. A second reviewer, on the committed change, found that CLAUDE.md and the worker prompt still said `bun test`, which reintroduced exactly the silent-subset failure criterion 2 forbids. Both fixed before this card closed.
+
+Also from that review, both applied: the ignore glob is anchored (`client/**`, not `**/client/**`) so a future src/*/client/ is not silently dropped; the client half's override is a never-matching pattern rather than an empty string, since nothing documents "" as a list-clearing sentinel.
+
+### Known, not fixed
+
+Naming a client test file directly still collects nothing, because the bunfig ignore applies to explicit path arguments too. `bun test client/src/system/components/grade.test.tsx` prints "did not match any test files" and exits 1. It fails rather than passing silently, so it is not the trap this card was about, but a developer iterating on one component test gets a confusing message with no hint that a config excluded it. The workaround is the second invocation's flags. Worth a card if it bites.
+
+The split is convention, not a guard. A DOM test added outside client/ fails loudly with "document is not defined", and a new top-level test directory joins the default run automatically, so neither loses tests silently. Nothing ties the bunfig pattern, the script's path argument, and the preload together.
+
+`tools/` holds no test files (checked 2026-09-07). Criterion 1 names it because the run collects the directory, not because tests live there.
 <!-- SECTION:NOTES:END -->
