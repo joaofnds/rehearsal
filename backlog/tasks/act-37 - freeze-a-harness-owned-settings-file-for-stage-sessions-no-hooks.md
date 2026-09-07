@@ -1,10 +1,10 @@
 ---
 id: ACT-37
 title: 'freeze a harness-owned settings file for stage sessions, no hooks'
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-03 23:33'
-updated_date: '2026-09-07 10:46'
+updated_date: '2026-09-07 11:11'
 labels:
   - defect
 dependencies: []
@@ -41,10 +41,10 @@ discovering it from ~/.claude.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A pipeline or replay case can declare a settings file carrying the permissions deny list, effort, output style selection, and feature switches
-- [ ] #2 A stage session run with --setting-sources project reads the declared settings file's values, observed once directly against a real claude invocation
-- [ ] #3 The declared settings file contains no hooks key and the harness does not read or install any hooks configuration for a stage session
-- [ ] #4 The declared settings file's content is part of the stage's recorded lineage, so changing it stales the checkpoint the same way a corpus edit does
+- [ ] #1 A pipeline or replay case can declare a settings file carrying the permissions deny list and feature switches (João, 2026-09-07, answer 1)
+- [ ] #2 A stage session run with --setting-sources project reads the declared settings file's values, observed once directly against a real claude invocation (card AC2)
+- [ ] #3 The declared settings file contains no hooks key and the harness does not read or install any hooks configuration for a stage session (card AC3)
+- [ ] #4 The declared settings file's content is part of the stage's recorded lineage in a field of its own beside model and effort, not in corpusFiles, so list stale does not report a settings change as a corpus edit (João, 2026-09-07, answer 3)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -93,4 +93,6 @@ Answered by Joao, 2026-09-07, all three as recommended:
 
 AC1 is superseded on its key list by answer 1 and should be rewritten to name
 the deny list and feature switches only.
+
+Shape 2026-09-07 (second pass): AC1 rewritten to drop effort and output style per João's answer 1. AC2-4 kept, each given its source. Answer 2 (reach the session through the existing --settings flag with the file's path, not a new worktree overlay) is the mechanism for AC2, not a separate observable, so it stays a note rather than a criterion. Card is fully answered; moving to Build.
 <!-- SECTION:NOTES:END -->
