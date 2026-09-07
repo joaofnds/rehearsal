@@ -15,12 +15,23 @@ const runHistoryRowSchema = z
 	.loose();
 const runHistoryResponseSchema = z.object({
 	rows: z.array(runHistoryRowSchema),
+	unreadable: z.array(z.object({ id: z.string(), reason: z.string() })),
 });
 
 async function runHistoryResponseFrom(
 	response: Response,
 ): Promise<z.infer<typeof runHistoryResponseSchema>> {
 	return runHistoryResponseSchema.parse(await response.json());
+}
+
+/**
+ * A response body carries no absolute filesystem path: the real leak this
+ * guards is a path outside `CONTROL_DIR` (a corpus root, a target repository),
+ * which `.not.toContain(CONTROL_DIR)` cannot see since the fixtures below live
+ * under a temp directory, not under `CONTROL_DIR`.
+ */
+function assertNoAbsolutePath(body: string): void {
+	expect(body).not.toMatch(/(?<=^|[\s(])\/[^\s,)]*/u);
 }
 
 describe(createApiApp.name, () => {
@@ -149,7 +160,7 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBeGreaterThanOrEqual(400);
 			expect(response.status).toBeLessThan(500);
-			expect(body).not.toContain(CONTROL_DIR);
+			assertNoAbsolutePath(body);
 		});
 
 		it("names no absolute filesystem path when the checkpoint stage in the id was never recorded", async () => {
@@ -167,7 +178,7 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBeGreaterThanOrEqual(400);
 			expect(response.status).toBeLessThan(500);
-			expect(body).not.toContain(CONTROL_DIR);
+			assertNoAbsolutePath(body);
 		});
 	});
 
@@ -187,7 +198,23 @@ describe(createApiApp.name, () => {
 			const body = await response.text();
 
 			expect(response.status).toBe(500);
-			expect(body).not.toContain(CONTROL_DIR);
+			assertNoAbsolutePath(body);
+		});
+
+		it("names no absolute path when staleCheckpoints itself throws from a corpus root outside CONTROL_DIR", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory();
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await rm(join(corpus, "skills", "build"), { recursive: true });
+			const app = createApiApp({
+				runsDirectory: fixture.runsDirectory,
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/runs");
+			const body = await response.text();
+
+			assertNoAbsolutePath(body);
 		});
 	});
 });

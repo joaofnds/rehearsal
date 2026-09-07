@@ -10,6 +10,7 @@ import { parseRunSummaryRecord } from "#benchmark/record-summary";
 import { stoppedStage } from "#benchmark/run-outcome";
 import { staleCheckpoints } from "#benchmark/staleness-report";
 import { corpusDigest } from "./corpus-digest";
+import { redactAbsolutePaths } from "./redact-path";
 
 /**
  * One run-history row, in decision-5's code vocabulary (`run`, `pipeline`,
@@ -142,27 +143,54 @@ async function rowFor(
 	};
 }
 
+export interface UnreadableRun {
+	readonly id: string;
+	readonly reason: string;
+}
+
+export interface RunHistoryReport {
+	readonly rows: readonly RunHistoryRow[];
+	readonly unreadable: readonly UnreadableRun[];
+}
+
 /**
  * Every recorded run rendered as a run-history row, staleness recomputed
  * against `source` on every call rather than cached: a stale badge that is
  * silently wrong is worse than the cost of hashing the corpus.
+ *
+ * One run's failure to read, a malformed artifact, a missing manifest, a
+ * corpus file `staleCheckpoints` cannot resolve, is collected rather than
+ * thrown: the `list runs` precedent (`src/cli/list-command.ts`'s `collect`)
+ * is what this follows, so a single bad run cannot blank the whole response
+ * the way an uncaught throw would. The reason is redacted the same way,
+ * since a filesystem error can name a path under the corpus root or the
+ * target repository, neither of which lives under `CONTROL_DIR`.
  */
-export async function runHistoryRows(
+export async function runHistoryReport(
 	runsDirectory: string,
 	source: CorpusRoot,
-): Promise<readonly RunHistoryRow[]> {
+): Promise<RunHistoryReport> {
 	const stale = await staleCheckpoints(runsDirectory, source);
 	const staleByCheckpointId = new Map(
 		stale.map((record) => [record.id, record.causes]),
 	);
 
 	const rows: RunHistoryRow[] = [];
+	const unreadable: UnreadableRun[] = [];
 	for (const run of await recordedRunNames(runsDirectory)) {
-		const row = await rowFor(runsDirectory, run, staleByCheckpointId);
-		if (row !== undefined) {
-			rows.push(row);
+		try {
+			const row = await rowFor(runsDirectory, run, staleByCheckpointId);
+			if (row !== undefined) {
+				rows.push(row);
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			unreadable.push({
+				id: `run:${run}`,
+				reason: redactAbsolutePaths(message),
+			});
 		}
 	}
 
-	return rows;
+	return { rows, unreadable };
 }

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { z } from "zod";
+import { stubFetch } from "#client/test-support/fetch-stub";
 import { RunHistoryPage } from "./run-history-page";
 import type { runHistoryResponseSchema } from "./run-history-row";
 
-type RunHistoryResponseBody = z.infer<typeof runHistoryResponseSchema>;
+type RunHistoryResponseBody = z.input<typeof runHistoryResponseSchema>;
 
 const originalFetch = globalThis.fetch;
 
@@ -14,9 +15,7 @@ afterEach(() => {
 });
 
 function respondingWith(body: RunHistoryResponseBody): void {
-	const stub = (): Promise<Response> => Promise.resolve(Response.json(body));
-	stub.preconnect = fetch.preconnect;
-	globalThis.fetch = stub;
+	stubFetch(body);
 }
 
 function renderPage(): void {
@@ -105,6 +104,47 @@ describe(RunHistoryPage.name, () => {
 			"aria-pressed",
 			"true",
 		);
+	});
+
+	it("narrows the table to stopped runs when the Stopped filter is pressed", async () => {
+		respondingWith({
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "STOPPED:build",
+					stage: "shape",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: true,
+					staleCauses: [],
+				},
+				{
+					run: "2026-09-03T00-00-00.000Z",
+					caseId: "audit-log",
+					status: "COMPLETE",
+					stage: "build",
+					grade: "A",
+					corpus: { digest: "b1c2d3" },
+					stale: false,
+					staleCauses: [],
+				},
+			],
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("2026-09-06T21-58-29.508Z")).toBeInTheDocument();
+		});
+		expect(screen.getByText("2026-09-03T00-00-00.000Z")).toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: "Stopped" }));
+
+		expect(screen.getByText("2026-09-06T21-58-29.508Z")).toBeInTheDocument();
+		expect(
+			screen.queryByText("2026-09-03T00-00-00.000Z"),
+		).not.toBeInTheDocument();
 	});
 
 	it("renders a run with no recorded checkpoint without a corpus digest", async () => {

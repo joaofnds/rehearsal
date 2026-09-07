@@ -13,9 +13,14 @@ export const runHistoryRowSchema = z
 	})
 	.readonly();
 
+export const unreadableRunSchema = z
+	.object({ id: z.string(), reason: z.string() })
+	.readonly();
+
 export const runHistoryResponseSchema = z
 	.object({
 		rows: z.array(runHistoryRowSchema).readonly(),
+		unreadable: z.array(unreadableRunSchema).readonly().default([]),
 	})
 	.readonly();
 

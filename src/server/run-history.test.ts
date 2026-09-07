@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CONTROL_DIR } from "#benchmark/config";
 import {
 	directorySource,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
-import { runHistoryRows } from "./run-history";
+import { runHistoryReport } from "./run-history";
 
-describe(runHistoryRows.name, () => {
+describe(runHistoryReport.name, () => {
 	const roots: string[] = [];
 
 	afterEach(async () => {
@@ -46,7 +47,7 @@ describe(runHistoryRows.name, () => {
 		const corpus = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(corpus));
 
-		const rows = await runHistoryRows(
+		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
 		);
@@ -68,7 +69,7 @@ describe(runHistoryRows.name, () => {
 		const fixture = await writtenFixture();
 		const before = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(before));
-		const beforeRows = await runHistoryRows(
+		const { rows: beforeRows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(before),
 		);
@@ -78,7 +79,7 @@ describe(runHistoryRows.name, () => {
 
 		const after = await corpusDirectory("build skill, edited\n");
 		await fixture.recordCorpusFrom(directorySource(after));
-		const afterRows = await runHistoryRows(
+		const { rows: afterRows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(after),
 		);
@@ -95,7 +96,7 @@ describe(runHistoryRows.name, () => {
 		await fixture.recordCorpusFrom(directorySource(recorded));
 		const edited = await corpusDirectory("build skill, edited\n");
 
-		const rows = await runHistoryRows(
+		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(edited),
 		);
@@ -112,7 +113,7 @@ describe(runHistoryRows.name, () => {
 		const corpus = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(corpus));
 
-		const rows = await runHistoryRows(
+		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
 		);
@@ -128,7 +129,7 @@ describe(runHistoryRows.name, () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRun();
 
-		const rows = await runHistoryRows(
+		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
 		);
@@ -144,11 +145,51 @@ describe(runHistoryRows.name, () => {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-empty-"));
 		roots.push(root);
 
-		const rows = await runHistoryRows(
+		const { rows } = await runHistoryReport(
 			root,
 			directorySource(await corpusDirectory("build skill\n")),
 		);
 
 		expect(rows).toEqual([]);
+	});
+
+	it("collects a run whose artifact fails to parse as unreadable, without dropping the other rows", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await writeFile(
+			join(fixture.runsDirectory, `${fixture.replayableRun}.json`),
+			"{ not json\n",
+		);
+
+		const { rows, unreadable } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		expect(rows.some((row) => row.run === fixture.replayableRun)).toBe(false);
+		expect(rows.some((row) => row.run === fixture.unreplayableRun)).toBe(true);
+		expect(unreadable).toHaveLength(1);
+		expect(unreadable.at(0)?.id).toBe(`run:${fixture.replayableRun}`);
+		expect(unreadable.at(0)?.reason.length).toBeGreaterThan(0);
+	});
+
+	it("names no absolute filesystem path in an unreadable run's reason", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await writeFile(
+			join(fixture.runsDirectory, `${fixture.replayableRun}.json`),
+			"{ not json\n",
+		);
+
+		const { unreadable } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		const reason = unreadable.at(0)?.reason ?? "";
+		expect(reason).not.toContain(CONTROL_DIR);
+		expect(reason).not.toMatch(/\/(?<segment>Users|home|var|tmp)\//u);
 	});
 });

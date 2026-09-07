@@ -1,20 +1,18 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
+import { stubFetch } from "#client/test-support/fetch-stub";
 import { createAppRouter } from "./router";
 
 const originalFetch = globalThis.fetch;
 
-function stubbingRunsEmpty(): void {
-	const stub = (): Promise<Response> =>
-		Promise.resolve(Response.json({ rows: [] }));
-	stub.preconnect = fetch.preconnect;
-	globalThis.fetch = stub;
-}
+afterEach(() => {
+	globalThis.fetch = originalFetch;
+});
 
 function renderAt(path: string): void {
-	stubbingRunsEmpty();
+	stubFetch({ rows: [] });
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
@@ -35,8 +33,6 @@ describe(createAppRouter.name, () => {
 		await waitFor(() => {
 			expect(screen.getByText("Run history")).toBeInTheDocument();
 		});
-
-		globalThis.fetch = originalFetch;
 	});
 
 	it("renders the design system reference at /system", async () => {
@@ -45,7 +41,5 @@ describe(createAppRouter.name, () => {
 		await waitFor(() => {
 			expect(screen.getByText("Rehearsal design system")).toBeInTheDocument();
 		});
-
-		globalThis.fetch = originalFetch;
 	});
 });
