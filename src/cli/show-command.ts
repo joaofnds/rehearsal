@@ -49,7 +49,7 @@ async function runRecordFile(
 	return stopped === undefined ? undefined : paths.stageFile(stopped.stage);
 }
 
-async function recordFileFor(
+export async function recordFileFor(
 	id: RecordId,
 	runsDirectory: string,
 ): Promise<string> {

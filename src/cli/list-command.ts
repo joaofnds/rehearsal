@@ -95,7 +95,7 @@ async function collect<Named>(
  * under the control root that discloses the home directory while naming the
  * same file the control-relative path names.
  */
-function controlRelative(reason: string): string {
+export function controlRelative(reason: string): string {
 	return reason.replaceAll(`${CONTROL_DIR}/`, "");
 }
 
