@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 21:32'
+updated_date: '2026-09-07 21:39'
 labels: []
 milestone: m-5
 dependencies:
@@ -86,4 +86,18 @@ Suite run before review: `mise exec -- bun run test` — 1141 pass, 0 fail (serv
 - [style] Empty-state's "Declare a case" button is a bare `<button>`; no Button component exists yet in the design system to compose from instead, and AC #7 doesn't name it.
 - [security] `record-id.ts`'s traversal guard checks `.`, `..`, `/` but not `\` — POSIX-only concern (this repo's dev/CI platform), not exploitable here.
 - [security] `Bun.serve` binds with no explicit hostname — unverified belief, out of this card's stated scope (id-traversal, path-leak).
+
+Oversight probes, 2026-09-07 (iteration session, after the build):
+
+Verified directly, not taken from the build session's report:
+- Full suite green from a fresh run: 1142 server, 78 client. typecheck, lint, fmt:check, lint:css all exit 0.
+- The path-redaction fix is really pinned. Reverting redactAbsolutePaths to 'return message' fails six tests, four of them at the route level, including the staleCheckpoints-throws case. Restored after the probe.
+- The live server serves the stopped run with stale:true and the corpus digest, matching what the CLI's 'list runs' and 'stale' report. A traversal id returns 400, not 500.
+- The rendered page was checked in a browser, which the build session could not do. Run history renders the stopped run, the stale badge, corpus@a3a62f, and the Stopped filter narrows correctly. The empty state renders against a records directory with no records.
+
+One defect the DOM tests could not see, found only in the browser and fixed in its own commit: TableShell renders its own caption, and the page also rendered a SectionLabel with the same text, so 'DURABLE RECORDS' appeared twice. getByText passes on either copy, so no test caught it. The caption was kept as the table's accessible name. A test now asserts one occurrence and the table's accessible name.
+
+Left for ACT-107: the empty-state sentence carries an em dash, copied faithfully from SPEC.md section 1, which AC #3 requires the empty state to match. Rewording is a change to what the card builds, so it is a card rather than a fix folded in here.
+
+Two stray files appeared at the repository root during the stage sessions, referenced by nothing in the tree: claude-hook-api-report.md (317 lines of hook API probes) and wp-fs.md (2 bytes). Neither is a product of this card. Both moved to /tmp/rehearsal-stash/ rather than deleted.
 <!-- SECTION:NOTES:END -->
