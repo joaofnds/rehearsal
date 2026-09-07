@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-07 00:19'
+updated_date: '2026-09-07 00:32'
 labels: []
 milestone: m-1
 dependencies: []
@@ -188,6 +188,18 @@ Not currently observable: no target repository has a .claude, so both readings r
 Separate and probably fine: replay-command.ts:175 also uses manifest.sourceRoot rather than the worktree João chose in question 2. The comment at 166-167 explains that this is the pre-worktree corpus freeze, running before any worktree exists, and sourceRoot is the repository that worktree is built from. That reads as a faithful application of the decision to a site where no worktree is available yet, not a deviation.
 
 Needs João's call: whether to change staleness-report.ts:78 back to the operator's source (reading A, as decided) or to accept reading B now that it is built. Holding the card out of Done until then.
+
+Reverted stale to reading A, 2026-09-06, at João's direction ('agree', answering the recommendation to change it back).
+
+staleness-report.ts:88 now passes homedir() to stageCorpusRoots instead of manifest.sourceRoot, so a live corpus resolves to the operator's install for pipeline checkpoints, matching what caseStaleness already did for session cases. The reason is written into the code above currentStageCorpus so the next reader does not re-derive it.
+
+Removed the test 'compares against the recorded run's own target, not this repository', which pinned the rejected reading. I first tried inverting it, then mutation-tested the replacement by restoring manifest.sourceRoot: it passed under both readings, so it proved nothing. The cause is that stageCorpusRoots only consults the target root when source.kind is 'live' (checkpoint.ts:124); a directory-source test takes the [source.root] branch and never sees the difference. A test that discriminates would need the fixture's discuss and build skills installed in the real ~/.claude, which this session will not write to. So this behavior is currently unpinned, and that is stated rather than papered over.
+
+Both acceptance criteria still hold. #2 is verified: no CONTROL_DIR argument remains at any corpus-root call site in run-command.ts, replay-command.ts, or checkpoint.ts. #1 speaks to a run against a case target, and run and replay both still search the target's .claude first; stale is neither a run nor a replay.
+
+Suite 1063 pass / 0 fail (one fewer than 1064, the removed test). Lint, typecheck and format clean. 'rehearsal stale' verified by hand: it reports rulebook/backlog-board.md changed against a real edit.
+
+Known wart, not worth changing here: under reading A, corpusLayoutRoots(homedir()) yields ~/.claude twice, since its project and user halves collapse to the same directory. Harmless, because resolution takes the first hit. Narrowing stageCorpusRoots would change replay's behavior too, which is outside this decision.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
