@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import type { CaseDeclaration, SessionCaseDeclaration } from "./case";
 import { listCases } from "./case";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
@@ -68,6 +69,15 @@ export interface CurrentSessionKnobs {
 	readonly effort?: Effort | undefined;
 }
 
+/**
+ * `stale` answers one question per invocation: what the corpus the operator
+ * named invalidated. So a live corpus here is the operator's install, not the
+ * target each run recorded, even though `replay` resolves the same source
+ * against the target it is about to run in. Half this command's subjects are
+ * session cases, which carry no manifest and no target at all, so pointing
+ * pipeline runs at their own recorded roots would make one command answer two
+ * questions depending on what it happened to be looking at.
+ */
 async function currentStageCorpus(
 	manifest: RunManifest,
 	chain: readonly CheckpointRecord[],
@@ -75,7 +85,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
 	const corpus = new Map<string, readonly HashedFile[]>();
-	const roots = stageCorpusRoots(source, manifest.sourceRoot);
+	const roots = stageCorpusRoots(source, homedir());
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
