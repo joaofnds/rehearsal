@@ -4,7 +4,7 @@ title: record the project half of the context manifest
 status: Shape
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-06 12:09'
+updated_date: '2026-09-07 20:44'
 labels: []
 dependencies:
   - ACT-41
@@ -38,3 +38,9 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 - [ ] #3 A document a stage read off its card appears in the manifest, named by its target-relative path
 - [ ] #4 The decision between declared and discovered project context is recorded on this card with its reason
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Direction, 2026-09-07: a case declares its project context explicitly, rather than the harness discovering it, for attributability. This answers doc-28's open question, restated unanswered in doc-33 and doc-36. The card is unblocked.
+<!-- SECTION:NOTES:END -->

@@ -4,7 +4,7 @@ title: stand up the stack end to end on one screen
 status: To Do
 assignee: []
 created_date: '2026-09-04 14:20'
-updated_date: '2026-09-07 20:29'
+updated_date: '2026-09-07 20:44'
 labels: []
 milestone: m-5
 dependencies:
@@ -49,4 +49,12 @@ The point is the wiring, not the screen. A second screen should be a matter of a
 Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
 
 Bet, 2026-09-07: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Direction, 2026-09-07 (answering the shape stage's three questions):
+
+1. This card defines the read API's JSON response shape for a run-history row, in the server layer. Decision-3 picked Hono for exactly this. No other card owns it.
+
+2. The route computes staleness live per request, calling staleCheckpoints scoped to the runs actually listed. A stale badge that is silently wrong is worse than the cost of hashing the corpus. staleCheckpoints (src/benchmark/staleness-report.ts) joins listRecords, recordFileFor, and parseRecordId as a read path the API goes through.
+
+3. The shape stage's third question was void. It claimed AC #1's two fixtures do not exist in this checkout. Probed directly: 'list runs' reports run:2026-09-06T21-58-29.508Z as STOPPED:build replayable, and 'stale' reports checkpoint:2026-09-06T21-58-29.508Z/shape as stale on sixteen changed corpus files. Both fixtures AC #1 names are on disk now. What is absent is a completed run, which AC #1 does not name. No fixture seeding is in this card's scope.
 <!-- SECTION:NOTES:END -->
