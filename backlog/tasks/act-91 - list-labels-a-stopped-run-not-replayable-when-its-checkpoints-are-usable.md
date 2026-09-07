@@ -1,10 +1,10 @@
 ---
 id: ACT-91
 title: list labels a stopped run not replayable when its checkpoints are usable
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-06 22:19'
-updated_date: '2026-09-07 12:43'
+updated_date: '2026-09-07 12:48'
 labels: []
 milestone: m-1
 dependencies: []
@@ -14,7 +14,7 @@ ordinal: 87008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stopped run whose manifest and stage checkpoints exist is listed as replayable (observed: run 2026-09-06T21-58-29.508Z, STOPPED:build, replayed its shape stage successfully while listed as not replayable)
+- [x] #1 A stopped run whose manifest and stage checkpoints exist is listed as replayable (observed: run 2026-09-06T21-58-29.508Z, STOPPED:build, replayed its shape stage successfully while listed as not replayable)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -34,3 +34,23 @@ Shaped 2026-09-07: fix confirmed as a one-line change. list-command.ts:153 hardc
 
 Iteration stopped 2026-09-07 before the build session. 'iterate step' refuses a card in Build or Review that carries an assignee, as a guard against two sessions working one card. The shape session set assignee @claude when it moved the card to Build, per the board rule that a session sets @claude when it picks a card up. So the guard fires on the iteration's own bookkeeping. ACT-37, the previous card through this loop, reached Build with assignee [] and was not refused. Checked at the stop: no other claude session was running against this board, so nothing actually holds the card.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-09-07 12:48
+---
+Fixed: list-command.ts:153 (stopped-run branch) now returns the unconditional 'replayable' literal, matching the fact loadRunManifest's success on the line above already proves (the manifest exists), mirroring the criterion the non-stopped branch (line 137-142) already used.
+
+Verified this session:
+- rerun of 'rehearsal list runs' against the run named in the AC (2026-09-06T21-58-29.508Z) now prints 'replayable' (was 'not replayable').
+- targeted and full suite green: 1087 pass, 0 fail (mise exec -- bun test).
+- typecheck and lint clean (tsc --noEmit, oxlint --type-aware).
+
+review-code ran three axes (Spec, Testing, Refactoring-advisory). Spec: clean, AC #1 present and pinned by test. Refactoring: no findings; the apparent duplication between the two branches' 'replayable' outcome is not Duplicated Code, since each derives it from a different, non-redundant fact (a poll vs. a successful parse already needed for caseId). Testing found two should-fix findings, both fixed in a follow-up commit: a stale test name that no longer described what it pinned, and a real coverage gap on the sibling branch (a stopped run whose manifest fails to load must not appear as replayable, or at all) that was previously covered only incidentally by an unrelated redaction test. The new test is mutation-verified: it fails against a mutated listRuns that swallows the manifest-load failure and returns a placeholder id as replayable.
+
+Commits: 2551651 (fix), e1889d8 (review fixes).
+
+Not verified: no wider blast-radius beyond list-command.ts was in scope; nothing else reads or depends on this literal.
+---
+<!-- COMMENTS:END -->
