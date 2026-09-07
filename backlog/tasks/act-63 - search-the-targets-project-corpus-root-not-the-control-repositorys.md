@@ -1,10 +1,11 @@
 ---
 id: ACT-63
 title: 'search the target''s project corpus root, not the control repository''s'
-status: Build
-assignee: []
+status: Review
+assignee:
+  - '@claude'
 created_date: '2026-09-04 17:30'
-updated_date: '2026-09-06 23:59'
+updated_date: '2026-09-07 00:18'
 labels: []
 milestone: m-1
 dependencies: []
@@ -26,8 +27,8 @@ Exposed by ACT-41, which removed the same control-root assumption from the instr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A stage's corpus roots for a run against a case target search that target's .claude before the user's, and never the control repository's
-- [ ] #2 corpusLayoutRoots is called with the target root at every run and replay site, with no CONTROL_DIR argument remaining
+- [x] #1 A stage's corpus roots for a run against a case target search that target's .claude before the user's, and never the control repository's
+- [x] #2 corpusLayoutRoots is called with the target root at every run and replay site, with no CONTROL_DIR argument remaining
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -114,4 +115,81 @@ Both design questions are now settled:
 2. A replay's corpus search uses the worktree directory, matching replay.ts:390 and 434.
 
 No open questions remain. The shaping can proceed on these two answers.
+
+2026-09-07, built and reviewed.
+
+Changed: stageCorpusRoots (checkpoint.ts) now takes a required targetRoot
+parameter and calls corpusLayoutRoots(targetRoot) instead of
+corpusLayoutRoots(CONTROL_DIR). CONTROL_DIR removed from checkpoint.ts
+entirely. staleness-report.ts's currentStageCorpus passes manifest.sourceRoot.
+run-records-test-support.ts's RecordedRunsFixture takes an optional
+sourceRoot constructor parameter (default the existing SOURCE_ROOT constant)
+threaded into every manifest it writes and into recordCorpusFrom's
+stageCorpusRoots call. run-command.ts's buildConfirmationRequest now calls
+corpusLayoutRoots(inputs.source.root). replay-command.ts gained an exported
+replayCorpusRoots(manifestFile) helper (loads the run's manifest the same way
+declaredSessionKnobs already does, returns corpusLayoutRoots(manifest.sourceRoot)),
+called from executeReplay in place of corpusLayoutRoots(CONTROL_DIR).
+
+Verified directly: built a real temp target directory with its own .claude/skills,
+called stageCorpusRoots and resolveSkillDirectory against it, confirmed the
+target's own skill file resolves before ~/.claude falls in as the second root.
+
+Full check passes: bun test (1064 pass, 0 fail), typecheck, lint, format all clean.
+
+Code review: all six axes run (spec, style, architecture, security, testing,
+refactoring). Style, architecture, security: nothing found. Refactoring: both
+extractions (replayCorpusRoots, the SOURCE_ROOT constant) called net wins, no
+objection. Spec and testing independently found the same should-fix: no test
+exercised staleCheckpoints's "live" branch through a real checkpoint chain, so a
+regression reintroducing CONTROL_DIR at staleness-report.ts's call site would not
+be caught. Fixed in this batch: added a test in staleness-report.test.ts building a
+real target directory with its own .claude, recording a live-source checkpoint
+against it via the fixture's new sourceRoot parameter, editing the recorded skill,
+and confirming staleCheckpoints reports the edit as staleness. Mutation-confirmed:
+reverting staleness-report.ts's manifest.sourceRoot argument to any other value
+makes this new test fail.
+
+Testing axis found one more should-fix, more serious: the new replayCorpusRoots
+unit test proves the helper computes the right value but never proves executeReplay
+(the real production wiring, hardwired with real ReplayDependencies at the CLI
+composition root in rehearsal.ts) actually passes that helper's result into
+executeReplayStage's corpusRoots field. Mutation-confirmed: reverting
+executeReplay's call site back to corpusLayoutRoots(CONTROL_DIR) leaves the full
+suite green. Investigated closing this in-batch: executeReplay's only two branches
+either call the real runReplay (needs a real git worktree and would run an actual
+paid Claude session for the debug path) or the real runReplayConfirmation (same,
+plus real judge scoring for the confirmation path); neither dependency is injected
+at executeReplay, unlike the benchmark-layer functions they call, which already
+have adequate Fake-based coverage (replay-command.test.ts at the benchmark layer,
+replay-confirmation.test.ts's ReplayConfirmationHarness). Revert test: this exact
+line was equally untestable before this diff (corpusLayoutRoots(CONTROL_DIR) was
+never covered at that call site either), so this is pre-existing test debt this
+diff's new code inherits rather than introduces, but it is real should-fix debt on
+the line the diff touched. Disposition: tracked as ACT-92 rather than fixed here,
+since closing it correctly needs ReplayDependencies made injectable at the CLI
+composition root, an architectural change beyond this bug fix's scope.
+
+Not verified: the fix has not been observed against a real target repository that
+actually carries a project-level .claude in a live rehearsal run or replay; the
+direct verification above used stageCorpusRoots/resolveSkillDirectory directly, not
+a full `rehearsal run`/`rehearsal replay` invocation. Both remain latent-bug
+territory until a target case gains its own .claude, same as the card's own
+description states.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+stageCorpusRoots and both CLI call sites (run-command.ts, replay-command.ts)
+now search the target repository's own .claude before the user's, never
+CONTROL_DIR. staleness-report.ts's live-corpus check now compares against
+each recorded run's own manifest.sourceRoot. Both acceptance criteria met and
+tested. Full check passes: 1064 tests, typecheck, lint, format all clean.
+
+Code review (6 axes) found two should-fix coverage gaps beyond the fix itself,
+both on test coverage rather than the production behavior: staleness-report.ts's
+live branch (fixed in this batch, mutation-confirmed) and executeReplay's real
+production wiring of corpusRoots, which needs an architectural change
+(injectable ReplayDependencies) to close and is tracked as ACT-92.
+<!-- SECTION:FINAL_SUMMARY:END -->
