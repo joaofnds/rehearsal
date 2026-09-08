@@ -23,7 +23,9 @@ import {
 	snapshotStyleName,
 } from "./session-corpus";
 import { evaluateChecks } from "./session-check";
-import { parseTranscriptFile, toolUses } from "./transcript";
+import type { ContextManifest } from "./context-manifest";
+import { observedManifest } from "./context-manifest";
+import { outputStyles, parseTranscriptFile, toolUses } from "./transcript";
 
 export type ClaudeRunner = (
 	command: readonly string[],
@@ -52,6 +54,7 @@ export interface SessionAttempt {
 	readonly metrics: ClaudeCallMetrics | undefined;
 	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
 	readonly checks: readonly CheckResult[];
+	readonly contextManifest: ContextManifest | undefined;
 }
 
 /**
@@ -325,6 +328,7 @@ async function recordAttempt(
 			metrics,
 			outcome: "NO_REPLY",
 			checks: [],
+			contextManifest: undefined,
 		};
 	}
 
@@ -342,6 +346,10 @@ async function recordAttempt(
 		metrics,
 		outcome: result.outcome,
 		checks: result.results,
+		contextManifest: observedManifest(
+			toolUses(transcript),
+			outputStyles(transcript),
+		),
 	};
 }
 

@@ -79,6 +79,23 @@ function readFileLine(sessionId: string, filePath: string): string {
 	});
 }
 
+function skillUseLine(sessionId: string, skill: string): string {
+	return JSON.stringify({
+		type: "assistant",
+		sessionId,
+		message: {
+			content: [{ type: "tool_use", name: "Skill", input: { skill } }],
+		},
+	});
+}
+
+function outputStyleLine(style: string): string {
+	return JSON.stringify({
+		type: "attachment",
+		attachment: { type: "output_style", style },
+	});
+}
+
 function sessionCase(
 	overrides: Immutable<Partial<SessionCase>> = {},
 ): SessionCase {
@@ -522,6 +539,29 @@ function appendingClaude(
 	};
 }
 
+/**
+ * A fresh session's transcript is whatever the provider writes, so a manifest
+ * test needs the lines a real one would emit for a skill invocation or an
+ * output style before the reply, not just the reply line `FakeClaude` writes.
+ */
+function claudeWriting(
+	projects: string,
+	extraLines: (sessionId: string) => readonly string[],
+	reply: string,
+): SessionAttemptRequest["runClaude"] {
+	return async (command, cwd) => {
+		const sessionId = namedSession(command);
+		const slug = join(projects, projectSlug(await realpath(cwd)));
+		await mkdir(slug, { recursive: true });
+		await writeFile(
+			join(slug, `${sessionId}.jsonl`),
+			`${[...extraLines(sessionId), transcriptLine(sessionId, reply)].join("\n")}\n`,
+		);
+
+		return envelope(reply);
+	};
+}
+
 describe(runSessionAttempt.name, () => {
 	it("runs in a fresh directory that is neither the control repository nor the case directory", async () => {
 		const projects = await projectsRoot();
@@ -693,6 +733,42 @@ describe(runSessionAttempt.name, () => {
 		]);
 	});
 
+	it("names an invoked skill's layout path in the recorded context manifest", async () => {
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claudeWriting(
+					projects,
+					(sessionId) => [skillUseLine(sessionId, "verify")],
+					"OK",
+				),
+			}),
+		);
+
+		expect(attempt.contextManifest?.paths).toContain("skills/verify/SKILL.md");
+	});
+
+	it("names the last output_style attachment's layout path in the recorded context manifest", async () => {
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: claudeWriting(
+					projects,
+					() => [outputStyleLine("brief")],
+					"OK",
+				),
+			}),
+		);
+
+		expect(attempt.contextManifest?.paths).toContain("output-styles/brief.md");
+	});
+
 	it("counts every tool use in the turn when the case declares no transcript prefix", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "OK");
@@ -844,6 +920,21 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(attempt.checks).toEqual([]);
+	});
+
+	it("records no context manifest when the session produced no reply", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: replylessClaude(claude.run),
+			}),
+		);
+
+		expect(attempt.contextManifest).toBeUndefined();
 	});
 
 	/**
