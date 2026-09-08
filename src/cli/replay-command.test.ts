@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTROL_DIR, parseArgs } from "#benchmark/config";
+import { CONTROL_DIR, parseArgs, parseReplayArgs } from "#benchmark/config";
 import { corpusLayoutRoots } from "#benchmark/checkpoint";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { buildRunManifest } from "#benchmark/run";
@@ -17,7 +17,9 @@ import {
 } from "#benchmark/test-support";
 import { loadPipeline } from "#benchmark/pipeline";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
+import type { ReplayCliConfig } from "#benchmark/config";
 import {
+	executeReplay,
 	replayCorpusRoots,
 	replaySettingsFile,
 	runReplayCommand,
@@ -40,6 +42,18 @@ const passingProbe = (): Promise<void> => Promise.resolve();
  * test claiming a run named "any-name" resolved must leave a real manifest at
  * the path replay computes for it, not just a Fake resolveRunDirectory.
  */
+function replayConfigFor(runName: string, corpus: string): ReplayCliConfig {
+	return parseReplayArgs([
+		"--run",
+		runName,
+		"--stage",
+		"shape",
+		"--corpus",
+		corpus,
+		...sessionArgs,
+	]);
+}
+
 async function writeManifestFor(runName: string): Promise<string> {
 	const paths = benchmarkRunPaths(benchmarkRunsDirectory(CONTROL_DIR), runName);
 	const config = parseArgs(
@@ -339,6 +353,35 @@ describe("--corpus on a stage replay", () => {
 			expect(corpora).toEqual(["/some/corpus"]);
 		} finally {
 			await rm(manifestFile, { force: true });
+		}
+	});
+	it("refuses a corpus whose CLAUDE.md is a symlink out of the root, as a precondition", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-replay-corpus-"));
+		const outside = await mkdtemp(join(tmpdir(), "rehearsal-replay-outside-"));
+		const manifestFile = await writeManifestFor("any-name-corpus-linked");
+
+		try {
+			await mkdir(join(root, "skills"), { recursive: true });
+			await Bun.write(join(outside, "secret.md"), "SECRET BYTES\n");
+			await symlink(join(outside, "secret.md"), join(root, "CLAUDE.md"));
+
+			const failure = await failureOf(
+				executeReplay(
+					replayConfigFor("any-name-corpus-linked", root),
+					benchmarkRunPaths(
+						benchmarkRunsDirectory(CONTROL_DIR),
+						"any-name-corpus-linked",
+					),
+					recordOutput().output,
+				),
+			);
+
+			expect(failure).toBeInstanceOf(RefusedPreconditionError);
+			expect(failure.message).not.toContain("SECRET BYTES");
+		} finally {
+			await rm(manifestFile, { force: true });
+			await rm(root, { force: true, recursive: true });
+			await rm(outside, { force: true, recursive: true });
 		}
 	});
 });

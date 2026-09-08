@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { mkdir, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import {
 	CorpusFileError,
 	hashCorpusFiles,
@@ -180,5 +182,107 @@ describe(liveCorpusInstructions.name, () => {
 		expect(resolveCorpusFile(liveCorpusSource(), "CLAUDE.md")).not.toBe(
 			join(CONTROL_DIR, "CLAUDE.md"),
 		);
+	});
+});
+
+describe("refusing a corpus file whose bytes are outside its root", () => {
+	async function outsideFile(text: string): Promise<string> {
+		const outside = await resources.createControlDirectory();
+		const path = join(outside, "secret.md");
+		await Bun.write(path, text);
+
+		return path;
+	}
+
+	it("refuses a CLAUDE.md that is a symlink to a file outside the root", async () => {
+		const root = await resources.createControlDirectory();
+		const secret = await outsideFile("SECRET BYTES\n");
+		await symlink(secret, join(root, "CLAUDE.md"));
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["CLAUDE.md"]),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("refuses a declared layout file that is a symlink outside the root", async () => {
+		const root = await resources.createControlDirectory();
+		const secret = await outsideFile("SECRET BYTES\n");
+		await mkdir(join(root, "skills/build"), { recursive: true });
+		await symlink(secret, join(root, "skills/build/LINKED.md"));
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["skills/build/LINKED.md"]),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("refuses a file reached through a layout directory that is itself a symlink outside the root", async () => {
+		const root = await resources.createControlDirectory();
+		const outside = await resources.createControlDirectory();
+		await mkdir(join(outside, "build"), { recursive: true });
+		await Bun.write(join(outside, "build/SKILL.md"), "OUTSIDE SKILL\n");
+		await mkdir(join(root, "skills"), { recursive: true });
+		await symlink(join(outside, "build"), join(root, "skills/build"));
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["skills/build/SKILL.md"]),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("refuses a relative symlink out of the root the same way an absolute one is refused", async () => {
+		const root = await resources.createControlDirectory();
+		const secret = await outsideFile("SECRET BYTES\n");
+		await symlink(relative(root, secret), join(root, "CLAUDE.md"));
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["CLAUDE.md"]),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("names the offending file by its layout path, carrying neither the target's path nor its bytes", async () => {
+		const root = await resources.createControlDirectory();
+		const secret = await outsideFile("SECRET BYTES\n");
+		await symlink(secret, join(root, "CLAUDE.md"));
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["CLAUDE.md"]),
+		);
+
+		expect(failure.message).toContain("CLAUDE.md");
+		expect(failure.message).not.toContain(secret);
+		expect(failure.message).not.toContain("SECRET BYTES");
+	});
+
+	it("refuses reading instructions through a symlinked CLAUDE.md", async () => {
+		const root = await resources.createControlDirectory();
+		const secret = await outsideFile("SECRET BYTES\n");
+		await symlink(secret, join(root, "CLAUDE.md"));
+
+		const failure = await failureOf(
+			readCorpusInstructions({ kind: "directory", root }),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("follows a symlink that resolves back inside the root", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "real.md"), "inside bytes\n");
+		await symlink(join(root, "real.md"), join(root, "CLAUDE.md"));
+
+		expect(await readCorpusInstructions({ kind: "directory", root })).toBe(
+			"inside bytes\n",
+		);
+	});
+
+	it("reports through the live install's symlinked CLAUDE.md", async () => {
+		expect(await readCorpusInstructions(liveCorpusSource())).not.toBe("");
 	});
 });

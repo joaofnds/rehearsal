@@ -6,7 +6,7 @@ import {
 	directorySource,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
-import { SymlinkedEntryError } from "#benchmark/checkpoint";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { failureOf } from "#cli/cli-test-support";
 import { corpusReport } from "./corpus-report";
 
@@ -146,5 +146,33 @@ describe(corpusReport.name, () => {
 
 		const instructions = report.files.find((file) => file.path === "CLAUDE.md");
 		expect(instructions?.readBy).toBe(0);
+	});
+	it("refuses a corpus root whose CLAUDE.md is a symlink to a file outside it", async () => {
+		const root = await corpusDirectory();
+		const outside = await corpusDirectory();
+		await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
+		await symlink(join(outside, "secret.md"), join(root, "CLAUDE.md"));
+		const runs = await runsDirectory();
+
+		const failure = await failureOf(corpusReport(directorySource(root), runs));
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).not.toContain("SECRET BYTES");
+	});
+
+	it("reports a root reached through a symlinked parent directory, since the link does not leave the corpus", async () => {
+		const parent = await corpusDirectory();
+		const root = join(parent, "corpus");
+		await mkdir(root, { recursive: true });
+		await writeFile(join(root, "CLAUDE.md"), "instructions\n");
+		const linkedParent = join(await corpusDirectory(), "link");
+		await symlink(parent, linkedParent);
+
+		const report = await corpusReport(
+			directorySource(join(linkedParent, "corpus")),
+			await runsDirectory(),
+		);
+
+		expect(report.files.map(({ path }) => path)).toEqual(["CLAUDE.md"]);
 	});
 });

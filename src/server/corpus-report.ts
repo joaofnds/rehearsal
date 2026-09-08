@@ -1,16 +1,13 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
-import {
-	hashDirectory,
-	hashFile,
-	parseCheckpointRecord,
-} from "#benchmark/checkpoint";
+import { hashDirectory, parseCheckpointRecord } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { pathExists } from "#benchmark/file-presence";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
+	hashCorpusFiles,
 } from "#benchmark/corpus-file";
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
 import { recordedCheckpoints } from "#cli/list-command";
@@ -67,12 +64,11 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedFile[]> {
 	const { root } = source;
 	const files: HashedFile[] = [];
 
-	const instructions = join(root, CORPUS_INSTRUCTIONS_PATH);
-	if (await Bun.file(instructions).exists()) {
-		files.push({
-			path: CORPUS_INSTRUCTIONS_PATH,
-			sha256: await hashFile(instructions),
-		});
+	if (await Bun.file(join(root, CORPUS_INSTRUCTIONS_PATH)).exists()) {
+		const instructions = await hashCorpusFiles(source, [
+			CORPUS_INSTRUCTIONS_PATH,
+		]);
+		files.push(...instructions.map(({ path, sha256 }) => ({ path, sha256 })));
 	}
 
 	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {

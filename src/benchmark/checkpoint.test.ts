@@ -27,9 +27,9 @@ import {
 	rootLineage,
 	snapshotStageCorpus,
 	stageCorpusRoots,
-	SymlinkedEntryError,
 } from "./checkpoint";
 import { liveCorpusRoot } from "./corpus-file";
+import { SymlinkedEntryError } from "./file-presence";
 import { failureOf } from "#cli/cli-test-support";
 import { TestResources } from "./test-support";
 

@@ -16,6 +16,7 @@ import {
 	corpusLayoutRoots,
 	installStageCorpusSnapshot,
 } from "#benchmark/checkpoint";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import {
 	captureBaselineContext,
 	captureCheckIntegrity,
@@ -382,7 +383,10 @@ async function replayCorpus(corpus: string | undefined): Promise<{
 			directory: source.root,
 		};
 	} catch (error) {
-		if (error instanceof CorpusFileError) {
+		if (
+			error instanceof CorpusFileError ||
+			error instanceof SymlinkedEntryError
+		) {
 			throw new RefusedPreconditionError(error.message);
 		}
 

@@ -9,6 +9,7 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 	parseCheckpointRecord,
 } from "./checkpoint";
+import { SymlinkedEntryError } from "./file-presence";
 import type { Effort } from "./config";
 import type { CorpusRoot } from "./corpus-file";
 import {
@@ -270,7 +271,10 @@ async function caseStaleness(
 			CASE_STALENESS_WORDING,
 		);
 	} catch (error) {
-		if (error instanceof CorpusFileError) {
+		if (
+			error instanceof CorpusFileError ||
+			error instanceof SymlinkedEntryError
+		) {
 			return [error.message];
 		}
 

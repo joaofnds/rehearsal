@@ -1,3 +1,4 @@
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type { StaleCliConfig } from "#benchmark/config";
 import { CorpusFileError } from "#benchmark/corpus-file";
 import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
@@ -40,7 +41,8 @@ async function refusingCorpusFailures<Answer>(
 	} catch (error) {
 		if (
 			error instanceof CorpusSourceError ||
-			error instanceof CorpusFileError
+			error instanceof CorpusFileError ||
+			error instanceof SymlinkedEntryError
 		) {
 			throw new RefusedPreconditionError(error.message);
 		}

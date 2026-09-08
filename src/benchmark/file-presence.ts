@@ -41,3 +41,13 @@ export async function lstatIfPresent(path: string): Promise<Stats | undefined> {
 export async function pathExists(path: string): Promise<boolean> {
 	return (await statIfExists(path)) !== undefined;
 }
+
+/**
+ * Bytes reached through a link that leaves the tree the caller named are
+ * refused, whether the walk saw the link or a containment check resolved it.
+ * One planted link produces one error type across every surface, so a caller
+ * translating it into a refused precondition catches one name.
+ */
+export class SymlinkedEntryError extends Error {
+	public override name = "SymlinkedEntryError";
+}

@@ -29,7 +29,7 @@ import {
 } from "#benchmark/session-corpus";
 import { sessionAttemptPaths } from "#benchmark/run-layout";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
-import { SymlinkedEntryError } from "#benchmark/checkpoint";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type {
 	CorpusSnapshotOrigin,

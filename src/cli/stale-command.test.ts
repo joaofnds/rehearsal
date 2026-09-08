@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -305,5 +305,25 @@ describe(runStale.name, () => {
 			expect(failure.message).toContain("gone");
 			expect(recorder.stdout).toEqual([]);
 		});
+	});
+	it("refuses a corpus whose CLAUDE.md is a symlink out of the root, as a precondition", async () => {
+		const fixture = await fixtureRecordedAgainst(
+			await corpusDirectory("build skill\n"),
+		);
+		const linked = await corpusDirectory("build skill\n");
+		const outside = await temporaryDirectory("rehearsal-stale-cli-outside-");
+		await Bun.write(join(outside, "secret.md"), "SECRET BYTES\n");
+		await rm(join(linked, "CLAUDE.md"));
+		await symlink(join(outside, "secret.md"), join(linked, "CLAUDE.md"));
+
+		const failure = await failureOf(
+			runStale(
+				{ corpus: linked, runsDirectory: fixture.runsDirectory },
+				{ output: recordOutput().output },
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).not.toContain("SECRET BYTES");
 	});
 });

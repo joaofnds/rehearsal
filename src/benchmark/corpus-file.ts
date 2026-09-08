@@ -1,5 +1,7 @@
+import { realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
+import { SymlinkedEntryError } from "./file-presence";
 
 /**
  * Where the corpus is installed for a session that names no source. Every
@@ -92,6 +94,39 @@ export function resolveCorpusFile(
 }
 
 /**
+ * A declared path that lands inside the root can still be a link, or sit under
+ * a linked directory, and opening it reads bytes the corpus does not hold while
+ * filing them under a path that says it does. `confinedTo` is lexical and never
+ * resolves a link; an `lstat` on the leaf sees a link one level down but not an
+ * intermediate directory that is one. Only resolving every component answers it,
+ * and both sides get resolved because macOS resolves `/tmp` to `/private/tmp`,
+ * so comparing a resolved path against a raw root rejects everything under it.
+ *
+ * A live source is exempt for the same reason `hashDirectory` takes
+ * `rootMayBeALink`: a `.claude` install is a tree of links into the real corpus,
+ * its own CLAUDE.md included, so containment against its root would refuse every
+ * file it holds. Only `liveCorpusRoot()` builds a live root, so no declared
+ * source can claim the exemption.
+ */
+async function refuseUncontained(
+	source: CorpusRoot,
+	layoutPath: string,
+	absolute: string,
+): Promise<void> {
+	if (source.kind === "live") {
+		return;
+	}
+
+	const resolvedRoot = await realpath(source.root);
+	const resolvedPath = await realpath(absolute);
+	if (!resolvedPath.startsWith(`${resolvedRoot}${sep}`)) {
+		throw new SymlinkedEntryError(
+			`Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`,
+		);
+	}
+}
+
+/**
  * The corpus's global instructions, read through the same resolution every
  * other corpus kind goes through. A corpus source holding any one kind is
  * valid, so a source with no CLAUDE.md is possible and is refused here in the
@@ -107,6 +142,8 @@ export async function readCorpusInstructions(
 			`Corpus file ${CORPUS_INSTRUCTIONS_PATH} does not exist at ${path}`,
 		);
 	}
+
+	await refuseUncontained(source, CORPUS_INSTRUCTIONS_PATH, path);
 
 	return file.text();
 }
@@ -147,6 +184,8 @@ export async function hashCorpusFiles(
 				`Corpus file ${layoutPath} does not exist at ${resolvedPath}`,
 			);
 		}
+
+		await refuseUncontained(source, layoutPath, resolvedPath);
 
 		hashed.push({
 			path: layoutPath,

@@ -7,7 +7,11 @@ import { effortSchema } from "./config";
 import type { CorpusRoot } from "./corpus-file";
 import { liveCorpusRoot } from "./corpus-file";
 import type { Immutable } from "./contracts";
-import { lstatIfPresent, statIfExists } from "./file-presence";
+import {
+	lstatIfPresent,
+	statIfExists,
+	SymlinkedEntryError,
+} from "./file-presence";
 import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
 
 export interface HashedFile {
@@ -73,16 +77,6 @@ export async function hashFile(path: string): Promise<string> {
 	return createHash("sha256")
 		.update(await Bun.file(path).bytes())
 		.digest("hex");
-}
-
-/**
- * The walked tree is the whole claim a lineage record makes about what it
- * hashed, so a link out of it is refused by name rather than followed. The CLI
- * translates this into a refused precondition; the corpus screen surfaces it
- * as a server error.
- */
-export class SymlinkedEntryError extends Error {
-	public override name = "SymlinkedEntryError";
 }
 
 /**
