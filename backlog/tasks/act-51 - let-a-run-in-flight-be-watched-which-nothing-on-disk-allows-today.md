@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 14:32'
+updated_date: '2026-09-08 14:55'
 labels: []
 milestone: m-6
 dependencies:
@@ -39,7 +39,7 @@ Depends on the gap inventory, which is what establishes the real scope.
 - [ ] #3 kill -9 against a running rehearsal process, followed by a server restart, leaves that run's status as INTERRUPTED (not FAILED) in the record a reader sees, via the startup reconciliation pass
 - [ ] #4 grep for console.log across src/benchmark/ (the 14 sites from ACT-26.7) returns none touching stage progress; the SIGINT/SIGTERM/SIGHUP path in run-abort.ts still writes FAILED for a graceful kill, unchanged
 - [ ] #5 GLOSSARY.md gains 'run event' and 'interrupted run' entries in the wording decision-3/this card's answers gave; no lint/lint:css failure and no new raw value or component outside the design system (decision-2)
-- [ ] #6 contracts.ts's run-status union includes INTERRUPTED distinct from FAILED; every reader of that union across src/ and client/ (not just src/benchmark) is updated, including client/src/run-history/run-status.ts's switch, which today maps FAILED to the UI state 'interrupted' and falls unrecognized values to 'pending' — INTERRUPTED needs its own case rather than hitting that default; typecheck clean
+- [ ] #6 An interrupted run reaches every reader that renders run status, showing as INTERRUPTED and distinct from FAILED, without appearing on any type whose shape requires a grade the run never earned; typecheck clean
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -198,4 +198,17 @@ Iteration stopped here rather than continuing to review. Reason: this build cost
 Two things a reviewer or the next session must settle before this card closes:
 - AC #6's literal text is now known to be wrong, and the build reverted the work it names. Either rewrite the criterion as the behavior a correct implementation produces (INTERRUPTED reaches every reader that renders run status, without being added to a graded-artifact type that requires a grade an interrupted run never has), or reject the revert. Do not check it as written.
 - AC #1 and #2 say 'observed against a real run rather than a fixture'. The build observed the mechanism over real HTTP with synthetic events and a synthetic dead pid, which is not that. Both stay unchecked until a paid run is watched in flight.
+
+Criterion 6 rewritten, 2026-09-08, in the iterate session.
+
+Was: "contracts.ts's run-status union includes INTERRUPTED distinct from FAILED; every reader of that union across src/ and client/ is updated..."
+Now: "An interrupted run reaches every reader that renders run status, showing as INTERRUPTED and distinct from FAILED, without appearing on any type whose shape requires a grade the run never earned; typecheck clean"
+
+Why: the old text named an approach (put the literal on contracts.ts's union) that the build then proved wrong. GradedRunArtifact and calibratableArtifactSchema both require a non-optional grade, and an interrupted run never reaches the Judge, so no writer can produce that shape. The board rules say a criterion naming an approach fails the card the day another is chosen, which is what happened here. The rewrite states the behavior instead, so it stays checkable whichever type carries the value.
+
+Verified while rewriting: the status a reader actually sees is RunHistoryRow.status, typed plain string at src/server/run-history.ts:27, which is why the build's revert typechecks. INTERRUPTED is set there at line 118 and has its own switch case at client/src/run-history/run-status.ts:22.
+
+Source for the rewrite: the build session's Spec-axis review finding, quoted in the build disposition note above, plus Joao's direction in this session to finish the work.
+
+Note on the CLI, for whoever hits it next: --ac appends, it does not replace. Passing six --ac flags to a card that already had six left twelve. --acceptance-criteria is the replacing flag; --clear-ac empties. Fixed in the same turn.
 <!-- SECTION:NOTES:END -->
