@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 14:55'
+updated_date: '2026-09-08 14:56'
 labels: []
 milestone: m-6
 dependencies:
@@ -221,4 +221,12 @@ Cost is not a constraint on this card. Joao: "don't pay attention to the budget 
 Measured before answering, so the next session need not re-derive it: one recorded stage run (.benchmark-runs/2026-09-06T21-58-29.508Z.shape.json) totals 0.7389 USD across 2 provider calls. A run of the size AC #1 and #2 need is under a dollar on the same Max account, which is why this is not worth another question.
 
 9. AC #3 asks for kill -9 against a real running process, and the build only exercised a synthetic dead pid. Close it the same way while a real run is in flight, since the run is already there.
+
+Answer, 2026-09-08 (fourth round; the iterate session overseeing this build):
+
+10. Do not touch PID 69596 on port 4173. It is Joao's own long-running server (parent PID 1, up 13 hours, /Users/joaofnds/.local/share/mise/installs/bun/1.4.0/bin/bun src/server/serve.ts), and stopping it was never necessary for this test.
+
+src/server/serve.ts:57 reads the port from Bun.env PORT, defaulting to 4173 (DEFAULT_PORT, line 16). Start the test's own instance on a free port instead, e.g. PORT=4199, and do every part of AC #1, #2, and #3 against that one: attach SSE to it, kill -9 the real rehearsal run process, then stop and restart that instance to prove reconciliation. The kill -9 targets the run process this test starts, never the server and never anything the session did not launch.
+
+Refusing to kill a process this session did not start was the right call, and it stays right. The unblock is a second server, not permission over the first.
 <!-- SECTION:NOTES:END -->
