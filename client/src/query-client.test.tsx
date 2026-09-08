@@ -1,0 +1,39 @@
+import { afterEach, describe, expect, it } from "bun:test";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import { ComparisonPage } from "#client/comparison/comparison-page";
+import { createQueryClient } from "#client/query-client";
+
+const DIGEST = "0".repeat(64);
+
+describe(createQueryClient.name, () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("shows the empty state on the first answer, without retrying a record that is not there", async () => {
+		let calls = 0;
+		const stub = (): Promise<Response> => {
+			calls += 1;
+
+			return Promise.resolve(
+				Response.json({ error: "not found" }, { status: 404 }),
+			);
+		};
+		stub.preconnect = originalFetch.preconnect;
+		globalThis.fetch = stub;
+
+		render(
+			<QueryClientProvider client={createQueryClient()}>
+				<ComparisonPage digest={DIGEST} />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("No comparison recorded")).toBeInTheDocument();
+		});
+		expect(calls).toBe(1);
+	});
+});
