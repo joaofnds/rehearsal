@@ -790,6 +790,48 @@ describe(deriveStaleness.name, () => {
 		expect(staleness[1]?.causes).toEqual(["skills/doctrine/SKILL.md changed"]);
 	});
 
+	it("marks every stage checkpoint stale when a rulebook file changes", () => {
+		const rule = {
+			path: "rulebook/coding-style.md",
+			sha256: "rr55",
+		} as const;
+		const ruledPlanning = checkpoint("shape", initial.lineage, [
+			claudeMd,
+			doctrine,
+			rule,
+			{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+		]);
+		const ruledBuild = checkpoint("build", ruledPlanning.lineage, [
+			claudeMd,
+			doctrine,
+			rule,
+			{ path: "skills/build/SKILL.md", sha256: "cc33" },
+		]);
+		const ruledChain = [initial, ruledPlanning, ruledBuild] as const;
+		const edited = { ...rule, sha256: "edited" };
+
+		const staleness = deriveStaleness(
+			ruledChain,
+			new Map([
+				[
+					"shape",
+					[
+						claudeMd,
+						doctrine,
+						edited,
+						{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+					],
+				],
+				["build", ruledBuild.corpusFiles],
+			]),
+			request,
+		);
+
+		expect(staleness.map(({ stale }) => stale)).toEqual([false, true, true]);
+		expect(staleness[1]?.causes).toEqual(["rulebook/coding-style.md changed"]);
+		expect(staleness[2]?.causes).toEqual(["upstream stage shape is stale"]);
+	});
+
 	it("marks every checkpoint including the initial one stale on a model change", () => {
 		const staleness = deriveStaleness(chain, currentCorpus(), {
 			model: "opus",
