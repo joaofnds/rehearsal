@@ -50,6 +50,14 @@ describe(CorpusPage.name, () => {
 		});
 	});
 
+	it("labels the header digest 'corpus root@<hash>', distinct from run history's 'corpus@<hash>'", async () => {
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("corpus root@a41c7e")).toBeInTheDocument();
+		});
+	});
+
 	it("renders one row per file with its path, hash, last-edited time, and read-by count", async () => {
 		renderPage();
 

@@ -39,7 +39,11 @@ export function CorpusPage(): React.JSX.Element {
 			{query.isError ? <p role="alert">Could not load the corpus.</p> : null}
 
 			{query.isSuccess ? (
-				<p className="rh-corpus__root">{query.data.root}</p>
+				<p className="rh-corpus__root">
+					<span>{query.data.root}</span>
+					<span> · </span>
+					<span>{`corpus root@${query.data.digest}`}</span>
+				</p>
 			) : null}
 
 			{query.isSuccess && query.data.files.length > 0 ? (

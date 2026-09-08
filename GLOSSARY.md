@@ -110,6 +110,14 @@
   (`CLAUDE.md`, `skills/<name>/...`, `output-styles/<name>.md`,
   `agents/<name>.md`), which one resolver maps onto the install, so an edit to
   any of them can make a prior attempt stale.
+- **`corpus@<hash>`** — run history's label for a run's corpus digest: what one
+  stage's checkpoint actually read, computed over the checkpoint's own
+  recorded corpus files. Distinct from `corpus root@<hash>`, which digests a
+  different set of files.
+- **`corpus root@<hash>`** — the corpus screen's label for a digest over every
+  file in the live corpus tree, including files no stage has ever read. Two
+  screens computing a digest over two different file sets is why the label
+  differs from `corpus@<hash>` rather than reusing it.
 - **Cut** — the 0-based line index of the first session-file record a transcript
   prefix drops. A cut of N keeps lines [0, N).
 - **Corpus layout** — the directory shape a corpus takes once resolved, and the
