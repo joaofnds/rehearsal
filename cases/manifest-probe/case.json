@@ -1,0 +1,30 @@
+{
+	"id": "manifest-probe",
+	"kind": "session",
+	"title": "A session that reads a file and invokes a skill, to exercise the context manifest",
+	"fixture": "fixture",
+	"prompt": "Read NOTES.md in the working directory. Then invoke the verify skill and report, in one sentence, what the notes say is broken.",
+	"tools": ["Read", "Skill"],
+	"settings": {
+		"outputStyle": "brief"
+	},
+	"corpusFiles": ["output-styles/brief.md", "skills/verify/SKILL.md"],
+	"checks": [
+		{
+			"kind": "word-band",
+			"max": 120
+		},
+		{
+			"kind": "forbidden-text",
+			"strings": ["\u2014"]
+		}
+	],
+	"model": "sonnet",
+	"sessionBudgetUsd": 3,
+	"transcript": {
+		"file": "a0491c04-fb39-42b6-851e-37aba8250e82-cut-24.jsonl",
+		"sha256": "7414a5463559009f3100d37e76c86c2ae4fb8243e97c6590d1c8d325bc85768a",
+		"sourceSession": "a0491c04-fb39-42b6-851e-37aba8250e82",
+		"cut": 24
+	}
+}
