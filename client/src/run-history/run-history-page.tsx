@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
 import { CorpusPill } from "#client/system/components/corpus-pill";
+import { EmptyState } from "#client/system/components/empty-state";
 import { FilterPill } from "#client/system/components/filter-pill";
 import type { GradeValue } from "#client/system/components/grade";
 import { Grade } from "#client/system/components/grade";
@@ -89,21 +90,6 @@ function FilterBar({
 	);
 }
 
-function EmptyState(): React.JSX.Element {
-	return (
-		<div className="rh-run-history__empty">
-			<h2>No runs recorded</h2>
-			<p>
-				The corpus is linked and a spend limit is set. Declare a case, then run
-				it — every attempt lands here as a durable record.
-			</p>
-			<button type="button" disabled>
-				Declare a case
-			</button>
-		</div>
-	);
-}
-
 export function RunHistoryPage(): React.JSX.Element {
 	const [filter, setFilter] = useState<Filter>("All");
 	const query = useQuery({
@@ -121,7 +107,17 @@ export function RunHistoryPage(): React.JSX.Element {
 			{query.isLoading ? <p>Loading…</p> : null}
 			{query.isError ? <p role="alert">Could not load run history.</p> : null}
 
-			{query.isSuccess && rows.length === 0 ? <EmptyState /> : null}
+			{query.isSuccess && rows.length === 0 ? (
+				<EmptyState heading="No runs recorded">
+					<p>
+						The corpus is linked and a spend limit is set. Declare a case, then
+						run it — every attempt lands here as a durable record.
+					</p>
+					<button type="button" disabled>
+						Declare a case
+					</button>
+				</EmptyState>
+			) : null}
 
 			{rows.length > 0 ? (
 				<TableShell

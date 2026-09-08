@@ -75,4 +75,28 @@ describe(CorpusPage.name, () => {
 		});
 		expect(screen.getByText("PLANNED")).toBeInTheDocument();
 	});
+
+	it("renders the empty state instead of a table when the corpus tree holds no files", async () => {
+		stubFetchByPath(
+			new Map([
+				[
+					"/api/corpus",
+					{ root: "/home/user/.claude", digest: "e3b0c4", files: [] },
+				],
+			]),
+		);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<CorpusPage />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("No corpus files found")).toBeInTheDocument();
+		});
+		expect(screen.queryByRole("table")).not.toBeInTheDocument();
+	});
 });

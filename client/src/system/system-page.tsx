@@ -1,4 +1,5 @@
 import { CorpusPill } from "./components/corpus-pill";
+import { EmptyState } from "./components/empty-state";
 import { FilterPill } from "./components/filter-pill";
 import { GRADE_SIZES, Grade } from "./components/grade";
 import { PlannedFeatureBlock } from "./components/planned-feature-block";
@@ -222,6 +223,16 @@ export function SystemPage(): React.JSX.Element {
 				<PlannedFeatureBlock heading="Edit an instruction, review, then apply">
 					<p>Writes a new corpus version, keeps the old one addressable</p>
 				</PlannedFeatureBlock>
+			</section>
+
+			<section>
+				<SectionLabel>EMPTY STATE</SectionLabel>
+				<EmptyState heading="No runs recorded">
+					<p>
+						The corpus is linked and a spend limit is set. Declare a case, then
+						run it — every attempt lands here as a durable record.
+					</p>
+				</EmptyState>
 			</section>
 
 			<section>

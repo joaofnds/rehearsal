@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
+import { EmptyState } from "#client/system/components/empty-state";
 import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
 import { TableShell } from "#client/system/components/table-shell";
 import "./corpus-page.css";
@@ -44,6 +45,16 @@ export function CorpusPage(): React.JSX.Element {
 					<span> · </span>
 					<span>{`corpus root@${query.data.digest}`}</span>
 				</p>
+			) : null}
+
+			{query.isSuccess && query.data.files.length === 0 ? (
+				<EmptyState heading="No corpus files found">
+					<p>
+						The corpus root holds no files in corpus layout. Add a CLAUDE.md, a
+						skill, an output style, or an agent definition under it, then reload
+						this screen.
+					</p>
+				</EmptyState>
 			) : null}
 
 			{query.isSuccess && query.data.files.length > 0 ? (

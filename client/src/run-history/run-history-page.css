@@ -30,11 +30,3 @@
 	display: flex;
 	gap: var(--space-8);
 }
-
-.rh-run-history__empty {
-	max-width: 44ch;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-10);
-	color: var(--color-text-muted);
-}
