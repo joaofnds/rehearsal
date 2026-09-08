@@ -4,6 +4,7 @@ import { casesRoot, readCaseDeclaration } from "#benchmark/case";
 import type { ToolUse } from "#benchmark/transcript";
 import {
 	outputStyles,
+	parseTranscript,
 	parseTranscriptFile,
 	toolUses,
 } from "#benchmark/transcript";
@@ -92,6 +93,24 @@ describe(reconcileManifest.name, () => {
 		expect(reconcileManifest(manifest, ["skills/verify/SKILL.md"])).toEqual([
 			{ kind: "unloaded-file", path: "skills/verify/SKILL.md" },
 		]);
+	});
+});
+
+describe("a transcript record of an unrecognized type", () => {
+	it("yields no manifest entry and no divergence, never a failed attempt", () => {
+		const transcript = parseTranscript(
+			JSON.stringify({
+				type: "future-record-kind",
+				payload: { skill: "verify" },
+			}),
+		);
+		const manifest = observedManifest(
+			toolUses(transcript),
+			outputStyles(transcript),
+		);
+
+		expect(manifest.paths).toEqual([]);
+		expect(reconcileManifest(manifest, [])).toEqual([]);
 	});
 });
 

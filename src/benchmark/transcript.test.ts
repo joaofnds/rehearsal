@@ -162,4 +162,14 @@ describe(outputStyles.name, () => {
 			outputStyles(parseTranscript(attachmentLine({ type: "budget_usd" }))),
 		).toEqual([]);
 	});
+
+	it("returns nothing for a record type it does not recognize", () => {
+		expect(
+			outputStyles(
+				parseTranscript(
+					line({ type: "future-record-kind", payload: { anything: true } }),
+				),
+			),
+		).toEqual([]);
+	});
 });
