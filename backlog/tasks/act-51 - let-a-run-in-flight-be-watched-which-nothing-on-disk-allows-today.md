@@ -1,8 +1,9 @@
 ---
 id: ACT-51
 title: 'let a run in flight be watched, which nothing on disk allows today'
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-04 13:01'
 updated_date: '2026-09-08 13:04'
 labels: []
