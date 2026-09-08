@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 16:09'
+updated_date: '2026-09-08 16:15'
 labels: []
 milestone: m-6
 dependencies:
@@ -45,84 +45,41 @@ Depends on the gap inventory, which is what establishes the real scope.
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Code review (review-code skill), 2026-09-08. Diff range 496fedb..70b8531.
-Suite: 1238+100 tests pass, 0 fail; typecheck, lint, fmt:check all clean
-(fresh run this session).
+Code review (review-code skill), 2026-09-08, second pass. Diff: commit
+beabe04 (refactor: use benchmarkRunPaths for a reconciling run's
+artifact and manifest paths), the one commit on this card that landed
+after the first review record above and was not covered by it.
+Suite: 1238+100 tests pass, 0 fail; typecheck, lint, fmt:check all
+clean (fresh run this session).
 
-Six axes ran (Spec, Style, Architecture, Security, Testing, Refactoring),
-one unprimed reviewer agent per axis, all changed files examined. Every
-finding verified against the code directly (not relayed from the
-reviewer's account) before disposal.
+Five axes ran (Spec, Style, Architecture, Security, Refactoring;
+Testing skipped, no test file in the diff), one unprimed reviewer
+agent per axis, the one changed file and its named comparison files
+examined. Every finding verified against the code directly before
+disposal.
 
-Blocking, fixed (commit 9499293): openRunEventStore set no busy_timeout,
-so a concurrent open (CLI run vs. server's SSE route vs. its startup
-reconciliation, all against one shared run-events.sqlite file) threw
-SQLITE_BUSY immediately. Reproduced live: 5 concurrent opens on a fresh
-file threw in 4 of 5 attempts; 5s busy_timeout brought 5 trials of 8
-concurrent opens to 0 failures.
+Spec, Style, Architecture, Security: nothing found. Confirmed
+byte-identical path construction before and after (verified by
+reading both path-builder expressions side by side), no behavior
+change, no new coupling or traversal exposure introduced by the
+refactor itself.
 
-Blocking, fixed (commit 7b824c1): completeArtifact/writeFailedArtifact
-in run-abort.ts recorded the terminal run-event and set
-terminalEventRecorded before attempting the authoritative artifact
-write. A write failure after a successful record left the event stream
-showing run-completed/run-failed while the artifact write it was
-supposed to describe never landed, and markAborted's own guard then
-skipped the corrective run-failed event because the flag was already
-set. Every runEvents.record call in the file is now wrapped in a
-recordRunEvent helper that reports and swallows a failure rather than
-propagating it, and the terminal writes now happen before their event
-is recorded.
+Note (all four axes independently): the commit message names
+"run-history.ts (in this same area of the codebase)" as an existing
+caller of benchmarkRunPaths for the identical purpose. The substance
+is correct but the file is src/server/run-history.ts, not
+src/benchmark/ as the phrasing implies. No code or action follows;
+recorded so a future reader of the commit message isn't misled about
+where to look.
 
-Should-fix, fixed (commit 2b9af4c): the SSE run-events route leaked an
-unredacted filesystem error verbatim to the client on a store-open
-failure, bypassing the redactAbsolutePaths convention every other route
-in api.ts follows. Reproduced with a read-only runs directory. Now
-wrapped in its own try/catch and redacted before writing the SSE error
-frame.
-
-Should-fix, fixed (folded into 9499293): run-events.ts read a SQLite
-row's kind column straight into the RunEventKind union with no runtime
-check, unlike every other on-disk boundary in this diff (target.ts's
-readRunMarker, manifest.ts's loadRunManifest both parse). Now validated
-through a zod schema on read.
-
-Should-fix, fixed (commit 131259f): a test in run.test.ts pinned its
-"before its session runs" claim with an expect() buried inside the
-runEvents.record fake's callback, invisible from the test's final
-assertion block. Moved to a snapshot asserted once at the end.
-
-Should-fix, tracked as a note rather than fixed this pass: a data clump
-(runEvents/elapsedMs threaded as an unnamed pair across four interfaces
-in run-abort.ts, run.ts, workflow.ts, with the same rationale comment
-duplicated twice) — real duplication, Introduce Parameter Object is the
-fix, but touches four interfaces' worth of call sites and test fixture
-construction; deferred rather than risked under time pressure after the
-blocking fixes. Worth a follow-up if this area of the code churns again.
-
-Note, found live while verifying the SSE redaction fix, not owned by
-this change (predates it, applies identically to four other routes
-already calling it): redactAbsolutePaths's regex requires a path to be
-preceded by whitespace, start-of-string, or an opening paren, so a path
-quoted with a single-quote (the shape Node's fs errors use, e.g. EROFS:
-..., mkdir '/path') is not redacted. Confirmed: redactAbsolutePaths("EROFS:
-read-only file system, mkdir '/private-nope-dir-xyz'") returns the
-message unchanged. Flagging for Joao to decide whether it's worth a
-follow-up card.
-
-Refactoring axis's two other should-fix-adjacent findings (Shotgun
-Surgery from threading INTERRUPTED across contracts/client/glossary; a
-4-positional-argument record() call where two same-typed number
-arguments could transpose silently) were reviewed and left as notes:
-the first is already mitigated by an extracted manifestBackedIdentity
-helper, the second is Style's territory and not actioned here.
-
-All fixes verified: full suite, typecheck, lint, fmt:check all green
-after every commit; the SQLite contention fix and the SSE redaction fix
-were each reproduced directly (not just re-run through the test suite).
-
-Correction, 2026-09-08, iterate session: the review session recorded that 'backlog task files aren't tracked in this git repo' and skipped committing on that basis, leaving the card dirty. That is false. git ls-files --error-unmatch on this card's own path returns it as tracked, and every card edit in this iteration has been committed. The project's CLAUDE.md says to record backlog changes through the backlog CLI, which is about how the file is written, not about whether it is version-controlled. Committed here.
-
-Verified independently after the review's five fixes: typecheck clean on both tsconfigs, oxlint clean, 1338 tests passing (1238 + 100, 0 fail). All six acceptance criteria are checked.
+Should-fix, fixed (commit 65c28e3): judge-agreement.ts's
+historicalStageJudgeModel still hand-rolled the identical
+*.checkpoints/manifest.json path beabe04's own rationale (run-layout.ts
+is meant to be the only place that knows the checkpoints-directory
+suffix) argues against duplicating. One sibling instance of the same
+duplication survived beabe04's dedup. Now routed through
+benchmarkRunPaths like every other reader. Verified: suite, typecheck,
+lint, fmt:check all clean after the fix.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
