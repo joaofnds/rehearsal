@@ -4,7 +4,7 @@ title: record the project half of the context manifest
 status: Shape
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-07 20:44'
+updated_date: '2026-09-08 17:16'
 labels: []
 dependencies:
   - ACT-41
@@ -43,4 +43,6 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 
 <!-- SECTION:NOTES:BEGIN -->
 Direction, 2026-09-07: a case declares its project context explicitly, rather than the harness discovering it, for attributability. This answers doc-28's open question, restated unanswered in doc-33 and doc-36. The card is unblocked.
+
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->
