@@ -4,7 +4,7 @@ title: carry rules/ in the corpus layout
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-07 10:44'
+updated_date: '2026-09-08 16:51'
 labels: []
 milestone: m-3
 dependencies:
@@ -43,4 +43,6 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-07: assigned m-3, same basis as ACT-59/71.
+
+Triage 2026-09-08 (d): stale premise. ~/.agents/rules/ no longer exists; verified 2026-09-08 that ls ~/.agents/ shows agents, rulebook, skills — rules/ was renamed/restructured to rulebook/ sometime after this card was filed (2026-09-04). The underlying gap (a corpus A/B that changes a rule file measures nothing) is unaffected, but every acceptance criterion names the rules/ prefix specifically. Whoever builds this must first re-verify what a real session loads today (rulebook/ contents, and whether AGENTS.md routes to it the way the card describes for the old rules/) before scoping the fix around a directory name that no longer matches disk.
 <!-- SECTION:NOTES:END -->

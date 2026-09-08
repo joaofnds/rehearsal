@@ -4,6 +4,7 @@ title: classify each recorded corpus file by the role a step gave it
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:28'
+updated_date: '2026-09-08 16:51'
 labels: []
 dependencies:
   - ACT-49
@@ -21,3 +22,9 @@ The design's step modal shows each instruction file a step loaded with a ROLE (p
 - [ ] #1 A recorded attempt names, for each corpus file it loaded, one of: project instructions, step skill, judge rubric, read for context
 - [ ] #2 The classification is checked against a real run's recorded files, not asserted from the pipeline definition alone
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-08 (d): citation error, substance unaffected. Card cites 'HashedFile (path + sha256 only, corpus-file.ts:14)'. Verified 2026-09-08: HashedFile is defined at src/benchmark/checkpoint.ts:13; corpus-file.ts has no such interface. The claim that no role field exists on it is still correct.
+<!-- SECTION:NOTES:END -->

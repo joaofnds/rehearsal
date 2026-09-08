@@ -4,6 +4,7 @@ title: the model preflight probe fails on a normal-cost completion
 status: To Do
 assignee: []
 created_date: '2026-09-08 11:23'
+updated_date: '2026-09-08 16:51'
 labels: []
 dependencies: []
 priority: medium
@@ -25,3 +26,9 @@ The message sends the reader to check entitlements for a model that works. Two t
 - [ ] #1 A probe whose completion exhausts its budget reports budget exhaustion, naming the cost and the cap, not an unavailable model
 - [ ] #2 The probe budget has headroom over a cold-cache completion, shown by a recorded cost measurement in the code or its test
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-08 (d): AC#2 is done, narrowing the remaining scope to AC#1. Commit a98bcc7 (2026-09-08, same day as filing) widened MODEL_PROBE_BUDGET_USD from $0.02 to $0.1 (src/benchmark/preflight.ts:62), citing this card's own $0.021876 measurement. Verified 2026-09-08: the constant reads 0.1 on disk. AC#1 (telling budget_exhausted apart from a genuine rejection) is still open: readClaudeEnvelope (src/benchmark/claude.ts:68-71) still throws a bare Error regardless of cause, and probeModelAvailable (preflight.ts:112-127) still relabels any bare Error as an entitlement problem. Remaining work is AC#1 only.
+<!-- SECTION:NOTES:END -->

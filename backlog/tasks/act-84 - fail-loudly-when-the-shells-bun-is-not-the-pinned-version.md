@@ -4,7 +4,7 @@ title: fail loudly when the shell's bun is not the pinned version
 status: To Do
 assignee: []
 created_date: '2026-09-05 21:09'
-updated_date: '2026-09-06 01:15'
+updated_date: '2026-09-08 16:51'
 labels: []
 dependencies: []
 priority: medium
@@ -39,4 +39,6 @@ Verified 2026-09-06: mise.toml pins bun 1.4.0 and the pin is directory-scoped. I
 Bare 'bun run lint', 'bun run typecheck', and 'bun run fmt:check' all pass on 1.4.1, so only CLI-starting commands are affected today. That is a property of the current checks, not a guarantee.
 
 Criterion #3 is new, carried from ACT-89. CLAUDE.md now tells sessions to prefix CLI-starting commands with 'mise exec --' (commit a24191c). That prose is a stopgap. An independent reviewer's finding: a session that skips the prefix on lint or typecheck gets a clean green and no signal at all, so a compliant run and a non-compliant one are indistinguishable except by accident. Once the mechanism lands, the instruction comes out.
+
+Triage 2026-09-08 (d): version drift only, no substance change. bun --version outside the repo is now 1.4.2 (cited 1.4.1); the mismatch condition and every other described behavior (bare bun test/lint/typecheck/fmt:check, mise exec -- prefix in CLAUDE.md, REQUIRED_BUN_VERSION check now at rehearsal.ts:47) check out exactly as described.
 <!-- SECTION:NOTES:END -->
