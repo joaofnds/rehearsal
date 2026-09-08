@@ -55,6 +55,20 @@ describe(corpusReport.name, () => {
 		);
 	});
 
+	it("reports a rulebook file exactly once, not once per list that carries it", async () => {
+		const root = await fullCorpusDirectory();
+		await mkdir(join(root, "rulebook"), { recursive: true });
+		await writeFile(join(root, "rulebook", "coding-style.md"), "style\n");
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(
+			report.files.filter(({ path }) => path === "rulebook/coding-style.md"),
+		).toHaveLength(1);
+	});
+
 	async function fullCorpusDirectory(): Promise<string> {
 		const root = await corpusDirectory();
 		await mkdir(join(root, "skills", "build"), { recursive: true });
