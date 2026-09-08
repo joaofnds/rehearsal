@@ -611,6 +611,129 @@ describe(createRunAbort.name, () => {
 		});
 	});
 
+	it("records a terminal run-failed event when an abort fails a pending stage, so an attached SSE client stops waiting", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const stageFile = "/runs/shape.json";
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writePendingStage({
+			file: stageFile,
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+		await abort.markAborted("run interrupted");
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual([
+			"stage-started",
+			"run-failed",
+		]);
+	});
+
+	it("records a terminal run-failed event when an abort fails a pending run artifact", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writePendingArtifact(artifact);
+		await abort.markAborted("run interrupted");
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-failed"]);
+	});
+
+	it("records a terminal run-failed event when abort has no pending stage or artifact, so a bare signal abort still ends the SSE stream", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.markAborted("run interrupted");
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-failed"]);
+	});
+
+	it("records a terminal run-failed event when writeFailedArtifact persists a final Judge failure", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const judgeFailure = new JudgeOutputValidationError({
+			message: "invalid Judge output",
+			prompt: "judge prompt",
+			attempts: [],
+			costUsd: 0,
+		});
+		const artifact = buildFailedJudgeRunArtifact(
+			artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+			judgeFailure,
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writeFailedArtifact(artifact);
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-failed"]);
+	});
+
 	it("records pending stage state when abort precedes its first write", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const stageFile = "/runs/shape.json";

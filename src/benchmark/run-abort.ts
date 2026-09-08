@@ -196,15 +196,15 @@ export function createRunAbort(
 		}
 
 		pendingStage = pending;
-		runEvents.record(
-			"stage-started",
-			pending.stage,
-			pending.input.transcript.costUsd,
-			elapsedMs(),
-		);
 
-		return enqueueNormalTransition(() =>
-			dependencies.persistence.write(
+		return enqueueNormalTransition(async () => {
+			runEvents.record(
+				"stage-started",
+				pending.stage,
+				pending.input.transcript.costUsd,
+				elapsedMs(),
+			);
+			await dependencies.persistence.write(
 				pending.file,
 				`${JSON.stringify(
 					{
@@ -215,8 +215,8 @@ export function createRunAbort(
 					null,
 					2,
 				)}\n`,
-			),
-		);
+			);
+		});
 	};
 	const writeStageProgress = (record: StageJudgeRecord): Promise<void> => {
 		if (abortRequested) {
@@ -244,14 +244,14 @@ export function createRunAbort(
 		}
 
 		const { file, stage } = pendingStage;
-		runEvents.record(
-			"stage-completed",
-			stage,
-			record.input.transcript.costUsd + record.costUsd,
-			elapsedMs(),
-		);
 
 		return enqueueNormalTransition(async () => {
+			runEvents.record(
+				"stage-completed",
+				stage,
+				record.input.transcript.costUsd + record.costUsd,
+				elapsedMs(),
+			);
 			await dependencies.persistence.write(
 				file,
 				`${JSON.stringify(record, null, 2)}\n`,
@@ -280,9 +280,14 @@ export function createRunAbort(
 		}
 
 		pendingArtifact = artifact;
-		runEvents.record("run-completed", "", totalSpentUsd(artifact), elapsedMs());
 
 		return enqueueNormalTransition(async () => {
+			runEvents.record(
+				"run-completed",
+				"",
+				totalSpentUsd(artifact),
+				elapsedMs(),
+			);
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
@@ -317,6 +322,7 @@ export function createRunAbort(
 		pendingArtifact = artifact;
 
 		return enqueueTransition(async () => {
+			runEvents.record("run-failed", "", totalSpentUsd(artifact), elapsedMs());
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
@@ -331,6 +337,14 @@ export function createRunAbort(
 			const stageToFail = pendingStage;
 			const artifactToFail = pendingArtifact;
 			abortRecorded = enqueueTransition(async () => {
+				runEvents.record(
+					"run-failed",
+					stageToFail?.stage ?? "",
+					artifactToFail === undefined
+						? (stageToFail?.input.transcript.costUsd ?? 0)
+						: totalSpentUsd(artifactToFail),
+					elapsedMs(),
+				);
 				if (stageToFail !== undefined) {
 					try {
 						await writeStageJudgeFailure(

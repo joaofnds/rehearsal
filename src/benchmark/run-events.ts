@@ -7,10 +7,12 @@ export type RunEventKind =
 	| "turn-completed"
 	| "stage-completed"
 	| "run-completed"
+	| "run-failed"
 	| "run-interrupted";
 
 const TERMINAL_RUN_EVENT_KINDS: ReadonlySet<RunEventKind> = new Set([
 	"run-completed",
+	"run-failed",
 	"run-interrupted",
 ]);
 
