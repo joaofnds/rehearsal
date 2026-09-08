@@ -43,6 +43,27 @@ describe(createAppRouter.name, () => {
 		});
 	});
 
+	it("renders the corpus screen at /corpus", async () => {
+		stubFetchByPath(
+			new Map([["/api/corpus", { root: "/corpus", digest: "a", files: [] }]]),
+		);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const router = createAppRouter({
+			history: createMemoryHistory({ initialEntries: ["/corpus"] }),
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Instruction corpus")).toBeInTheDocument();
+		});
+	});
+
 	it("renders the comparison screen at /comparisons/$digest", async () => {
 		const digest = "e".repeat(64);
 		stubFetchByPath(

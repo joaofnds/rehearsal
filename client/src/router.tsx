@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 import { ComparisonPage } from "#client/comparison/comparison-page";
+import { CorpusPage } from "#client/corpus/corpus-page";
 import { RunHistoryPage } from "#client/run-history/run-history-page";
 import { SystemPage } from "#client/system/system-page";
 
@@ -25,6 +26,12 @@ const systemRoute = createRoute({
 	component: SystemPage,
 });
 
+const corpusRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/corpus",
+	component: CorpusPage,
+});
+
 const comparisonRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/comparisons/$digest",
@@ -40,6 +47,7 @@ function ComparisonRoute(): React.JSX.Element {
 const routeTree = rootRoute.addChildren([
 	runHistoryRoute,
 	systemRoute,
+	corpusRoute,
 	comparisonRoute,
 ]);
 
