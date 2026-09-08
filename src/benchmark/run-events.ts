@@ -1,15 +1,19 @@
 import { Database } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { z } from "zod";
 
-export type RunEventKind =
-	| "stage-started"
-	| "turn-completed"
-	| "stage-judging"
-	| "stage-completed"
-	| "run-completed"
-	| "run-failed"
-	| "run-interrupted";
+const runEventKindSchema = z.enum([
+	"stage-started",
+	"turn-completed",
+	"stage-judging",
+	"stage-completed",
+	"run-completed",
+	"run-failed",
+	"run-interrupted",
+]);
+
+export type RunEventKind = z.infer<typeof runEventKindSchema>;
 
 const TERMINAL_RUN_EVENT_KINDS: ReadonlySet<RunEventKind> = new Set([
 	"run-completed",
@@ -64,7 +68,10 @@ export interface RunEventRecorder {
 /**
  * The port `run-abort.ts` and `workflow.ts` write through, so neither needs
  * to know the store exists: they see a recorder scoped to the one run they
- * are already running.
+ * are already running. The store is derived and disposable (GLOSSARY.md:
+ * "the run artifact on disk remains authoritative"), so a failure recording
+ * to it (e.g. transient SQLite contention from a concurrent reader) is
+ * swallowed here rather than propagated into the caller's own control flow.
  */
 export function runEventRecorderFor(
 	store: RunEventStore,
@@ -72,7 +79,12 @@ export function runEventRecorderFor(
 ): RunEventRecorder {
 	return {
 		record: (kind, stage, spentUsd, elapsedMs) => {
-			store.append({ runId, kind, stage, spentUsd, elapsedMs });
+			try {
+				store.append({ runId, kind, stage, spentUsd, elapsedMs });
+			} catch {
+				// Best-effort: the event stream can drop an entry without
+				// affecting the run it describes.
+			}
 		},
 	};
 }
@@ -93,7 +105,7 @@ const SCHEMA = `
 interface RunEventRow {
 	readonly sequence: number;
 	readonly run_id: string;
-	readonly kind: RunEventKind;
+	readonly kind: string;
 	readonly stage: string;
 	readonly spent_usd: number;
 	readonly elapsed_ms: number;
@@ -104,7 +116,7 @@ function toRunEvent(row: RunEventRow): RunEvent {
 	return {
 		sequence: row.sequence,
 		runId: row.run_id,
-		kind: row.kind,
+		kind: runEventKindSchema.parse(row.kind),
 		stage: row.stage,
 		spentUsd: row.spent_usd,
 		elapsedMs: row.elapsed_ms,
@@ -117,6 +129,7 @@ export async function openRunEventStore(path: string): Promise<RunEventStore> {
 		await mkdir(dirname(path), { recursive: true });
 	}
 	const database = new Database(path);
+	database.run("PRAGMA busy_timeout = 5000");
 	database.run("PRAGMA journal_mode = WAL");
 	database.run(SCHEMA);
 
