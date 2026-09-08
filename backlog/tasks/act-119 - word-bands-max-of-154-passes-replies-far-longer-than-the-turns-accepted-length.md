@@ -1,10 +1,10 @@
 ---
 id: ACT-119
 title: brief-reply replies run longer than the accepted length on three of four turns
-status: Shape
+status: To Do
 assignee: []
 created_date: '2026-09-08 12:25'
-updated_date: '2026-09-08 20:41'
+updated_date: '2026-09-08 21:48'
 labels: []
 dependencies: []
 priority: medium
@@ -69,4 +69,11 @@ Per-case bands rejected by Joao, 2026-09-08, after the glossary's documented des
 The 154-to-145 ceiling question is deliberately left open. It was raised as an option in the same exchange and not decided, so it is not this session's to settle.
 
 Triage 2026-09-08 (e): routed to Shape. AC#1 asks João to decide between keeping the 154 ceiling or moving to 145; that decision is not this session's to make, per the card's own implementation notes. Joins this run's questions list.
+Decided 2026-09-08 by direction ("Agree with both", on the recommendation to
+keep 154). The ceiling stays at 154 and does not drop to 145. Dropping it
+would have failed a 158-word reply already accepted on another turn, which
+makes the check disagree with the judgment it is meant to encode. Keeping 154
+leaves the check looser than the shortest accepted replies, and that is the
+accepted cost.
+
 <!-- SECTION:NOTES:END -->

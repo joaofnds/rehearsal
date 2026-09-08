@@ -39,4 +39,17 @@ ACT-51 reached Review, review found a blocking defect and said so, and the card 
 This widens the card: the defect is not 'shaping does not move its card'. It is that the column is the only routing input, and a stage that finishes with work still owed has no way to say what the next stage should be. Review finding a blocker means the card goes back to Build; shaping finishing means it goes to Build; neither happens on its own.
 
 The second guard proposed above (a step refuses to re-run a stage whose finished record is already on the card) would have caught the shaping loop but not this one, since the review record was new each time. What catches both: a stage that ends with work owed says which column the card belongs in, and the step honors that rather than re-reading the old column.
+Second observation, 2026-09-08, on ACT-104. Same failure, unchanged: four
+shape sessions ran on one card. The fourth recognised the card as build-ready
+and refused as redundant, and the column only moved because a human moved it
+by hand. Costs on stderr for the run: 0.30, 0.29, 0.46, 0.19, 1.13, then 0.04
+for the pass that recognised it.
+
+ACT-125 was filed for this before the duplicate was found and has been
+removed. Its one addition is kept here: the board rule this violates is
+~/.agents/rulebook/backlog-board.md, "The status is a claim", which already
+requires the move in the same turn as the work. The gap is that nothing
+enforces it, which is why acceptance criterion 1 asks for the observation
+rather than the rule.
+
 <!-- SECTION:NOTES:END -->

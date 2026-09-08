@@ -1,11 +1,11 @@
 ---
 id: ACT-50
 title: build the comparison and corpus screens
-status: Done
+status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 01:45'
+updated_date: '2026-09-08 21:48'
 labels: []
 milestone: m-7
 dependencies:
@@ -50,6 +50,7 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 - [x] #10 Both new screens render the design's empty state, observed on a checkout with no records at all (source: card description, 'every screen has the empty state the design specifies')
 - [x] #11 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system (source: decision-2)
 - [x] #12 Building the comparison screen touches only a new Router route file, its page component, and any new files under client/src/system/components/ -- a prediction from ACT-53 AC #9, confirmed or corrected here (source: direction 2026-09-07, João: 'I agree' to moving ACT-53 AC #9 onto ACT-50; router.tsx has exactly two routes today, /  and /system, checked 2026-09-08)
+- [ ] #13 The comparison page's What moved tab renders the per-measure interval and verdict the served report carries, replacing the PlannedFeatureBlock
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -306,6 +307,17 @@ Full suite re-verified green after every fix: 1163 server + 99 client tests (bun
 Post-review probes, 2026-09-08. The second review corrected my own corpus fix: my version walked CLAUDE.md plus skills, agents, and output-styles, taking CORPUS_LAYOUT_DIRECTORIES as the definition, but a real checkpoint on disk records rulebook too. Verified directly: the top-level entries in 2026-09-06T21-58-29.508Z/shape are CLAUDE.md, agents, output-styles, rulebook, skills. My fix dropped a directory every stage reads. Corrected in 23d297a.
 
 Verified after: the live /api/corpus serves exactly those five top-level entries, 120 files, no non-layout path. Suite green at 1163 server and 99 client, typecheck, lint and fmt clean.
+Reopened 2026-09-08 by direction ("agree", on folding the What moved UI here
+rather than opening a new card). ACT-104 shipped the data this tab needs: the
+served comparison report now carries, per measure per case, a grade-span
+interval and one of three verdicts. That satisfies this card's own scope, a
+screen whose data the harness already records, so the remaining work is the
+render this card deferred by name.
+
+Note for whoever picks it up: the placeholder copy in comparison-page.tsx says
+a paired estimate cannot supply the interval yet. ACT-104 made that false, so
+the text goes with the block.
+
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 01:41'
+updated_date: '2026-09-08 21:48'
 labels: []
 dependencies: []
 priority: medium
@@ -27,3 +28,9 @@ Pre-req: read ~/.agents/rulebook/coding-style.md and doctrine.md's Security-adja
 - [ ] #1 hashDirectory (or its corpus-screen caller specifically, if a blanket change is unsafe for the other three callers) does not read, hash, or report the contents of a symlink target outside the directory being walked
 - [ ] #2 a regression test plants a symlink inside a walked directory pointing outside the corpus root and asserts the target's path and content are absent from both the report and the digest
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+<!-- SECTION:NOTES:END -->
