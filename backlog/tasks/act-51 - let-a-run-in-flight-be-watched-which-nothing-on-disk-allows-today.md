@@ -1,11 +1,11 @@
 ---
 id: ACT-51
 title: 'let a run in flight be watched, which nothing on disk allows today'
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 16:15'
+updated_date: '2026-09-08 16:16'
 labels: []
 milestone: m-6
 dependencies:
@@ -100,4 +100,14 @@ Full suite green throughout (1228 + 100 tests), lint, lint:css, fmt:check, typec
 Not verified: sub-turn/mid-turn granularity (explicitly out of scope, ACT-96-100) and restart-survival of live progress (explicitly not required, per Joao's answer 7). Card ready for review.
 
 Build session (second pass), 2026-09-08: fixed the blocking defect, the stage-started naming defect, and all eight should-fix items the prior code-review found, per direction to fix and re-review in this same card. Two prior findings were not fixed: should-fix #6 (an SSE server-termination test) was investigated and left undone, disclosed as a genuine gap this test layer cannot exercise. A fresh six-axis code review of this batch then found one new blocking defect (a spurious second, empty run-failed event on the ordinary judge-failure path) via the Architecture axis; fixed and verified in its own commit before this review closed. All other axes (Spec, Style, Security, Refactoring) found no blocking or should-fix issues beyond one Testing should-fix (a new test's missing payload assertion), which was fixed and verified with a mutation test. Full suite green (1238 + 100 tests), typecheck/lint/fmt clean throughout. Card ready for Review.
+
+A run in flight now writes durable run events a second process can watch live, and a run that dies without finishing is reconciled into a distinct interrupted outcome rather than being called a failure.
+
+What landed: an append-only run-event store in SQLite, derived and rebuildable per decision-3, with the records on disk still authoritative; events at a stage's start, each turn's completion, each stage's completion, and every terminal outcome; an SSE endpoint serving one run's events; a startup reconciliation pass that checks whether a run's process is still alive before declaring it interrupted; and INTERRUPTED reaching every reader that renders run status. Harness stage progress no longer goes to stdout as prose, closing ACT-26.7.
+
+Evidenced against a real run, not fixtures: run 2026-09-08T14-59-44.459Z recorded real spend and rising elapsed time, was killed with kill -9, and reconciled to INTERRUPTED after a server restart. All six acceptance criteria carry that kind of observation.
+
+Three defects were found by oversight or review after the first build called itself done, each one a case the criteria as written would have passed: stage-started fired at the judge handoff rather than at a stage's start, so a watcher learned the running stage only once it was over; a run that failed or was stopped by hand wrote its terminal artifact without recording any event, leaving an attached client waiting forever on the ordinary exit path; and a terminal artifact write could fail while the stream still reported success. The first two are why the live test passing was not sufficient evidence on its own.
+
+Left open elsewhere, none blocking: ACT-121 (a preflight probe that exhausts its budget reports the model as unavailable), ACT-122 (the path redactor misses the quoted form Node's fs errors use), and a data-clump refactor noted on this card.
 <!-- SECTION:FINAL_SUMMARY:END -->
