@@ -12,6 +12,7 @@ import { confirmationGroupRecordSchema } from "./confirmation-record";
 import type { ConfirmationGroupRecord } from "./confirmation-record";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
+import { openRunEventStore } from "./run-events";
 import type {
 	GroupReportSummaryRecord,
 	RunSummaryRecord,
@@ -27,6 +28,7 @@ import {
 	comparisonReportPaths,
 	confirmationGroupPaths,
 	replayRecordFile,
+	runEventsDatabaseFile,
 	sessionAttemptPaths,
 } from "./run-layout";
 
@@ -281,6 +283,7 @@ export class RecordedRunsFixture {
 	};
 	public readonly stoppedRun = "2026-09-04T00-00-00.000Z";
 	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
+	public readonly interruptedRun = "2026-09-06T00-00-00.000Z";
 
 	public constructor(
 		public readonly runsDirectory: string,
@@ -515,6 +518,29 @@ export class RecordedRunsFixture {
 			paths.manifestFile,
 			manifest(this.noRecordRun, this.sourceRoot),
 		);
+	}
+
+	/**
+	 * A run a kill -9 ended: no terminal artifact, no STAGE_JUDGE_FAILED file
+	 * (nothing runs to write one), only its checkpoints directory, manifest,
+	 * and a run-interrupted event a reconciliation pass appended.
+	 */
+	public async writeInterruptedRun(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.interruptedRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.interruptedRun, this.sourceRoot),
+		);
+		const store = openRunEventStore(runEventsDatabaseFile(this.runsDirectory));
+		store.append({
+			runId: this.interruptedRun,
+			kind: "run-interrupted",
+			stage: "build",
+			spentUsd: 1,
+			elapsedMs: 5000,
+		});
+		store.close();
 	}
 
 	public async writeUnreadableGroup(groupId: string): Promise<void> {

@@ -141,6 +141,21 @@ describe(runHistoryReport.name, () => {
 		expect(row?.grade).toBeUndefined();
 	});
 
+	it("reports a run reconciled to INTERRUPTED, which today's checkpoint- and stage-file reads alone leave invisible", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeInterruptedRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+		);
+
+		const row = rows.find(
+			(candidate) => candidate.run === fixture.interruptedRun,
+		);
+		expect(row).toMatchObject({ status: "INTERRUPTED" });
+	});
+
 	it("collects a run stopped mid-stage with no manifest as unreadable, matching list runs, rather than dropping it silently", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRunWithoutManifest();

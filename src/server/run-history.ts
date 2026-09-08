@@ -5,7 +5,10 @@ import {
 	benchmarkRunPaths,
 	checkpointStageNames,
 	recordedRunNames,
+	runEventsDatabaseFile,
 } from "#benchmark/run-layout";
+import type { RunEventStore } from "#benchmark/run-events";
+import { openRunEventStore } from "#benchmark/run-events";
 import { parseRunSummaryRecord } from "#benchmark/record-summary";
 import { stoppedStage } from "#benchmark/run-outcome";
 import { staleCheckpoints } from "#benchmark/staleness-report";
@@ -63,6 +66,7 @@ interface RunIdentity {
 async function statusAndCaseId(
 	runsDirectory: string,
 	run: string,
+	runEvents: RunEventStore,
 ): Promise<RunIdentity | undefined> {
 	const paths = benchmarkRunPaths(runsDirectory, run);
 	if (await Bun.file(paths.artifactFile).exists()) {
@@ -83,29 +87,50 @@ async function statusAndCaseId(
 	}
 
 	const stopped = await stoppedStage(runsDirectory, run);
-	if (stopped === undefined) {
-		return undefined;
+	if (stopped !== undefined) {
+		if (!(await Bun.file(paths.manifestFile).exists())) {
+			throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
+		}
+
+		const manifest = await loadRunManifest(paths.manifestFile);
+
+		return {
+			status: `STOPPED:${stopped.stage}`,
+			caseId: manifest.caseId,
+			gradeByStage: new Map(),
+		};
 	}
 
-	if (!(await Bun.file(paths.manifestFile).exists())) {
-		throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
+	/**
+	 * A kill -9 leaves no artifact and no STAGE_JUDGE_FAILED file: nothing
+	 * runs to write one. The reconciliation pass is the only thing that ever
+	 * marks such a run, in the event stream rather than on disk, so this is
+	 * the one status this reader derives from SQLite instead of a file.
+	 */
+	if (runEvents.latestEvent(run)?.kind === "run-interrupted") {
+		if (!(await Bun.file(paths.manifestFile).exists())) {
+			throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
+		}
+
+		const manifest = await loadRunManifest(paths.manifestFile);
+
+		return {
+			status: "INTERRUPTED",
+			caseId: manifest.caseId,
+			gradeByStage: new Map(),
+		};
 	}
 
-	const manifest = await loadRunManifest(paths.manifestFile);
-
-	return {
-		status: `STOPPED:${stopped.stage}`,
-		caseId: manifest.caseId,
-		gradeByStage: new Map(),
-	};
+	return undefined;
 }
 
 async function rowFor(
 	runsDirectory: string,
 	run: string,
 	staleByCheckpointId: ReadonlyMap<string, readonly string[]>,
+	runEvents: RunEventStore,
 ): Promise<RunHistoryRow | undefined> {
-	const identity = await statusAndCaseId(runsDirectory, run);
+	const identity = await statusAndCaseId(runsDirectory, run, runEvents);
 	if (identity === undefined) {
 		return undefined;
 	}
@@ -175,22 +200,32 @@ export async function runHistoryReport(
 		stale.map((record) => [record.id, record.causes]),
 	);
 
-	const rows: RunHistoryRow[] = [];
-	const unreadable: UnreadableRun[] = [];
-	for (const run of await recordedRunNames(runsDirectory)) {
-		try {
-			const row = await rowFor(runsDirectory, run, staleByCheckpointId);
-			if (row !== undefined) {
-				rows.push(row);
+	const runEvents = openRunEventStore(runEventsDatabaseFile(runsDirectory));
+	try {
+		const rows: RunHistoryRow[] = [];
+		const unreadable: UnreadableRun[] = [];
+		for (const run of await recordedRunNames(runsDirectory)) {
+			try {
+				const row = await rowFor(
+					runsDirectory,
+					run,
+					staleByCheckpointId,
+					runEvents,
+				);
+				if (row !== undefined) {
+					rows.push(row);
+				}
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				unreadable.push({
+					id: `run:${run}`,
+					reason: redactAbsolutePaths(message),
+				});
 			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			unreadable.push({
-				id: `run:${run}`,
-				reason: redactAbsolutePaths(message),
-			});
 		}
-	}
 
-	return { rows, unreadable };
+		return { rows, unreadable };
+	} finally {
+		runEvents.close();
+	}
 }
