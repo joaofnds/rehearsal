@@ -5,6 +5,7 @@ describe(runStatusState.name, () => {
 	it.each([
 		["COMPLETE", "accepted"],
 		["FAILED", "interrupted"],
+		["INTERRUPTED", "interrupted"],
 		["AWAITING_HUMAN_REVIEW", "pending"],
 		["STOPPED:build", "stopped"],
 		["STOPPED:shape", "stopped"],
