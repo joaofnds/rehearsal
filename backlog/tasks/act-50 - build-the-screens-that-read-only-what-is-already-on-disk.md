@@ -1,11 +1,11 @@
 ---
 id: ACT-50
 title: build the comparison and corpus screens
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 01:09'
+updated_date: '2026-09-08 01:22'
 labels: []
 milestone: m-7
 dependencies:
