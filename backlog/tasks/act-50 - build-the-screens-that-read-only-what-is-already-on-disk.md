@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 00:16'
+updated_date: '2026-09-08 00:56'
 labels: []
 milestone: m-7
 dependencies:
@@ -36,18 +36,18 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Comparison screen, Attempt-pairs presentation: rows are cases (caseDeltas), not attempt pairs; each row shows the case id and the per-arm reading available today (source: sourceRepSchema carries no per-rep grade, comparison-record.ts:142-146, .strict())
-- [ ] #2 Comparison screen, Attempt-pairs presentation: each arm band renders that arm's gradeDistribution as a count per letter grade, never a synthesized median or a plus/minus range (source: reliabilitySummarySchema has no median/range field, comparison-record.ts:148-163; STAGE_LETTER_GRADES has no plus/minus, config.ts:18; direction 2026-09-07 'I agree, no "range C+ - A-"')
-- [ ] #3 Comparison screen: the segmented switcher offers Attempt pairs (built) and What moved; What moved renders under the PLANNED/dashed-border/disabled vocabulary SPEC.md section 6 defines for planned features, never as a working tab (source: SPEC.md section 5b needs a per-measure interval and reading verdict that PairedEstimate cannot supply; deferred whole to ACT-104)
-- [ ] #4 Comparison screen: an attribution claim between two named arms names differing files by deduplicating corpusDifferences(reps[arm].executedCorpus, reps[otherArm].executedCorpus) across every stage pair by file path first, so one file edited once counts once even though it is read at every stage that declares it; the claim renders only when that deduplicated set is empty, and a refusal lists the deduplicated differing paths otherwise, never a silent claim (source: corpusDifferences is called per-stage keyed on record.stage, checkpoint.ts:454-479; SPEC.md section 5b: 'Attribution is only legitimate when exactly one file hash differs... refuse the attribution claim'; subtlety pinned in this card's 2026-09-07 notes: 'one edited file appears once per stage')
-- [ ] #5 Comparison screen: loading a comparison record through a crafted id whose segment escapes the runs directory is refused, reusing the existing route-level test (source: api.test.ts:134, 'refuses a record id whose segment escapes the runs directory, without a 500')
-- [ ] #6 Corpus screen renders three columns from data already on disk: Path, Hash, Last edited (via stat), and Read by (a fold over checkpoint corpus-file records); no fourth Invalidated column (source: staleness-report.ts:217 stat() precedent; ACT-110 not yet landed)
-- [ ] #7 Corpus screen's success response includes the corpus root's real absolute path unredacted (source: direction 2026-09-07, answer to shaping question 1: 'Show the corpus root unredacted... Redaction stays on the error path, unchanged'; redactAbsolutePaths is called only from api.ts's error branches, redact-path.ts, api.ts:56,62,85)
-- [ ] #8 Corpus screen's header digest is labeled 'corpus root@<hash>' and computed by corpusDigest() over every file in the live corpus tree; run history's existing 'corpus@<hash>' label and meaning (what one stage read) are unchanged; both terms are added to GLOSSARY.md (source: direction 2026-09-07, answer to shaping question 2; corpusDigest is a reusable function over any HashedFile[], corpus-digest.ts; run-history.ts:140 calls it over checkpoint.corpusFiles; GLOSSARY.md defines neither term today, checked 2026-09-08)
-- [ ] #9 Corpus screen renders the design's dashed-border/reduced-opacity/PLANNED-pill block for the disabled edit-instruction workflow as a design-system component, not inline markup (source: SPEC.md section 6, 'the established vocabulary for planned features... never show a planned control as live'; system-page.tsx:20 already lists 'Planned-feature block, neededBy: ACT-50')
-- [ ] #10 Both new screens render the design's empty state, observed on a checkout with no records at all (source: card description, 'every screen has the empty state the design specifies')
-- [ ] #11 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system (source: decision-2)
-- [ ] #12 Building the comparison screen touches only a new Router route file, its page component, and any new files under client/src/system/components/ -- a prediction from ACT-53 AC #9, confirmed or corrected here (source: direction 2026-09-07, João: 'I agree' to moving ACT-53 AC #9 onto ACT-50; router.tsx has exactly two routes today, /  and /system, checked 2026-09-08)
+- [x] #1 Comparison screen, Attempt-pairs presentation: rows are cases (caseDeltas), not attempt pairs; each row shows the case id and the per-arm reading available today (source: sourceRepSchema carries no per-rep grade, comparison-record.ts:142-146, .strict())
+- [x] #2 Comparison screen, Attempt-pairs presentation: each arm band renders that arm's gradeDistribution as a count per letter grade, never a synthesized median or a plus/minus range (source: reliabilitySummarySchema has no median/range field, comparison-record.ts:148-163; STAGE_LETTER_GRADES has no plus/minus, config.ts:18; direction 2026-09-07 'I agree, no "range C+ - A-"')
+- [x] #3 Comparison screen: the segmented switcher offers Attempt pairs (built) and What moved; What moved renders under the PLANNED/dashed-border/disabled vocabulary SPEC.md section 6 defines for planned features, never as a working tab (source: SPEC.md section 5b needs a per-measure interval and reading verdict that PairedEstimate cannot supply; deferred whole to ACT-104)
+- [x] #4 Comparison screen: an attribution claim between two named arms names differing files by deduplicating corpusDifferences(reps[arm].executedCorpus, reps[otherArm].executedCorpus) across every stage pair by file path first, so one file edited once counts once even though it is read at every stage that declares it; the claim renders only when that deduplicated set is empty, and a refusal lists the deduplicated differing paths otherwise, never a silent claim (source: corpusDifferences is called per-stage keyed on record.stage, checkpoint.ts:454-479; SPEC.md section 5b: 'Attribution is only legitimate when exactly one file hash differs... refuse the attribution claim'; subtlety pinned in this card's 2026-09-07 notes: 'one edited file appears once per stage')
+- [x] #5 Comparison screen: loading a comparison record through a crafted id whose segment escapes the runs directory is refused, reusing the existing route-level test (source: api.test.ts:134, 'refuses a record id whose segment escapes the runs directory, without a 500')
+- [x] #6 Corpus screen renders three columns from data already on disk: Path, Hash, Last edited (via stat), and Read by (a fold over checkpoint corpus-file records); no fourth Invalidated column (source: staleness-report.ts:217 stat() precedent; ACT-110 not yet landed)
+- [x] #7 Corpus screen's success response includes the corpus root's real absolute path unredacted (source: direction 2026-09-07, answer to shaping question 1: 'Show the corpus root unredacted... Redaction stays on the error path, unchanged'; redactAbsolutePaths is called only from api.ts's error branches, redact-path.ts, api.ts:56,62,85)
+- [x] #8 Corpus screen's header digest is labeled 'corpus root@<hash>' and computed by corpusDigest() over every file in the live corpus tree; run history's existing 'corpus@<hash>' label and meaning (what one stage read) are unchanged; both terms are added to GLOSSARY.md (source: direction 2026-09-07, answer to shaping question 2; corpusDigest is a reusable function over any HashedFile[], corpus-digest.ts; run-history.ts:140 calls it over checkpoint.corpusFiles; GLOSSARY.md defines neither term today, checked 2026-09-08)
+- [x] #9 Corpus screen renders the design's dashed-border/reduced-opacity/PLANNED-pill block for the disabled edit-instruction workflow as a design-system component, not inline markup (source: SPEC.md section 6, 'the established vocabulary for planned features... never show a planned control as live'; system-page.tsx:20 already lists 'Planned-feature block, neededBy: ACT-50')
+- [x] #10 Both new screens render the design's empty state, observed on a checkout with no records at all (source: card description, 'every screen has the empty state the design specifies')
+- [x] #11 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system (source: decision-2)
+- [x] #12 Building the comparison screen touches only a new Router route file, its page component, and any new files under client/src/system/components/ -- a prediction from ACT-53 AC #9, confirmed or corrected here (source: direction 2026-09-07, João: 'I agree' to moving ACT-53 AC #9 onto ACT-50; router.tsx has exactly two routes today, /  and /system, checked 2026-09-08)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -147,4 +147,112 @@ One round run, no second round needed: both blocking findings were fixed and re-
 Oversight probes, 2026-09-08, at the build's mid-card checkpoint. Verified directly rather than taken from the session's report: full suite green from a fresh run (1149 server, up from 1142; 81 client, up from 78), typecheck and lint clean, tree clean across the three commits. The crafted-digest refusal is really pinned: replacing parseRecordId on the comparison route with an unvalidated id fails all three tests in src/server/comparisons.test.ts, including the escape-refusal one. Restored after the probe.
 
 Directed to continue the remaining criteria in the same sequence.
+
+AC #12 file-touch prediction, checked against the actual build: the comparison screen build (e279864, 9525efa, a028652, 94530c6) touched client/src/comparison/comparison-page.{tsx,css,test.tsx}, client/src/router.tsx, client/src/router.test.tsx, and client/src/system/components/switcher.{tsx,css,test.tsx}, matching the prediction. Two touches outside it were necessary and are not scope creep: client/src/test-support/fetch-stub.ts gained stubFetchByPath (a page calling more than one endpoint needs a keyed stub, not a new shape of its own), and client/src/system/system-page.tsx gained the Switcher showcase section, which AC #11 already requires for every new design-system component. Corrected: the prediction holds for the route and page, undercounts by two files that any new design-system component or multi-endpoint page would also touch.
+
+Code review 2026-09-08 (review-code skill), six reviewer agents in parallel, one round: Spec conformance, Style, Architecture, Security, Testing, Refactoring. Full suite green before dispatch (1154 server + 98 client tests, bun run test). Diff reviewed: 3af6536..HEAD (34 files, ~1574 insertions) via /tmp/act-50-review/diff.patch.
+
+Spec conformance (docs/design-handoff/SPEC.md sections 5/6, wiki-checks Spec section; all 34 files examined): AC-by-AC walk present for #1,#2,#3,#5,#6,#7,#8,#9,#10,#11,#12; #4 partial. BLOCKING finding: the attribution dedup fix (AC #4) operated on the wrong path shape and could falsely refuse a genuine single-file edit in real pipeline data.
+
+Style (coding-style.md, coding-style-typescript.md, coding-style-frontend.md, doctrine Code craft): should-fix, 6 duplicate/mirrored attribution cards render per case instead of 3 (armPairs() built every ordered pair, not the report's 3 canonical contrasts); should-fix, doc comment on armPairLabel asserted single-source-of-truth while the client held its own copy; note, ComparisonArmPair type exported but never referenced; note, api.ts's two route handlers share an error-translation shape (Repeated Switches, routed to Refactoring, not a Style defect).
+
+Architecture (engineering-judgment.md, coupling.md, doctrine Architecture, coding-style.md layering sections): should-fix, functional coupling — armPairLabel duplicated between server and client was avoidable, since the function has no real dependency on the Node-only code that made the rest of comparisons.ts unsafe for the client to import (traced the import graph precisely). Note (strength, load-bearing): the client's existing  for ComparisonAttribution is verified safe under verbatimModuleSyntax; flagged so a future edit doesn't widen it to a value import.
+
+Security (wiki-checks Security section, no house security file): nothing found. Verified /api/corpus's unredacted root exposure is the signed-off product decision with no reachable privilege boundary crossed (no auth layer anywhere in src/server/); probed parseRecordId directly against traversal variants, all refused; no XSS sink in any new component. Independently corroborated the armPairLabel duplication (non-security, noted for completeness).
+
+Testing (testing/00-index.md, 01/02/03, wiki-checks): should-fix, comparisons.test.ts's armPairLabel test asserted two independent rows in one body instead of it.each; should-fix, router.test.tsx's two new route tests hand-repeated wiring renderAt exists to remove (Test Code Duplication). Note: dedupedByPath's same-arm-different-hash-within-one-path case is untested (no test in comparison-attribution.test.ts covers it). Ran and verified two mutation probes (dedup call removed: 2/4 tests fail as expected; run-vs-checkpoint counting: traced correct). Independently corroborated the armPairLabel duplication.
+
+Refactoring (advisory; reviewer did not load the refactoring index/catalog this session, so offered no scored refactoring-axis verdict, but reported two [correctness]-tagged findings, which any axis may): BLOCKING, reproduced directly — corpusReport threw an unhandled ENOENT and 500'd the whole /api/corpus route on any incomplete checkpoint directory anywhere in the runs directory. Independently reproduced the 6-vs-3 attribution-card bug via a live probe against the route. Note: same dedupedByPath gap Testing found.
+
+Disposition of every finding:
+1. BLOCKING (Spec/Refactoring, corroborated Architecture/Security/Testing): attribution dedup false-refuses on real pipeline path shapes — FIXED, commit 9c72924 (layoutPath() strips the stage segment before deduping; reproduced the bug directly before the fix, both the new and pre-existing comparison-attribution.test.ts cases green after).
+2. BLOCKING (Refactoring, reproduced directly by this session too): corpusReport crashes on an incomplete checkpoint — FIXED, commit f231e4b (readCountsByPath skips an unparseable checkpoint, matching list-command.ts's collect() discipline; reproduced the crash directly before the fix).
+3. SHOULD-FIX (Style, corroborated Architecture/Refactoring): 6 duplicate attribution cards instead of 3 — FIXED, commit 13e5b9d (armPairs() returns only the report's 3 canonical contrasts; ComparisonArmPair's now-fully-dead export removed in the same commit).
+4. SHOULD-FIX (Architecture, corroborated Security/Testing/Style): armPairLabel duplicated between server and client, and the duplication was avoidable — FIXED, commit 685cb07 (extracted to comparison-arm-pair.ts, a module with only a type-only import; verified via vite v8.2.2 building client environment for production...
+transforming...
+✓ 183 modules transformed.
+rendering chunks...
+computing gzip size...
+client/dist/index.html                                                   0.37 kB │ gzip:   0.26 kB
+client/dist/assets/jetbrains-mono-greek-400-normal-C190GLew.woff2        4.22 kB
+client/dist/assets/jetbrains-mono-greek-500-normal-JpySY46c.woff2        4.28 kB
+client/dist/assets/jetbrains-mono-greek-700-normal-C6CZE3T8.woff2        4.30 kB
+client/dist/assets/inter-vietnamese-400-normal-DMkecbls.woff2            4.97 kB
+client/dist/assets/inter-vietnamese-600-normal-Cc8MFFhd.woff2            5.10 kB
+client/dist/assets/inter-vietnamese-500-normal-DOriooB6.woff2            5.11 kB
+client/dist/assets/inter-greek-ext-400-normal-DGGRlc-M.woff2             5.26 kB
+client/dist/assets/jetbrains-mono-cyrillic-400-normal-BEIGL1Tu.woff2     5.32 kB
+client/dist/assets/jetbrains-mono-cyrillic-700-normal-BWTpRfYl.woff2     5.33 kB
+client/dist/assets/jetbrains-mono-cyrillic-500-normal-DmUKJPL_.woff2     5.35 kB
+client/dist/assets/jetbrains-mono-vietnamese-400-normal-CqNFfHCs.woff    5.37 kB
+client/dist/assets/inter-greek-ext-500-normal-C4iEst2y.woff2             5.42 kB
+client/dist/assets/inter-greek-ext-600-normal-DRtmH8MT.woff2             5.43 kB
+client/dist/assets/jetbrains-mono-vietnamese-700-normal-BDLVIk2r.woff    5.45 kB
+client/dist/assets/jetbrains-mono-vietnamese-500-normal-DNRqzVM1.woff    5.47 kB
+client/dist/assets/jetbrains-mono-greek-400-normal-B9oWc5Lo.woff         5.66 kB
+client/dist/assets/jetbrains-mono-greek-700-normal-DEigVDxa.woff         5.69 kB
+client/dist/assets/jetbrains-mono-greek-500-normal-D7SFKleX.woff         5.72 kB
+client/dist/assets/inter-vietnamese-400-normal-Bbgyi5SW.woff             6.50 kB
+client/dist/assets/inter-vietnamese-500-normal-mJboJaSs.woff             6.59 kB
+client/dist/assets/inter-vietnamese-600-normal-BuLX-rYi.woff             6.64 kB
+client/dist/assets/jetbrains-mono-cyrillic-400-normal-ugxPyKxw.woff      6.97 kB
+client/dist/assets/jetbrains-mono-cyrillic-700-normal-CEoEElIJ.woff      7.01 kB
+client/dist/assets/jetbrains-mono-cyrillic-500-normal-DJqRU3vO.woff      7.02 kB
+client/dist/assets/inter-greek-ext-400-normal-KugGGMne.woff              7.06 kB
+client/dist/assets/inter-greek-ext-500-normal-2j5mBUwD.woff              7.19 kB
+client/dist/assets/inter-greek-ext-600-normal-B8X0CLgF.woff              7.21 kB
+client/dist/assets/jetbrains-mono-latin-ext-400-normal-Bc8Ftmh3.woff2    7.33 kB
+client/dist/assets/jetbrains-mono-latin-ext-700-normal-CZipNAKV.woff2    7.47 kB
+client/dist/assets/jetbrains-mono-latin-ext-500-normal-Cut-4mMH.woff2    7.52 kB
+client/dist/assets/inter-cyrillic-400-normal-obahsSVq.woff2              7.71 kB
+client/dist/assets/inter-greek-400-normal-B4URO6DV.woff2                 7.77 kB
+client/dist/assets/inter-cyrillic-500-normal-BasfLYem.woff2              7.90 kB
+client/dist/assets/inter-greek-500-normal-BIZE56-Y.woff2                 7.92 kB
+client/dist/assets/inter-greek-600-normal-plRanbMR.woff2                 7.94 kB
+client/dist/assets/inter-cyrillic-600-normal-CWCymEST.woff2              7.97 kB
+client/dist/assets/inter-cyrillic-400-normal-HOLc17fK.woff               9.78 kB
+client/dist/assets/inter-greek-400-normal-q2sYcFCs.woff                  9.92 kB
+client/dist/assets/inter-cyrillic-600-normal-4D_pXhcN.woff               9.93 kB
+client/dist/assets/inter-cyrillic-500-normal-CxZf_p3X.woff               9.94 kB
+client/dist/assets/inter-greek-500-normal-Xzm54t5V.woff                  9.98 kB
+client/dist/assets/inter-greek-600-normal-BZpKdvQh.woff                 10.03 kB
+client/dist/assets/jetbrains-mono-latin-ext-400-normal-fXTG6kC5.woff    10.12 kB
+client/dist/assets/inter-cyrillic-ext-400-normal-BQZuk6qB.woff2         10.23 kB
+client/dist/assets/jetbrains-mono-latin-ext-700-normal-CxPITLHs.woff    10.30 kB
+client/dist/assets/jetbrains-mono-latin-ext-500-normal-ckzbgY84.woff    10.33 kB
+client/dist/assets/inter-cyrillic-ext-500-normal-B0yAr1jD.woff2         10.43 kB
+client/dist/assets/inter-cyrillic-ext-600-normal-Dfes3d0z.woff2         10.48 kB
+client/dist/assets/inter-cyrillic-ext-400-normal-DQukG94-.woff          13.33 kB
+client/dist/assets/inter-cyrillic-ext-500-normal-BmqWE9Dz.woff          13.45 kB
+client/dist/assets/inter-cyrillic-ext-600-normal-Bcila6Z-.woff          13.46 kB
+client/dist/assets/jetbrains-mono-latin-400-normal-V6pRDFza.woff2       21.16 kB
+client/dist/assets/jetbrains-mono-latin-500-normal-BWZEU5yA.woff2       21.83 kB
+client/dist/assets/jetbrains-mono-latin-700-normal-BYuf6tUa.woff2       21.90 kB
+client/dist/assets/inter-latin-400-normal-C38fXH4l.woff2                23.66 kB
+client/dist/assets/inter-latin-500-normal-Cerq10X2.woff2                24.27 kB
+client/dist/assets/inter-latin-600-normal-LgqL8muc.woff2                24.45 kB
+client/dist/assets/jetbrains-mono-latin-400-normal-6-qcROiO.woff        27.49 kB
+client/dist/assets/jetbrains-mono-latin-500-normal-CJOVTJB7.woff        28.20 kB
+client/dist/assets/jetbrains-mono-latin-700-normal-D3wTyLJW.woff        28.20 kB
+client/dist/assets/inter-latin-400-normal-CyCys3Eg.woff                 30.69 kB
+client/dist/assets/inter-latin-600-normal-CiBQ2DWP.woff                 31.26 kB
+client/dist/assets/inter-latin-500-normal-BL9OpVg8.woff                 31.28 kB
+client/dist/assets/inter-latin-ext-400-normal-C1nco2VV.woff2            35.00 kB
+client/dist/assets/inter-latin-ext-500-normal-CV4jyFjo.woff2            36.02 kB
+client/dist/assets/inter-latin-ext-600-normal-D2bJ5OIk.woff2            36.26 kB
+client/dist/assets/inter-latin-ext-400-normal-77YHD8bZ.woff             47.56 kB
+client/dist/assets/inter-latin-ext-500-normal-BxGbmqWO.woff             48.49 kB
+client/dist/assets/inter-latin-ext-600-normal-CIVaiw4L.woff             48.66 kB
+client/dist/assets/index-BhDWee75.css                                   49.79 kB │ gzip:  23.74 kB
+client/dist/assets/index-C8CVoTEm.js                                   319.76 kB │ gzip: 101.13 kB
+
+✓ built in 169ms plus a grep over the built bundle for node:crypto/node:fs, zero matches). This closes ACT-111, which had filed the duplication as a card before the review found a cheaper fix existed.
+5. SHOULD-FIX (Testing): loop-style multi-assert test — FIXED, commit 13e5b9d (folded into the it.each added alongside the 3-pairs fix, since the same test needed updating anyway).
+6. SHOULD-FIX (Testing): router.test.tsx wiring duplication — FIXED, commit 82b2e30 (renderAt/renderAtWithStub share renderRouterAt).
+7. NOTE (Testing/Refactoring): dedupedByPath's same-arm-different-hash-within-one-path case is untested and its correct behavior undecided — TRACKED, filed ACT-112 (a product call on what should happen when one arm's own corpus is internally inconsistent across its own stages, not a defect in what was asked for here).
+8. NOTE (Style): ComparisonArmPair dead export — resolved as a side effect of disposition #3 (removed).
+9. NOTE (Style): api.ts's two route handlers share an error-translation shape — NOT FIXED, no axis scored this as an actionable finding (Style explicitly routed it to Refactoring, which did not independently flag it); left as a descriptive observation only.
+10. Refactoring's aside on stubFetchByPath silently returning 200/null-body on an unstubbed path — NOT FIXED, cited only as evidence for how finding #3 went unnoticed, no axis scored it as its own defect.
+
+Full suite re-verified green after every fix: 1160 server + 98 client tests (bun run test), tsc --noEmit clean on both tsconfigs, oxlint --type-aware clean.
 <!-- SECTION:NOTES:END -->
