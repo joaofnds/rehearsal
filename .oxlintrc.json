@@ -10,6 +10,7 @@
 		"restriction": "error"
 	},
 	"ignorePatterns": [
+		"cases/*/fixture/**",
 		".benchmark-runs",
 		"tools/oxlint/anti-slop/**",
 		"docs/recovered/**",

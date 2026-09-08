@@ -12,6 +12,7 @@
 	"bracketSameLine": false,
 	"bracketSpacing": true,
 	"ignorePatterns": [
+		"cases/*/fixture/**",
 		"**/.benchmark-runs",
 		"backlog/**",
 		"docs/recovered/**",
