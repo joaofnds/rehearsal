@@ -73,7 +73,7 @@ function fakeDependencies(
 
 describe(reconcileInterruptedRuns.name, () => {
 	it("reconciles a run to INTERRUPTED when its claimed target's pid is dead and no terminal record exists", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -96,7 +96,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("leaves a run alone when its claimed target's pid is still alive", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -119,7 +119,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("leaves a run alone once its terminal record already exists on disk", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -138,7 +138,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("treats a missing manifest as nothing to reconcile, not an error, since the crash may have preceded it", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -155,7 +155,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("treats a missing claim marker as nothing to reconcile, since the target may already have been restored", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -176,7 +176,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("does not re-reconcile a run already marked INTERRUPTED", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "run-interrupted",
@@ -197,7 +197,7 @@ describe(reconcileInterruptedRuns.name, () => {
 	});
 
 	it("reconciles every crashed run among several, independently", async () => {
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -241,7 +241,7 @@ describe(liveReconciliationDependencies.name, () => {
 		await claimTarget(source);
 		const paths = benchmarkRunPaths(runsDirectory, "run-1");
 		await writeRunManifest(paths.manifestFile, manifestFixture(source.root));
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -264,7 +264,7 @@ describe(liveReconciliationDependencies.name, () => {
 			join(tmpdir(), "rehearsal-reconciliation-"),
 		);
 		testResources.track(runsDirectory);
-		const store = openRunEventStore(":memory:");
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",

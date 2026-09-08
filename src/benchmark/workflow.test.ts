@@ -149,7 +149,7 @@ describe("workflow provider metrics", () => {
 		]);
 	});
 
-	it("records a turn-completed run event for every provider turn, with the running spend and no console output", async () => {
+	it("records a turn-completed run event for every provider turn, with the running spend", async () => {
 		const responses = [
 			JSON.stringify({
 				session_id: "worker-session",

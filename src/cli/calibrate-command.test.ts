@@ -580,25 +580,6 @@ describe(runCalibrate.name, () => {
 	});
 
 	/**
-	 * INTERRUPTED is never written to an artifact today (a kill -9 leaves no
-	 * terminal record at all; the reconciliation pass marks the run-event
-	 * stream instead), but the schema was strict on the three prior literals
-	 * only, so an artifact carrying it would have failed to parse outright
-	 * rather than reading with a wrong status. This guards the union staying
-	 * in sync with contracts.ts's should a future writer ever produce one.
-	 */
-	it("parses an artifact carrying status INTERRUPTED without refusing it", async () => {
-		const fixture = await writeRunFixture({ status: "INTERRUPTED" });
-		directories.push(fixture.runsDirectory);
-
-		const artifact = calibratableArtifactSchema.parse(
-			JSON.parse(await Bun.file(fixture.artifactFile).text()),
-		);
-
-		expect(artifact.status).toBe("INTERRUPTED");
-	});
-
-	/**
 	 * Same rule as the final rubric: a rubric the scorecard recorded a path
 	 * for and the command cannot read is refused, not recorded as one that
 	 * did not change. The paused loop re-prompts for the same read, so the

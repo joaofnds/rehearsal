@@ -8,7 +8,10 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
 import { runEventsDatabaseFile } from "#benchmark/run-layout";
-import { isTerminalRunEventKind, openRunEventStore } from "#benchmark/run-events";
+import {
+	isTerminalRunEventKind,
+	openRunEventStore,
+} from "#benchmark/run-events";
 import { comparisonReport } from "./comparisons";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
@@ -86,32 +89,45 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 		.get("/api/runs/:run/events", (context) => {
 			const runId = context.req.param("run");
 
-			return streamSSE(context, async (stream) => {
-				const store = openRunEventStore(
-					runEventsDatabaseFile(dependencies.runsDirectory),
-				);
+			return streamSSE(
+				context,
+				async (stream) => {
+					const store = await openRunEventStore(
+						runEventsDatabaseFile(dependencies.runsDirectory),
+					);
 
-				try {
-					let sequence = 0;
-					let sawTerminalEvent = false;
+					try {
+						let sequence = 0;
+						let sawTerminalEvent = false;
 
-					while (!sawTerminalEvent && !stream.aborted) {
-						for (const event of store.eventsSince(runId, sequence)) {
-							const { kind, sequence: eventSequence } = event;
-							await stream.writeSSE({ data: JSON.stringify(event) });
-							sequence = eventSequence;
-							if (isTerminalRunEventKind(kind)) {
-								sawTerminalEvent = true;
+						while (!sawTerminalEvent && !stream.aborted) {
+							for (const event of store.eventsSince(runId, sequence)) {
+								const { kind, sequence: eventSequence } = event;
+								await stream.writeSSE({ data: JSON.stringify(event) });
+								sequence = eventSequence;
+								if (isTerminalRunEventKind(kind)) {
+									sawTerminalEvent = true;
+								}
+							}
+							if (!sawTerminalEvent && !stream.aborted) {
+								await stream.sleep(RUN_EVENTS_POLL_MS);
 							}
 						}
-						if (!sawTerminalEvent && !stream.aborted) {
-							await stream.sleep(RUN_EVENTS_POLL_MS);
-						}
+					} finally {
+						store.close();
 					}
-				} finally {
-					store.close();
-				}
-			});
+				},
+				/**
+				 * A client that disconnects while the store is still opening
+				 * (mkdir/Database are both real I/O now) can reach this
+				 * before the try/finally above ever starts: nothing has
+				 * opened yet for `finally` to close. Swallowing here, rather
+				 * than leaving the callback's rejection unhandled, is correct
+				 * because the client is already gone and there is nothing
+				 * left to report the error to.
+				 */
+				() => Promise.resolve(),
+			);
 		})
 		.get("/api/records/:id", async (context) => {
 			try {

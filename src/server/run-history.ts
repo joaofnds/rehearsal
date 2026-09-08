@@ -200,7 +200,9 @@ export async function runHistoryReport(
 		stale.map((record) => [record.id, record.causes]),
 	);
 
-	const runEvents = openRunEventStore(runEventsDatabaseFile(runsDirectory));
+	const runEvents = await openRunEventStore(
+		runEventsDatabaseFile(runsDirectory),
+	);
 	try {
 		const rows: RunHistoryRow[] = [];
 		const unreadable: UnreadableRun[] = [];

@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type RunEventKind =
@@ -109,9 +109,9 @@ function toRunEvent(row: RunEventRow): RunEvent {
 	};
 }
 
-export function openRunEventStore(path: string): RunEventStore {
+export async function openRunEventStore(path: string): Promise<RunEventStore> {
 	if (path !== ":memory:") {
-		mkdirSync(dirname(path), { recursive: true });
+		await mkdir(dirname(path), { recursive: true });
 	}
 	const database = new Database(path);
 	database.run("PRAGMA journal_mode = WAL");

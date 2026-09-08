@@ -231,7 +231,9 @@ describe(createApiApp.name, () => {
 				join(tmpdir(), "rehearsal-api-runs-"),
 			);
 			roots.push(runsDirectory);
-			const store = openRunEventStore(runEventsDatabaseFile(runsDirectory));
+			const store = await openRunEventStore(
+				runEventsDatabaseFile(runsDirectory),
+			);
 			store.append({
 				runId: "run-1",
 				kind: "stage-started",

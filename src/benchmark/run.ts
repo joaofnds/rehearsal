@@ -857,7 +857,7 @@ export async function runBenchmark(
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
-	const runEventStore = openRunEventStore(
+	const runEventStore = await openRunEventStore(
 		runEventsDatabaseFile(runFiles.runsDirectory),
 	);
 	const runStartedAtMs = Date.now();

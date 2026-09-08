@@ -27,7 +27,7 @@ const DEFAULT_PORT = 4173;
  * one.
  */
 async function reconcileOnStartup(runsDirectory: string): Promise<void> {
-	const store = openRunEventStore(runEventsDatabaseFile(runsDirectory));
+	const store = await openRunEventStore(runEventsDatabaseFile(runsDirectory));
 	try {
 		await reconcileInterruptedRuns(
 			store,

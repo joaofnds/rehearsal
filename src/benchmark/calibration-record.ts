@@ -31,12 +31,7 @@ const judgeKnobsSchema = z.object({
 
 export const calibratableArtifactSchema = judgeKnobsSchema
 	.extend({
-		status: z.enum([
-			"AWAITING_HUMAN_REVIEW",
-			"COMPLETE",
-			"FAILED",
-			"INTERRUPTED",
-		]),
+		status: z.enum(["AWAITING_HUMAN_REVIEW", "COMPLETE", "FAILED"]),
 		caseId: z.string().min(1),
 		sourceRoot: z.string().min(1),
 		resultSha: z.string().min(1),

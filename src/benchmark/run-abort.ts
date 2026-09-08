@@ -280,12 +280,7 @@ export function createRunAbort(
 		}
 
 		pendingArtifact = artifact;
-		runEvents.record(
-			"run-completed",
-			"",
-			totalSpentUsd(artifact),
-			elapsedMs(),
-		);
+		runEvents.record("run-completed", "", totalSpentUsd(artifact), elapsedMs());
 
 		return enqueueNormalTransition(async () => {
 			await writeRunArtifact(

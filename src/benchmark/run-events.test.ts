@@ -16,7 +16,7 @@ describe(openRunEventStore.name, () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
 		testResources.track(directory);
 
-		const store = openRunEventStore(join(directory, "events.sqlite"));
+		const store = await openRunEventStore(join(directory, "events.sqlite"));
 
 		expect(store.journalMode()).toBe("wal");
 		store.close();
@@ -27,14 +27,14 @@ describe(openRunEventStore.name, () => {
 		testResources.track(parent);
 		const path = join(parent, "not-yet-created", "events.sqlite");
 
-		const store = openRunEventStore(path);
+		const store = await openRunEventStore(path);
 
 		expect(await Bun.file(path).exists()).toBe(true);
 		store.close();
 	});
 
-	it("replays every appended event for a run in append order", () => {
-		const store = openRunEventStore(":memory:");
+	it("replays every appended event for a run in append order", async () => {
+		const store = await openRunEventStore(":memory:");
 
 		store.append({
 			runId: "run-1",
@@ -62,8 +62,8 @@ describe(openRunEventStore.name, () => {
 		]);
 	});
 
-	it("keeps events for different runs separate", () => {
-		const store = openRunEventStore(":memory:");
+	it("keeps events for different runs separate", async () => {
+		const store = await openRunEventStore(":memory:");
 
 		store.append({
 			runId: "run-1",
@@ -84,8 +84,8 @@ describe(openRunEventStore.name, () => {
 		expect(store.eventsSince("run-2", 0)).toHaveLength(1);
 	});
 
-	it("returns only events after the requested sequence, for a reader that reconnects mid-stream", () => {
-		const store = openRunEventStore(":memory:");
+	it("returns only events after the requested sequence, for a reader that reconnects mid-stream", async () => {
+		const store = await openRunEventStore(":memory:");
 
 		store.append({
 			runId: "run-1",
@@ -108,8 +108,8 @@ describe(openRunEventStore.name, () => {
 		).toEqual(["turn-completed"]);
 	});
 
-	it("reports the latest event recorded for a run", () => {
-		const store = openRunEventStore(":memory:");
+	it("reports the latest event recorded for a run", async () => {
+		const store = await openRunEventStore(":memory:");
 
 		store.append({
 			runId: "run-1",
@@ -129,14 +129,14 @@ describe(openRunEventStore.name, () => {
 		expect(store.latestEvent("run-1")?.kind).toBe("run-completed");
 	});
 
-	it("reports no latest event for a run nothing was appended to", () => {
-		const store = openRunEventStore(":memory:");
+	it("reports no latest event for a run nothing was appended to", async () => {
+		const store = await openRunEventStore(":memory:");
 
 		expect(store.latestEvent("run-1")).toBeUndefined();
 	});
 
-	it("lists the run id of every run holding at least one event", () => {
-		const store = openRunEventStore(":memory:");
+	it("lists the run id of every run holding at least one event", async () => {
+		const store = await openRunEventStore(":memory:");
 		store.append({
 			runId: "run-1",
 			kind: "stage-started",
@@ -157,8 +157,8 @@ describe(openRunEventStore.name, () => {
 });
 
 describe(runEventRecorderFor.name, () => {
-	it("appends every recorded call to the store under the fixed run id", () => {
-		const store = openRunEventStore(":memory:");
+	it("appends every recorded call to the store under the fixed run id", async () => {
+		const store = await openRunEventStore(":memory:");
 		const recorder = runEventRecorderFor(store, "run-1");
 
 		recorder.record("stage-started", "shape", 0, 0);

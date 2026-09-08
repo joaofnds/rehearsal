@@ -532,7 +532,9 @@ export class RecordedRunsFixture {
 			paths.manifestFile,
 			manifest(this.interruptedRun, this.sourceRoot),
 		);
-		const store = openRunEventStore(runEventsDatabaseFile(this.runsDirectory));
+		const store = await openRunEventStore(
+			runEventsDatabaseFile(this.runsDirectory),
+		);
 		store.append({
 			runId: this.interruptedRun,
 			kind: "run-interrupted",
