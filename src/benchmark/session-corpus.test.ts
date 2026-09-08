@@ -173,6 +173,27 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(failure).toBeInstanceOf(SessionCorpusError);
 		expect(failure.message).toContain("leak.md");
 	});
+
+	it("refuses a declared file reached through a layout directory that is itself a symlink", async () => {
+		const outside = await resources.createControlDirectory();
+		await Bun.write(join(outside, "agents/reviewer.md"), "OUTSIDE AGENT\n");
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, "CLAUDE.md"), "variant instructions\n");
+		await symlink(join(outside, "agents"), join(root, "agents"));
+		const destination = await resources.createControlDirectory();
+
+		const failure = await failureOf(
+			snapshotSessionCorpus(
+				await resolveCorpusSource(root),
+				join(destination, "corpus"),
+				["agents/reviewer.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("agents/reviewer.md");
+		expect(failure.message).not.toContain("OUTSIDE AGENT");
+	});
 });
 
 describe("selecting the style and scoping the overlay to what the case declared", () => {

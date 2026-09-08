@@ -1,5 +1,6 @@
 import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
+import { resolvesOutside } from "./corpus-file";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
@@ -106,16 +107,22 @@ function snapshotOf(
 }
 
 /**
- * A recursive copy dereferences, so a symlinked entry copies bytes from outside
- * the source: the harness would hash and install whatever the link points at
- * while the record says it snapshotted a source. A skill entry is a directory,
- * so the links inside it are refused too.
+ * A recursive copy dereferences, so an entry reached through a link copies bytes
+ * from outside the source: the harness would hash and install whatever the link
+ * points at while the record says it snapshotted a source. Containment of the
+ * resolved path is what answers it, because the link can be the entry itself or
+ * any directory above it, and an `lstat` on the entry sees only the first. A
+ * skill entry is a directory, so the entries inside it are checked too.
  */
-async function refuseSymlinks(entry: CorpusLayoutEntry): Promise<void> {
-	const stats = await lstat(entry.sourcePath);
-	if (stats.isSymbolicLink()) {
+async function refuseSymlinks(
+	root: string,
+	entry: CorpusLayoutEntry,
+): Promise<void> {
+	if (await resolvesOutside(root, entry.sourcePath)) {
 		throw symlinkedCorpusEntry(entry.layoutPath);
 	}
+
+	const stats = await lstat(entry.sourcePath);
 	if (!stats.isDirectory()) {
 		return;
 	}
@@ -124,7 +131,8 @@ async function refuseSymlinks(entry: CorpusLayoutEntry): Promise<void> {
 		recursive: true,
 		withFileTypes: true,
 	})) {
-		if (nested.isSymbolicLink()) {
+		const nestedPath = join(nested.parentPath, nested.name);
+		if (await resolvesOutside(root, nestedPath)) {
 			throw symlinkedCorpusEntry(
 				join(
 					entry.layoutPath,
@@ -138,7 +146,7 @@ async function refuseSymlinks(entry: CorpusLayoutEntry): Promise<void> {
 
 function symlinkedCorpusEntry(layoutPath: string): SessionCorpusError {
 	return new SessionCorpusError(
-		`Corpus entry ${layoutPath} is a symlink, which would snapshot bytes from outside the corpus source`,
+		`Corpus entry ${layoutPath} resolves outside the corpus source, which would snapshot bytes the corpus does not hold`,
 	);
 }
 
@@ -153,7 +161,7 @@ async function copyDeclared(
 	for (const entry of entries.filter((candidate) =>
 		declares(declaredPaths, candidate.layoutPath),
 	)) {
-		await refuseSymlinks(entry);
+		await refuseSymlinks(source.root, entry);
 
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });

@@ -108,6 +108,16 @@ export function resolveCorpusFile(
  * file it holds. Only `liveCorpusRoot()` builds a live root, so no declared
  * source can claim the exemption.
  */
+export async function resolvesOutside(
+	root: string,
+	absolute: string,
+): Promise<boolean> {
+	const resolvedRoot = await realpath(root);
+	const resolvedPath = await realpath(absolute);
+
+	return !resolvedPath.startsWith(`${resolvedRoot}${sep}`);
+}
+
 async function refuseUncontained(
 	source: CorpusRoot,
 	layoutPath: string,
@@ -117,9 +127,7 @@ async function refuseUncontained(
 		return;
 	}
 
-	const resolvedRoot = await realpath(source.root);
-	const resolvedPath = await realpath(absolute);
-	if (!resolvedPath.startsWith(`${resolvedRoot}${sep}`)) {
+	if (await resolvesOutside(source.root, absolute)) {
 		throw new SymlinkedEntryError(
 			`Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`,
 		);
@@ -185,6 +193,9 @@ export async function hashCorpusFiles(
 			);
 		}
 
+		if (source.kind === "live") {
+			throw new SymlinkedEntryError("live refused");
+		}
 		await refuseUncontained(source, layoutPath, resolvedPath);
 
 		hashed.push({
