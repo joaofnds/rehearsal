@@ -211,4 +211,14 @@ Verified while rewriting: the status a reader actually sees is RunHistoryRow.sta
 Source for the rewrite: the build session's Spec-axis review finding, quoted in the build disposition note above, plus Joao's direction in this session to finish the work.
 
 Note on the CLI, for whoever hits it next: --ac appends, it does not replace. Passing six --ac flags to a card that already had six left twelve. --acceptance-criteria is the replacing flag; --clear-ac empties. Fixed in the same turn.
+
+Answers, 2026-09-08 (third round; typed into the iterate session by Joao):
+
+Cost is not a constraint on this card. Joao: "don't pay attention to the budget and cost for the actual iteration because I am not paying for tokens I pay the Claude Max account so we basically have unlimited usage on Opus and Sonnet so you can just finish your work guilty free". The 48.60 USD stop recorded above was the iterate session's call, and it is now withdrawn. Do not stop this card for spend again, and do not ask about a ceiling.
+
+8. Run a real rehearsal run to close AC #1 and #2. Synthetic events are not acceptable for them: both criteria say in their own text 'observed against a real run rather than a fixture', and that wording is the point of the card, since the whole premise of this harness is that evidence is inspectable rather than asserted. Use --model sonnet, per the project's CLAUDE.md, so the result stays comparable with the recorded runs.
+
+Measured before answering, so the next session need not re-derive it: one recorded stage run (.benchmark-runs/2026-09-06T21-58-29.508Z.shape.json) totals 0.7389 USD across 2 provider calls. A run of the size AC #1 and #2 need is under a dollar on the same Max account, which is why this is not worth another question.
+
+9. AC #3 asks for kill -9 against a real running process, and the build only exercised a synthetic dead pid. Close it the same way while a real run is in flight, since the run is already there.
 <!-- SECTION:NOTES:END -->
