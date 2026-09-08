@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { openRunEventStore } from "./run-events";
+import { openRunEventStore, runEventRecorderFor } from "./run-events";
 
 describe(openRunEventStore.name, () => {
 	it("replays every appended event for a run in append order", () => {
@@ -122,5 +122,29 @@ describe(openRunEventStore.name, () => {
 		});
 
 		expect(store.runIds().toSorted()).toEqual(["run-1", "run-2"]);
+	});
+});
+
+describe(runEventRecorderFor.name, () => {
+	it("appends every recorded call to the store under the fixed run id", () => {
+		const store = openRunEventStore(":memory:");
+		const recorder = runEventRecorderFor(store, "run-1");
+
+		recorder.record("stage-started", "shape", 0, 0);
+		recorder.record("stage-completed", "shape", 1, 1000);
+
+		expect(
+			store
+				.eventsSince("run-1", 0)
+				.map(({ kind, stage, spentUsd, elapsedMs }) => ({
+					kind,
+					stage,
+					spentUsd,
+					elapsedMs,
+				})),
+		).toEqual([
+			{ kind: "stage-started", stage: "shape", spentUsd: 0, elapsedMs: 0 },
+			{ kind: "stage-completed", stage: "shape", spentUsd: 1, elapsedMs: 1000 },
+		]);
 	});
 });

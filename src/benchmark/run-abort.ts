@@ -8,6 +8,7 @@ import type {
 	StageScorecard,
 } from "./contracts";
 import type { JudgeAttempt } from "./judge-attempt";
+import type { RunEventRecorder } from "./run-events";
 
 export interface PendingStage {
 	readonly file: string;
@@ -22,27 +23,6 @@ export interface PendingStage {
 		  }
 		| undefined;
 	readonly scorecard?: StageScorecard | undefined;
-}
-
-export type RunEventKind =
-	| "stage-started"
-	| "stage-completed"
-	| "run-completed";
-
-/**
- * Spend and elapsed time are the stage's own, not the run's running total
- * against its ceiling: `createRunAbort` sees one stage transition at a time
- * and has no view of prior stages' cost or the run's start time. A reader
- * derives the cumulative figure AC #2 wants from the full replayed stream,
- * the same way it derives everything else from these raw per-event facts.
- */
-export interface RunEventRecorder {
-	readonly record: (
-		kind: RunEventKind,
-		stage: string,
-		spentUsd: number,
-		elapsedMs: number,
-	) => void;
 }
 
 export const noopRunEventRecorder: RunEventRecorder = {

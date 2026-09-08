@@ -14,17 +14,13 @@ import type { PipelineDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { RunArtifactBaseInputs, RunArtifactInputs } from "./run";
 import { buildFailedJudgeRunArtifact, buildRunArtifact } from "./run";
-import type {
-	PendingStage,
-	RunArtifactPersistence,
-	RunEventKind,
-	RunEventRecorder,
-} from "./run-abort";
+import type { PendingStage, RunArtifactPersistence } from "./run-abort";
 import {
 	createRunAbort,
 	fileRunArtifactPersistence,
 	writeStageJudgeFailure,
 } from "./run-abort";
+import type { RunEventKind, RunEventRecorder } from "./run-events";
 import { deriveStageGrade, parseStageRubric } from "./stage-grading";
 import {
 	AUDIT_LOG_PIPELINE_PATH,

@@ -31,6 +31,31 @@ export interface RunEventStore {
 	readonly close: () => void;
 }
 
+export interface RunEventRecorder {
+	readonly record: (
+		kind: RunEventKind,
+		stage: string,
+		spentUsd: number,
+		elapsedMs: number,
+	) => void;
+}
+
+/**
+ * The port `run-abort.ts` and `workflow.ts` write through, so neither needs
+ * to know the store exists: they see a recorder scoped to the one run they
+ * are already running.
+ */
+export function runEventRecorderFor(
+	store: RunEventStore,
+	runId: string,
+): RunEventRecorder {
+	return {
+		record: (kind, stage, spentUsd, elapsedMs) => {
+			store.append({ runId, kind, stage, spentUsd, elapsedMs });
+		},
+	};
+}
+
 const SCHEMA = `
 	CREATE TABLE IF NOT EXISTS run_events (
 		sequence INTEGER PRIMARY KEY AUTOINCREMENT,
