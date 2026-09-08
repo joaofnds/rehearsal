@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import type { SSEStreamingApi } from "hono/streaming";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { displayPath } from "#benchmark/config";
 import { parseComparisonReport } from "#benchmark/comparison-record";
@@ -8,6 +9,7 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
 import { runEventsDatabaseFile } from "#benchmark/run-layout";
+import type { RunEventStore } from "#benchmark/run-events";
 import {
 	isTerminalRunEventKind,
 	openRunEventStore,
@@ -18,6 +20,29 @@ import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
 
 const RUN_EVENTS_POLL_MS = 500;
+
+async function streamRunEvents(
+	store: RunEventStore,
+	runId: string,
+	stream: Readonly<SSEStreamingApi>,
+): Promise<void> {
+	let sequence = 0;
+	let sawTerminalEvent = false;
+
+	while (!sawTerminalEvent && !stream.aborted) {
+		for (const event of store.eventsSince(runId, sequence)) {
+			const { kind, sequence: eventSequence } = event;
+			await stream.writeSSE({ data: JSON.stringify(event) });
+			sequence = eventSequence;
+			if (isTerminalRunEventKind(kind)) {
+				sawTerminalEvent = true;
+			}
+		}
+		if (!sawTerminalEvent && !stream.aborted) {
+			await stream.sleep(RUN_EVENTS_POLL_MS);
+		}
+	}
+}
 
 export interface ApiDependencies {
 	readonly runsDirectory: string;
@@ -92,29 +117,30 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 			return streamSSE(
 				context,
 				async (stream) => {
-					const store = await openRunEventStore(
-						runEventsDatabaseFile(dependencies.runsDirectory),
-					);
-
 					try {
-						let sequence = 0;
-						let sawTerminalEvent = false;
+						const store = await openRunEventStore(
+							runEventsDatabaseFile(dependencies.runsDirectory),
+						);
 
-						while (!sawTerminalEvent && !stream.aborted) {
-							for (const event of store.eventsSince(runId, sequence)) {
-								const { kind, sequence: eventSequence } = event;
-								await stream.writeSSE({ data: JSON.stringify(event) });
-								sequence = eventSequence;
-								if (isTerminalRunEventKind(kind)) {
-									sawTerminalEvent = true;
-								}
-							}
-							if (!sawTerminalEvent && !stream.aborted) {
-								await stream.sleep(RUN_EVENTS_POLL_MS);
-							}
+						try {
+							await streamRunEvents(store, runId, stream);
+						} finally {
+							store.close();
 						}
-					} finally {
-						store.close();
+					} catch (error) {
+						/**
+						 * streamSSE writes an uncaught rejection from this callback to
+						 * the client verbatim (Hono's own SSE error handling, not
+						 * app.onError, which never sees an error from inside a stream
+						 * body), so a filesystem error opening the store must be
+						 * redacted here the same way every other route redacts one.
+						 */
+						const message =
+							error instanceof Error ? error.message : String(error);
+						await stream.writeSSE({
+							event: "error",
+							data: redactAbsolutePaths(message),
+						});
 					}
 				},
 				/**
