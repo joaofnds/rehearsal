@@ -16,11 +16,26 @@ const attributionSchema = z.discriminatedUnion("claim", [
 		differingPaths: z.array(z.string()),
 	}),
 ]);
+const qualityReadingSchema = z.object({
+	interval: z.object({
+		minuend: z.object({ low: z.string(), high: z.string() }),
+		subtrahend: z.object({ low: z.string(), high: z.string() }),
+	}),
+	verdict: z.discriminatedUnion("kind", [
+		z.object({ kind: z.literal("insideRerunNoise") }),
+		z.object({ kind: z.literal("unchangedAlreadyClear") }),
+		z.object({ kind: z.literal("separated"), arm: z.string() }),
+	]),
+});
 const comparisonResponseSchema = z.object({
 	report: z
 		.object({ cases: z.array(z.object({ caseId: z.string() })) })
 		.loose(),
 	attribution: z.record(z.string(), z.record(z.string(), attributionSchema)),
+	qualityReadings: z.record(
+		z.string(),
+		z.record(z.string(), z.record(z.string(), qualityReadingSchema)),
+	),
 });
 
 async function comparisonResponseFrom(
@@ -71,6 +86,38 @@ describe("GET /api/comparisons/:digest", () => {
 		expect(body.attribution["case-1"]?.["candidateMinusBaseline"]).toEqual({
 			claim: "refused",
 			differingPaths: ["inputs/corpus/SKILL.md"],
+		});
+	});
+
+	it("renders a quality reading per case per contrast per declared-stage measure", async () => {
+		const fixture = await writtenFixture();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(await corpusDirectory()),
+		});
+
+		const response = await app.request(
+			`/api/comparisons/${fixture.comparisonDigest}`,
+		);
+		const body = await comparisonResponseFrom(response);
+
+		expect(
+			body.qualityReadings["case-1"]?.["candidateMinusBaseline"]?.["discuss"],
+		).toEqual({
+			interval: {
+				minuend: { low: "A", high: "A" },
+				subtrahend: { low: "A", high: "D" },
+			},
+			verdict: { kind: "insideRerunNoise" },
+		});
+		expect(
+			body.qualityReadings["case-1"]?.["candidateMinusControl"]?.["discuss"],
+		).toEqual({
+			interval: {
+				minuend: { low: "A", high: "A" },
+				subtrahend: { low: "D", high: "D" },
+			},
+			verdict: { kind: "separated", arm: "candidate" },
 		});
 	});
 
