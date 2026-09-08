@@ -4,11 +4,11 @@ title: make runBenchmark reachable from a test with fake dependencies
 status: To Do
 assignee: []
 created_date: '2026-09-03 03:17'
-updated_date: '2026-09-08 16:51'
+updated_date: '2026-09-08 17:15'
 labels: []
 dependencies:
   - ACT-26.7
-priority: low
+priority: medium
 ordinal: 33008
 ---
 
@@ -39,4 +39,6 @@ The tool has never run its own pipeline (`rehearsal list runs` empty at 540ba9a)
 One exception worth watching: ACT-26.7 becomes real the moment anything consumes `run --json` programmatically, because harness prose on stdout makes the record unparseable. If m-1's run is driven by hand and read by eye, that does not bite. If it is scripted, ACT-26.7 blocks it and should be pulled forward.
 
 Triage 2026-09-08 (d): same stale premise as ACT-27, see that card's note of the same date. A real recorded run now exists (rehearsal.ts list runs, verified 2026-09-08), so the 'nothing an operator can observe yet' reasoning both cards were deprioritized on no longer holds as stated. Priority is João's call, flagged in this run's triage doc rather than changed here.
+
+Priority 2026-09-08: Low to Medium, directed by João, same basis as ACT-27's note of this date. The 'nothing an operator can observe yet' premise is verified false: a real replayable run exists (rehearsal.ts list runs, this session). src/benchmark/run.ts has grown to 1156 lines since the card was written.
 <!-- SECTION:NOTES:END -->
