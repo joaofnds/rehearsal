@@ -3,11 +3,11 @@ id: ACT-132
 title: >-
   A symlinked CLAUDE.md at the corpus root is followed, bypassing the
   directory-walk refusal
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-08 22:44'
-updated_date: '2026-09-08 23:33'
+updated_date: '2026-09-08 23:51'
 labels: []
 dependencies: []
 priority: high
@@ -16,27 +16,27 @@ ordinal: 128008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 a corpus root whose CLAUDE.md is a symlink pointing outside the root keeps the target path and bytes out of the corpus report files and digest, refused or omitted (reproduced 2026-09-09: corpusReport on a directory corpus whose CLAUDE.md linked to an outside file returned that file hashed under path CLAUDE.md)
-- [ ] #2 a corpus source whose instruction file is a real file still reports it exactly as it does today
-- [ ] #3 bun run test, bun run lint, bun run typecheck all pass (the project own check, CLAUDE.md)
-- [ ] #4 a directory corpus source whose CLAUDE.md is a symlink to a file outside the root is refused by corpusReport: the outside file's sha256 and bytes appear in neither report.files nor report.digest (reproduced 2026-09-09: corpusReport on such a root returned path CLAUDE.md with sha256 23185939fe8f74ed893c5b8d7d23975d5147105dd17b891df4bc57c66abf3785, equal to shasum -a 256 of the outside file)
-- [ ] #5 a directory corpus source whose CLAUDE.md is a symlink outside the root is refused by readCorpusInstructions and by hashCorpusFiles, so stale --corpus and replay --corpus surface a refusal rather than the outside bytes (reproduced 2026-09-09: readCorpusInstructions returned the outside file's text and hashCorpusFiles returned its sha256)
-- [ ] #6 a directory corpus source whose declared corpus file inside a layout directory is a symlink outside the root is refused by hashCorpusFiles (reproduced 2026-09-09: hashCorpusFiles on skills/build/LINKED.md -> an outside file returned that file's sha256)
-- [ ] #7 the live corpus source keeps reporting through its symlinked CLAUDE.md: corpusReport against ~/.claude returns 123 files with a CLAUDE.md entry (measured 2026-09-09 by corpusReport(liveCorpusSource(), tmpdir) at 2191223; ~/.claude/CLAUDE.md is a symlink to ~/.agents/AGENTS.md, and checkpoint.ts:115-121 with commit 47ed48b state the live install is the trusted root that may be a link)
-- [ ] #8 a directory corpus source whose instruction file and declared files are real files reports and hashes exactly as it does at 2191223
-- [ ] #9 the refusal names the corpus layout path of the offending file, and its message carries neither the link target's absolute path nor its bytes
-- [ ] #10 bun run test, bun run lint, bun run typecheck all pass (the project's own check, CLAUDE.md)
-- [ ] #11 a directory corpus source whose CLAUDE.md is a symlink resolving outside the root is refused by corpusReport, readCorpusInstructions and hashCorpusFiles, and the outside file's sha256 and bytes appear in no report, digest or return value (reproduced 2026-09-09 at 2191223: all three returned the outside file's bytes or its sha256 23185939fe8f74ed893c5b8d7d23975d5147105dd17b891df4bc57c66abf3785, equal to shasum -a 256 of the target)
-- [ ] #12 a directory corpus source whose declared corpus file inside a layout directory is a symlink resolving outside the root is refused by hashCorpusFiles (reproduced 2026-09-09: hashCorpusFiles on skills/build/LINKED.md -> an outside file returned that file's sha256)
-- [ ] #13 a directory corpus source whose layout directory is itself a symlink to a directory outside the root is refused by hashCorpusFiles for a real file inside it, not only by corpusReport (reproduced 2026-09-09: skills/build -> /tmp/act132f/outside/build with a real SKILL.md inside; hashCorpusFiles returned sha256 243fdb41799f5a01066f9dccca1f0809c52858bed6bf92f3ab9d606f90625922, equal to shasum -a 256 of the outside file, while lstat of the resolved path reported isSymbolicLink false and corpusReport refused the same root)
-- [ ] #14 a relative symlink out of the root is refused the same way an absolute one is (reproduced 2026-09-09 by the reviewer: ../outside/s.md leaks identically today)
-- [ ] #15 corpusReport, readCorpusInstructions and hashCorpusFiles all refuse with SymlinkedEntryError, the type the directory walk already throws, so one planted link produces one error type across every surface (doc-49 section 4: 'refused by the same named error the walk gives')
-- [ ] #16 stale --corpus and replay --corpus against such a source exit as a refused precondition rather than an uncaught error, with the refusal text on stderr (stale-command.ts refusingCorpusFailures and staleness-report.ts catch only CorpusSourceError and CorpusFileError today, so SymlinkedEntryError would escape them)
-- [ ] #17 the refusal names the offending file by its corpus layout path, and its message carries neither the link target's path nor its bytes
-- [ ] #18 a directory corpus source whose root is reached through a symlinked parent directory is reported and hashed, not refused (measured 2026-09-09: realpath of /tmp/act132d/corpus is /private/tmp/act132d/corpus on this machine, so a containment check comparing a realpath against a raw root rejects every fixture under /tmp)
-- [ ] #19 the live corpus source keeps reporting through its symlinked CLAUDE.md: corpusReport against ~/.claude returns a CLAUDE.md entry and a file list of the same length it returns at 2191223 (measured 2026-09-09 by corpusReport(liveCorpusSource(), tmpdir()) at 2191223, which returned 123 files; the number tracks this machine's ~/.agents tree and is a baseline to re-measure, not a constant)
-- [ ] #20 a directory corpus source holding only real files reports the same paths, sha256 values and digest it reports at 2191223 for the same fixture
-- [ ] #21 bun run test, bun run lint, bun run typecheck all pass (the project's own check, CLAUDE.md)
+- [x] #1 a corpus root whose CLAUDE.md is a symlink pointing outside the root keeps the target path and bytes out of the corpus report files and digest, refused or omitted (reproduced 2026-09-09: corpusReport on a directory corpus whose CLAUDE.md linked to an outside file returned that file hashed under path CLAUDE.md)
+- [x] #2 a corpus source whose instruction file is a real file still reports it exactly as it does today
+- [x] #3 bun run test, bun run lint, bun run typecheck all pass (the project own check, CLAUDE.md)
+- [x] #4 a directory corpus source whose CLAUDE.md is a symlink to a file outside the root is refused by corpusReport: the outside file's sha256 and bytes appear in neither report.files nor report.digest (reproduced 2026-09-09: corpusReport on such a root returned path CLAUDE.md with sha256 23185939fe8f74ed893c5b8d7d23975d5147105dd17b891df4bc57c66abf3785, equal to shasum -a 256 of the outside file)
+- [x] #5 a directory corpus source whose CLAUDE.md is a symlink outside the root is refused by readCorpusInstructions and by hashCorpusFiles, so stale --corpus and replay --corpus surface a refusal rather than the outside bytes (reproduced 2026-09-09: readCorpusInstructions returned the outside file's text and hashCorpusFiles returned its sha256)
+- [x] #6 a directory corpus source whose declared corpus file inside a layout directory is a symlink outside the root is refused by hashCorpusFiles (reproduced 2026-09-09: hashCorpusFiles on skills/build/LINKED.md -> an outside file returned that file's sha256)
+- [x] #7 the live corpus source keeps reporting through its symlinked CLAUDE.md: corpusReport against ~/.claude returns 123 files with a CLAUDE.md entry (measured 2026-09-09 by corpusReport(liveCorpusSource(), tmpdir) at 2191223; ~/.claude/CLAUDE.md is a symlink to ~/.agents/AGENTS.md, and checkpoint.ts:115-121 with commit 47ed48b state the live install is the trusted root that may be a link)
+- [x] #8 a directory corpus source whose instruction file and declared files are real files reports and hashes exactly as it does at 2191223
+- [x] #9 the refusal names the corpus layout path of the offending file, and its message carries neither the link target's absolute path nor its bytes
+- [x] #10 bun run test, bun run lint, bun run typecheck all pass (the project's own check, CLAUDE.md)
+- [x] #11 a directory corpus source whose CLAUDE.md is a symlink resolving outside the root is refused by corpusReport, readCorpusInstructions and hashCorpusFiles, and the outside file's sha256 and bytes appear in no report, digest or return value (reproduced 2026-09-09 at 2191223: all three returned the outside file's bytes or its sha256 23185939fe8f74ed893c5b8d7d23975d5147105dd17b891df4bc57c66abf3785, equal to shasum -a 256 of the target)
+- [x] #12 a directory corpus source whose declared corpus file inside a layout directory is a symlink resolving outside the root is refused by hashCorpusFiles (reproduced 2026-09-09: hashCorpusFiles on skills/build/LINKED.md -> an outside file returned that file's sha256)
+- [x] #13 a directory corpus source whose layout directory is itself a symlink to a directory outside the root is refused by hashCorpusFiles for a real file inside it, not only by corpusReport (reproduced 2026-09-09: skills/build -> /tmp/act132f/outside/build with a real SKILL.md inside; hashCorpusFiles returned sha256 243fdb41799f5a01066f9dccca1f0809c52858bed6bf92f3ab9d606f90625922, equal to shasum -a 256 of the outside file, while lstat of the resolved path reported isSymbolicLink false and corpusReport refused the same root)
+- [x] #14 a relative symlink out of the root is refused the same way an absolute one is (reproduced 2026-09-09 by the reviewer: ../outside/s.md leaks identically today)
+- [x] #15 corpusReport, readCorpusInstructions and hashCorpusFiles all refuse with SymlinkedEntryError, the type the directory walk already throws, so one planted link produces one error type across every surface (doc-49 section 4: 'refused by the same named error the walk gives')
+- [x] #16 stale --corpus and replay --corpus against such a source exit as a refused precondition rather than an uncaught error, with the refusal text on stderr (stale-command.ts refusingCorpusFailures and staleness-report.ts catch only CorpusSourceError and CorpusFileError today, so SymlinkedEntryError would escape them)
+- [x] #17 the refusal names the offending file by its corpus layout path, and its message carries neither the link target's path nor its bytes
+- [x] #18 a directory corpus source whose root is reached through a symlinked parent directory is reported and hashed, not refused (measured 2026-09-09: realpath of /tmp/act132d/corpus is /private/tmp/act132d/corpus on this machine, so a containment check comparing a realpath against a raw root rejects every fixture under /tmp)
+- [x] #19 the live corpus source keeps reporting through its symlinked CLAUDE.md: corpusReport against ~/.claude returns a CLAUDE.md entry and a file list of the same length it returns at 2191223 (measured 2026-09-09 by corpusReport(liveCorpusSource(), tmpdir()) at 2191223, which returned 123 files; the number tracks this machine's ~/.agents tree and is a baseline to re-measure, not a constant)
+- [x] #20 a directory corpus source holding only real files reports the same paths, sha256 values and digest it reports at 2191223 for the same fixture
+- [x] #21 bun run test, bun run lint, bun run typecheck all pass (the project's own check, CLAUDE.md)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -312,4 +312,125 @@ Held: realpath rewrites /tmp to /private/tmp on this machine, so a containment c
 Narrower than written: that intermediate-directory case does NOT leak on a directory corpus today. hashDirectory refuseIfLink (checkpoint.ts:100-105) already throws SymlinkedEntryError for it before reading anything inside, observed on a corpus whose agents/ linked outside. It leaks only on kind 'live', where hashCorpusLayout passes rootMayBeALink true and the refusal is deliberately switched off; observed on the same layout, where the outside file was reported as agents/rule.md with its outside bytes.
 
 This matters for the exemption decision. The stage exempted the live corpus because ~/.claude/CLAUDE.md is a symlink into ~/.agents, which is sound for the instruction file. But the same exemption is what opens the intermediate-directory leak, so 'live is exempt' and 'the intermediate case is closed' cannot both be true as stated. The containment check is what reconciles them: a live corpus may follow a link, and what it follows to must still resolve inside the corpus's own resolved root. Build against that, and let the first test be the live intermediate case rather than the directory one, which already passes.
+
+## Build decision 2026-09-09: live stays exempt
+
+The oversight probe proposed that a live corpus may follow a link but what it
+follows to must resolve inside the corpus's own resolved root. Measured this
+session on this machine: realpath(~/.claude) is /Users/joaofnds/.claude, while
+realpath(~/.claude/CLAUDE.md) is /Users/joaofnds/.agents/AGENTS.md and
+realpath(~/.claude/skills) is /Users/joaofnds/.agents/skills. Every layout entry
+of the live install resolves outside its own root, so containment against the
+live root refuses the entire live corpus. The reconciliation the probe proposed
+is not available.
+
+Decision: containment applies to kind 'directory' only, as the shape stage
+picked. kind 'live' stays exempt, and every non-test construction of a live root
+goes through liveCorpusRoot(), so no caller-supplied string can claim it. The
+intermediate-directory leak on a live source is therefore accepted, and it is
+the same acceptance hashDirectory already makes with rootMayBeALink. Criterion
+#13's fixture is a directory source, which this closes.
+
+## Defect found outside the card's path, fixed in its own commit (8617b76)
+
+While reviewing the fix I probed session run --corpus, which the shaping recorded
+as 'guarded today' because session-corpus.ts refuseSymlinks lstat-checks the
+directory branch. It was not guarded against the intermediate-directory case.
+
+Reproduced at cf24913 on a directory source whose agents/ is a symlink to a
+directory outside the root holding a real reviewer.md: snapshotSessionCorpus
+copied it into the snapshot and hashCorpusFiles on that snapshot returned sha256
+924ab048ffc82e1a3dcd9f4a6756cd160b5abbfbfa68ffc35cc90b14fd15dc54, equal to
+shasum -a 256 of the outside file. The containment guard this card added does not
+catch it, because by then the bytes are a real file under the snapshot root.
+
+Revert test: the evidence stands with this card's change reverted, so the defect
+is session-corpus.ts's, not this change's. Fixed in 8617b76 by giving
+refuseSymlinks the same containment predicate, now shared from corpus-file.ts as
+resolvesOutside rather than encoded a second way. Observed refused directly after
+the fix. Full suite 1306 + 100 pass, lint and typecheck clean.
+
+## Handoff 2026-09-09
+
+### What changed
+
+Containment of the fully resolved path is now the one rule for whether corpus
+bytes belong to a corpus, applied at four sites and shared as resolvesOutside in
+corpus-file.ts:
+
+- cf24913: corpusReport, readCorpusInstructions and hashCorpusFiles refuse a
+  directory source whose declared path resolves outside its root. corpus-report
+  stopped hashing the instruction file through its own join. SymlinkedEntryError
+  moved from checkpoint.ts to file-presence.ts, because corpus-file importing it
+  from checkpoint closed a cycle oxlint refuses. stale --corpus and replay
+  --corpus translate it into a refused precondition.
+- 8617b76: session run --corpus refused. Its refuseSymlinks lstat missed a
+  layout directory that is itself a link, which the shaping had recorded as
+  already guarded and which was not.
+- 1921434: installStageCorpusSnapshot refused. replay --corpus handed it the
+  operator's raw root and cp dereferences, so outside bytes were installed into
+  the worktree the stage session reads while the read surfaces refused them.
+- c9ffe4d: hashDirectory judges an entry by where it resolves rather than by
+  whether it is a link. It and the new guard disagreed on a link pointing back
+  inside the root, under one error type, so a corpus could pass stale --corpus
+  and be refused by the corpus screen. lstat stays for the two cases resolution
+  cannot answer: an entry that vanished mid-walk is skipped, a dangling link is
+  refused.
+- 623fce3, 4d03355, 7af4465: three surviving mutations pinned, the lexical check
+  renamed to withoutTraversal, and session run's corpus precondition translating
+  the refusal like its neighbour already did.
+- c3ca1bd: removed a review probe's debug throw that 8617b76 committed by
+  mistake. It refused every live-source hash. See Risks below.
+
+### What became possible but is not wired up
+
+resolvesOutside is exported from corpus-file.ts and used by three modules. No
+caller outside those. Nothing else in the tree needs it today.
+
+### What was observed, and how
+
+Every one of the 21 criteria was observed at HEAD by running the functions
+directly, not through the suite. Leaf link, nested declared link, intermediate
+directory link, relative link: all four refused with SymlinkedEntryError on all
+three read surfaces, message carrying neither the target path nor its bytes.
+Symlinked-parent root reported normally. A real-files fixture reported digest
+1cf0ff with sha256 8c8169bd..., 5e247875..., 6caf93e0..., identical before and
+after. The session-run and install leaks were each reproduced before the fix and
+observed refused after.
+
+Full check at HEAD: bun run test 1310 pass 0 fail plus 100 client pass 0 fail,
+bun run lint clean, bun run typecheck clean.
+
+### What was not verified
+
+The live corpus reports 122 files, not the 123 the criteria record. I measured
+122 at the baseline commit 2191223 as well, in a fresh clone, so the count
+tracks this machine's ~/.agents tree rather than any code change. The criterion
+says exactly that. Nothing about the code was ruled out by this, but the number
+in criteria #7 and #19 is stale.
+
+A check-then-read race exists: refuseUncontained resolves the path, then the
+bytes are opened by path rather than through a handle captured at check time. An
+actor who can write the corpus directory during a run could repoint the link
+between the two. Not probed. Not closed: it needs the same write access as
+planting the link the guard exists to catch, and the threat model here is data a
+case author declares, not a live adversary.
+
+### Where things went
+
+ACT-133 filed: a hardlinked corpus file still hands over outside bytes.
+Reproduced at 7af4465. Containment cannot see it, because a hardlink resolves to
+a path inside the root; closing it needs inode identity or a link-count refusal,
+and whether it is worth closing at all is that card's first question.
+
+ACT-129, which depends on this card, still has its subject: three refusal
+messages in three wordings remain, though the type count is now one across every
+reader-facing surface.
+
+### Risks a next session should know
+
+Commit 8617b76's tree carries three lines a review process injected into the
+working tree, which I staged by mistake. c3ca1bd removes them. The tip is
+correct and every check passes at HEAD; only that one commit's tree is wrong. I
+did not rewrite published history.
 <!-- SECTION:NOTES:END -->
