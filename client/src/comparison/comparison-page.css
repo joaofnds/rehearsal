@@ -26,3 +26,23 @@
 	font-family: var(--font-mono);
 	font-weight: 700;
 }
+
+.rh-comparison__attribution-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.rh-comparison__attribution {
+	border: var(--border-width-hairline) solid var(--color-border-2);
+	padding: var(--space-12) var(--space-16);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.rh-comparison__attribution-pair {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-11);
+	color: var(--color-text-dim);
+}

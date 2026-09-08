@@ -5,6 +5,7 @@ import { apiClient } from "#client/api-client";
 import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
 import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
+import type { ComparisonAttribution } from "#server/comparison-attribution";
 import "./comparison-page.css";
 
 const PRESENTATIONS = ["Attempt pairs", "What moved"] as const;
@@ -61,6 +62,56 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 	];
 }
 
+function armPairLabel(pairKey: string): string {
+	const [minuend, subtrahend] = pairKey.split("Minus");
+	return `${minuend} vs ${subtrahend}`;
+}
+
+function AttributionCard({
+	pairKey,
+	attribution,
+}: {
+	readonly pairKey: string;
+	readonly attribution: ComparisonAttribution;
+}): React.JSX.Element {
+	return (
+		<div className="rh-comparison__attribution">
+			<span className="rh-comparison__attribution-pair">
+				{armPairLabel(pairKey)}
+			</span>
+			{attribution.claim === "identical" ? (
+				<p>No corpus difference between these arms.</p>
+			) : (
+				<div>
+					<p>
+						Refuses the attribution claim: more than one file could explain a
+						movement between these arms.
+					</p>
+					<ul>
+						{attribution.differingPaths.map((path) => (
+							<li key={path}>{path}</li>
+						))}
+					</ul>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function AttributionCards({
+	attribution,
+}: {
+	readonly attribution: Readonly<Record<string, ComparisonAttribution>>;
+}): React.JSX.Element {
+	return (
+		<div className="rh-comparison__attribution-list">
+			{Object.entries(attribution).map(([pairKey, claim]) => (
+				<AttributionCard key={pairKey} pairKey={pairKey} attribution={claim} />
+			))}
+		</div>
+	);
+}
+
 export function ComparisonPage({
 	digest,
 }: {
@@ -90,13 +141,21 @@ export function ComparisonPage({
 			) : null}
 
 			{query.isSuccess && presentation === "Attempt pairs" ? (
-				<TableShell
-					caption="ATTEMPT PAIRS"
-					columns={[...COLUMNS]}
-					rows={query.data.report.cases.map((benchmarkCase) =>
-						rowFor(benchmarkCase),
-					)}
-				/>
+				<>
+					<TableShell
+						caption="ATTEMPT PAIRS"
+						columns={[...COLUMNS]}
+						rows={query.data.report.cases.map((benchmarkCase) =>
+							rowFor(benchmarkCase),
+						)}
+					/>
+					{query.data.report.cases.map((benchmarkCase) => (
+						<AttributionCards
+							key={benchmarkCase.caseId}
+							attribution={query.data.attribution[benchmarkCase.caseId] ?? {}}
+						/>
+					))}
+				</>
 			) : null}
 
 			{query.isSuccess && presentation === "What moved" ? (

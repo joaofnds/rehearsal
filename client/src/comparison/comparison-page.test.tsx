@@ -158,4 +158,52 @@ describe(ComparisonPage.name, () => {
 		expect(screen.getByText("PLANNED")).toBeInTheDocument();
 		expect(screen.queryByRole("table")).not.toBeInTheDocument();
 	});
+
+	it("refuses the attribution claim and lists the differing paths when the corpora disagree", async () => {
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("case-1")).toBeInTheDocument();
+		});
+		expect(
+			screen.getByText(/refuses the attribution claim/iu),
+		).toBeInTheDocument();
+		expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
+	});
+
+	it("reports no corpus difference, never a false attribution, when the two arms' corpora are identical", async () => {
+		stubFetchByPath(
+			new Map([
+				[
+					`/api/comparisons/${DIGEST}`,
+					{
+						...comparisonResponseBody(),
+						attribution: {
+							"case-1": {
+								candidateMinusBaseline: { claim: "identical" },
+							},
+						},
+					},
+				],
+			]),
+		);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<ComparisonPage digest={DIGEST} />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("case-1")).toBeInTheDocument();
+		});
+		expect(
+			screen.getByText(/no corpus difference between these arms/iu),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText(/refuses the attribution claim/iu),
+		).not.toBeInTheDocument();
+	});
 });
