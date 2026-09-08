@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import { loadRunManifest } from "./manifest";
+import { benchmarkRunPaths } from "./run-layout";
 import { readRunMarker } from "./target";
 import type { RunEventStore } from "./run-events";
 import { isTerminalRunEventKind } from "./run-events";
@@ -38,17 +38,12 @@ export async function reconcileInterruptedRuns(
 				continue;
 			}
 
-			const artifactFile = join(dependencies.runsDirectory, `${runId}.json`);
-			if (await dependencies.artifactExists(artifactFile)) {
+			const paths = benchmarkRunPaths(dependencies.runsDirectory, runId);
+			if (await dependencies.artifactExists(paths.artifactFile)) {
 				continue;
 			}
 
-			const manifestFile = join(
-				dependencies.runsDirectory,
-				`${runId}.checkpoints`,
-				"manifest.json",
-			);
-			const manifest = await dependencies.loadManifest(manifestFile);
+			const manifest = await dependencies.loadManifest(paths.manifestFile);
 			if (manifest === undefined) {
 				continue;
 			}
