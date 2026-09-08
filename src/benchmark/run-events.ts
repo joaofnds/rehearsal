@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 export type RunEventKind =
 	| "stage-started"
 	| "turn-completed"
+	| "stage-judging"
 	| "stage-completed"
 	| "run-completed"
 	| "run-failed"

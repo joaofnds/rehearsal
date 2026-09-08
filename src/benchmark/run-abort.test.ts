@@ -414,7 +414,7 @@ function fakeRunEventRecorder(): FakeRunEventRecorder {
 }
 
 describe(createRunAbort.name, () => {
-	it("records a stage-started run event with the stage's own spend before the pending stage write settles", async () => {
+	it("records a stage-judging run event with the stage's own spend before the pending stage write settles", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const runEvents = fakeRunEventRecorder();
 		const abort = createRunAbort(
@@ -445,7 +445,7 @@ describe(createRunAbort.name, () => {
 				stage,
 				spentUsd,
 			})),
-		).toEqual([{ kind: "stage-started", stage: "shape", spentUsd: 1 }]);
+		).toEqual([{ kind: "stage-judging", stage: "shape", spentUsd: 1 }]);
 	});
 
 	it("records a stage-completed run event carrying the stage session and Judge spend when a stage finishes", async () => {
@@ -483,7 +483,7 @@ describe(createRunAbort.name, () => {
 		expect(
 			runEvents.events.map(({ kind, stage }) => ({ kind, stage })),
 		).toEqual([
-			{ kind: "stage-started", stage: "shape" },
+			{ kind: "stage-judging", stage: "shape" },
 			{ kind: "stage-completed", stage: "shape" },
 		]);
 		expect(runEvents.events.at(-1)?.spentUsd).toBe(2);
@@ -639,7 +639,7 @@ describe(createRunAbort.name, () => {
 		await abort.markAborted("run interrupted");
 
 		expect(runEvents.events.map(({ kind }) => kind)).toEqual([
-			"stage-started",
+			"stage-judging",
 			"run-failed",
 		]);
 	});

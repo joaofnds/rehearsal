@@ -199,7 +199,7 @@ export function createRunAbort(
 
 		return enqueueNormalTransition(async () => {
 			runEvents.record(
-				"stage-started",
+				"stage-judging",
 				pending.stage,
 				pending.input.transcript.costUsd,
 				elapsedMs(),

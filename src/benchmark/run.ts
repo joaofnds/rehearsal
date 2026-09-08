@@ -690,6 +690,12 @@ export async function runGradedStages(
 
 	for (const definition of context.pipeline.stages) {
 		const stage = definition.name;
+		context.runEvents?.record(
+			"stage-started",
+			stage,
+			workflow.reduce((total, transcript) => total + transcript.costUsd, 0),
+			context.elapsedMs?.() ?? 0,
+		);
 		const session = await executeStageSession(
 			dependencies,
 			{
