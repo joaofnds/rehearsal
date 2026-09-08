@@ -4,7 +4,7 @@ title: 'let a run in flight be watched, which nothing on disk allows today'
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 13:03'
+updated_date: '2026-09-08 13:04'
 labels: []
 milestone: m-6
 dependencies:
@@ -156,4 +156,18 @@ Blocking, fixed above: the first draft of this record replaced Implementation No
 Should-fix, folded above: AC #6 undercounted its own readers at two (contracts.ts, run-status.ts) when a third, independent reader exists — calibration-record.ts:34's calibratableArtifactSchema, a strict zod enum that would fail to parse an INTERRUPTED artifact outright. Now named alongside the other two. Also folded: the reconciliation pass's module placement was presented as a free builder choice between serve.ts and app.ts; the two are not equivalent (app.ts's createAppServer is a side-effect-free factory tests call directly), so the record now names serve.ts's main() as the pass's home.
 
 Noted, not blocking: not all 14 console.log sites from ACT-26.7 report stage progress, so AC #4's scope is the progress-reporting subset, not the full count by number — folded into the plan's phrasing above. The pid-liveness reconciliation plan is directionally sound; pid reuse and a missing marker file are named as gaps the builder must handle rather than silently trust, not fully designed here since no card fact fixes the exact behavior beyond "don't wrongly interrupt a healthy run" and "don't error on an absent marker." All file:line citations in the plan were verified against the current working tree this session.
+
+Answers, 2026-09-08 (first round; typed into the iterate session by Joao, "agree" to the four questions as recommended). Restored: this block was written to the card in commit 1a6994f, then dropped from the file in 81a8310 by an --append-notes issued against a stale read while the shaping session was concurrently rewriting the same card. The shaping record below already carries its substance; this restores the decisions with their source, since only what is quoted here shows the direction that authorized them.
+
+1. Storage is not an open question. decision-3 settles it: SQLite in WAL mode, derived and rebuildable, records on disk stay authoritative, SSE for push. Add the live writes at the existing transition points in src/benchmark/run-abort.ts (writePendingStage, writeStageProgress, completeStage) and the per-turn loop in src/benchmark/workflow.ts that already computes spentUsd and providerCalls. No parallel mechanism.
+
+2. AC #2 needs turn-and-stage-boundary granularity only: current stage, spend against the ceiling, elapsed time. Live tool-call chips, the task graph's in/out counts, and mid-turn token streaming are ACT-96 through ACT-100's, not this card's. The harness invokes claude as a subprocess per turn and receives one complete envelope, so sub-turn streaming would be new plumbing this card never scoped.
+
+3. Add INTERRUPTED to the run status union in src/benchmark/contracts.ts as a state distinct from FAILED. Today a killed run writes FAILED (markAborted in run-abort.ts) and the design renders a stopped run as neutral rather than a failure. This is a contract change touching every reader of run status.
+
+4. Reconciliation splits: leave run-abort.ts's existing SIGINT/SIGTERM/SIGHUP handler as it is, since it already writes a terminal state on a graceful kill. Add a startup reconciliation pass in the server for the crash case (SIGKILL, OOM, power loss) that leaves no terminal write. This keeps the card almost entirely out of rehearsal run.
+
+5. Add both terms to GLOSSARY.md, wording as proposed: run event (one durable, timestamped fact about a run in progress, held in the derived SQLite store per decision-3, replayed to a client over SSE) and interrupted run (a run whose process ended without writing a terminal status, reconciled from run events on server startup into a distinct, non-failure outcome).
+
+Probed in the iterate session before these answers were given: no RUNNING or INTERRUPTED appears in contracts.ts (its status unions are AWAITING_HUMAN_REVIEW|COMPLETE|FAILED and FAILED); the run-abort.ts and workflow.ts symbols above exist as named; ACT-96 through ACT-100 do own the task-graph detail deferred in answer 2. Also probed after: src/benchmark/calibration-record.ts:34 carries an independent zod enum of the same three statuses, a third reader AC #6 must cover.
 <!-- SECTION:NOTES:END -->
