@@ -18,6 +18,7 @@ import {
 	corpusLayoutRoots,
 	deriveStaleness,
 	hashDirectory,
+	hashWorkflowState,
 	initialCheckpointInputs,
 	installStageCorpusSnapshot,
 	lineageKey,
@@ -936,6 +937,25 @@ describe(stageCorpusRoots.name, () => {
 				"/target",
 			),
 		).toEqual(["/variants/brief"]);
+	});
+});
+
+describe(hashWorkflowState.name, () => {
+	it("refuses a target whose backlog tree holds a symlink, rather than hashing what it points at", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-workflow-state-"));
+		testResources.track(parent);
+		const outside = join(parent, "outside");
+		await mkdir(outside);
+		await writeFile(join(outside, "control.key"), "secret bytes");
+		const target = join(parent, "target");
+		await mkdir(join(target, "backlog"), { recursive: true });
+		await writeFile(join(target, "backlog", "board.md"), "board");
+		await symlink(outside, join(target, "backlog", "escape"));
+
+		const failure = await failureOf(hashWorkflowState(target));
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("escape");
 	});
 });
 

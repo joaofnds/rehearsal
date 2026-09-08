@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	directorySource,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
+import { failureOf } from "#cli/cli-test-support";
 import { corpusReport } from "./corpus-report";
 
 describe(corpusReport.name, () => {
@@ -53,6 +54,20 @@ describe(corpusReport.name, () => {
 		expect(report.files.map(({ path }) => path)).toContain(
 			"rulebook/coding-style.md",
 		);
+	});
+
+	it("refuses a corpus root whose layout directory holds a symlink, rather than reporting what it points at", async () => {
+		const root = await fullCorpusDirectory();
+		const outside = await corpusDirectory();
+		await writeFile(join(outside, "control.key"), "secret bytes\n");
+		await symlink(outside, join(root, "skills", "escape"));
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const failure = await failureOf(corpusReport(directorySource(root), runs));
+
+		expect(failure.message).toContain("escape");
+		expect(failure.message).not.toContain("secret bytes");
 	});
 
 	it("reports a rulebook file exactly once, not once per list that carries it", async () => {
