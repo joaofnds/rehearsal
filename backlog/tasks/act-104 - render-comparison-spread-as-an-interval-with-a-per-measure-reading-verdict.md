@@ -4,7 +4,7 @@ title: render comparison spread as an interval with a per-measure reading verdic
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-08 20:42'
+updated_date: '2026-09-08 21:12'
 labels: []
 dependencies:
   - ACT-49
@@ -27,13 +27,79 @@ The design's 'What moved' comparison layout shows, per measure, a spread across 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Ambiguity found 2026-09-07, verified in code before this card is picked up. This card's interval is described as 'a spread across attempts', matching SPEC.md 5b's column heading 'Spread across 6 attempts'. The quantity the harness actually computes is not that: buildPairedEstimate (src/benchmark/comparison-estimator.ts:57) derives standardError across CASES, dividing sampleVariance by caseDeltas.length, and it throws below two cases. An interval drawn from it is a spread across cases, not across the attempts within an arm.
+Ambiguity found 2026-09-07: the card's 'spread across attempts' and the quantity the harness computes are not the same thing. Settled below, decision 1.
 
-Whoever builds this card settles which quantity the interval represents before drawing it, since the two answers differ numerically and the screen asserts a claim about rerun noise either way.
-
-Separately: a 95% interval as meanDelta +/- 1.96*standardError is a routine default, since docs/research.md adopts that error-bar framing and both terms already exist. The per-measure reading verdict is not. Three of SPEC 5b's five phrases ('clearest movement', 'unchanged, already clear', 'fires less often') cannot be derived from a single PairedEstimate under any threshold: 'clearest movement' ranks measures against each other, and blocker rows are counted rather than graded. Designing that vocabulary is the substance of AC #2.
-
-Triage 2026-09-08 (e): citation drift only. buildPairedEstimate is at comparison-estimator.ts:54, not the cited :57 (function moved since filing). Substance unchanged: it still divides by caseDeltas.length and still throws below two cases.
+Triage 2026-09-08 (e): citation drift only. buildPairedEstimate is at comparison-estimator.ts:54, not the :57 originally cited.
 
 Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Design decided 2026-09-08 by advisor review (Fable 5.1, unprimed) plus direct
+verification of every load-bearing claim. The four answers below are settled
+constraints for whoever builds this; do not reopen them.
+
+1. What the interval represents. Within-arm spread across reps, per case per
+measure. NOT the contrast's PairedEstimate.standardError, which is dispersion
+across benchmark cases and measures a different thing. Two facts rule the
+existing field out. comparison-quality.ts:104-107 hands buildPairedEstimate
+single-element arrays ([minuend.successRate]), so rep-level variation never
+reaches the estimator at all; and comparison-estimator.ts:57 throws below two
+cases, while the design's scenario is one checkpoint and one task. A committed
+test at comparison-quality.test.ts:138 asserts standardError of exactly 0 for
+a two-case contrast, so an interval drawn from it would render a point and
+assert certainty from two numbers.
+
+The dispersion the harness already records is ReliabilitySummary
+(confirmation-report.ts:27-38), per case per arm: gradeDistribution across
+reps, successful/requested, and a binomial standardError over reps. Per
+measure kind: graded stages take low and high grade from gradeDistribution on
+the STAGE_LETTER_GRADES scale, which is what the design's "arms overlap by 2
+steps" measures; binary measures take successful/requested as a count, the way
+SPEC 5b counts blockers rather than grading them; meters take the spread of
+the per-rep values array in comparison-resources.ts. PairedEstimate keeps its
+existing role on the Attempt pairs screen, labeled as across N cases, and is
+not redefined.
+
+2. Where it is computed. Derived at serve time from the persisted record,
+following src/server/comparisons.ts:21-40, which derives attribution the same
+way and states the rule: a server-owned contract, not something the browser
+re-derives. No schema version bump, since every input is already in the
+record. This settles AC #1's "a comparison report states" as the served
+report.
+
+3. Row key. Per (case, measure), on the candidate-vs-baseline contrast.
+The design's table is one case; the harness's report holds two or more.
+Pooling reps across cases would mix case difficulty into what the row calls
+rerun noise. Precedent: commit e279864, the pairing unit the report can
+render is the case.
+
+4. The reading vocabulary, and what is NOT built. Build the closed set
+derivable from one row's two arm summaries: inside rerun noise (spread
+overlap), unchanged already clear (both arms at ceiling), and a directional
+magnitude for meters when both arms are AVAILABLE, with the UNAVAILABLE
+branch yielding no phrase rather than a number. Test the binomial edges at
+0/n and n/n, where the Wald standard error is zero.
+
+Two SPEC phrases are out of scope here, each for its own reason.
+"fires less often" is a hard-blocker reading, and no per-blocker result
+exists on the rep record: judgedStageSchema (confirmation-record.ts:28-35)
+carries stage, status, grade, verdict, elapsedMs, evidence and nothing more.
+That needs a new card for per-rep blocker firings, not this one.
+"clearest movement" is a superlative over the whole table, not a function of
+one row, so it is a table-level highlight and belongs to its own card.
+
+5. Scope. Report data only. The client's What moved block stays a
+PlannedFeatureBlock (comparison-page.tsx:172-179, pinned by
+comparison-page.test.tsx:150-160). ACT-50 deferred this screen to ACT-104 by
+name while shipping Attempt pairs only, and every card filed from ACT-49's
+inventory is a data-shape card. Note for whoever picks up the screen card:
+the planned-block copy says a paired estimate cannot supply the interval yet,
+which this card makes false.
+
+The card's title says "render" while its acceptance criteria say report data.
+The acceptance criteria govern.
+
+Card premise corrected: the note above calling meanDelta +/- 1.96*standardError
+a routine default does not hold for the contrast estimate. At two cases the
+interval can be zero-width, and 1.96 is a large-sample multiplier being applied
+at one degree of freedom. It is not the basis for this card's interval.
 <!-- SECTION:NOTES:END -->
