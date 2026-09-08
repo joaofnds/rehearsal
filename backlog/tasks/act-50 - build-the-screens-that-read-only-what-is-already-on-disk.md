@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 01:43'
+updated_date: '2026-09-08 01:45'
 labels: []
 milestone: m-7
 dependencies:
@@ -14,6 +14,8 @@ dependencies:
   - ACT-49
   - ACT-52
   - ACT-53
+documentation:
+  - doc-37
 priority: medium
 ordinal: 52008
 ---
