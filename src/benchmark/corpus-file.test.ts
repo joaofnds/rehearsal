@@ -26,6 +26,10 @@ describe(resolveCorpusFile.name, () => {
 		],
 		["agents/reviewer.md", join(homedir(), ".claude/agents/reviewer.md")],
 		["skills/build/SKILL.md", join(homedir(), ".claude/skills/build/SKILL.md")],
+		[
+			"rulebook/coding-style.md",
+			join(homedir(), ".claude/rulebook/coding-style.md"),
+		],
 	])("resolves %s onto the install", (layoutPath, expected) => {
 		expect(resolveCorpusFile(live, layoutPath)).toBe(expected);
 	});

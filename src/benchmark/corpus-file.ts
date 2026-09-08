@@ -55,6 +55,7 @@ export const CORPUS_LAYOUT_DIRECTORIES: readonly string[] = [
 	"skills",
 	"agents",
 	"output-styles",
+	"rulebook",
 ];
 
 /**
@@ -86,7 +87,7 @@ export function resolveCorpusFile(
 	}
 
 	throw new CorpusFileError(
-		`Corpus file ${layoutPath} names no corpus layout path: use CLAUDE.md, output-styles/<name>.md, agents/<name>.md, or skills/<name>/...`,
+		`Corpus file ${layoutPath} names no corpus layout path: use CLAUDE.md, output-styles/<name>.md, agents/<name>.md, skills/<name>/..., or rulebook/<name>.md`,
 	);
 }
 
