@@ -6,9 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 22:43'
-updated_date: '2026-09-08 22:43'
+updated_date: '2026-09-08 23:16'
 labels: []
 dependencies: []
+priority: medium
 ordinal: 127008
 ---
 
@@ -32,4 +33,8 @@ is loaded and the interleaving differs from running the file alone.
 Ownership rule: a test that passes on one run and not another is a defect whoever wrote it.
 Naming it here rather than leaving it, since a suite that fails once in a while teaches
 everyone to re-run instead of read.
+
+Triage 2026-09-09: independent corroboration. doc-49 (reflection on ACT-113, filed after this card) records a full-suite run at 1293 pass / 0 fail in which 'ACT-131's flaky peer-ordering test did not fire this run'. That is consistent with the card's account of an intermittent failure rather than a persistent one, and it is a second data point on the same suite size the card cites.
+
+Reproducing command, per decision-1: mise exec -- bun run test, repeated; the card's criterion #1 asks for twenty consecutive full-suite passes.
 <!-- SECTION:NOTES:END -->

@@ -6,9 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 22:41'
-updated_date: '2026-09-08 22:41'
+updated_date: '2026-09-08 23:16'
 labels: []
+milestone: m-5
 dependencies: []
+priority: high
 ordinal: 126008
 ---
 
@@ -45,4 +47,8 @@ The gap is pre-existing in structure (the call has always sat outside the try). 
 changed is that a reachable input now throws through it.
 
 Correction to the line above: the sentence should read "This one and the stale command were not considered." A backtick swallowed the phrase when the note was written.
+
+Triage 2026-09-09, premise check on AC#2. The criterion cites src/cli/stale-command.ts:81 as calling staleCheckpoints unguarded. Read this run: line 80 already wraps that call in refusingCorpusFailures. The wrapper (stale-command.ts:35-50) catches only CorpusSourceError and CorpusFileError and rethrows everything else, and SymlinkedEntryError (checkpoint.ts:84) extends Error directly, so it is not caught. The criterion's behavior stands; its stated cause does not. The writer's evidence stays as written above.
+
+The reproducing command, per decision-1: plant a symlink in a corpus layout directory, then run mise exec -- ./rehearsal.ts stale --corpus <that root>.
 <!-- SECTION:NOTES:END -->

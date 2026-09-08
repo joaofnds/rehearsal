@@ -4,7 +4,7 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-07 16:24'
+updated_date: '2026-09-08 23:16'
 labels: []
 dependencies: []
 priority: low
@@ -29,4 +29,29 @@ So the id counter is derived from the active tasks directory and does not accoun
 Cost: an id is how a card is referenced in commits, notes and conversation. Two cards sharing one makes the history ambiguous. Searching the log for act-89 today returns commits from both. The damage grows with the archive, since older references are the ones most likely to be read by someone who was not there.
 
 Not urgent: nothing is currently broken by it beyond ambiguous references, and both ACT-89s are resolved. Worth fixing before the archive grows.
+
+Triage 2026-09-09: the cost is no longer only ambiguous references. The reissued id now BLOCKS dependency edits across the whole board. Observed this run: 'backlog task edit ACT-126 --dep ACT-50' was refused with 'Cannot verify the dependencies stay acyclic: more than one record claims ACT-52. Run backlog doctor to repair duplicate IDs first.' Every --dep on this board fails the same way until the duplicate is repaired, so triage could not record one of the orderings it found.
+
+Second reissued pair, found this run: act-52 exists both live (build-the-design-system-before-the-first-screen) and archived (settle-the-domain-vocabulary-the-UI-and-the-harness-will-share). The card above records only the act-89 pair.
+
+Reproducing command, per decision-1: ls backlog/tasks backlog/archive/tasks | sed 's/ - .*//' | sort | uniq -d
+
+Not repaired here: 'backlog doctor' rewrites card ids, which changes how every commit and note referencing them reads, and that is outside triage's remit.
+
+Full duplicate set, measured 2026-09-09 by the command above: act-52, act-53, act-89. Three reissued ids, each a live card and an archived card sharing a number.
+
+  act-52 live: build-the-design-system-before-the-first-screen
+  act-52 archived: settle-the-domain-vocabulary-the-UI-and-the-harness-will-share
+  act-53 live: stand-up-the-stack-end-to-end-on-one-screen
+  act-53 archived: (archive/tasks)
+  act-89 live: session checks count the transcript prefix as behavior under test
+  act-89 archived: run-the-checks-through-the-pinned-toolchain
+
+Cause narrowed 2026-09-09, and it corrects the CLI's own advice. 'backlog doctor' reports 'No duplicate IDs, self-referential dependencies, or dependency cycles found' on this board, while 'backlog task edit ACT-126 --dep ACT-50' refuses in the same minute naming ACT-52. Both observed this run. So the message's instruction ('Run backlog doctor to repair duplicate IDs first') routes to a command that does not see the problem, and --fix has nothing to apply.
+
+The refusal is not board-wide. 'backlog task edit ACT-129 --dep ACT-128 --dep ACT-132' succeeded this run. What differs: the acyclic check walks the dependency chain of the card being depended on, and ACT-50's chain reaches ACT-52 (via ACT-52 and ACT-53, both themselves reissued ids), while ACT-128 and ACT-132 have no dependencies at all. So the block hits exactly those edges whose chain contains a reissued id.
+
+Duplicates live across backlog/tasks and backlog/archive/tasks. doctor's own help says it reads 'active and completed task files' and does not name the archive, which is consistent with it not seeing these.
+
+This makes the card's 'not urgent' assessment stale. It is now a live block on recording board structure, and its stated repair route does not work.
 <!-- SECTION:NOTES:END -->

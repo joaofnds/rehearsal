@@ -1,9 +1,10 @@
 ---
 id: ACT-124
 title: 'exclude case fixtures from lint and format, or fix them'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-08 21:42'
+updated_date: '2026-09-08 23:14'
 labels: []
 dependencies: []
 ordinal: 120008
@@ -23,7 +24,13 @@ Decide which is true and act on it: either fixture trees are not project source 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 bun run lint exits zero on a clean checkout
-- [ ] #2 bun run fmt:check exits zero on a clean checkout
-- [ ] #3 A case fixture's bytes are unchanged by whichever route is taken, shown by the corpus digests the harness records
+- [x] #1 bun run lint exits zero on a clean checkout
+- [x] #2 bun run fmt:check exits zero on a clean checkout
+- [x] #3 A case fixture's bytes are unchanged by whichever route is taken, shown by the corpus digests the harness records
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Overtaken by commit 60d6297 (build: stop linting and formatting case fixture trees), which added cases/*/fixture/** to .oxlintrc.json and .oxfmtrc.json. All three criteria proven this run: mise exec -- bun run lint and bun run fmt:check both exit 0 on a clean checkout (run 2026-09-09, triage), and 60d6297's file list touches only .oxfmtrc.json, .oxlintrc.json and the two case.json declarations, no file under any fixture/ tree, so fixture bytes are unchanged. Closed by triage 2026-09-09.
+<!-- SECTION:FINAL_SUMMARY:END -->

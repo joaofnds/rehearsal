@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 21:48'
+updated_date: '2026-09-08 23:17'
 labels: []
 milestone: m-7
 dependencies:
@@ -318,6 +318,11 @@ Note for whoever picks it up: the placeholder copy in comparison-page.tsx says
 a paired estimate cannot supply the interval yet. ACT-104 made that false, so
 the text goes with the block.
 
+Triage 2026-09-09: this card was reopened to To Do by commit f835f75 (2026-09-08 23:49), which added AC#13 for the What moved tab. Twelve of thirteen criteria are checked; only AC#13 is open, so the card is now a one-criterion card despite its size.
+
+Overlap with ACT-126, which was filed at 21:47 the same day from doc-47 and covers the same tab. ACT-126's three criteria are finer than AC#13 and add one thing AC#13 does not state: the tab is opened in a browser against a comparison recorded on disk and the rendered values confirmed against the served field. Merge is on the triage doc for a call, survivor recommended as this card because the direction named it. Whichever survives should carry that browser-confirmation criterion, since it is the only one that observes the screen rather than the code.
+
+Assignee still reads @claude on a card in To Do. Left as the writer set it.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

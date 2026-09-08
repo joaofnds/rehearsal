@@ -1,12 +1,17 @@
 ---
 id: ACT-119
 title: brief-reply replies run longer than the accepted length on three of four turns
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-08 12:25'
-updated_date: '2026-09-08 21:48'
-labels: []
+updated_date: '2026-09-08 23:17'
+labels:
+  - partial
 dependencies: []
+references:
+  - >-
+    backlog/decisions/decision-6 -
+    The-brief-reply-cases-keep-the-population-ceiling-of-154-words.md
 priority: medium
 ordinal: 115008
 ---
@@ -54,9 +59,9 @@ as a measured property.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A decision is recorded on whether the four brief-reply cases keep the population ceiling of 154 or move to 145, the highest length accepted on these four turns
+- [x] #1 A decision is recorded on whether the four brief-reply cases keep the population ceiling of 154 or move to 145, the highest length accepted on these four turns
 - [ ] #2 If the ceiling moves, every brief-reply case declares the new ceiling and GLOSSARY.md's Accepted band entry states the same number
-- [ ] #3 If the ceiling stays at 154, the reason is recorded on this card and no case or glossary text changes
+- [x] #3 If the ceiling stays at 154, the reason is recorded on this card and no case or glossary text changes
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -76,4 +81,17 @@ makes the check disagree with the judgment it is meant to encode. Keeping 154
 leaves the check looser than the shortest accepted replies, and that is the
 accepted cost.
 
+Triage 2026-09-09: criterion #1 is satisfied by decision-6 on this board, which records the ceiling staying at 154, and criterion #3 by the same decision plus this note. Criterion #2 is conditional on the ceiling moving; it did not, so it is void rather than unproven. The direction is commit f835f75, 2026-09-08: 'ACT-119 keeps its 154-word ceiling. Dropping to 145 would fail a reply already accepted, making the check disagree with the judgment it encodes.'
+
+No case declaration and no GLOSSARY.md text changed, which is what criterion #3 asks to be true.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by decision-6 on this board: the four brief-reply cases keep the population ceiling of 154 words, by direction in commit f835f75 (2026-09-08).
+
+Criteria #1 and #3 are checked and proven: the decision is recorded, and no case declaration or GLOSSARY.md text changed, which is exactly what #3 asks. Criterion #2 ('if the ceiling moves, every brief-reply case declares the new ceiling and GLOSSARY.md states the same number') is left unchecked because it is conditional on a move that did not happen. It is void, not unproven. The partial label carries that, per the board's guard on closing with an unchecked criterion.
+
+What stays true and is not re-opened: three of four brief-reply replies exceed the length accepted for their turn, measured in ACT-35's runs. That is the benchmark working, not a defect in the check.
+<!-- SECTION:FINAL_SUMMARY:END -->

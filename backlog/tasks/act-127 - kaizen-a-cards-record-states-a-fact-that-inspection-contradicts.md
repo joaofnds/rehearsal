@@ -4,8 +4,14 @@ title: 'kaizen: a card''s record states a fact that inspection contradicts'
 status: To Do
 assignee: []
 created_date: '2026-09-08 21:49'
+updated_date: '2026-09-08 23:17'
 labels: []
 dependencies: []
+references:
+  - >-
+    backlog/decisions/decision-7 -
+    Start-the-kaizen-on-records-stating-facts-inspection-contradicts.md
+priority: medium
 ordinal: 123008
 ---
 
@@ -28,3 +34,15 @@ Run the kaizen skill against the six instances to find where the guard belongs.
 - [ ] #1 The kaizen names the point in the flow where a cross-card or cross-code claim gets written without a check, backed by the six recorded instances
 - [ ] #2 A guard exists that fires on such a claim before it is committed, observed by writing one and seeing it caught
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Seventh instance, found by triage 2026-09-09, same pattern and worth adding to the six the card already holds.
+
+ACT-126's description states: 'ACT-50 is not the right home: it is Done and its own text deliberately deferred this tab to ACT-104 by name.' ACT-50 reads To Do, verified this run. Commit f835f75 reopened it and added AC#13 for exactly the tab ACT-126 covers, two hours after ACT-126 was filed.
+
+What makes it the same pattern rather than ordinary staleness: the claim was checkable when written (the card asserts another card's status without reading it), and the assertion is load-bearing, since it is the whole reason the card exists as a separate card instead of a criterion on ACT-50. This one differs from the earlier six in one way worth the kaizen's attention: the fact was true when written and was falsified two hours later by a direction. A guard that only checks at write time would have passed it. That argues for the check living where a card is next read, not only where it is written.
+
+Also recorded as a consequence on decision-7.
+<!-- SECTION:NOTES:END -->
