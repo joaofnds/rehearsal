@@ -9,6 +9,7 @@
 		"outputStyle": "brief"
 	},
 	"corpusFiles": ["output-styles/brief.md", "skills/verify/SKILL.md"],
+	"projectFiles": ["NOTES.md"],
 	"checks": [
 		{
 			"kind": "word-band",

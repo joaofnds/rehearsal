@@ -332,6 +332,15 @@ describe("loadCase for a session case", () => {
 		});
 	});
 
+	it("defaults projectFiles to an empty list when a session declaration omits it", () => {
+		const declaration = parseCaseDeclaration("smoke", sessionDeclaration());
+		if (declaration.kind !== "session") {
+			throw new Error("expected a session declaration");
+		}
+
+		expect(declaration.projectFiles).toEqual([]);
+	});
+
 	it.each(["/etc", "../../CLAUDE.md"])(
 		"refuses a fixture at %s, which leaves the case directory",
 		(fixture) => {

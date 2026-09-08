@@ -26,6 +26,15 @@ const corpusFileSchema = z
 	})
 	.strict();
 
+const contextHalfSchema = z.enum(["corpus", "project"]);
+
+const manifestEntrySchema = z
+	.object({
+		path: z.string().min(1),
+		half: contextHalfSchema,
+	})
+	.strict();
+
 /**
  * The manifest is observed name-only (ACT-59, doc-9 gap 2): the transcript
  * never carries the corpus's own bytes, so an entry is a layout path and
@@ -33,7 +42,7 @@ const corpusFileSchema = z
  */
 const contextManifestSchema = z
 	.object({
-		paths: z.array(z.string().min(1)),
+		paths: z.array(manifestEntrySchema),
 	})
 	.strict();
 
@@ -41,6 +50,7 @@ const manifestDivergenceSchema = z
 	.object({
 		kind: z.enum(["undeclared-file", "unloaded-file"]),
 		path: z.string().min(1),
+		half: contextHalfSchema,
 	})
 	.strict();
 

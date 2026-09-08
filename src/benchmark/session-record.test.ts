@@ -125,11 +125,13 @@ describe("sessionAttemptRecordSchema", () => {
 		expect(
 			sessionAttemptRecordSchema.parse(
 				record({
-					contextManifest: { paths: ["skills/verify/SKILL.md"] },
+					contextManifest: {
+						paths: [{ path: "skills/verify/SKILL.md", half: "corpus" }],
+					},
 					divergences: [],
 				}),
 			).contextManifest,
-		).toEqual({ paths: ["skills/verify/SKILL.md"] });
+		).toEqual({ paths: [{ path: "skills/verify/SKILL.md", half: "corpus" }] });
 	});
 
 	it("carries a named divergence between the manifest and the declaration", () => {
@@ -138,11 +140,17 @@ describe("sessionAttemptRecordSchema", () => {
 				record({
 					contextManifest: { paths: [] },
 					divergences: [
-						{ kind: "unloaded-file", path: "skills/verify/SKILL.md" },
+						{
+							kind: "unloaded-file",
+							path: "skills/verify/SKILL.md",
+							half: "corpus",
+						},
 					],
 				}),
 			).divergences,
-		).toEqual([{ kind: "unloaded-file", path: "skills/verify/SKILL.md" }]);
+		).toEqual([
+			{ kind: "unloaded-file", path: "skills/verify/SKILL.md", half: "corpus" },
+		]);
 	});
 
 	/**
@@ -160,10 +168,29 @@ describe("sessionAttemptRecordSchema", () => {
 	it("refuses a divergence naming a kind that does not exist", () => {
 		const parsed = sessionAttemptRecordSchema.safeParse({
 			...record({ contextManifest: { paths: [] } }),
-			divergences: [{ kind: "renamed-file", path: "skills/verify/SKILL.md" }],
+			divergences: [
+				{
+					kind: "renamed-file",
+					path: "skills/verify/SKILL.md",
+					half: "corpus",
+				},
+			],
 		});
 
 		expect(parsed.success).toBe(false);
+	});
+
+	it("carries a project-half divergence's half tag through the record", () => {
+		expect(
+			sessionAttemptRecordSchema.parse(
+				record({
+					contextManifest: { paths: [] },
+					divergences: [
+						{ kind: "unloaded-file", path: "NOTES.md", half: "project" },
+					],
+				}),
+			).divergences,
+		).toEqual([{ kind: "unloaded-file", path: "NOTES.md", half: "project" }]);
 	});
 
 	/**

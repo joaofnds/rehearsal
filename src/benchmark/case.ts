@@ -80,6 +80,7 @@ export const caseDeclarationSchema = z.discriminatedUnion("kind", [
 			settings: jsonObjectSchema.optional(),
 			agents: jsonObjectSchema.optional(),
 			corpusFiles: z.array(z.string().min(1)),
+			projectFiles: z.array(z.string().min(1)).default([]),
 			checks: z.array(checkSchema).min(1),
 			model: declaredModelSchema,
 			sessionBudgetUsd: declaredSessionBudgetUsdSchema,
@@ -278,6 +279,7 @@ export interface SessionCase {
 	readonly settings: Immutable<JsonObject> | undefined;
 	readonly agents: Immutable<JsonObject> | undefined;
 	readonly corpusFiles: readonly string[];
+	readonly projectFiles: readonly string[];
 	readonly checks: Immutable<readonly Check[]>;
 }
 
@@ -437,6 +439,7 @@ function loadSessionCase(declaration: SessionCaseDeclaration): SessionCase {
 		settings: declaration.settings,
 		agents: declaration.agents,
 		corpusFiles: declaration.corpusFiles,
+		projectFiles: declaration.projectFiles,
 		checks: declaration.checks,
 	};
 }

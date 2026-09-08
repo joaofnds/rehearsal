@@ -7,7 +7,11 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
-import { reconcileManifest } from "#benchmark/context-manifest";
+import {
+	corpusEntries,
+	projectEntries,
+	reconcileManifest,
+} from "#benchmark/context-manifest";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
@@ -174,9 +178,14 @@ function buildAttemptRecord(
 		record.metrics = { ...attempt.metrics };
 	}
 	if (attempt.contextManifest !== undefined) {
-		record.contextManifest = { paths: [...attempt.contextManifest.paths] };
+		record.contextManifest = {
+			paths: attempt.contextManifest.paths.map((entry) => ({ ...entry })),
+		};
 		record.divergences = [
-			...reconcileManifest(attempt.contextManifest, sessionCase.corpusFiles),
+			...reconcileManifest(attempt.contextManifest, [
+				...corpusEntries(sessionCase.corpusFiles),
+				...projectEntries(sessionCase.projectFiles),
+			]),
 		];
 	}
 

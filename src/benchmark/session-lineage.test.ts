@@ -26,6 +26,7 @@ function sessionCase(fixturePath?: string): SessionCase {
 			prompt: "Reply with the single word OK.",
 			tools: [],
 			corpusFiles: ["output-styles/brief.md"],
+			projectFiles: [],
 			checks: [{ kind: "word-band", max: 1 }],
 		},
 		fixturePath,
@@ -35,6 +36,7 @@ function sessionCase(fixturePath?: string): SessionCase {
 		settings: undefined,
 		agents: undefined,
 		corpusFiles: ["output-styles/brief.md"],
+		projectFiles: [],
 		checks: [{ kind: "word-band", max: 1 }],
 	};
 }
@@ -154,6 +156,20 @@ describe(sessionLineage.name, () => {
 		const other: SessionCase = {
 			...sessionCase(),
 			settings: { outputStyle: "brief" },
+		};
+
+		const [before, after] = await Promise.all([
+			sessionLineage(sessionCase(), corpus(ORIGINAL), settings),
+			sessionLineage(other, corpus(ORIGINAL), settings),
+		]);
+
+		expect(after).not.toBe(before);
+	});
+
+	it("changes when the declared project files list changes", async () => {
+		const other: SessionCase = {
+			...sessionCase(),
+			projectFiles: ["NOTES.md"],
 		};
 
 		const [before, after] = await Promise.all([

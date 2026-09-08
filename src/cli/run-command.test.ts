@@ -42,6 +42,7 @@ const smokeCase: SessionCase = {
 		prompt: "Reply with the single word OK.",
 		tools: [],
 		corpusFiles: [],
+		projectFiles: [],
 		checks: [{ kind: "word-band", max: 1 }],
 	},
 	fixturePath: undefined,
@@ -51,6 +52,7 @@ const smokeCase: SessionCase = {
 	settings: undefined,
 	agents: undefined,
 	corpusFiles: [],
+	projectFiles: [],
 	checks: [{ kind: "word-band", max: 1 }],
 };
 

@@ -347,7 +347,11 @@ async function recordAttempt(
 		metrics,
 		outcome: result.outcome,
 		checks: result.results,
-		contextManifest: observedManifest(toolUses(turn), outputStyles(turn)),
+		contextManifest: observedManifest(
+			toolUses(turn),
+			outputStyles(turn),
+			request.sessionCase.projectFiles,
+		),
 	};
 }
 

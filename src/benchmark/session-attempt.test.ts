@@ -108,6 +108,7 @@ function sessionCase(
 			prompt: "Reply with the single word OK.",
 			tools: [],
 			corpusFiles: [],
+			projectFiles: [],
 			checks: [{ kind: "word-band", max: 1 }],
 		},
 		fixturePath: undefined,
@@ -117,6 +118,7 @@ function sessionCase(
 		settings: undefined,
 		agents: undefined,
 		corpusFiles: [],
+		projectFiles: [],
 		checks: [{ kind: "word-band", max: 1 }],
 		...overrides,
 	};
@@ -748,7 +750,51 @@ describe(runSessionAttempt.name, () => {
 			}),
 		);
 
-		expect(attempt.contextManifest?.paths).toContain("skills/verify/SKILL.md");
+		expect(attempt.contextManifest?.paths).toContainEqual({
+			path: "skills/verify/SKILL.md",
+			half: "corpus",
+		});
+	});
+
+	it("names a declared project file's Read as a project-half entry in the recorded context manifest", async () => {
+		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		resources.track(fixture);
+		await writeFile(join(fixture, "NOTES.md"), "planted\n");
+		const projects = await projectsRoot();
+		const runClaude: SessionAttemptRequest["runClaude"] = async (
+			command,
+			cwd,
+		) => {
+			const sessionId = namedSession(command);
+			const slug = join(projects, projectSlug(await realpath(cwd)));
+			await mkdir(slug, { recursive: true });
+			await writeFile(
+				join(slug, `${sessionId}.jsonl`),
+				`${[
+					readFileLine(sessionId, join(cwd, "NOTES.md")),
+					transcriptLine(sessionId, "OK"),
+				].join("\n")}\n`,
+			);
+
+			return envelope("OK");
+		};
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: sessionCase({
+					fixturePath: fixture,
+					projectFiles: ["NOTES.md"],
+				}),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude,
+			}),
+		);
+
+		expect(attempt.contextManifest?.paths).toContainEqual({
+			path: "NOTES.md",
+			half: "project",
+		});
 	});
 
 	it("names the last output_style attachment's layout path in the recorded context manifest", async () => {
@@ -766,7 +812,10 @@ describe(runSessionAttempt.name, () => {
 			}),
 		);
 
-		expect(attempt.contextManifest?.paths).toContain("output-styles/brief.md");
+		expect(attempt.contextManifest?.paths).toContainEqual({
+			path: "output-styles/brief.md",
+			half: "corpus",
+		});
 	});
 
 	it("excludes a skill invoked only in the seeded transcript prefix from the recorded context manifest", async () => {
@@ -784,9 +833,10 @@ describe(runSessionAttempt.name, () => {
 			}),
 		);
 
-		expect(attempt.contextManifest?.paths).not.toContain(
-			"skills/verify/SKILL.md",
-		);
+		expect(attempt.contextManifest?.paths).not.toContainEqual({
+			path: "skills/verify/SKILL.md",
+			half: "corpus",
+		});
 	});
 
 	it("counts every tool use in the turn when the case declares no transcript prefix", async () => {

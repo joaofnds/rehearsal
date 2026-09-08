@@ -37,6 +37,7 @@ function sessionCase(
 			prompt: "Reply with the single word OK.",
 			tools: [],
 			corpusFiles: [],
+			projectFiles: [],
 			checks: [{ kind: "word-band", max: 1 }],
 		},
 		fixturePath: undefined,
@@ -46,6 +47,7 @@ function sessionCase(
 		settings: undefined,
 		agents: undefined,
 		corpusFiles: [],
+		projectFiles: [],
 		checks: [{ kind: "word-band", max: 1 }],
 		...overrides,
 	};
@@ -254,6 +256,7 @@ describe("running a session case against a corpus source", () => {
 				prompt: "Reply with the single word OK.",
 				tools: [],
 				corpusFiles: ["output-styles/brief.md"],
+				projectFiles: [],
 				checks: [{ kind: "word-band", max: 1 }],
 			},
 		});
@@ -339,7 +342,11 @@ describe("running a session case against a corpus source", () => {
 		const outcome = await attemptWith(await corpusDirectory("marker brief\n"));
 
 		expect(outcome.record.divergences).toEqual([
-			{ kind: "unloaded-file", path: "output-styles/brief.md" },
+			{
+				kind: "unloaded-file",
+				path: "output-styles/brief.md",
+				half: "corpus",
+			},
 		]);
 	});
 
@@ -389,7 +396,28 @@ describe("running a session case against a corpus source", () => {
 		});
 
 		expect(outcome.record.divergences).toEqual([
-			{ kind: "undeclared-file", path: "skills/verify/SKILL.md" },
+			{
+				kind: "undeclared-file",
+				path: "skills/verify/SKILL.md",
+				half: "corpus",
+			},
+		]);
+	});
+
+	it("reports an unloaded-file divergence for a declared project file the session never read, tagged project-half", async () => {
+		const projects = await temporary("rehearsal-projects-");
+		const runsDirectory = await temporary("rehearsal-runs-");
+
+		const outcome = await runSessionDebugAttempt({
+			sessionCase: sessionCase({ projectFiles: ["NOTES.md"] }),
+			config,
+			runsDirectory,
+			runClaude: fakeClaude(projects, "OK"),
+			projectsDirectory: projects,
+		});
+
+		expect(outcome.record.divergences).toEqual([
+			{ kind: "unloaded-file", path: "NOTES.md", half: "project" },
 		]);
 	});
 
@@ -430,7 +458,7 @@ describe("running a session case against a corpus source", () => {
 		});
 
 		expect(outcome.record.lineage).toBe(
-			"1122487029704150f0b0d7cbde1cee199b41f8f62c3a2cf4c3dc5951a8e378d1",
+			"f5c101c10b2941f88f89b2ba059a7f2ca6782162ef7ddccded391fd2c4d5b71b",
 		);
 	});
 

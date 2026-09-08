@@ -10,9 +10,13 @@ import type { ResolvedCorpusFile } from "./corpus-file";
  * case has no settings file of its own — that surface is ACT-37's, for stage
  * checkpoints only — so it never sets that field and always hashes it as
  * absent. Everything else frozen about a session attempt that is not corpus
- * — the transcript digest, the fixture tree, the prompt, and the tool and
- * settings overlays — is hashed into the one upstream string, so a corpus
- * edit still invalidates through corpusFiles.
+ * — the transcript digest, the fixture tree, the prompt, the tool and
+ * settings overlays, and the declared project files — is hashed into the one
+ * upstream string, so a corpus edit still invalidates through corpusFiles.
+ * `projectFiles` names which of the fixture's own bytes the manifest checks
+ * against, a fact the fixture's byte hash alone does not carry: two cases
+ * sharing one fixture tree but declaring a different project file are
+ * checked against a different contract and must not share a lineage.
  */
 export async function sessionUpstreamDigest(
 	sessionCase: SessionCase,
@@ -31,6 +35,7 @@ export async function sessionUpstreamDigest(
 				tools: sessionCase.tools,
 				settings: sessionCase.settings ?? null,
 				agents: sessionCase.agents ?? null,
+				projectFiles: sessionCase.projectFiles,
 			}),
 		)
 		.digest("hex");
