@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-08 11:10'
+updated_date: '2026-09-08 11:23'
 labels: []
 milestone: m-3
 dependencies: []
@@ -63,4 +63,10 @@ nested_memory (its question 2): confirmed, and doc-9's constraint is wrong as st
 skill_listing (the shape session left this unconfirmed): keys are [content, isInitial, names, skillCount, type]. names is a plain array of skill-name strings (absorb, build, debug, doctrine, refactor, review-instructions, shape, ship). output_style is {type, style} with style the bare name, as doc-9 says.
 
 Unrecognized types (its question 3): confirmed as it proposed. Skip silently, never a divergence. AC#5's 'a record type the parser does not recognize yields no manifest entry' says exactly this, and a divergence is reserved for a corpus-file mismatch under AC#2 and AC#3.
+
+Fixture captured, 2026-09-08, at João's direction. New session case `manifest-probe` (cases/manifest-probe/) declares tools [Read, Skill] against a small fixture tree; its committed prefix a0491c04-...-cut-24.jsonl carries one Read, one Skill naming verify, an output_style attachment and a skill_listing, in 24 lines. AC#4 now has its fixture.
+
+Two defects found while capturing, both filed rather than fixed here: ACT-116 (case capture resolves session ids only against ~/.claude/projects, so it cannot capture a harness run, which passes --no-session-persistence; the prefix was placed and hashed by hand) and ACT-117 (the model preflight probe's $0.02 cap is close enough to real cost that a cold-cache completion exhausts it, and the harness reports that as an unavailable model).
+
+The case's own word-band check fails at 131 words against a 120 cap. Deliberate: the case exists to emit transcript records, and its checks are not what this card reads.
 <!-- SECTION:NOTES:END -->
