@@ -111,7 +111,11 @@ export interface RunFixture {
 export interface RunFixtureOptions {
 	readonly instructions?: string | undefined;
 	readonly stageScopeStatus?: "PASS" | "FAIL" | undefined;
-	readonly status?: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | undefined;
+	readonly status?:
+		| "AWAITING_HUMAN_REVIEW"
+		| "COMPLETE"
+		| "INTERRUPTED"
+		| undefined;
 	readonly caseId?: string | undefined;
 }
 

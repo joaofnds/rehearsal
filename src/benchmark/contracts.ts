@@ -437,7 +437,11 @@ export interface RunArtifactEvidence {
 }
 
 export interface GradedRunArtifact extends RunArtifactEvidence {
-	readonly status: "AWAITING_HUMAN_REVIEW" | "COMPLETE" | "FAILED";
+	readonly status:
+		| "AWAITING_HUMAN_REVIEW"
+		| "COMPLETE"
+		| "FAILED"
+		| "INTERRUPTED";
 	readonly grade: JudgeGrade;
 	readonly reviewFile: string;
 	readonly calibration?: CalibrationResult | undefined;
