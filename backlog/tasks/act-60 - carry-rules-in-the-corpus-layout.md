@@ -1,10 +1,10 @@
 ---
 id: ACT-60
 title: carry rulebook/ in the corpus layout
-status: Build
+status: Done
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-08 16:57'
+updated_date: '2026-09-08 17:10'
 labels: []
 milestone: m-3
 dependencies:
@@ -79,14 +79,14 @@ project context, varying per case, and belong to the project-half card
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A case can declare a corpus file under rulebook/ and resolveCorpusFile resolves it against the live source and against a directory corpus source
-- [ ] #2 A declared rulebook/ file is hashed into the attempt record's corpus digests before any provider call, exercised the same way an agents/ or output-styles/ file already is
-- [ ] #3 An edit to a rulebook/ file a checkpoint's captured corpus already covers continues to make that checkpoint stale (regression only: checkpoint.ts's own LAYOUT_DIRECTORY_KINDS is unchanged by this card)
-- [ ] #4 A context manifest built from a transcript carrying a Read tool_use on a rulebook/ path (ACT-59's observedManifest) reports that path as a manifest entry, and a case that declares it in corpusFiles without the session reading it reports an unloaded-file divergence
-- [ ] #5 A corpus source directory holding only a rulebook/ subdirectory is accepted by resolveCorpusSource rather than refused as holding no layout entry
-- [ ] #6 A session case run against a directory corpus source (--corpus <path>) that declares a rulebook/ file gets that file copied into the attempt's .claude overlay, the same way a declared agents/ or output-styles/ file already is
-- [ ] #7 GLOSSARY.md's Corpus layout and Corpus layout path entries both list rulebook/<name>.md alongside output-styles/, agents/, and skills/
-- [ ] #8 src/server/corpus-report.ts's CorpusFileReport for the live corpus lists each rulebook file exactly once, not twice, once its own explicit rulebook append to CORPUS_SCREEN_DIRECTORIES is removed in favor of CORPUS_LAYOUT_DIRECTORIES carrying it
+- [x] #1 A case can declare a corpus file under rulebook/ and resolveCorpusFile resolves it against the live source and against a directory corpus source
+- [x] #2 A declared rulebook/ file is hashed into the attempt record's corpus digests before any provider call, exercised the same way an agents/ or output-styles/ file already is
+- [x] #3 An edit to a rulebook/ file a checkpoint's captured corpus already covers continues to make that checkpoint stale (regression only: checkpoint.ts's own LAYOUT_DIRECTORY_KINDS is unchanged by this card)
+- [x] #4 A context manifest built from a transcript carrying a Read tool_use on a rulebook/ path (ACT-59's observedManifest) reports that path as a manifest entry, and a case that declares it in corpusFiles without the session reading it reports an unloaded-file divergence
+- [x] #5 A corpus source directory holding only a rulebook/ subdirectory is accepted by resolveCorpusSource rather than refused as holding no layout entry
+- [x] #6 A session case run against a directory corpus source (--corpus <path>) that declares a rulebook/ file gets that file copied into the attempt's .claude overlay, the same way a declared agents/ or output-styles/ file already is
+- [x] #7 GLOSSARY.md's Corpus layout and Corpus layout path entries both list rulebook/<name>.md alongside output-styles/, agents/, and skills/
+- [x] #8 src/server/corpus-report.ts's CorpusFileReport for the live corpus lists each rulebook file exactly once, not twice, once its own explicit rulebook append to CORPUS_SCREEN_DIRECTORIES is removed in favor of CORPUS_LAYOUT_DIRECTORIES carrying it
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -143,3 +143,53 @@ case, following the existing skills/agents/output-styles pattern exactly.
 Carries forward: project-half context (target repo's own CLAUDE.md,
 GLOSSARY.md, stage documents) stays out of scope, per doc-9 and ACT-61.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All 8 acceptance criteria implemented and verified with a fresh test run this
+session (mise exec -- bun run test: 1246 + 100 pass, 0 fail; typecheck, lint,
+fmt:check all clean). Commits: 343f8f3 (add rulebook to
+CORPUS_LAYOUT_DIRECTORIES), 9153efb (test coverage for hashing/source
+acceptance/manifest), 0c7145d (fix corpus-report.ts's double-count once
+rulebook joined the base list), 3963a41 (add rulebook/ to session-corpus.ts's
+OVERLAID_KINDS so a directory-source overlay actually delivers it),
+01c9f2c (regression test proving deriveStaleness still catches a rulebook
+edit), 1364e91 (GLOSSARY.md's two layout entries), cbf81a2 (review fixes,
+below).
+
+Six-axis code review ran (Spec, Style, Architecture, Security, Testing,
+Refactoring), one reviewer per axis, all against the ACT-60 diff
+(b85f504..HEAD at review time). Spec confirmed all 8 ACs present, each with
+a code path and a pinning test. Security and Testing found nothing.
+
+Two should-fix findings, independently raised by 3-4 of the 6 reviewers,
+were fixed in commit cbf81a2: GLOSSARY.md's "Corpus (instruction corpus)"
+and "Corpus overlay" entries were left stale/wrong after this task edited
+the two sibling "Corpus layout"/"Corpus layout path" entries — "Corpus
+overlay" in particular said the overlay carries only output styles and
+agent definitions, which the code no longer matches. Also fixed a cosmetic
+ordering nit the Style axis noted in corpus-file.ts's refusal message.
+
+Two findings were surfaced and left open, judged pre-existing or deliberate
+rather than this task's to fix:
+- Refactoring flagged three independent "layout kind" lists (corpus-file.ts's
+  CORPUS_LAYOUT_DIRECTORIES, checkpoint.ts's LAYOUT_DIRECTORY_KINDS,
+  session-corpus.ts's OVERLAID_KINDS) as duplicated knowledge, should-fix.
+  Architecture reviewed the same shape and judged it a deliberate split:
+  OVERLAID_KINDS is a genuine subset (skills/ is excluded on purpose, per its
+  own doc comment, since a skill can't be overlaid this way until ACT-28),
+  and checkpoint.ts is untouched by this card. Worth a follow-up card if a
+  future layout kind needs adding to more than one list again.
+- checkpoint.ts:117-118's doc comment already omitted rulebook before this
+  diff (confirmed via git show b85f504); out of scope since checkpoint.ts
+  isn't in this diff's changed-file set.
+- No test exercises a nested rulebook subdirectory path (e.g.
+  rulebook/testing/00-index.md); Spec reviewer verified manually that the
+  existing generic code (recursive cp, prefix-matching declares()) already
+  handles it correctly, so this is a coverage gap, not a functional one.
+
+Carries forward: project-half context (the target repository's own
+CLAUDE.md, GLOSSARY.md, stage documents) stays out of scope per doc-9 and
+ACT-61, unchanged by this card.
+<!-- SECTION:FINAL_SUMMARY:END -->
