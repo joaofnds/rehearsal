@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
 import type { CorpusRoot } from "./corpus-file";
-import { liveCorpusRoot } from "./corpus-file";
+import { liveCorpusRoot, resolvesOutside } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import {
 	lstatIfPresent,
@@ -87,7 +87,7 @@ export async function hashFile(path: string): Promise<string> {
  */
 function symlinkedEntry(path: string): SymlinkedEntryError {
 	return new SymlinkedEntryError(
-		`${path} is a symlink, which would hash bytes from outside the walked tree`,
+		`${path} resolves outside the tree it is named under, so its bytes are not the ones that tree holds`,
 	);
 }
 
@@ -338,10 +338,34 @@ async function replaceLayoutDirectory(
 	await cp(source, target, { recursive: true });
 }
 
+/**
+ * `cp` dereferences, so an entry reached through a link installs bytes from
+ * outside the snapshot into the worktree the session reads, while the record
+ * says the session read the snapshot. Containment of the resolved path is what
+ * answers it, because the link can be the entry or any directory above it.
+ */
+async function refuseUncontainedEntries(
+	snapshotDirectory: string,
+): Promise<void> {
+	for (const entry of await readdir(snapshotDirectory, {
+		recursive: true,
+		withFileTypes: true,
+	})) {
+		const absolute = join(entry.parentPath, entry.name);
+		if (await resolvesOutside(snapshotDirectory, absolute)) {
+			throw symlinkedEntry(
+				join(relative(snapshotDirectory, entry.parentPath), entry.name),
+			);
+		}
+	}
+}
+
 export async function installStageCorpusSnapshot(
 	snapshotDirectory: string,
 	targetDirectory: string,
 ): Promise<void> {
+	await refuseUncontainedEntries(snapshotDirectory);
+
 	const targetLayout = join(targetDirectory, ".claude");
 	await mkdir(targetLayout, { recursive: true });
 	await cp(

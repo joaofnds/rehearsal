@@ -237,6 +237,33 @@ describe(captureStageCorpus.name, () => {
 		);
 	});
 
+	it("refuses to install a snapshot entry that resolves outside the snapshot directory", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		testResources.track(parent);
+		const outside = join(parent, "outside");
+		await mkdir(outside, { recursive: true });
+		await Bun.write(join(outside, "secret.md"), "SECRET BYTES\n");
+		const snapshotDirectory = join(parent, "snapshot");
+		for (const kind of ["skills", "agents", "output-styles", "rulebook"]) {
+			await mkdir(join(snapshotDirectory, kind), { recursive: true });
+		}
+		await Bun.write(join(snapshotDirectory, "CLAUDE.md"), "instructions\n");
+		await symlink(
+			join(outside, "secret.md"),
+			join(snapshotDirectory, "agents", "leak.md"),
+		);
+		const worktree = join(parent, "worktree");
+		await mkdir(worktree, { recursive: true });
+
+		const failure = await failureOf(
+			installStageCorpusSnapshot(snapshotDirectory, worktree),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("agents/leak.md");
+		expect(failure.message).not.toContain("SECRET BYTES");
+	});
+
 	it("removes a prior stage's agents and output styles the next stage's snapshot does not carry", async () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "doctrine", "doctrine skill");
