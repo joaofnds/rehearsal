@@ -130,6 +130,26 @@ describe(createApiApp.name, () => {
 		});
 	});
 
+	describe("GET /api/corpus", () => {
+		it("renders the corpus root unredacted, since the operator declared it and the server is theirs", async () => {
+			const corpus = await corpusDirectory();
+			const runsDirectory = await mkdtemp(
+				join(tmpdir(), "rehearsal-api-runs-"),
+			);
+			roots.push(runsDirectory);
+			const app = createApiApp({
+				runsDirectory,
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/corpus");
+			const body: unknown = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(body).toMatchObject({ root: corpus });
+		});
+	});
+
 	describe("GET /api/records/:id", () => {
 		it("refuses a record id whose segment escapes the runs directory, without a 500", async () => {
 			const fixture = await writtenFixture();

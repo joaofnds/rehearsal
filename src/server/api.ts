@@ -7,6 +7,7 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
 import { comparisonReport } from "./comparisons";
+import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
 
@@ -35,6 +36,14 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 			const report = await runHistoryReport(
 				dependencies.runsDirectory,
 				dependencies.corpusSource,
+			);
+
+			return context.json(report);
+		})
+		.get("/api/corpus", async (context) => {
+			const report = await corpusReport(
+				dependencies.corpusSource,
+				dependencies.runsDirectory,
 			);
 
 			return context.json(report);
