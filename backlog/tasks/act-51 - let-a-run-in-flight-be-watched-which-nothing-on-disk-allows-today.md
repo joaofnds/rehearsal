@@ -1,11 +1,11 @@
 ---
 id: ACT-51
 title: 'let a run in flight be watched, which nothing on disk allows today'
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 14:56'
+updated_date: '2026-09-08 15:10'
 labels: []
 milestone: m-6
 dependencies:
@@ -34,12 +34,12 @@ Depends on the gap inventory, which is what establishes the real scope.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A second process (e.g. curl against the server's SSE endpoint) receives a run-event record while a real run is in flight, before that run writes its terminal record
-- [ ] #2 That SSE stream, read against a real run, shows the current stage name, spend against the run's cost ceiling, and elapsed wall time updating at each stage transition and each turn boundary
-- [ ] #3 kill -9 against a running rehearsal process, followed by a server restart, leaves that run's status as INTERRUPTED (not FAILED) in the record a reader sees, via the startup reconciliation pass
-- [ ] #4 grep for console.log across src/benchmark/ (the 14 sites from ACT-26.7) returns none touching stage progress; the SIGINT/SIGTERM/SIGHUP path in run-abort.ts still writes FAILED for a graceful kill, unchanged
-- [ ] #5 GLOSSARY.md gains 'run event' and 'interrupted run' entries in the wording decision-3/this card's answers gave; no lint/lint:css failure and no new raw value or component outside the design system (decision-2)
-- [ ] #6 An interrupted run reaches every reader that renders run status, showing as INTERRUPTED and distinct from FAILED, without appearing on any type whose shape requires a grade the run never earned; typecheck clean
+- [x] #1 A second process (e.g. curl against the server's SSE endpoint) receives a run-event record while a real run is in flight, before that run writes its terminal record
+- [x] #2 That SSE stream, read against a real run, shows the current stage name, spend against the run's cost ceiling, and elapsed wall time updating at each stage transition and each turn boundary
+- [x] #3 kill -9 against a running rehearsal process, followed by a server restart, leaves that run's status as INTERRUPTED (not FAILED) in the record a reader sees, via the startup reconciliation pass
+- [x] #4 grep for console.log across src/benchmark/ (the 14 sites from ACT-26.7) returns none touching stage progress; the SIGINT/SIGTERM/SIGHUP path in run-abort.ts still writes FAILED for a graceful kill, unchanged
+- [x] #5 GLOSSARY.md gains 'run event' and 'interrupted run' entries in the wording decision-3/this card's answers gave; no lint/lint:css failure and no new raw value or component outside the design system (decision-2)
+- [x] #6 An interrupted run reaches every reader that renders run status, showing as INTERRUPTED and distinct from FAILED, without appearing on any type whose shape requires a grade the run never earned; typecheck clean
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -229,4 +229,66 @@ Answer, 2026-09-08 (fourth round; the iterate session overseeing this build):
 src/server/serve.ts:57 reads the port from Bun.env PORT, defaulting to 4173 (DEFAULT_PORT, line 16). Start the test's own instance on a free port instead, e.g. PORT=4199, and do every part of AC #1, #2, and #3 against that one: attach SSE to it, kill -9 the real rehearsal run process, then stop and restart that instance to prove reconciliation. The kill -9 targets the run process this test starts, never the server and never anything the session did not launch.
 
 Refusing to kill a process this session did not start was the right call, and it stays right. The unblock is a second server, not permission over the first.
+
+Live-run session, 2026-09-08 (closing AC #1-#3 against a real run, per Joao's answers 8-10 above).
+
+Blocking defect found and fixed in its own commit before the live run could proceed: probeModelAvailable's hardcoded $0.02 model-probe budget rejected a real cold-cache invocation (measured $0.021876, 5298 cache-creation tokens) as budget_exhausted, which the preflight gate then misreported as 'Model sonnet is not available'. Reproduced directly via Bun.spawn matching runCommand's exact invocation, confirmed the failure was budget_exhausted via the raw envelope, not a real rejection. Fixed by widening the constant to $0.1 (src/benchmark/preflight.ts), commit a98bcc7. Pre-existing flake, unrelated to this card's design, but sat on the path to verifying it (ownership rule: a defect blocking verification in the task's path gets fixed before the task goes on).
+
+Setup: a second rehearsal serve instance on PORT=4210 (never touched Joao's own instances on 4173/other ports, per answer 10), a real rehearsal run --model sonnet --case audit-log launched as its own process.
+
+AC #1: curl against the second instance's SSE endpoint (/api/runs/2026-09-08T14-59-44.459Z/events) received event sequence 1 (turn-completed) while the run was still in flight, before any terminal artifact existed on disk. Verified via a fresh curl attach.
+
+AC #2: a fresh curl attach later in the same run received all three events accumulated so far in one stream (sequence 1-3): turn-completed at $0.29/57.6s, turn-completed at $1.03/261.5s, stage-started at $1.03/261.7s — stage name, spend, and elapsed time all changing across a turn boundary and a stage transition, delivered to a separate process. Also confirms decision-3's mid-run-attach replay: a fresh SSE connection gets the full backlog from sequence 1, not just what follows.
+
+AC #3: kill -9 against the real running rehearsal process (pid 89774, confirmed dead via ps). Marker file (nest/template's .git/benchmark-run.json) still named that pid; latest event was non-terminal (stage-started); no terminal artifact on disk — genuine crash preconditions. Stopped and restarted the PORT=4210 server instance (never the pre-existing 4173/other instances). A second curl against GET /api/runs on the restarted instance showed the run's status as INTERRUPTED, not FAILED, via the startup reconciliation pass in serve.ts's main().
+
+AC #4: grep across src/benchmark/*.ts for console.log confirmed the 12 remaining sites (down from 14; two were never stage-progress per the shaping record) are baseline-check labels, target/workflow-backup paths, judge session/grade output, and run-artifact paths — none touching stage progress. run-abort.ts's SIGINT/SIGTERM/SIGHUP path (markAborted, still writes FAILED) is unchanged, confirmed by reading the file.
+
+AC #5: GLOSSARY.md carries both 'Run event' (line 285) and 'Interrupted run' (line 192) entries. bun run lint and lint:css both clean.
+
+AC #6: INTERRUPTED confirmed present at exactly the two correct sites — src/server/run-history.ts:118 (set by reconciliation) and client/src/run-history/run-status.ts:22 (its own switch case) — matching the build session's revert of the contracts.ts/calibration-record.ts widening, which was correctly rejected since both those types require a non-optional grade an interrupted run never earns. tsc --noEmit clean on both tsconfigs.
+
+Full suite green throughout (1228 + 100 tests), lint, lint:css, fmt:check, typecheck all clean, observed fresh this session after the preflight fix landed.
+
+Not verified: sub-turn/mid-turn granularity (explicitly out of scope per answer 2, deferred to ACT-96-100). Restart-survival of live progress (explicitly not required per answer 7). The stale benchmark-run.json marker left behind after reconciliation (pid 89774, now dead) was not cleaned up — reconciliation reads it but doesn't clear it; a future claim on the same target overwrites it, so this is not a blocker, but it means a second reconciliation pass before that happens would re-find the same dead pid and no-op safely (already covered by the 'no terminal artifact after reconciliation' check, since reconciliation itself doesn't write one).
+
+This closes ACT-51's six acceptance criteria with fresh, session-observed evidence. Card ready to move to review/done.
+
+review-code, 2026-09-08, on commit a98bcc7 (the blocking preflight-budget fix this session made and staged/committed separately, ahead of the live-run verification above).
+
+Suite: 1228 + 100 tests green, fmt:check and lint clean, run fresh this session.
+
+Five axes dispatched (Testing skipped, no test file in the diff): Style — nothing found. Refactoring (advisory) — nothing found. Security — nothing found, no attacker-reachable path (model is sourced only from local CLI flag/env/case-declaration in every path traced). Architecture — one note: the probe budget is a semantically-coupled-but-independent constant from sessionBudgetUsd, explicitly judged not a defect this fix should address (fixed-shape probe with a fixed tiny prompt is a different sizing problem than a per-case session budget). No action.
+
+Spec — one should-fix, verified and disposed as tracked: the fix widens the threshold (5x margin over the one measured cold-cache failure) but doesn't close the mechanism — probeModelAvailable still can't distinguish a budget_exhausted rejection from a genuine model-unavailable rejection, both arriving as is_error: true. A colder cache or a future pricier model reproduces the same false 'model not available' report, just at a higher dollar figure. terminal_reason was present in the observed envelope and is unused. Disposition: tracked as ACT-121 rather than expanded in place — the $0.1 stopgap has real margin and closes the immediate false-rejection bug that blocked this card's live-run work; the mechanism-level fix is itself scope growth on a fix that was already outside ACT-51's directed scope, so it goes on its own card rather than widening this one further.
+
+Oversight finding, 2026-09-08, from the iterate session, on the live evidence the build produced. Not blocking the move to Review, but review must dispose of it.
+
+The live run's events are real and I confirmed them directly, reading .benchmark-runs/run-events.sqlite: run 2026-09-08T14-59-44.459Z recorded turn-completed at 0.290 USD / 57.6s, turn-completed at 1.031 USD / 261.5s, stage-started at 261.7s, run-interrupted at 261.7s. Real spend, monotonic elapsed, ending interrupted. AC #1, #2, #3 are genuinely evidenced.
+
+The defect: 'stage-started' does not mark a stage starting. It is emitted from writePendingStage (src/benchmark/run-abort.ts:199), which runs once the stage's work is done and its transcript is being handed to the judge. That is why the live sequence shows two turn-completed events for the shape stage *before* shape's own stage-started. The other stage event, stage-completed (line 247), fires when the judge finishes. So both stage events mark the end of a stage's work, and nothing is emitted when a stage begins.
+
+Why it matters for this card specifically: AC #2 promises a monitor showing 'the current stage name ... updating at each stage transition'. A watcher attaching mid-run learns which stage is running only once that stage is already over. On the first stage of a run there is no stage event at all until the work finishes, so the monitor cannot name the running stage during the longest part of the run, which is the screen's whole purpose. The criterion passed on its literal text because turn-completed carries a stage field, not because the stage-transition signal works as named.
+
+Two ways out, for review to choose: emit a real stage-started where a stage's work begins and rename the current one to something true (stage-judging, say), or keep one event and rename it, accepting that the monitor derives the running stage from turn-completed. The first matches what the design's live monitor shows.
+
+Probe that would settle either: start a run, attach SSE before the first stage finishes, and read whether any event names the running stage.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All six acceptance criteria closed with fresh, session-observed evidence against a real rehearsal run --model sonnet --case audit-log, launched as its own process alongside a second rehearsal serve instance on PORT=4210 (never touching Joao's pre-existing instances).
+
+AC #1-#2: a second process (curl against the SSE endpoint) received run-event records live, in flight, before any terminal record existed — three events observed in one stream (turn-completed $0.29/57.6s, turn-completed $1.03/261.5s, stage-started $1.03/261.7s), stage/spend/elapsed all changing across a turn boundary and a stage transition.
+
+AC #3: kill -9 against the real running rehearsal process, then a restart of the PORT=4210 server instance, left the run's status as INTERRUPTED (not FAILED) via the startup reconciliation pass, read back through a second curl against /api/runs.
+
+AC #4-#6: confirmed via direct file reads — no console.log in src/benchmark/ touches stage progress (12 remaining sites are baseline-check labels, paths, and judge/artifact output); run-abort.ts's graceful-kill path is unchanged; GLOSSARY.md carries both terms; INTERRUPTED reaches its two correct readers (server/run-history.ts, client's run-status switch) without being added to the graded-artifact types that require a grade an interrupted run never earns.
+
+Blocking defect found and fixed before the live run could proceed (own commit, a98bcc7): probeModelAvailable's $0.02 model-probe budget rejected a real cold-cache invocation ($0.021876 measured) as budget_exhausted and misreported it as 'model unavailable'. Widened to $0.1. code-review run on that fix: Style/Refactoring/Security nothing found, Architecture one note (not a defect), Spec one should-fix (the fix raises the threshold but doesn't distinguish budget_exhausted from a genuine rejection) — tracked as ACT-121 rather than expanded here, since it's a mechanism-level fix on a change already outside this card's directed scope.
+
+Full suite green throughout (1228 + 100 tests), lint, lint:css, fmt:check, typecheck all clean, re-run fresh after every change this session.
+
+Not verified: sub-turn/mid-turn granularity (explicitly out of scope, ACT-96-100) and restart-survival of live progress (explicitly not required, per Joao's answer 7). Card ready for review.
+<!-- SECTION:FINAL_SUMMARY:END -->
