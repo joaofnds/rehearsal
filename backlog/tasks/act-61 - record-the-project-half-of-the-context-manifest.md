@@ -5,13 +5,13 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-08 17:51'
+updated_date: '2026-09-08 20:16'
 labels: []
 dependencies:
   - ACT-41
   - ACT-59
 documentation:
-  - backlog/docs/doc-9 - context-manifest-design.md
+  - backlog/docs/doc-45 - reflection-ACT-61.md
 priority: medium
 ordinal: 58008
 ---
