@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 01:01'
+updated_date: '2026-09-08 01:09'
 labels: []
 milestone: m-7
 dependencies:
@@ -261,4 +261,16 @@ Live check 2026-09-08, after the code review: started the real server (bun run s
 Re-fetched GET /api/comparisons/<64 nines> directly: confirmed 404, matching exactly the status code ComparisonPage's ComparisonNotFoundError branches on.
 
 Not observed: the rendered page in an actual browser. No browser-automation tool was available in this session (checked via ToolSearch). What was observed instead: the real HTTP responses both screens fetch from (root path, digest, and file list for corpus; 404 for a missing comparison), and the component tree's real rendering through React Testing Library's actual DOM output in every test in the suite. This is not a substitute for a paint-and-look browser check; it stops short of what the build skill asks for. If a comparison record is ever produced (a real  run) or someone opens the app in a browser, that would be the missing check.
+
+Browser verification, 2026-09-08, by the overseeing session. The build session had no browser tool and correctly handed this back rather than claiming it. Both screens were opened against the live server and the real .benchmark-runs.
+
+Two defects found that the test suite could not see, each fixed in its own commit with a test that fails when the fix is reverted:
+
+1. The corpus screen published everything under the corpus root, not the corpus. Against the real ~/.claude that was 7020 files instead of 35, including caches, logs, credential backups, and daemon/control.key, and the digest the screen presents as the corpus version was computed over all of them. corpus-report.ts called hashDirectory(root, '') where the harness's own corpusLayoutEntries walks CLAUDE.md plus skills, agents, and output-styles. Fixed in bdd72a1; the live digest changed, which is the proof it was wrong before.
+
+2. A comparison with no recorded report rendered a blank page. Past the first failure a retrying query is neither loading nor errored, so no branch drew. Every client test constructed its own QueryClient with retry disabled, so the suite never ran the configuration main.tsx ships. The client now comes from createQueryClient, which the tests use, and a not-found answer settles on the first response. Fixed in 0fabb78.
+
+The second one is the more useful finding: the suite was green on a policy the app does not use. Any future client test that builds its own QueryClient re-opens that gap.
+
+Verified after both fixes: corpus screen lists 35 corpus files with the corpus root@ label and unredacted root as directed; the comparison screen shows its empty state immediately; typecheck, lint, fmt:check clean; 1162 server and 99 client tests pass.
 <!-- SECTION:NOTES:END -->
