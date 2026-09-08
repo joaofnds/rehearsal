@@ -334,6 +334,27 @@ describe(installSessionCorpusSnapshot.name, () => {
 		).toBe("variant reviewer\n");
 	});
 
+	it("writes the snapshot's declared rulebook file under the attempt's .claude", async () => {
+		const root = await directoryCorpus({
+			"rulebook/coding-style.md": "variant coding style\n",
+		});
+		const destination = await resources.createControlDirectory();
+		const snapshot = await snapshotSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			["rulebook/coding-style.md"],
+		);
+		const attemptDirectory = await resources.createControlDirectory();
+
+		await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/rulebook/coding-style.md"),
+			).text(),
+		).toBe("variant coding style\n");
+	});
+
 	it("installs nothing for a live source, whose files the session already reads", async () => {
 		const destination = await resources.createControlDirectory();
 		const snapshot = await snapshotSessionCorpus(

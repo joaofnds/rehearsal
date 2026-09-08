@@ -197,7 +197,11 @@ export async function installSessionCorpusSnapshot(
 	}
 }
 
-const OVERLAID_KINDS: readonly string[] = ["output-styles/", "agents/"];
+const OVERLAID_KINDS: readonly string[] = [
+	"output-styles/",
+	"agents/",
+	"rulebook/",
+];
 
 function isOverlaid(layoutPath: string): boolean {
 	return OVERLAID_KINDS.some((kind) => layoutPath.startsWith(kind));
