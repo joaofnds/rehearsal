@@ -69,4 +69,22 @@ describe(comparisonAttribution.name, () => {
 			differingPaths: ["skills/discuss/SKILL.md"],
 		});
 	});
+
+	it("claims attribution for a file edited identically across every stage's own corpus copy", () => {
+		const left = [
+			file("inputs/corpus/discuss/CLAUDE.md", "a".repeat(64)),
+			file("inputs/corpus/build/CLAUDE.md", "a".repeat(64)),
+		];
+		const right = [
+			file("inputs/corpus/discuss/CLAUDE.md", "b".repeat(64)),
+			file("inputs/corpus/build/CLAUDE.md", "b".repeat(64)),
+		];
+
+		const result = comparisonAttribution(left, right);
+
+		expect(result).toEqual({
+			claim: "refused",
+			differingPaths: ["CLAUDE.md"],
+		});
+	});
 });

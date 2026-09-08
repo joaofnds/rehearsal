@@ -12,17 +12,34 @@ const ATTRIBUTION_WORDING = {
 };
 
 /**
- * A corpus file is recorded once per stage that declared it (`checkpoint.ts`'s
- * `snapshotStageCorpus`), so the same path can appear more than once in either
- * arm's `executedCorpus` with the same hash every time. Deduping by path
- * before diffing is what keeps one edited file from being counted once per
- * stage that read it.
+ * A pipeline arm's `executedCorpus` path is stage-qualified
+ * (`inputs/corpus/<stage>/CLAUDE.md`, written by `frozenDirectoryFiles` walking
+ * each stage's own capture directory under `inputs/corpus/`, per
+ * `pipeline-confirmation.ts`), while a session arm's path is bare
+ * (`CLAUDE.md`). Both name the same corpus-layout file once per stage that
+ * declared it, so the layout path, everything after `corpus/<stage>/`, is the
+ * identity `dedupedByPath` must key on: keying on the raw path instead treats
+ * one file edited identically across every stage as a difference at every
+ * stage but one, which is the false refusal this function exists to prevent.
  */
+function layoutPath(path: string): string {
+	const segments = path.split("/");
+	const corpusIndex = segments.lastIndexOf("corpus");
+	if (corpusIndex === -1) {
+		return path;
+	}
+
+	const afterStage = segments.slice(corpusIndex + 2);
+
+	return afterStage.length === 0 ? path : afterStage.join("/");
+}
+
 function dedupedByPath(files: readonly HashedFile[]): HashedFile[] {
 	const byPath = new Map<string, string>();
 	for (const file of files) {
-		if (!byPath.has(file.path)) {
-			byPath.set(file.path, file.sha256);
+		const path = layoutPath(file.path);
+		if (!byPath.has(path)) {
+			byPath.set(path, file.sha256);
 		}
 	}
 
