@@ -14,6 +14,7 @@ import {
 	stageGradeSchema,
 	stageRubricSchema,
 } from "./contracts";
+import { benchmarkRunPaths } from "./run-layout";
 
 export type AgreementDecision = "PASS" | "FAIL";
 
@@ -323,7 +324,7 @@ async function historicalStageJudgeModel(
 		const manifest = judgeManifestSchema.parse(
 			JSON.parse(
 				await Bun.file(
-					join(runsDirectory, `${runName}.checkpoints`, "manifest.json"),
+					benchmarkRunPaths(runsDirectory, runName).manifestFile,
 				).text(),
 			),
 		);
