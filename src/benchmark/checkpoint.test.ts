@@ -26,8 +26,10 @@ import {
 	rootLineage,
 	snapshotStageCorpus,
 	stageCorpusRoots,
+	SymlinkedEntryError,
 } from "./checkpoint";
 import { liveCorpusRoot } from "./corpus-file";
+import { failureOf } from "#cli/cli-test-support";
 import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
@@ -938,18 +940,15 @@ describe(stageCorpusRoots.name, () => {
 });
 
 describe(hashDirectory.name, () => {
-	it("skips an entry readdir lists but whose target no longer resolves, rather than throwing", async () => {
-		const directory = await mkdtemp(
-			join(tmpdir(), "rehearsal-hash-directory-"),
-		);
-		testResources.track(directory);
-		await writeFile(join(directory, "CLAUDE.md"), "instructions");
-		await symlink(
-			join(directory, "does-not-exist"),
-			join(directory, "broken-link"),
-		);
+	it("hashes the files under a root that is itself a symlink", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+		testResources.track(parent);
+		const real = join(parent, "real");
+		await mkdir(real);
+		await writeFile(join(real, "CLAUDE.md"), "instructions");
+		await symlink(real, join(parent, "link"));
 
-		const files = await hashDirectory(directory, "");
+		const files = await hashDirectory(join(parent, "link"), "");
 
 		expect(files).toEqual([
 			{
@@ -958,5 +957,41 @@ describe(hashDirectory.name, () => {
 					"238fa28a94976c7da14563bc873c2729bd5cd325389085bb4c6dd0de28923590",
 			},
 		]);
+	});
+
+	describe("when the walk lists an entry that is a symlink", () => {
+		it("throws SymlinkedEntryError naming the entry, hashing nothing behind it", async () => {
+			const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+			testResources.track(parent);
+			const outside = join(parent, "outside");
+			await mkdir(outside);
+			await writeFile(join(outside, "control.key"), "secret bytes");
+			const walked = join(parent, "walked");
+			await mkdir(walked);
+			await writeFile(join(walked, "CLAUDE.md"), "instructions");
+			await symlink(outside, join(walked, "evil"));
+
+			const failure = await failureOf(hashDirectory(walked, ""));
+
+			expect(failure).toBeInstanceOf(SymlinkedEntryError);
+			expect(failure.message).toContain("evil");
+		});
+
+		it("throws for a link whose target is gone, which stat alone reports as a missing entry", async () => {
+			const directory = await mkdtemp(
+				join(tmpdir(), "rehearsal-hash-directory-"),
+			);
+			testResources.track(directory);
+			await writeFile(join(directory, "CLAUDE.md"), "instructions");
+			await symlink(
+				join(directory, "does-not-exist"),
+				join(directory, "broken-link"),
+			);
+
+			const failure = await failureOf(hashDirectory(directory, ""));
+
+			expect(failure).toBeInstanceOf(SymlinkedEntryError);
+			expect(failure.message).toContain("broken-link");
+		});
 	});
 });

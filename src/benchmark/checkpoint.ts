@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
@@ -76,16 +76,48 @@ export async function hashFile(path: string): Promise<string> {
 }
 
 /**
- * How a directory tree becomes lineage inputs. Both a checkpoint's workflow
- * state and a session case's fixture hash through here, because two copies of
- * this walk could disagree about ordering or about what counts as a file, and
- * a lineage key that differs by walk is a stale checkpoint nobody can explain.
+ * A walk of a live directory races whatever else writes to it, so an entry
+ * that vanished between the listing and this call is absence, not a failure.
+ */
+async function lstatIfExists(
+	path: string,
+): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
+	try {
+		return await lstat(path);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * The walked tree is the whole claim a lineage record makes about what it
+ * hashed, so a link out of it is refused by name rather than followed. The CLI
+ * translates this into a refused precondition; the corpus screen surfaces it
+ * as a server error.
+ */
+export class SymlinkedEntryError extends Error {
+	public override name = "SymlinkedEntryError";
+}
+
+/**
+ * A symlink inside the walked tree is refused, because `readdir` follows one:
+ * it lists the link's descendants as ordinary entries under the link's own
+ * relative path, so hashing them reads bytes from outside the tree the caller
+ * named and files them under a path that claims they are inside it. Skipping
+ * the link alone does not stop that, since the descendants are listed under
+ * their own paths and report no link of their own. The root argument is
+ * exempt: a `.claude` layout directory is routinely a symlink into the real
+ * corpus, and refusing that would empty every lineage this records.
  *
- * An entry `readdir` lists but that no longer resolves by the time this walk
- * reaches it (a broken symlink, or a file removed between the listing and the
- * read) is skipped rather than thrown: a frozen snapshot this function's other
- * callers hash never loses a file mid-walk, so this tolerance is a no-op for
- * them, but the live corpus root the corpus screen hashes is a directory
+ * Both a checkpoint's workflow state and a session case's fixture hash through
+ * here, because two copies of this walk could disagree about ordering or about
+ * what counts as a file, and a lineage key that differs by walk is a stale
+ * checkpoint nobody can explain.
+ *
+ * An entry `readdir` lists but that no longer exists by the time this walk
+ * reaches it is skipped rather than thrown: a frozen snapshot this function's
+ * other callers hash never loses a file mid-walk, so this tolerance is a no-op
+ * for them, but the live corpus root the corpus screen hashes is a directory
  * another process can still be writing to.
  */
 export async function hashDirectory(
@@ -97,11 +129,14 @@ export async function hashDirectory(
 
 	for (const entry of entries.toSorted()) {
 		const absolute = join(root, entry);
-		let entryStats: Awaited<ReturnType<typeof stat>>;
-		try {
-			entryStats = await stat(absolute);
-		} catch {
+		const entryStats = await lstatIfExists(absolute);
+		if (entryStats === undefined) {
 			continue;
+		}
+		if (entryStats.isSymbolicLink()) {
+			throw new SymlinkedEntryError(
+				`Entry ${entry} under ${root} is a symlink, which would hash bytes from outside the walked tree`,
+			);
 		}
 		if (!entryStats.isFile()) {
 			continue;

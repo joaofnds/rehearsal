@@ -29,6 +29,7 @@ import {
 } from "#benchmark/session-corpus";
 import { sessionAttemptPaths } from "#benchmark/run-layout";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
+import { SymlinkedEntryError } from "#benchmark/checkpoint";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type {
 	CorpusSnapshotOrigin,
@@ -93,6 +94,29 @@ async function requireCorpus(
 			error instanceof CorpusFileError ||
 			error instanceof SessionCorpusError
 		) {
+			throw new RefusedPreconditionError(error.message);
+		}
+
+		throw error;
+	}
+}
+
+/**
+ * The fixture tree is hashed into the lineage before the attempt seeds it, so
+ * a tree the harness would refuse to seed is refused here first. Without this
+ * translation the earlier walk would surface a raw error where the later copy
+ * gives a named refusal, and which one a case author saw would depend on
+ * nothing they can see.
+ */
+async function lineageOf(
+	sessionCase: SessionCase,
+	corpusFiles: readonly ResolvedCorpusFile[],
+	settings: SessionSettings,
+): Promise<string> {
+	try {
+		return await sessionLineage(sessionCase, corpusFiles, settings);
+	} catch (error) {
+		if (error instanceof SymlinkedEntryError) {
 			throw new RefusedPreconditionError(error.message);
 		}
 
@@ -213,7 +237,7 @@ export async function runSessionDebugAttempt(
 		attemptPaths.corpusDirectory,
 	);
 	const corpusFiles = corpus.files;
-	const lineage = await sessionLineage(sessionCase, corpusFiles, settings);
+	const lineage = await lineageOf(sessionCase, corpusFiles, settings);
 
 	const startedAt = Date.now();
 	const attempt = await attempted({
