@@ -63,7 +63,8 @@ async function readCountsByPath(
  * credentials, none of which any stage reads and none of which belong in a
  * digest or on a screen.
  */
-async function hashCorpusLayout(root: string): Promise<HashedFile[]> {
+async function hashCorpusLayout(source: CorpusRoot): Promise<HashedFile[]> {
+	const { root } = source;
 	const files: HashedFile[] = [];
 
 	const instructions = join(root, CORPUS_INSTRUCTIONS_PATH);
@@ -79,7 +80,11 @@ async function hashCorpusLayout(root: string): Promise<HashedFile[]> {
 		if (!(await pathExists(absolute))) {
 			continue;
 		}
-		files.push(...(await hashDirectory(absolute, directory)));
+		files.push(
+			...(await hashDirectory(absolute, directory, {
+				rootMayBeALink: source.kind === "live",
+			})),
+		);
 	}
 
 	return files;
@@ -89,7 +94,7 @@ export async function corpusReport(
 	source: CorpusRoot,
 	runsDirectory: string,
 ): Promise<CorpusReport> {
-	const hashedFiles = await hashCorpusLayout(source.root);
+	const hashedFiles = await hashCorpusLayout(source);
 	const readCounts = await readCountsByPath(runsDirectory);
 
 	const files: CorpusFileReport[] = [];

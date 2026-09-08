@@ -941,6 +941,22 @@ describe(stageCorpusRoots.name, () => {
 });
 
 describe(hashWorkflowState.name, () => {
+	it("refuses a target whose backlog tree is itself a symlink, rather than hashing what it points at", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-workflow-state-"));
+		testResources.track(parent);
+		const outside = join(parent, "outside");
+		await mkdir(outside);
+		await writeFile(join(outside, "control.key"), "secret bytes");
+		const target = join(parent, "target");
+		await mkdir(target);
+		await symlink(outside, join(target, "backlog"));
+
+		const failure = await failureOf(hashWorkflowState(target));
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("backlog");
+	});
+
 	it("refuses a target whose backlog tree holds a symlink, rather than hashing what it points at", async () => {
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-workflow-state-"));
 		testResources.track(parent);
@@ -968,7 +984,9 @@ describe(hashDirectory.name, () => {
 		await writeFile(join(real, "CLAUDE.md"), "instructions");
 		await symlink(real, join(parent, "link"));
 
-		const files = await hashDirectory(join(parent, "link"), "");
+		const files = await hashDirectory(join(parent, "link"), "", {
+			rootMayBeALink: true,
+		});
 
 		expect(files).toEqual([
 			{
@@ -980,7 +998,7 @@ describe(hashDirectory.name, () => {
 	});
 
 	describe("when the walk lists an entry that is a symlink", () => {
-		it("throws SymlinkedEntryError naming the entry, hashing nothing behind it", async () => {
+		it("throws SymlinkedEntryError naming the entry, without the target's bytes", async () => {
 			const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
 			testResources.track(parent);
 			const outside = join(parent, "outside");
@@ -991,10 +1009,13 @@ describe(hashDirectory.name, () => {
 			await writeFile(join(walked, "CLAUDE.md"), "instructions");
 			await symlink(outside, join(walked, "evil"));
 
-			const failure = await failureOf(hashDirectory(walked, ""));
+			const failure = await failureOf(
+				hashDirectory(walked, "", { rootMayBeALink: true }),
+			);
 
 			expect(failure).toBeInstanceOf(SymlinkedEntryError);
 			expect(failure.message).toContain("evil");
+			expect(failure.message).not.toContain("secret bytes");
 		});
 
 		it("throws for a link whose target is gone, which stat alone reports as a missing entry", async () => {
@@ -1008,7 +1029,9 @@ describe(hashDirectory.name, () => {
 				join(directory, "broken-link"),
 			);
 
-			const failure = await failureOf(hashDirectory(directory, ""));
+			const failure = await failureOf(
+				hashDirectory(directory, "", { rootMayBeALink: true }),
+			);
 
 			expect(failure).toBeInstanceOf(SymlinkedEntryError);
 			expect(failure.message).toContain("broken-link");

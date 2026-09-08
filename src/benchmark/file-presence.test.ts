@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { chmod } from "node:fs/promises";
+import { chmod, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { pathExists, statIfExists } from "#benchmark/file-presence";
+import {
+	lstatIfPresent,
+	pathExists,
+	statIfExists,
+} from "#benchmark/file-presence";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 
@@ -33,6 +37,40 @@ describe(statIfExists.name, () => {
 
 		const failure = await failureOf(
 			statIfExists(join(directory, "locked/inside.md")),
+		);
+
+		await chmod(join(directory, "locked"), 0o700);
+		expect(failure.message).toContain("EACCES");
+	});
+});
+
+describe(lstatIfPresent.name, () => {
+	it("reports a symlink as a symlink rather than following it", async () => {
+		const directory = await resources.createControlDirectory();
+		await Bun.write(join(directory, "target.md"), "there\n");
+		await symlink(join(directory, "target.md"), join(directory, "link.md"));
+
+		const stats = await lstatIfPresent(join(directory, "link.md"));
+
+		expect(stats?.isSymbolicLink()).toBe(true);
+	});
+
+	it("reports absence for a path that is not there", async () => {
+		expect(await lstatIfPresent("/no/such/path/at/all")).toBeUndefined();
+	});
+
+	/**
+	 * A directory readable but not searchable lists its children through readdir
+	 * and refuses to stat them. Reading that as absence drops a real file from a
+	 * lineage that then reports itself complete.
+	 */
+	it("raises a failure that is not absence rather than reporting absence", async () => {
+		const directory = await resources.createControlDirectory();
+		await Bun.write(join(directory, "locked/inside.md"), "hidden\n");
+		await chmod(join(directory, "locked"), 0o444);
+
+		const failure = await failureOf(
+			lstatIfPresent(join(directory, "locked/inside.md")),
 		);
 
 		await chmod(join(directory, "locked"), 0o700);

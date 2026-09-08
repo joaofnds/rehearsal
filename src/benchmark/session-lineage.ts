@@ -30,7 +30,7 @@ export async function sessionUpstreamDigest(
 				fixture:
 					fixturePath === undefined
 						? null
-						: await hashDirectory(fixturePath, ""),
+						: await hashDirectory(fixturePath, "", { rootMayBeALink: false }),
 				prompt: sessionCase.prompt,
 				tools: sessionCase.tools,
 				settings: sessionCase.settings ?? null,

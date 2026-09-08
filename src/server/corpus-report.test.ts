@@ -6,6 +6,7 @@ import {
 	directorySource,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
+import { SymlinkedEntryError } from "#benchmark/checkpoint";
 import { failureOf } from "#cli/cli-test-support";
 import { corpusReport } from "./corpus-report";
 
@@ -66,6 +67,7 @@ describe(corpusReport.name, () => {
 
 		const failure = await failureOf(corpusReport(directorySource(root), runs));
 
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
 		expect(failure.message).toContain("escape");
 		expect(failure.message).not.toContain("secret bytes");
 	});

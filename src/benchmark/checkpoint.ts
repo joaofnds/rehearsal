@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, lstat, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
@@ -7,7 +7,7 @@ import { effortSchema } from "./config";
 import type { CorpusRoot } from "./corpus-file";
 import { liveCorpusRoot } from "./corpus-file";
 import type { Immutable } from "./contracts";
-import { statIfExists } from "./file-presence";
+import { lstatIfPresent, statIfExists } from "./file-presence";
 import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
 
 export interface HashedFile {
@@ -76,20 +76,6 @@ export async function hashFile(path: string): Promise<string> {
 }
 
 /**
- * A walk of a live directory races whatever else writes to it, so an entry
- * that vanished between the listing and this call is absence, not a failure.
- */
-async function lstatIfExists(
-	path: string,
-): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
-	try {
-		return await lstat(path);
-	} catch {
-		return undefined;
-	}
-}
-
-/**
  * The walked tree is the whole claim a lineage record makes about what it
  * hashed, so a link out of it is refused by name rather than followed. The CLI
  * translates this into a refused precondition; the corpus screen surfaces it
@@ -99,15 +85,34 @@ export class SymlinkedEntryError extends Error {
 	public override name = "SymlinkedEntryError";
 }
 
+function symlinkedEntry(entry: string, root: string): SymlinkedEntryError {
+	return new SymlinkedEntryError(
+		`Entry ${entry} under ${root} is a symlink, which would hash bytes from outside the walked tree`,
+	);
+}
+
+async function refuseIfLink(root: string, prefix: string): Promise<void> {
+	const stats = await lstatIfPresent(root);
+	if (stats?.isSymbolicLink() === true) {
+		throw symlinkedEntry(prefix === "" ? root : prefix, root);
+	}
+}
+
 /**
  * A symlink inside the walked tree is refused, because `readdir` follows one:
  * it lists the link's descendants as ordinary entries under the link's own
  * relative path, so hashing them reads bytes from outside the tree the caller
  * named and files them under a path that claims they are inside it. Skipping
  * the link alone does not stop that, since the descendants are listed under
- * their own paths and report no link of their own. The root argument is
- * exempt: a `.claude` layout directory is routinely a symlink into the real
- * corpus, and refusing that would empty every lineage this records.
+ * their own paths and report no link of their own.
+ *
+ * `rootMayBeALink` is the caller's answer for the root itself, which `readdir`
+ * follows before this walk sees anything. Only a caller that resolved the root
+ * from a trusted location may say yes: a `.claude` layout directory is
+ * routinely a symlink into the real corpus, and refusing it would empty every
+ * lineage this records. A root taken from a target repository or a case
+ * declaration says no, or the link it is becomes the whole leak one directory
+ * further up.
  *
  * Both a checkpoint's workflow state and a session case's fixture hash through
  * here, because two copies of this walk could disagree about ordering or about
@@ -123,20 +128,23 @@ export class SymlinkedEntryError extends Error {
 export async function hashDirectory(
 	root: string,
 	prefix: string,
+	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
 ): Promise<HashedFile[]> {
+	if (!rootMayBeALink) {
+		await refuseIfLink(root, prefix);
+	}
+
 	const entries = await readdir(root, { recursive: true });
 	const files: HashedFile[] = [];
 
 	for (const entry of entries.toSorted()) {
 		const absolute = join(root, entry);
-		const entryStats = await lstatIfExists(absolute);
+		const entryStats = await lstatIfPresent(absolute);
 		if (entryStats === undefined) {
 			continue;
 		}
 		if (entryStats.isSymbolicLink()) {
-			throw new SymlinkedEntryError(
-				`Entry ${entry} under ${root} is a symlink, which would hash bytes from outside the walked tree`,
-			);
+			throw symlinkedEntry(entry, root);
 		}
 		if (!entryStats.isFile()) {
 			continue;
@@ -253,7 +261,11 @@ export async function captureStageCorpus(
 	for (const kind of LAYOUT_DIRECTORY_KINDS) {
 		const directory = await resolveLayoutDirectory(kind, roots);
 		if (directory !== undefined) {
-			files.push(...(await hashDirectory(directory, kind)));
+			files.push(
+				...(await hashDirectory(directory, kind, {
+					rootMayBeALink: true,
+				})),
+			);
 		}
 	}
 
@@ -265,6 +277,7 @@ export async function captureStageCorpus(
 			...(await hashDirectory(
 				await resolveSkillDirectory(global, roots),
 				join("skills", global),
+				{ rootMayBeALink: true },
 			)),
 		);
 	}
@@ -273,6 +286,7 @@ export async function captureStageCorpus(
 			...(await hashDirectory(
 				await resolveSkillDirectory(skill, roots),
 				join("skills", skill),
+				{ rootMayBeALink: true },
 			)),
 		);
 	}
@@ -601,7 +615,11 @@ export async function hashWorkflowState(
 	const files: HashedFile[] = [];
 
 	for (const tree of await existingWorkflowTrees(targetDir)) {
-		files.push(...(await hashDirectory(tree.directory, tree.path)));
+		files.push(
+			...(await hashDirectory(tree.directory, tree.path, {
+				rootMayBeALink: false,
+			})),
+		);
 	}
 
 	return files;

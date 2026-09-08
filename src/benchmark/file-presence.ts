@@ -1,5 +1,5 @@
 import type { Stats } from "node:fs";
-import { stat } from "node:fs/promises";
+import { lstat, stat } from "node:fs/promises";
 
 /**
  * Only a missing path may read as absent; any other failure (EACCES, EIO) must
@@ -10,6 +10,25 @@ import { stat } from "node:fs/promises";
 export async function statIfExists(path: string): Promise<Stats | undefined> {
 	try {
 		return await stat(path);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return undefined;
+		}
+
+		throw error;
+	}
+}
+
+/**
+ * The same rule as `statIfExists`, for a walk that must see a symlink rather
+ * than what it points at. A directory readable but not searchable is the case
+ * that separates the two failures: `readdir` lists its children and `lstat`
+ * refuses them, so reading that refusal as absence would drop a real file from
+ * a lineage that then reports itself complete.
+ */
+export async function lstatIfPresent(path: string): Promise<Stats | undefined> {
+	try {
+		return await lstat(path);
 	} catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
 			return undefined;
