@@ -1003,6 +1003,27 @@ describe(hashWorkflowState.name, () => {
 });
 
 describe(hashDirectory.name, () => {
+	it("hashes a file reached through a link that resolves back inside the walked tree", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+		testResources.track(parent);
+		const root = join(parent, "corpus");
+		await mkdir(join(root, "build"), { recursive: true });
+		await writeFile(join(root, "build", "SKILL.md"), "real skill");
+		await symlink(
+			join(root, "build", "SKILL.md"),
+			join(root, "build", "ALIAS.md"),
+		);
+
+		const hashed = await hashDirectory(root, "skills", {
+			rootMayBeALink: false,
+		});
+
+		expect(hashed.map(({ path }) => path)).toEqual([
+			"skills/build/ALIAS.md",
+			"skills/build/SKILL.md",
+		]);
+	});
+
 	it("hashes the files under a root that is itself a symlink", async () => {
 		const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
 		testResources.track(parent);

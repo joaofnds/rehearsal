@@ -99,12 +99,19 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
 }
 
 /**
- * A symlink inside the walked tree is refused, because `readdir` follows one:
- * it lists the link's descendants as ordinary entries under the link's own
- * relative path, so hashing them reads bytes from outside the tree the caller
- * named and files them under a path that claims they are inside it. Skipping
- * the link alone does not stop that, since the descendants are listed under
- * their own paths and report no link of their own.
+ * An entry whose resolved path leaves the walked tree is refused, because
+ * `readdir` follows a link: it lists the link's descendants as ordinary entries
+ * under the link's own relative path, so hashing them reads bytes from outside
+ * the tree the caller named and files them under a path that claims they are
+ * inside it. Skipping the link alone does not stop that, since the descendants
+ * are listed under their own paths and report no link of their own. Resolving
+ * every component is what sees it, because the link may be the entry or any
+ * directory above it, and a link that resolves back inside the tree is followed
+ * rather than refused: nothing escapes, and a corpus may link within itself.
+ *
+ * A link whose target is gone resolves to nothing, so it is refused too: the
+ * walk that skipped it would report a lineage as complete while a declared file
+ * was never hashed.
  *
  * `rootMayBeALink` is the caller's answer for the root itself, which `readdir`
  * follows before this walk sees anything. Only a caller that resolved the root
@@ -139,11 +146,13 @@ export async function hashDirectory(
 
 	for (const entry of entries.toSorted()) {
 		const absolute = join(root, entry);
-		const entryStats = await lstatIfPresent(absolute);
-		if (entryStats === undefined) {
+		const linkStats = await lstatIfPresent(absolute);
+		if (linkStats === undefined) {
 			continue;
 		}
-		if (entryStats.isSymbolicLink()) {
+
+		const entryStats = await statIfExists(absolute);
+		if (entryStats === undefined || (await resolvesOutside(root, absolute))) {
 			throw symlinkedEntry(join(prefix, entry));
 		}
 		if (!entryStats.isFile()) {
