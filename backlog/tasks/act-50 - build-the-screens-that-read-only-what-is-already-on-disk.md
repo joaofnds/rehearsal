@@ -1,7 +1,7 @@
 ---
 id: ACT-50
 title: build the comparison and corpus screens
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
@@ -305,3 +305,17 @@ Post-review probes, 2026-09-08. The second review corrected my own corpus fix: m
 
 Verified after: the live /api/corpus serves exactly those five top-level entries, 120 files, no non-layout path. Suite green at 1163 server and 99 client, typecheck, lint and fmt clean.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both screens ship, reading only what the harness already records.
+
+Comparison screen: the Attempt-pairs presentation renders case rows and raw grade-distribution counts, since the report pairs on cases and keeps no per-rep grade. The attribution claim names differing files by deduplicating corpusDifferences over each arm's executedCorpus, and refuses the claim when more than one file differs. What moved renders as a PLANNED control, gated on ACT-104.
+
+Corpus screen: path, hash, last-edited and read-by, all derived from data already on disk. The root shows unredacted as directed, and its digest is labeled 'corpus root@' to distinguish it from run history's 'corpus@', which covers only what one stage read. Both terms are in the glossary.
+
+Four defects were found after the build first reported done, three of them only visible outside the test suite. The corpus screen published the whole corpus root, 7020 files against a real ~/.claude including logs and credentials, where the corpus is 120. A comparison with no record rendered a blank page, because every client test built its own QueryClient with retries off and so never ran the shipped configuration. The corpus fix then proved incomplete, dropping rulebook, which a real checkpoint records. A crafted digest would have crashed the comparison route.
+
+Next: ACT-104 unblocks What moved, ACT-109 the per-attempt rows, ACT-110 the invalidated count, ACT-113 a symlink containment gap in hashDirectory that predates this card.
+<!-- SECTION:FINAL_SUMMARY:END -->
