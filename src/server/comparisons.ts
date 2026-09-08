@@ -14,6 +14,21 @@ function pairKey(minuend: ComparisonArm, subtrahend: ComparisonArm): string {
 	return `${minuend}Minus${subtrahend[0]?.toUpperCase()}${subtrahend.slice(1)}`;
 }
 
+/**
+ * The one place that decodes a `pairKey` back into its two arm names, so the
+ * client renders a label from the same rule that built the key rather than
+ * re-deriving the `Minus` convention on its own.
+ */
+export function armPairLabel(pair: string): string {
+	const [minuend, subtrahend] = pair.split("Minus");
+	const lowercasedSubtrahend =
+		subtrahend === undefined
+			? undefined
+			: `${subtrahend[0]?.toLowerCase()}${subtrahend.slice(1)}`;
+
+	return `${minuend} vs ${lowercasedSubtrahend}`;
+}
+
 function armPairs(): readonly {
 	readonly minuend: ComparisonArm;
 	readonly subtrahend: ComparisonArm;

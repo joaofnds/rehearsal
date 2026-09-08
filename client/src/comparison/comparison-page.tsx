@@ -72,7 +72,12 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 
 function armPairLabel(pairKey: string): string {
 	const [minuend, subtrahend] = pairKey.split("Minus");
-	return `${minuend} vs ${subtrahend}`;
+	const lowercasedSubtrahend =
+		subtrahend === undefined
+			? undefined
+			: `${subtrahend[0]?.toLowerCase()}${subtrahend.slice(1)}`;
+
+	return `${minuend} vs ${lowercasedSubtrahend}`;
 }
 
 function AttributionCard({

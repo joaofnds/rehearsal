@@ -171,6 +171,15 @@ describe(ComparisonPage.name, () => {
 		expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
 	});
 
+	it("labels the arm pair lowercase, not 'candidate vs Baseline'", async () => {
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("case-1")).toBeInTheDocument();
+		});
+		expect(screen.getByText("candidate vs baseline")).toBeInTheDocument();
+	});
+
 	it("renders the empty state, not a generic error, when no comparison is recorded for the digest", async () => {
 		const stub = (): Promise<Response> =>
 			Promise.resolve(Response.json({ error: "not found" }, { status: 404 }));

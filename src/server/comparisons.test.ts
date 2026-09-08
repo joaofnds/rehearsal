@@ -8,6 +8,7 @@ import {
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
 import { createApiApp } from "./api";
+import { armPairLabel } from "./comparisons";
 
 const attributionSchema = z.discriminatedUnion("claim", [
 	z.object({ claim: z.literal("identical") }),
@@ -28,6 +29,19 @@ async function comparisonResponseFrom(
 ): Promise<z.infer<typeof comparisonResponseSchema>> {
 	return comparisonResponseSchema.parse(await response.json());
 }
+
+describe(armPairLabel.name, () => {
+	it("decodes a pair key into its minuend and subtrahend arm names", () => {
+		expect(armPairLabel("candidateMinusBaseline")).toBe(
+			"candidate vs baseline",
+		);
+	});
+
+	it("decodes every arm pair the server itself constructs", () => {
+		expect(armPairLabel("baselineMinusControl")).toBe("baseline vs control");
+		expect(armPairLabel("controlMinusCandidate")).toBe("control vs candidate");
+	});
+});
 
 describe("GET /api/comparisons/:digest", () => {
 	const roots: string[] = [];
