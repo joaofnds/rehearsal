@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 13:04'
+updated_date: '2026-09-08 14:32'
 labels: []
 milestone: m-6
 dependencies:
@@ -171,4 +171,31 @@ Answers, 2026-09-08 (first round; typed into the iterate session by Joao, "agree
 5. Add both terms to GLOSSARY.md, wording as proposed: run event (one durable, timestamped fact about a run in progress, held in the derived SQLite store per decision-3, replayed to a client over SSE) and interrupted run (a run whose process ended without writing a terminal status, reconciled from run events on server startup into a distinct, non-failure outcome).
 
 Probed in the iterate session before these answers were given: no RUNNING or INTERRUPTED appears in contracts.ts (its status unions are AWAITING_HUMAN_REVIEW|COMPLETE|FAILED and FAILED); the run-abort.ts and workflow.ts symbols above exist as named; ACT-96 through ACT-100 do own the task-graph detail deferred in answer 2. Also probed after: src/benchmark/calibration-record.ts:34 carries an independent zod enum of the same three statuses, a third reader AC #6 must cover.
+
+Build session, 2026-09-08: implementation complete across all six ACs, code-review skill run with six axis reviewers (Spec, Style, Architecture, Security, Testing, Refactoring) against the full diff.
+
+Verified findings fixed this session:
+- [blocking] openRunEventStore threw SQLITE_CANTOPEN on any checkout where .benchmark-runs never existed, crashing `rehearsal serve` at startup and 500ing GET /api/runs. Fixed: creates the parent directory first; function is now async (oxlint bans the sync mkdir call), every caller updated.
+- [blocking] run-abort.ts and workflow.ts each captured their own clock origin, so elapsedMs on the SSE stream jumped backward at every stage boundary. Fixed: both now accept a caller-supplied elapsedMs function; run.ts owns the one origin and shares it.
+- [should-fix, AC #4] Three console.log sites in run.ts (stage session start, stage Judge start, stage grade) fired once per stage and were missed by the earlier workflow.ts-only pass. Removed.
+- [should-fix] TERMINAL_RUN_EVENT_KINDS duplicated in api.ts and run-reconciliation.ts. Consolidated into isTerminalRunEventKind in run-events.ts.
+- [should-fix] Resource leak in run-events.test.ts (unclosed file-backed store); misleading test name in workflow.test.ts. Both fixed.
+
+One finding reverses part of AC #6 as originally written: Spec review argued, and I agree after re-checking, that adding INTERRUPTED to contracts.ts's GradedRunArtifact["status"] and calibratableArtifactSchema was wrong. Both types require a non-optional `grade: JudgeGrade`, and no writer in the codebase (or in this diff's design) ever produces an INTERRUPTED artifact with a grade — an interrupted run by definition never reaches the Judge. Reverted both unions to their original three literals. RunHistoryRow.status (server/run-history.ts, a plain string, not typed against contracts.ts's union) is the only place INTERRUPTED correctly lives, and it already carries it correctly via the reconciliation fallback this session added. AC #6's literal text ("contracts.ts's run-status union includes INTERRUPTED") does not match a correct implementation; the card's own shaping record was wrong on this specific point across two adversarial review rounds that didn't catch it.
+
+Live-observed this session, not just unit-tested: booted the server on a spare port against a fresh runs directory (confirms the startup-crash fix); curled GET /api/runs/:run/events from a separate process against a real appended event and received it over SSE (AC #1's literal scenario); ran reconcileInterruptedRuns against a synthetic claimed target with a genuinely dead pid (999999) and confirmed via a second curl to /api/runs that the row renders "status":"INTERRUPTED" (AC #3's literal scenario, minus a true kill -9 against a real paid rehearsal run, which this sandbox cannot exercise).
+
+Not verified: AC #1-#2 against a real, paid `rehearsal run` in flight (no budget/session available this session) — the mechanism is proven with synthetic events; a live run's actual behavior (real spend numbers, real turn cadence) was not observed end-to-end. AC #5's GLOSSARY.md wording was not sent back to Joao for confirmation; used the shaping record's proposed wording, lightly adapted to match what was actually built.
+
+Full suite green throughout (1328 tests), typecheck/lint/fmt clean. 19 commits total.
+
+Oversight, 2026-09-08, from the iterate session that ran this build:
+
+Independently checked, not taken from the build's report: the full suite is green (1228 + 100 tests, 0 fail), typecheck clean across both tsconfigs, oxlint clean. INTERRUPTED appears in exactly one non-test place in src/ (src/server/run-history.ts:118) and in client/src/run-history/run-status.ts:22, matching the revert described above. The 12 remaining console.log sites under src/benchmark/ are run-summary and judge output (target paths, judge session, grade, artifact paths), none of them stage progress, which is what AC #4 asks.
+
+Iteration stopped here rather than continuing to review. Reason: this build cost 48.60 USD in one session. Nothing in the card, the bet, or the queue entry weighed a number near that, so continuing to spend against it is a decision for Joao rather than for the iteration.
+
+Two things a reviewer or the next session must settle before this card closes:
+- AC #6's literal text is now known to be wrong, and the build reverted the work it names. Either rewrite the criterion as the behavior a correct implementation produces (INTERRUPTED reaches every reader that renders run status, without being added to a graded-artifact type that requires a grade an interrupted run never has), or reject the revert. Do not check it as written.
+- AC #1 and #2 say 'observed against a real run rather than a fixture'. The build observed the mechanism over real HTTP with synthetic events and a synthetic dead pid, which is not that. Both stay unchecked until a paid run is watched in flight.
 <!-- SECTION:NOTES:END -->
