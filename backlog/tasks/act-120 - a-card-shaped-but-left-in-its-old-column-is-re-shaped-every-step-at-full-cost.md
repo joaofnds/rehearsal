@@ -4,7 +4,7 @@ title: 'a card shaped but left in its old column is re-shaped every step, at ful
 status: To Do
 assignee: []
 created_date: '2026-09-08 13:34'
-updated_date: '2026-09-08 13:34'
+updated_date: '2026-09-08 15:19'
 labels: []
 dependencies: []
 type: bug
@@ -31,4 +31,12 @@ Two candidate guards, either or both:
 - iterate step refuses to re-run a stage against a card that already carries that stage's finished record, and reports the mismatch instead. This one also catches the case where a stage finishes without moving the card for some other reason.
 
 Second, separate defect seen in the same run, worth a card of its own if it recurs: an --append-notes issued against a stale read reverted the card's notes to their pre-edit state and carried its own addition on top, silently dropping a block of answers (81a8310, restored in 2b628f2). The shaping session reported hitting the same thing with --notes and catching it via a reviewer. Both are the same underlying hazard: concurrent writers to one card file, where the CLI's read-modify-write has no staleness check.
+
+Second instance, 2026-09-08, same iteration, different stage.
+
+ACT-51 reached Review, review found a blocking defect and said so, and the card then needed code. But its column still read Review, so the next step invoked review again, which correctly reported there was nothing new to review and asked to pick up the fix instead. The step burned a session to discover the card was in the wrong column, exactly as the three shaping passes did.
+
+This widens the card: the defect is not 'shaping does not move its card'. It is that the column is the only routing input, and a stage that finishes with work still owed has no way to say what the next stage should be. Review finding a blocker means the card goes back to Build; shaping finishing means it goes to Build; neither happens on its own.
+
+The second guard proposed above (a step refuses to re-run a stage whose finished record is already on the card) would have caught the shaping loop but not this one, since the review record was new each time. What catches both: a stage that ends with work owed says which column the card belongs in, and the step honors that rather than re-reading the old column.
 <!-- SECTION:NOTES:END -->
