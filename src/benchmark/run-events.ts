@@ -28,6 +28,7 @@ export interface RunEventStore {
 	) => readonly RunEvent[];
 	readonly latestEvent: (runId: string) => RunEvent | undefined;
 	readonly runIds: () => readonly string[];
+	readonly journalMode: () => string;
 	readonly close: () => void;
 }
 
@@ -93,8 +94,12 @@ function toRunEvent(row: RunEventRow): RunEvent {
 
 export function openRunEventStore(path: string): RunEventStore {
 	const database = new Database(path);
+	database.run("PRAGMA journal_mode = WAL");
 	database.run(SCHEMA);
 
+	const selectJournalMode = database.query<{ journal_mode: string }, []>(
+		"PRAGMA journal_mode",
+	);
 	const insert = database.query<
 		RunEventRow,
 		[string, RunEventKind, string, number, number, string]
@@ -137,6 +142,7 @@ export function openRunEventStore(path: string): RunEventStore {
 			return row === null ? undefined : toRunEvent(row);
 		},
 		runIds: () => selectRunIds.all().map((row) => row.run_id),
+		journalMode: () => selectJournalMode.get()?.journal_mode ?? "",
 		close: () => {
 			database.close();
 		},

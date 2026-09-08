@@ -66,10 +66,12 @@ import type {
 } from "./pipeline";
 import type { PendingStage } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
+import { openRunEventStore, runEventRecorderFor } from "./run-events";
 import type { BenchmarkRunPaths } from "./run-layout";
 import {
 	benchmarkRunPaths,
 	benchmarkRunsDirectory,
+	runEventsDatabaseFile,
 	runNameFromTimestamp,
 } from "./run-layout";
 import {
@@ -851,6 +853,9 @@ export async function runBenchmark(
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;
+	const runEventStore = openRunEventStore(
+		runEventsDatabaseFile(runFiles.runsDirectory),
+	);
 	const abort = createRunAbort(
 		{
 			killActiveCommands,
@@ -863,6 +868,7 @@ export async function runBenchmark(
 			exit: (code) => process.exit(code),
 			reportError: console.error,
 			persistence: fileRunArtifactPersistence,
+			runEvents: runEventRecorderFor(runEventStore, runFiles.name),
 		},
 		{
 			artifactFile: runFiles.artifactFile,
@@ -873,6 +879,7 @@ export async function runBenchmark(
 	try {
 		await claimTarget(source);
 	} catch (error) {
+		runEventStore.close();
 		abort.release();
 		throw error;
 	}
@@ -1129,6 +1136,7 @@ export async function runBenchmark(
 			await abort.teardown();
 		} finally {
 			abort.release();
+			runEventStore.close();
 			await rm(productOwnerDirectory, { force: true, recursive: true });
 		}
 	}

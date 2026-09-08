@@ -12,12 +12,23 @@ import {
 	confirmationGroupPaths,
 	recordedRunNames,
 	replayAttemptIds,
+	runEventsDatabaseFile,
 	runNameFromCheckpointsEntry,
 	runNameFromTimestamp,
 	runStageFiles,
 	sessionAttemptIds,
 	sessionAttemptPaths,
 } from "./run-layout";
+
+describe(runEventsDatabaseFile.name, () => {
+	it("names one database file shared across every run under the runs directory", () => {
+		const runsDirectory = benchmarkRunsDirectory("/control");
+
+		expect(runEventsDatabaseFile(runsDirectory)).toBe(
+			join("/control", ".benchmark-runs", "run-events.sqlite"),
+		);
+	});
+});
 
 describe(benchmarkRunPaths.name, () => {
 	it("preserves every existing run artifact path", () => {

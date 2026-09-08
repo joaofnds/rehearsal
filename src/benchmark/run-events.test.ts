@@ -1,7 +1,18 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { openRunEventStore, runEventRecorderFor } from "./run-events";
 
 describe(openRunEventStore.name, () => {
+	it("opens a file-backed database in WAL mode, per decision-3", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
+
+		const store = openRunEventStore(join(directory, "events.sqlite"));
+
+		expect(store.journalMode()).toBe("wal");
+	});
+
 	it("replays every appended event for a run in append order", () => {
 		const store = openRunEventStore(":memory:");
 

@@ -51,6 +51,15 @@ export function benchmarkRunsDirectory(controlDirectory: string): string {
 	return join(controlDirectory, ".benchmark-runs");
 }
 
+/**
+ * One database, not one per run: per decision-3 the event store is derived
+ * state a reader can delete and rebuild, and every run in flight at once
+ * writes into it, keyed by its own run id.
+ */
+export function runEventsDatabaseFile(runsDirectory: string): string {
+	return join(runsDirectory, "run-events.sqlite");
+}
+
 export function runNameFromTimestamp(timestamp: string): string {
 	return timestamp.replaceAll(":", "-");
 }
