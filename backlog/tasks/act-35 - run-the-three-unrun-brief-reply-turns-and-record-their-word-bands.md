@@ -4,7 +4,7 @@ title: run the three unrun brief-reply turns and record their word bands
 status: Done
 assignee: []
 created_date: '2026-09-03 11:56'
-updated_date: '2026-09-08 12:25'
+updated_date: '2026-09-08 12:30'
 labels: []
 milestone: m-3
 dependencies:
@@ -120,4 +120,8 @@ ACT-25 carry-over (AC#4):
     above beside the accepted lengths.
 
 The word-band concern above is filed as ACT-119, so it is not left only in this Done card's prose.
+
+Correction, 2026-09-08: the word-band concern recorded above overstated the case. GLOSSARY.md's 'Accepted band' entry documents 154 as the ceiling of the range across Joao's whole population of accepted replies, and states that cases declare a ceiling and never a floor by design. The single shared max is deliberate, not an oversight, and this session's note that 'the band as declared is not measuring what the accepted lengths record' was wrong to imply otherwise.
+
+What stands from those runs is unchanged and is evidence about the corpus: three of four replies exceeded the length accepted for their own turn, and three exceeded the population ceiling and duly failed. ACT-119 now carries the narrower open question, whether these four cases should use 145 rather than 154.
 <!-- SECTION:NOTES:END -->
