@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { displayPath } from "#benchmark/config";
 import { parseComparisonReport } from "#benchmark/comparison-record";
@@ -6,10 +7,15 @@ import { recordFileFor } from "#cli/show-command";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
+import { runEventsDatabaseFile } from "#benchmark/run-layout";
+import { openRunEventStore } from "#benchmark/run-events";
 import { comparisonReport } from "./comparisons";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
+
+const TERMINAL_RUN_EVENT_KINDS = new Set(["run-completed", "run-interrupted"]);
+const RUN_EVENTS_POLL_MS = 500;
 
 export interface ApiDependencies {
 	readonly runsDirectory: string;
@@ -77,6 +83,36 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 
 				throw error;
 			}
+		})
+		.get("/api/runs/:run/events", (context) => {
+			const runId = context.req.param("run");
+
+			return streamSSE(context, async (stream) => {
+				const store = openRunEventStore(
+					runEventsDatabaseFile(dependencies.runsDirectory),
+				);
+
+				try {
+					let sequence = 0;
+					let sawTerminalEvent = false;
+
+					while (!sawTerminalEvent && !stream.aborted) {
+						for (const event of store.eventsSince(runId, sequence)) {
+							const { kind, sequence: eventSequence } = event;
+							await stream.writeSSE({ data: JSON.stringify(event) });
+							sequence = eventSequence;
+							if (TERMINAL_RUN_EVENT_KINDS.has(kind)) {
+								sawTerminalEvent = true;
+							}
+						}
+						if (!sawTerminalEvent && !stream.aborted) {
+							await stream.sleep(RUN_EVENTS_POLL_MS);
+						}
+					}
+				} finally {
+					store.close();
+				}
+			});
 		})
 		.get("/api/records/:id", async (context) => {
 			try {

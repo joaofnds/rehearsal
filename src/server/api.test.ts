@@ -8,7 +8,30 @@ import {
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
 import { CONTROL_DIR } from "#benchmark/config";
+import { runEventsDatabaseFile } from "#benchmark/run-layout";
+import { openRunEventStore } from "#benchmark/run-events";
 import { createApiApp } from "./api";
+
+const runEventSchema = z.object({ kind: z.string() }).loose();
+
+function parseSSEFrames(
+	body: string,
+): readonly z.infer<typeof runEventSchema>[] {
+	return body
+		.split("\n\n")
+		.filter((frame) => frame.length > 0)
+		.map((frame) =>
+			runEventSchema.parse(
+				JSON.parse(
+					frame
+						.split("\n")
+						.filter((line) => line.startsWith("data:"))
+						.map((line) => line.slice("data:".length).trim())
+						.join("\n"),
+				),
+			),
+		);
+}
 
 const runHistoryRowSchema = z
 	.object({ run: z.string(), stale: z.boolean() })
@@ -199,6 +222,67 @@ describe(createApiApp.name, () => {
 			expect(response.status).toBeGreaterThanOrEqual(400);
 			expect(response.status).toBeLessThan(500);
 			assertNoAbsolutePath(body);
+		});
+	});
+
+	describe("GET /api/runs/:run/events", () => {
+		it("streams every already-appended event as SSE frames, for a reader attaching mid-run", async () => {
+			const runsDirectory = await mkdtemp(
+				join(tmpdir(), "rehearsal-api-runs-"),
+			);
+			roots.push(runsDirectory);
+			const store = openRunEventStore(runEventsDatabaseFile(runsDirectory));
+			store.append({
+				runId: "run-1",
+				kind: "stage-started",
+				stage: "shape",
+				spentUsd: 0,
+				elapsedMs: 0,
+			});
+			store.append({
+				runId: "run-1",
+				kind: "run-completed",
+				stage: "shape",
+				spentUsd: 1,
+				elapsedMs: 1000,
+			});
+			store.close();
+			const app = createApiApp({
+				runsDirectory,
+				corpusSource: directorySource(await corpusDirectory()),
+			});
+
+			const response = await app.request("/api/runs/run-1/events");
+			const frames = parseSSEFrames(await response.text());
+
+			expect(response.headers.get("content-type")).toBe("text/event-stream");
+			expect(frames.map(({ kind }) => kind)).toEqual([
+				"stage-started",
+				"run-completed",
+			]);
+		});
+
+		it("keeps a run with no events open rather than closing the connection, since the run may not have started emitting yet", async () => {
+			const runsDirectory = await mkdtemp(
+				join(tmpdir(), "rehearsal-api-runs-"),
+			);
+			roots.push(runsDirectory);
+			const app = createApiApp({
+				runsDirectory,
+				corpusSource: directorySource(await corpusDirectory()),
+			});
+			const controller = new AbortController();
+
+			const responsePromise = app.request("/api/runs/no-such-run/events", {
+				signal: controller.signal,
+			});
+			const response = await responsePromise;
+			const reader = response.body?.getReader();
+
+			expect(response.status).toBe(200);
+			expect(response.headers.get("content-type")).toBe("text/event-stream");
+			controller.abort();
+			await reader?.cancel();
 		});
 	});
 
