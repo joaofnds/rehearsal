@@ -55,7 +55,6 @@ describe(SystemPage.name, () => {
 		"Evidence disclosure",
 		"Step node card",
 		"Stat card",
-		"Planned-feature block",
 		"Dialog shell",
 	])("names %s as not yet built", (name) => {
 		render(<SystemPage />);
@@ -69,9 +68,14 @@ describe(SystemPage.name, () => {
 		expect(screen.getAllByText(/ACT-51/u).length).toBe(3);
 	});
 
-	it("names ACT-50 as needing the planned-feature block", () => {
+	it("renders the planned-feature block", () => {
 		render(<SystemPage />);
 
-		expect(screen.getByText(/ACT-50/u)).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", {
+				name: "Edit an instruction, review, then apply",
+			}),
+		).toBeInTheDocument();
+		expect(screen.getByText("PLANNED")).toBeInTheDocument();
 	});
 });

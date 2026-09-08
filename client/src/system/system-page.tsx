@@ -1,6 +1,7 @@
 import { CorpusPill } from "./components/corpus-pill";
 import { FilterPill } from "./components/filter-pill";
 import { GRADE_SIZES, Grade } from "./components/grade";
+import { PlannedFeatureBlock } from "./components/planned-feature-block";
 import { SectionLabel } from "./components/section-label";
 import { STATUS_STATES, Status } from "./components/status";
 import { TableShell } from "./components/table-shell";
@@ -17,7 +18,6 @@ const DEFERRED_COMPONENTS = [
 	{ name: "Evidence disclosure", neededBy: "ACT-51 (live monitor)" },
 	{ name: "Step node card", neededBy: "ACT-51 (live monitor)" },
 	{ name: "Stat card", neededBy: "run detail (unfiled)" },
-	{ name: "Planned-feature block", neededBy: "ACT-50 (corpus screen)" },
 	{
 		name: "Dialog shell",
 		neededBy: "ACT-51 (step modal, its node action stack)",
@@ -204,6 +204,13 @@ export function SystemPage(): React.JSX.Element {
 					columns={["Run", "Case"]}
 					rows={[["r-0148", "auth-refactor"]]}
 				/>
+			</section>
+
+			<section>
+				<SectionLabel>PLANNED FEATURE BLOCK</SectionLabel>
+				<PlannedFeatureBlock heading="Edit an instruction, review, then apply">
+					<p>Writes a new corpus version, keeps the old one addressable</p>
+				</PlannedFeatureBlock>
 			</section>
 
 			<section>
