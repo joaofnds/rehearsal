@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-08 10:33'
+updated_date: '2026-09-08 11:10'
 labels: []
 milestone: m-3
 dependencies: []
@@ -53,4 +53,14 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 Triage 2026-09-07: assigned m-3, per doc-16/doc-22/doc-23's unopposed recommendation carried across three prior triage runs.
 
 Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Overseeing session, 2026-09-08, probing the shape session's findings.
+
+Fixture (its question 1): shape reported one live transcript, from another repo, unsuitable. There are three on disk. The two it did not examine are this repo's own session transcripts under .benchmark-runs/sessions/brief-reply-92b2e8b0/*/transcript.jsonl (1280 lines each, byte-identical inventories). They still carry no Skill and no Read tool_use — the session used Bash, Edit, Write, Agent, ToolSearch — so its conclusion stands for the wrong reason: the gap is that no session yet recorded has invoked a skill or a Read, not that the only fixture is foreign. Capturing a fresh on-topic session remains the answer.
+
+nested_memory (its question 2): confirmed, and doc-9's constraint is wrong as stated. The attachment carries keys [content, displayPath, path, type] and its content field holds the loaded file's full bytes inline (~10KB in this instance). Two bounds keep it from reaching this card. The single nested_memory record here names /Users/joaofnds/code/trunk/.claude/rules/commit-graph.md, a path outside both the corpus and the target, and the live corpus CLAUDE.md content ('Working with Joao') appears zero times in the transcript. So bytes do reach the transcript, but not the corpus's bytes, and doc-9's operative conclusion — reconciliation is name-against-name, hashes come from the corpus resolver — survives. What fails is its stated reason.
+
+skill_listing (the shape session left this unconfirmed): keys are [content, isInitial, names, skillCount, type]. names is a plain array of skill-name strings (absorb, build, debug, doctrine, refactor, review-instructions, shape, ship). output_style is {type, style} with style the bare name, as doc-9 says.
+
+Unrecognized types (its question 3): confirmed as it proposed. Skip silently, never a divergence. AC#5's 'a record type the parser does not recognize yields no manifest entry' says exactly this, and a divergence is reserved for a corpus-file mismatch under AC#2 and AC#3.
 <!-- SECTION:NOTES:END -->

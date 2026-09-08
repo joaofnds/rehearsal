@@ -71,12 +71,21 @@ So the transcript names the output style in force, the skills offered, the
 skills invoked, the agents offered, and the MCP instructions, plus every file
 read through the `Read` tool.
 
-### 2. The transcript names loads but does not carry their content
+### 2. The transcript does not carry the corpus's content
 
 This is the boundary the design has to respect. The provider records *that* the
-`brief` style was in force and *that* `doctrine` was invoked. It does not record
-their bytes. Verified: the live corpus `CLAUDE.md` content
+`brief` style was in force and *that* `doctrine` was invoked, without their
+bytes. Verified: the live corpus `CLAUDE.md` content
 ("Working with João") appears zero times in that transcript.
+
+Corrected 2026-09-08. An earlier version of this section claimed the transcript
+never carries any loaded file's bytes. That is false. A `nested_memory`
+attachment carries `{type, path, displayPath, content}` with the file's full
+content inline, ~10KB in the one instance on disk. The claim holds only for the
+corpus, which is all this design needs: that record named a path outside both
+the corpus and the target, and no corpus file's bytes appear anywhere in the
+transcript. A parser must not assume name-only records as a property of the
+format.
 
 The consequence: an observed manifest can name what loaded, but only the corpus
 resolver can supply the bytes for it. Reconciliation is therefore
