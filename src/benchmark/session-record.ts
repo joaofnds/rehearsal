@@ -26,6 +26,24 @@ const corpusFileSchema = z
 	})
 	.strict();
 
+/**
+ * The manifest is observed name-only (ACT-59, doc-9 gap 2): the transcript
+ * never carries the corpus's own bytes, so an entry is a layout path and
+ * nothing a hash could attach to.
+ */
+const contextManifestSchema = z
+	.object({
+		paths: z.array(z.string().min(1)),
+	})
+	.strict();
+
+const manifestDivergenceSchema = z
+	.object({
+		kind: z.enum(["undeclared-file", "unloaded-file"]),
+		path: z.string().min(1),
+	})
+	.strict();
+
 interface RecordedOutcome {
 	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
 	readonly reply?: string | undefined;
@@ -111,6 +129,8 @@ export const sessionAttemptRecordSchema = z
 		sessionBudgetUsd: z.number().positive(),
 		corpusFiles: z.array(corpusFileSchema),
 		corpusOrigin: corpusSnapshotOriginSchema.optional(),
+		contextManifest: contextManifestSchema.optional(),
+		divergences: z.array(manifestDivergenceSchema).optional(),
 		prompt: z.string().min(1),
 		reply: z.string().optional(),
 		transcriptFile: z.string().min(1),

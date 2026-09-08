@@ -117,6 +117,56 @@ describe("sessionAttemptRecordSchema", () => {
 	});
 
 	/**
+	 * The manifest is observed name-only (ACT-59, doc-9 gap 2): the transcript
+	 * never carries the corpus's own bytes, so a manifest entry is a layout path
+	 * and nothing a hash could attach to.
+	 */
+	it("carries the observed context manifest's paths", () => {
+		expect(
+			sessionAttemptRecordSchema.parse(
+				record({
+					contextManifest: { paths: ["skills/verify/SKILL.md"] },
+					divergences: [],
+				}),
+			).contextManifest,
+		).toEqual({ paths: ["skills/verify/SKILL.md"] });
+	});
+
+	it("carries a named divergence between the manifest and the declaration", () => {
+		expect(
+			sessionAttemptRecordSchema.parse(
+				record({
+					contextManifest: { paths: [] },
+					divergences: [
+						{ kind: "unloaded-file", path: "skills/verify/SKILL.md" },
+					],
+				}),
+			).divergences,
+		).toEqual([{ kind: "unloaded-file", path: "skills/verify/SKILL.md" }]);
+	});
+
+	/**
+	 * Records written before the manifest existed carry neither field, and no
+	 * observation was made of what they loaded, which is different from having
+	 * observed zero divergence.
+	 */
+	it("accepts a record written before the context manifest existed", () => {
+		const parsed = sessionAttemptRecordSchema.parse(record());
+
+		expect(parsed.contextManifest).toBeUndefined();
+		expect(parsed.divergences).toBeUndefined();
+	});
+
+	it("refuses a divergence naming a kind that does not exist", () => {
+		const parsed = sessionAttemptRecordSchema.safeParse({
+			...record({ contextManifest: { paths: [] } }),
+			divergences: [{ kind: "renamed-file", path: "skills/verify/SKILL.md" }],
+		});
+
+		expect(parsed.success).toBe(false);
+	});
+
+	/**
 	 * An origin is the live install or a directory, and nothing else. A record on
 	 * disk is data, so the kind arrives as an unchecked string; the compiler
 	 * refuses this shape in typed code, which is the same guarantee one layer
