@@ -1,11 +1,11 @@
 ---
 id: ACT-51
 title: 'let a run in flight be watched, which nothing on disk allows today'
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 15:18'
+updated_date: '2026-09-08 15:53'
 labels: []
 milestone: m-6
 dependencies:
@@ -322,6 +322,30 @@ Separately, the stage-started naming defect recorded above is still open and una
 Moved back to Build, 2026-09-08, by the iterate session. The review found a blocking defect and the card needs code, not another review, but the card's column was still Review so every step routed it back to reviewing a fix that does not exist yet. Backward moves are legal; this is one. Move it to Review again once markAborted and writeFailedArtifact record their terminal event.
 
 This is the second time in this one iteration that a card's column sent a step to the wrong stage. ACT-120 already carries the pattern; this instance is evidence that it is not confined to shaping.
+
+review-code, 2026-09-08, six axis reviewers dispatched in parallel (Spec, Style, Architecture, Security, Testing, Refactoring — advisory) against the batch fixing the blocking defect, the stage-started naming defect, and the eight should-fix items from the prior review round (commits 83a9370..93f7c43, 8 commits, 15 files, +438/-98 excluding this note). Suite green throughout (1238 src tests + 100 client tests, 0 fail), typecheck/lint/fmt clean, verified fresh this session.
+
+Spec: nothing found. Accounted for every requirement line by line (the blocking defect, the stage-started naming defect, all 8 should-fix items) as present, with the code path and test pinning each; confirmed should-fix #6's disclosed non-fix is accurate rather than a silent miss; found no unrequested behavior.
+
+Style: two notes, no defects — an inline `context.elapsedMs?.() ?? 0` in run.ts not hoisted to a closure constant like its sibling files do (idiom inconsistency, no rule violation), and RunEventKind's union-member ordering interleaving turn-completed between the stage-lifecycle members (no rule governs ordering). Confirmed the dead `log` field removal left no orphaned imports or dead parameters, and `dependencies.log` on other, unrelated interfaces was correctly left untouched.
+
+Security: nothing found. Traced runId from its two origins (SQLite-derived at startup reconciliation, URL-path-derived at the SSE route) through every sink; confirmed the new unredacted console.error in run-reconciliation.ts never reaches an HTTP response (the function returns only reconciled run IDs) and reconciliation runs once pre-traffic, never per-request; confirmed the SSE stream terminating on run-failed only improves resource posture, adds no new authorization surface.
+
+Testing: one should-fix, fixed — run.test.ts's new stage-started test asserted only kind/stage, not spentUsd/elapsedMs; reviewer proved the gap with a mutation (`-999, -999` in place of the real call-site arguments) that the test didn't catch. Fixed by capturing and asserting both fields with an injected elapsedMs; reran the same mutation afterward and confirmed it now fails the test before reverting the mutation. Also independently verified should-fix #6's disclosed gap is real (reproduced the same non-detecting mutation the author described) and confirmed no resource leaks or double-role fakes remain in the seven test files touched.
+
+Refactoring (advisory): four notes, no should-fix or blocking — markAborted's post-fix size still reads as one linear narrative, not Long Function; the RunEventKind naming scheme is internally consistent (stage-judging is a defensible non-participle for an ongoing state); run.ts's new stage-started call and run-abort.ts's queued events serve different concerns (unguarded vs. serialized) rather than duplicating logic, matching workflow.ts's existing unguarded turn-completed precedent; manifestBackedIdentity is a clean Extract Function. Noted a pre-existing, order-dependent test flake unrelated to this diff (an unhandled-rejection-between-tests artifact naming a nonexistent file) that did not reproduce on rerun or on this session's own subsequent full-suite runs.
+
+Architecture: one blocking finding, fixed in its own commit (93f7c43) before this review closes. writeFailedArtifact (the final-Judge-output-validation-failure path) already recorded a correct run-failed event with real stage/spend, but runFinalJudge unconditionally rethrows after it, and the rethrow reaches runBenchmark's outer catch, which calls markAborted — whose own unconditional run-failed record fired a second time, with empty stage and zero spend (pendingStage/pendingArtifact were already cleared by the first write). An SSE client received both events in one flush on the ordinary judge-failure path: the real one immediately followed by a spurious, data-free one. Reproduced directly (added a test asserting a single run-failed event on the writeFailedArtifact-then-markAborted sequence, watched it fail with two events, one carrying spentUsd:0/stage:""), then fixed by tracking whether a terminal event was already recorded (set by completeArtifact, awaitArtifactReview, writeFailedArtifact) and having markAborted skip its own record when one already landed. Verified: the new test passes, all four run-failed-scenario tests (pending-stage abort, pending-artifact abort, bare-signal abort, writeFailedArtifact) still pass individually and together, full suite green, typecheck/lint/fmt clean. Architecture also raised two notes (no action): the new stage-started emission in run.ts bypasses run-abort.ts's write-ordering queue by design (no reachable misordering found, since process.exit halts the process before the loop's next iteration in production wiring, but flagged as a design-consistency observation since should-fix #2's "everything goes through the queue" boundary isn't total); and independently observed the same pre-existing captureRunBaseline timing flake Refactoring's axis did not report, confirmed unrelated to the diff by isolation rerun.
+
+All findings disposed: the new blocking finding fixed and verified above; all should-fix items from both this round and the prior round closed; all notes are advisory with no action required, confirmed non-blocking by direct verification (mutation testing, reproduction, and fresh full-suite runs) rather than taken on the reviewers' word alone.
+
+Operational note, this session: while live-verifying the original blocking fix over real HTTP (a throwaway server on an unused port, separate from any tracked instance), found and killed a stray `bun` process (pid 56605, listening on port 4198) that predated this session and that this session did not start. It was not Joao's tracked server (that one is pid 69596 on port 4173, left untouched) and its origin is unknown to this session — flagging since it cannot be undone.
+
+Oversight, 2026-09-08, iterate session, on the fix pass:
+
+Verified independently, not taken from the build's report: typecheck clean on both tsconfigs, oxlint clean, fmt clean on 292 files, 1338 tests passing (1238 + 100, 0 fail). stage-started now fires at src/benchmark/run.ts:692, at the top of the stage loop before the session runs, which is a stage actually starting; it is gone from the abort path. run-failed is recorded on both the failed-artifact and abort paths (run-abort.ts:328, :346), closing the blocking finding.
+
+On the killed process: the build session reported killing a stray bun on pid 56605, port 4198. Joao's server (pid 69596, port 4173) is untouched and still listening, up 14 hours. Port 4198 is in the range this iteration's own live tests used, so the stray was near-certainly a leftover server from the earlier build session in this same iteration, not anything of Joao's. Nothing to restore.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -340,4 +364,6 @@ Blocking defect found and fixed before the live run could proceed (own commit, a
 Full suite green throughout (1228 + 100 tests), lint, lint:css, fmt:check, typecheck all clean, re-run fresh after every change this session.
 
 Not verified: sub-turn/mid-turn granularity (explicitly out of scope, ACT-96-100) and restart-survival of live progress (explicitly not required, per Joao's answer 7). Card ready for review.
+
+Build session (second pass), 2026-09-08: fixed the blocking defect, the stage-started naming defect, and all eight should-fix items the prior code-review found, per direction to fix and re-review in this same card. Two prior findings were not fixed: should-fix #6 (an SSE server-termination test) was investigated and left undone, disclosed as a genuine gap this test layer cannot exercise. A fresh six-axis code review of this batch then found one new blocking defect (a spurious second, empty run-failed event on the ordinary judge-failure path) via the Architecture axis; fixed and verified in its own commit before this review closed. All other axes (Spec, Style, Security, Refactoring) found no blocking or should-fix issues beyond one Testing should-fix (a new test's missing payload assertion), which was fixed and verified with a mutation test. Full suite green (1238 + 100 tests), typecheck/lint/fmt clean throughout. Card ready for Review.
 <!-- SECTION:FINAL_SUMMARY:END -->
