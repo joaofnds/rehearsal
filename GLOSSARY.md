@@ -105,11 +105,11 @@
   transcript names a load without carrying its bytes, so reconciliation is
   name-against-name and every hash comes from the corpus resolver.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
-  installed `CLAUDE.md`, the stage skills, the output styles, and the agent
-  definitions. A case names the ones it reads in corpus layout paths
-  (`CLAUDE.md`, `skills/<name>/...`, `output-styles/<name>.md`,
-  `agents/<name>.md`), which one resolver maps onto the install, so an edit to
-  any of them can make a prior attempt stale.
+  installed `CLAUDE.md`, the stage skills, the output styles, the agent
+  definitions, and the rulebook. A case names the ones it reads in corpus
+  layout paths (`CLAUDE.md`, `skills/<name>/...`, `output-styles/<name>.md`,
+  `agents/<name>.md`, `rulebook/<name>.md`), which one resolver maps onto the
+  install, so an edit to any of them can make a prior attempt stale.
 - **`corpus@<hash>`** — run history's label for a run's corpus digest: what one
   stage's checkpoint actually read, computed over the checkpoint's own
   recorded corpus files. Distinct from `corpus root@<hash>`, which digests a
@@ -138,12 +138,12 @@
   so a source carrying an undeclared style cannot change what the attempt runs
   against.
 - **Corpus overlay** — the project-level files a session attempt is given so it
-  reads a corpus variant: the snapshot's output styles and agent definitions
-  written under the attempt directory's `.claude/`, where they shadow the
-  same-named user-level ones. The session runs with the live configuration, so
-  its hooks, memory, and MCP are the real ones and nothing installed moves. A
-  skill cannot be delivered this way, because a project-level skill does not
-  shadow a user-level one.
+  reads a corpus variant: the snapshot's output styles, agent definitions, and
+  rulebook files written under the attempt directory's `.claude/`, where they
+  shadow the same-named user-level ones. The session runs with the live
+  configuration, so its hooks, memory, and MCP are the real ones and nothing
+  installed moves. A skill cannot be delivered this way, because a
+  project-level skill does not shadow a user-level one.
 - **Corpus snapshot origin** — where a snapshot's bytes were read from, recorded
   beside them and persisted in the attempt record: the live install, or the
   directory the source named. What produced that directory is not recorded,

@@ -87,7 +87,7 @@ export function resolveCorpusFile(
 	}
 
 	throw new CorpusFileError(
-		`Corpus file ${layoutPath} names no corpus layout path: use CLAUDE.md, output-styles/<name>.md, agents/<name>.md, skills/<name>/..., or rulebook/<name>.md`,
+		`Corpus file ${layoutPath} names no corpus layout path: use CLAUDE.md, output-styles/<name>.md, agents/<name>.md, rulebook/<name>.md, or skills/<name>/...`,
 	);
 }
 
