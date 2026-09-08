@@ -14,6 +14,7 @@ import type {
 	StageTranscript,
 } from "./contracts";
 import { productAnswerSchema, stageTurnSchema } from "./contracts";
+import type { RunEventRecorder } from "./run-events";
 
 export interface ProductOwnerSnapshot {
 	readonly sessionId: string;
@@ -52,6 +53,8 @@ export interface WorkflowStageRequest {
 	readonly skill: string;
 	readonly settingSources?: "project" | undefined;
 	readonly settingsOverlay?: string | undefined;
+	readonly runEvents?: RunEventRecorder | undefined;
+	readonly now?: (() => number) | undefined;
 }
 
 function reasonOf(cause: unknown): string {
@@ -170,7 +173,10 @@ export async function runWorkflowStage(
 		skill,
 		settingSources,
 		settingsOverlay,
+		runEvents,
+		now = () => Date.now(),
 	} = request;
+	const startedAtMs = now();
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
 	const providerCalls: ProviderCall[] = [];
@@ -213,16 +219,17 @@ export async function runWorkflowStage(
 		sessionId = envelope.session_id;
 		spentUsd += envelope.total_cost_usd ?? 0;
 		providerCalls.push(providerCall(readClaudeCallMetrics(envelope)));
-		console.log(agent.message);
 
 		if (agent.status === "COMPLETE") {
 			exchanges.push({ agent });
+			runEvents?.record("turn-completed", stage, spentUsd, now() - startedAtMs);
+
 			return { stage, sessionId, costUsd: spentUsd, providerCalls, exchanges };
 		}
 
 		const productOwnerAnswer = await productOwner.ask(stage, agent.message);
-		console.log(`Product Owner: ${productOwnerAnswer}`);
 		exchanges.push({ agent, productOwnerAnswer });
+		runEvents?.record("turn-completed", stage, spentUsd, now() - startedAtMs);
 		prompt = continueStagePrompt(skill, productOwnerAnswer);
 	}
 

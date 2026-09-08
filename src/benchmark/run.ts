@@ -66,6 +66,7 @@ import type {
 } from "./pipeline";
 import type { PendingStage } from "./run-abort";
 import { createRunAbort, fileRunArtifactPersistence } from "./run-abort";
+import type { RunEventRecorder } from "./run-events";
 import { openRunEventStore, runEventRecorderFor } from "./run-events";
 import type { BenchmarkRunPaths } from "./run-layout";
 import {
@@ -487,6 +488,7 @@ export interface StageContext {
 	readonly collectJudgeAgreement: (
 		currentCalibrations: readonly JudgeAgreementCalibration[],
 	) => Promise<JudgeAgreementReport>;
+	readonly runEvents?: RunEventRecorder | undefined;
 }
 
 export interface StageOutcome {
@@ -516,6 +518,7 @@ export interface StageSessionEnvironment {
 	readonly settingSources?: "project" | undefined;
 	readonly settingsOverlay?: string | undefined;
 	readonly log: (message: string) => void;
+	readonly runEvents?: RunEventRecorder | undefined;
 }
 
 export interface StageSessionResult {
@@ -557,6 +560,7 @@ export async function executeStageSession(
 		skill: definition.skill,
 		settingSources: environment.settingSources,
 		settingsOverlay: environment.settingsOverlay,
+		runEvents: environment.runEvents,
 	});
 
 	const currentTaskOutput = await dependencies.readTaskOutput(
@@ -990,6 +994,7 @@ export async function runBenchmark(
 					updatePendingStage: abort.updatePendingStage,
 					writeStageProgress: abort.writeStageProgress,
 					completeStage: abort.completeStage,
+					runEvents: runEventRecorderFor(runEventStore, runFiles.name),
 					calibrateStageFailure: async (scorecards) => {
 						if (!config.pause) {
 							return undefined;

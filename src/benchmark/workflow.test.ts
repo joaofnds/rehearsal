@@ -149,6 +149,54 @@ describe("workflow provider metrics", () => {
 		]);
 	});
 
+	it("records a turn-completed run event for every provider turn, with the running spend and no console output", async () => {
+		const responses = [
+			JSON.stringify({
+				session_id: "worker-session",
+				total_cost_usd: 0.3,
+				structured_output: { status: "QUESTION", message: "Which scope?" },
+			}),
+			JSON.stringify({
+				session_id: "worker-session",
+				total_cost_usd: 0.4,
+				structured_output: { status: "COMPLETE", message: "Shaped" },
+			}),
+		];
+		const productOwner: ProductOwner = {
+			ask: () => Promise.resolve("Use the small scope"),
+			snapshot: () => ({
+				sessionId: "po-session",
+				spentUsd: 0,
+				providerCalls: [],
+			}),
+		};
+		const recorded: { readonly kind: string; readonly spentUsd: number }[] = [];
+
+		await runWorkflowStage(
+			{
+				targetDir: "/target",
+				model: "sonnet",
+				effort: undefined,
+				sessionBudgetUsd: 5,
+				productOwner,
+				taskId: "ACT-5",
+				stage: "shape",
+				skill: "shape",
+				runEvents: {
+					record: (kind, _stage, spentUsd) => {
+						recorded.push({ kind, spentUsd });
+					},
+				},
+			},
+			() => Promise.resolve(responses.shift() ?? ""),
+		);
+
+		expect(recorded).toEqual([
+			{ kind: "turn-completed", spentUsd: 0.3 },
+			{ kind: "turn-completed", spentUsd: 0.7 },
+		]);
+	});
+
 	it("restricts a stage session to project-level settings when asked", async () => {
 		const commands: string[][] = [];
 		const productOwner: ProductOwner = {
