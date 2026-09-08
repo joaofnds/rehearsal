@@ -514,8 +514,17 @@ describe(createRunAbort.name, () => {
 			stage: "shape",
 			input: stageJudgeInput("shape"),
 		});
+		await abort.completeStage({
+			...stageScorecard("PASS"),
+			corpusFiles: [],
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+		});
 
-		expect(runEvents.events.map(({ elapsedMs }) => elapsedMs)).toEqual([500]);
+		expect(runEvents.events.map(({ elapsedMs }) => elapsedMs)).toEqual([
+			500, 500,
+		]);
 	});
 
 	it("records a run-completed run event when the artifact reaches its terminal write", async () => {
@@ -534,6 +543,7 @@ describe(createRunAbort.name, () => {
 				reportError: () => undefined,
 				persistence,
 				runEvents,
+				elapsedMs: () => 500,
 			},
 			{
 				artifactFile: "/runs/run.json",
@@ -544,6 +554,7 @@ describe(createRunAbort.name, () => {
 		await abort.completeArtifact({ ...artifact, status: "COMPLETE" });
 
 		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-completed"]);
+		expect(runEvents.events.at(-1)?.elapsedMs).toBe(500);
 	});
 
 	it("records a run-completed run event when a paused run's artifact awaits review", async () => {
@@ -562,6 +573,7 @@ describe(createRunAbort.name, () => {
 				reportError: () => undefined,
 				persistence,
 				runEvents,
+				elapsedMs: () => 500,
 			},
 			{
 				artifactFile: "/runs/run.json",
@@ -573,6 +585,7 @@ describe(createRunAbort.name, () => {
 		await abort.awaitArtifactReview();
 
 		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-completed"]);
+		expect(runEvents.events.at(-1)?.elapsedMs).toBe(500);
 	});
 
 	it("records an interrupted pending stage as failed after the active write settles", async () => {

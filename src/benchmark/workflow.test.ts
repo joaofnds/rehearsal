@@ -170,7 +170,11 @@ describe("workflow provider metrics", () => {
 				providerCalls: [],
 			}),
 		};
-		const recorded: { readonly kind: string; readonly spentUsd: number }[] = [];
+		const recorded: {
+			readonly kind: string;
+			readonly spentUsd: number;
+			readonly elapsedMs: number;
+		}[] = [];
 
 		await runWorkflowStage(
 			{
@@ -183,17 +187,18 @@ describe("workflow provider metrics", () => {
 				stage: "shape",
 				skill: "shape",
 				runEvents: {
-					record: (kind, _stage, spentUsd) => {
-						recorded.push({ kind, spentUsd });
+					record: (kind, _stage, spentUsd, elapsedMs) => {
+						recorded.push({ kind, spentUsd, elapsedMs });
 					},
 				},
+				elapsedMs: () => 500,
 			},
 			() => Promise.resolve(responses.shift() ?? ""),
 		);
 
 		expect(recorded).toEqual([
-			{ kind: "turn-completed", spentUsd: 0.3 },
-			{ kind: "turn-completed", spentUsd: 0.7 },
+			{ kind: "turn-completed", spentUsd: 0.3, elapsedMs: 500 },
+			{ kind: "turn-completed", spentUsd: 0.7, elapsedMs: 500 },
 		]);
 	});
 
