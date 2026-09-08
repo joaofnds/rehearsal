@@ -171,6 +171,26 @@ describe(ComparisonPage.name, () => {
 		expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
 	});
 
+	it("renders the empty state, not a generic error, when no comparison is recorded for the digest", async () => {
+		const stub = (): Promise<Response> =>
+			Promise.resolve(Response.json({ error: "not found" }, { status: 404 }));
+		stub.preconnect = fetch.preconnect;
+		globalThis.fetch = stub;
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<ComparisonPage digest={DIGEST} />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("No comparison recorded")).toBeInTheDocument();
+		});
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+
 	it("reports no corpus difference, never a false attribution, when the two arms' corpora are identical", async () => {
 		stubFetchByPath(
 			new Map([

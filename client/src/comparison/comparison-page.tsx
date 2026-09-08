@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
 import { useState } from "react";
 import { apiClient } from "#client/api-client";
+import { EmptyState } from "#client/system/components/empty-state";
 import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
 import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
@@ -19,10 +20,17 @@ type ComparisonReport = ComparisonResponse["report"];
 type ComparisonCase = ComparisonReport["cases"][number];
 type ComparisonArm = ComparisonCase["arms"]["baseline"];
 
+export class ComparisonNotFoundError extends Error {
+	public override name = "ComparisonNotFoundError";
+}
+
 async function fetchComparison(digest: string): Promise<ComparisonResponse> {
 	const response = await apiClient.api.comparisons[":digest"].$get({
 		param: { digest },
 	});
+	if (response.status === 404) {
+		throw new ComparisonNotFoundError(`No comparison recorded for ${digest}`);
+	}
 	if (!response.ok) {
 		throw new Error(`Could not load comparison ${digest}`);
 	}
@@ -129,7 +137,14 @@ export function ComparisonPage({
 			<h1>Comparison</h1>
 
 			{query.isLoading ? <p>Loading…</p> : null}
-			{query.isError ? <p role="alert">Could not load comparison.</p> : null}
+			{query.isError && query.error instanceof ComparisonNotFoundError ? (
+				<EmptyState heading="No comparison recorded">
+					<p>No comparison is recorded for this digest yet.</p>
+				</EmptyState>
+			) : null}
+			{query.isError && !(query.error instanceof ComparisonNotFoundError) ? (
+				<p role="alert">Could not load comparison.</p>
+			) : null}
 
 			{query.isSuccess ? (
 				<Switcher
