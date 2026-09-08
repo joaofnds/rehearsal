@@ -1,10 +1,10 @@
 ---
 id: ACT-35
 title: run the three unrun brief-reply turns and record their word bands
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-03 11:56'
-updated_date: '2026-09-08 12:21'
+updated_date: '2026-09-08 12:25'
 labels: []
 milestone: m-3
 dependencies:
@@ -32,10 +32,10 @@ Filed at triage 2026-09-03 because an obligation recorded only in a Done card's 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 One debug attempt of each of brief-reply-e3dea673, brief-reply-02f0f204, and brief-reply-40878d26 exits 0 with a non-empty reply
-- [ ] #2 All four replies' word counts are recorded on this card beside that turn's accepted length (145, 136, 108, 76), each with its word-band result
-- [ ] #3 `rehearsal stale` reports none of the four cases stale against the live corpus and all four stale against a corpus directory whose brief.md differs by one byte
-- [ ] #4 ACT-25's criteria #9, #10, and #11 are each either checked with the observation that satisfies them or restated on this card as still unobserved with the reason
+- [x] #1 One debug attempt of each of brief-reply-e3dea673, brief-reply-02f0f204, and brief-reply-40878d26 exits 0 with a non-empty reply
+- [x] #2 All four replies' word counts are recorded on this card beside that turn's accepted length (145, 136, 108, 76), each with its word-band result
+- [x] #3 `rehearsal stale` reports none of the four cases stale against the live corpus and all four stale against a corpus directory whose brief.md differs by one byte
+- [x] #4 ACT-25's criteria #9, #10, and #11 are each either checked with the observation that satisfies them or restated on this card as still unobserved with the reason
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -73,4 +73,51 @@ Satisfying AC#3 as written needs all four re-run, not three.
 
 Not spent: the ~7 USD for the runs. Stopped here for the money decision rather
 than starting it unasked.
+
+Runs executed 2026-09-08, one debug rep per case, --model sonnet. Total spend
+3.30 USD against the card's ~7 USD projection and a 50 USD budget.
+
+The four prefixes were absent: transcript prefix bytes are git-ignored run state,
+so `rehearsal run` refused each case until `rehearsal case capture` rebuilt them
+from the source sessions under ~/.claude/projects. All four captures reproduced
+the cases' pinned sha256 byte-for-byte, so the prefixes are the same bytes the
+earlier runs used. Capture also rewrites the declaration's formatting; that diff
+was reverted since only the ignored prefix bytes were needed.
+
+Word bands, reply against the length Joao accepted for that turn:
+
+  case                  accepted  reply  word-band  forbidden-text  tool-calls
+  brief-reply-e3dea673       145    158  FAIL       FAIL (em dash)  PASS
+  brief-reply-02f0f204       136    286  FAIL       PASS            PASS
+  brief-reply-40878d26       108    129  PASS       PASS            PASS
+  brief-reply-92b2e8b0        76    164  FAIL       PASS            PASS
+
+tool-calls PASSes 0 on all four. This is ACT-32's fix observed across every case,
+not only the one that had been re-run, and it retires the FAIL that was evidence
+about the check rather than about the corpus.
+
+word-band's max is 154 for all four cases while the accepted lengths run 76 to
+145, so the check passes replies far longer than the turn actually took. Only
+40878d26 lands inside its own accepted length. The other three exceed it, and
+92b2e8b0 more than doubles it while still being scored against 154. The band as
+declared is not measuring what the accepted lengths record.
+
+`rehearsal stale` now behaves as AC#3 requires, both halves observed:
+  - live corpus: no brief-reply case reported stale (only manifest-probe, on an
+    unrelated removed skill file)
+  - /tmp/corpus-probe, a full mirror of the live corpus with one byte appended to
+    output-styles/brief.md: all four brief-reply cases reported stale on
+    "output-styles/brief.md changed"
+This became checkable only because all four were re-run; the earlier note that
+AC#3 was unsatisfiable applied to the pre-run state and is now resolved.
+
+ACT-25 carry-over (AC#4):
+  - #9 satisfied: each of the four attempts records a reply and 0 tool calls, so
+    the turn returned prose rather than tool use or a refusal.
+  - #10 satisfied: every attempt's corpusFiles names output-styles/brief.md with
+    the live sha 16f2833a..., and the stale halves above both hold.
+  - #11 satisfied: one debug attempt of each case, all four word counts recorded
+    above beside the accepted lengths.
+
+The word-band concern above is filed as ACT-119, so it is not left only in this Done card's prose.
 <!-- SECTION:NOTES:END -->
