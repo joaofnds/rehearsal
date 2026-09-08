@@ -395,23 +395,30 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 });
 
+interface RecordedRunEvent {
+	readonly kind: RunEventKind;
+	readonly stage: string;
+	readonly spentUsd: number;
+	readonly elapsedMs: number;
+}
+
 interface FakeRunEventRecorder extends RunEventRecorder {
-	readonly events: { readonly kind: RunEventKind; readonly stage: string }[];
+	readonly events: RecordedRunEvent[];
 }
 
 function fakeRunEventRecorder(): FakeRunEventRecorder {
-	const events: { readonly kind: RunEventKind; readonly stage: string }[] = [];
+	const events: RecordedRunEvent[] = [];
 
 	return {
 		events,
-		record: (kind, stage) => {
-			events.push({ kind, stage });
+		record: (kind, stage, spentUsd, elapsedMs) => {
+			events.push({ kind, stage, spentUsd, elapsedMs });
 		},
 	};
 }
 
 describe(createRunAbort.name, () => {
-	it("records a stage-started run event before the pending stage write settles", async () => {
+	it("records a stage-started run event with the stage's own spend before the pending stage write settles", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const runEvents = fakeRunEventRecorder();
 		const abort = createRunAbort(
@@ -436,12 +443,16 @@ describe(createRunAbort.name, () => {
 			input: stageJudgeInput("shape"),
 		});
 
-		expect(runEvents.events).toEqual([
-			{ kind: "stage-started", stage: "shape" },
-		]);
+		expect(
+			runEvents.events.map(({ kind, stage, spentUsd }) => ({
+				kind,
+				stage,
+				spentUsd,
+			})),
+		).toEqual([{ kind: "stage-started", stage: "shape", spentUsd: 1 }]);
 	});
 
-	it("records a stage-completed run event when a stage finishes", async () => {
+	it("records a stage-completed run event carrying the stage session and Judge spend when a stage finishes", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const runEvents = fakeRunEventRecorder();
 		const abort = createRunAbort(
@@ -473,10 +484,43 @@ describe(createRunAbort.name, () => {
 			sessionBudgetUsd: 5,
 		});
 
-		expect(runEvents.events).toEqual([
+		expect(
+			runEvents.events.map(({ kind, stage }) => ({ kind, stage })),
+		).toEqual([
 			{ kind: "stage-started", stage: "shape" },
 			{ kind: "stage-completed", stage: "shape" },
 		]);
+		expect(runEvents.events.at(-1)?.spentUsd).toBe(2);
+	});
+
+	it("records elapsed time against the clock injected at construction", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const times = [1000, 1500];
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+				now: () => times.shift() ?? 1500,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writePendingStage({
+			file: "/runs/shape.json",
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		expect(runEvents.events.map(({ elapsedMs }) => elapsedMs)).toEqual([500]);
 	});
 
 	it("records an interrupted pending stage as failed after the active write settles", async () => {

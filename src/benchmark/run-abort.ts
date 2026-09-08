@@ -29,8 +29,20 @@ export type RunEventKind =
 	| "stage-completed"
 	| "run-completed";
 
+/**
+ * Spend and elapsed time are the stage's own, not the run's running total
+ * against its ceiling: `createRunAbort` sees one stage transition at a time
+ * and has no view of prior stages' cost or the run's start time. A reader
+ * derives the cumulative figure AC #2 wants from the full replayed stream,
+ * the same way it derives everything else from these raw per-event facts.
+ */
 export interface RunEventRecorder {
-	readonly record: (kind: RunEventKind, stage: string) => void;
+	readonly record: (
+		kind: RunEventKind,
+		stage: string,
+		spentUsd: number,
+		elapsedMs: number,
+	) => void;
 }
 
 export const noopRunEventRecorder: RunEventRecorder = {
@@ -51,6 +63,7 @@ export interface RunAbortDependencies {
 	readonly reportError: (message: string) => void;
 	readonly persistence: RunArtifactPersistence;
 	readonly runEvents?: RunEventRecorder | undefined;
+	readonly now?: (() => number) | undefined;
 }
 
 export interface RunAbortRequest {
@@ -149,6 +162,8 @@ export function createRunAbort(
 	let abortRequested = false;
 	let transitionReady = Promise.resolve();
 	const runEvents = dependencies.runEvents ?? noopRunEventRecorder;
+	const now = dependencies.now ?? (() => Date.now());
+	const startedAtMs = now();
 
 	const enqueueTransition = async (
 		transition: () => Promise<void>,
@@ -183,7 +198,12 @@ export function createRunAbort(
 		}
 
 		pendingStage = pending;
-		runEvents.record("stage-started", pending.stage);
+		runEvents.record(
+			"stage-started",
+			pending.stage,
+			pending.input.transcript.costUsd,
+			now() - startedAtMs,
+		);
 
 		return enqueueNormalTransition(() =>
 			dependencies.persistence.write(
@@ -226,7 +246,12 @@ export function createRunAbort(
 		}
 
 		const { file, stage } = pendingStage;
-		runEvents.record("stage-completed", stage);
+		runEvents.record(
+			"stage-completed",
+			stage,
+			record.input.transcript.costUsd + record.costUsd,
+			now() - startedAtMs,
+		);
 
 		return enqueueNormalTransition(async () => {
 			await dependencies.persistence.write(
