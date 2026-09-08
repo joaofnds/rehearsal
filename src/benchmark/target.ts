@@ -1,6 +1,7 @@
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 import { captureBoundedContent } from "./checks";
 import { CommandError, runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
@@ -123,6 +124,30 @@ async function runMarkerPath(root: string): Promise<string> {
 		await git(root, "rev-parse", "--absolute-git-dir"),
 		"benchmark-run.json",
 	);
+}
+
+const runMarkerSchema = z.object({
+	sha: z.string().min(1),
+	pid: z.number(),
+	startedAt: z.string().min(1),
+});
+
+export type RunMarker = z.infer<typeof runMarkerSchema>;
+
+/**
+ * Undefined for a target nothing has claimed, or one already restored: both
+ * read as "nothing to reconcile" to a caller reconciling crashed runs, not
+ * as an error.
+ */
+export async function readRunMarker(
+	root: string,
+): Promise<RunMarker | undefined> {
+	const marker = Bun.file(await runMarkerPath(root));
+	if (!(await marker.exists())) {
+		return undefined;
+	}
+
+	return runMarkerSchema.parse(JSON.parse(await marker.text()));
 }
 
 export async function claimTarget(source: SourceBaseline): Promise<void> {

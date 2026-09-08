@@ -14,6 +14,7 @@ import {
 	captureWorkflowBackup,
 	claimTarget,
 	currentSha,
+	readRunMarker,
 	refExists,
 	removeWorktree,
 	restoreTarget,
@@ -528,6 +529,34 @@ describe(claimTarget.name, () => {
 		);
 		await restoreTarget(baseline);
 		expect(claimTarget(baseline)).resolves.toBeUndefined();
+	});
+});
+
+describe(readRunMarker.name, () => {
+	it("reads the pid a claim recorded for a still-claimed target", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		await claimTarget(baseline);
+
+		const marker = await readRunMarker(baseline.root);
+
+		expect(marker).toMatchObject({ sha: baseline.sha, pid: process.pid });
+	});
+
+	it("reports no marker for a target nothing has claimed", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+
+		expect(await readRunMarker(baseline.root)).toBeUndefined();
+	});
+
+	it("reports no marker once a claim is restored", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		await claimTarget(baseline);
+		await restoreTarget(baseline);
+
+		expect(await readRunMarker(baseline.root)).toBeUndefined();
 	});
 });
 
