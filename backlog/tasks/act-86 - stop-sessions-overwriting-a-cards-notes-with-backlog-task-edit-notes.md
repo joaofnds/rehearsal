@@ -4,7 +4,7 @@ title: stop sessions overwriting a card's notes with backlog task edit --notes
 status: To Do
 assignee: []
 created_date: '2026-09-05 22:48'
-updated_date: '2026-09-08 10:32'
+updated_date: '2026-09-08 10:38'
 labels: []
 dependencies: []
 type: chore
@@ -54,4 +54,5 @@ Triage 2026-09-08, corrected by the overseeing session the same day: the 2026-09
 
 Net effect is the same as every prior note and unchanged from doc-36: no rendered skill under ~/.agents/skills names --append-notes, so the prose fix is not in force and criterion #1 stays unverifiable. What changes is the cause, and it matters for the fix: this was never a revert to guard against, it was a commit that never reached main. Re-landing it is a normal edit on main, not an isolated commit defended from future sweeps.
 
+2026-09-08: follow-on card ACT-115 filed to re-land the --append-notes line on main. This card stays open until that lands and a later session's card write is observed using it.
 <!-- SECTION:NOTES:END -->

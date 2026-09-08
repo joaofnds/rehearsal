@@ -4,8 +4,10 @@ title: the comparison screen has never rendered a real recorded comparison
 status: To Do
 assignee: []
 created_date: '2026-09-08 01:46'
+updated_date: '2026-09-08 10:38'
 labels: []
 dependencies: []
+priority: medium
 type: chore
 ordinal: 110008
 ---
