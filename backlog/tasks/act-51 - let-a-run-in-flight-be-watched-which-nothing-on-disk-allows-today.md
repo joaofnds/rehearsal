@@ -1,7 +1,7 @@
 ---
 id: ACT-51
 title: 'let a run in flight be watched, which nothing on disk allows today'
-status: Review
+status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
@@ -318,6 +318,10 @@ This blocks Done. AC #1 delivers 'a second process receives run events while a r
 Also dispose of the eight should-fix items in the same pass, in particular the two that two reviewers found independently (the dead log fields, and the elapsedMs coverage gap that leaves an already-fixed regression unpinned at most call sites). A regression fixed once and left untested is the one that comes back.
 
 Separately, the stage-started naming defect recorded above is still open and unaddressed by this review. Dispose of it too: either emit a real event where a stage's work begins, or rename the current one to what it actually marks.
+
+Moved back to Build, 2026-09-08, by the iterate session. The review found a blocking defect and the card needs code, not another review, but the card's column was still Review so every step routed it back to reviewing a fix that does not exist yet. Backward moves are legal; this is one. Move it to Review again once markAborted and writeFailedArtifact record their terminal event.
+
+This is the second time in this one iteration that a card's column sent a step to the wrong stage. ACT-120 already carries the pattern; this instance is evidence that it is not confined to shaping.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
