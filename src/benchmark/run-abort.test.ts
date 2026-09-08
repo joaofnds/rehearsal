@@ -523,6 +523,63 @@ describe(createRunAbort.name, () => {
 		expect(runEvents.events.map(({ elapsedMs }) => elapsedMs)).toEqual([500]);
 	});
 
+	it("records a run-completed run event when the artifact reaches its terminal write", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.completeArtifact({ ...artifact, status: "COMPLETE" });
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-completed"]);
+	});
+
+	it("records a run-completed run event when a paused run's artifact awaits review", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const pipeline = await loadDefaultPipeline();
+		const artifact = buildRunArtifact(
+			artifactInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		await abort.writePendingArtifact(artifact);
+
+		await abort.awaitArtifactReview();
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-completed"]);
+	});
+
 	it("records an interrupted pending stage as failed after the active write settles", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const stageFile = "/runs/shape.json";

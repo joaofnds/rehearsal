@@ -99,6 +99,18 @@ export const fileRunArtifactPersistence: RunArtifactPersistence = {
 	},
 };
 
+function totalSpentUsd(artifact: RunArtifact): number {
+	return (
+		artifact.workflow.reduce((total, stage) => total + stage.costUsd, 0) +
+		artifact.stageScorecards.reduce(
+			(total, stage) => total + stage.costUsd,
+			0,
+		) +
+		artifact.productOwnerCostUsd +
+		artifact.judgeCostUsd
+	);
+}
+
 function signalExitCode(signal: NodeJS.Signals): number {
 	if (signal === "SIGTERM") {
 		return 143;
@@ -282,6 +294,12 @@ export function createRunAbort(
 		}
 
 		pendingArtifact = artifact;
+		runEvents.record(
+			"run-completed",
+			"",
+			totalSpentUsd(artifact),
+			now() - startedAtMs,
+		);
 
 		return enqueueNormalTransition(async () => {
 			await writeRunArtifact(
@@ -300,6 +318,14 @@ export function createRunAbort(
 	 */
 	const awaitArtifactReview = (): Promise<void> =>
 		enqueueNormalTransition(() => {
+			if (pendingArtifact !== undefined) {
+				runEvents.record(
+					"run-completed",
+					"",
+					totalSpentUsd(pendingArtifact),
+					now() - startedAtMs,
+				);
+			}
 			pendingArtifact = undefined;
 
 			return Promise.resolve();
