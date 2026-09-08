@@ -13,6 +13,18 @@ afterEach(() => {
 
 function renderAt(path: string): void {
 	stubFetch({ rows: [], unreadable: [] });
+	renderRouterAt(path);
+}
+
+function renderAtWithStub(
+	path: string,
+	byPath: ReadonlyMap<string, unknown>,
+): void {
+	stubFetchByPath(byPath);
+	renderRouterAt(path);
+}
+
+function renderRouterAt(path: string): void {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
@@ -44,19 +56,9 @@ describe(createAppRouter.name, () => {
 	});
 
 	it("renders the corpus screen at /corpus", async () => {
-		stubFetchByPath(
+		renderAtWithStub(
+			"/corpus",
 			new Map([["/api/corpus", { root: "/corpus", digest: "a", files: [] }]]),
-		);
-		const client = new QueryClient({
-			defaultOptions: { queries: { retry: false } },
-		});
-		const router = createAppRouter({
-			history: createMemoryHistory({ initialEntries: ["/corpus"] }),
-		});
-		render(
-			<QueryClientProvider client={client}>
-				<RouterProvider router={router} />
-			</QueryClientProvider>,
 		);
 
 		await waitFor(() => {
@@ -66,26 +68,14 @@ describe(createAppRouter.name, () => {
 
 	it("renders the comparison screen at /comparisons/$digest", async () => {
 		const digest = "e".repeat(64);
-		stubFetchByPath(
+		renderAtWithStub(
+			`/comparisons/${digest}`,
 			new Map([
 				[
 					`/api/comparisons/${digest}`,
 					{ report: { cases: [] }, attribution: {} },
 				],
 			]),
-		);
-		const client = new QueryClient({
-			defaultOptions: { queries: { retry: false } },
-		});
-		const router = createAppRouter({
-			history: createMemoryHistory({
-				initialEntries: [`/comparisons/${digest}`],
-			}),
-		});
-		render(
-			<QueryClientProvider client={client}>
-				<RouterProvider router={router} />
-			</QueryClientProvider>,
 		);
 
 		await waitFor(() => {
