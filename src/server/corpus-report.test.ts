@@ -24,6 +24,23 @@ describe(corpusReport.name, () => {
 		return root;
 	}
 
+	it("reports only the corpus layout, never a file beside it in the root", async () => {
+		const root = await fullCorpusDirectory();
+		await mkdir(join(root, "daemon"), { recursive: true });
+		await writeFile(join(root, "daemon", "control.key"), "secret\n");
+		await writeFile(join(root, ".claude.json"), "{}\n");
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.files.map(({ path }) => path)).toEqual([
+			"CLAUDE.md",
+			"skills/build/SKILL.md",
+			"skills/discuss/SKILL.md",
+		]);
+	});
+
 	async function fullCorpusDirectory(): Promise<string> {
 		const root = await corpusDirectory();
 		await mkdir(join(root, "skills", "build"), { recursive: true });

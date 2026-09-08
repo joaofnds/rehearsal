@@ -69,7 +69,7 @@ export function lineageKey(inputs: LineageInputs): string {
 	);
 }
 
-async function hashFile(path: string): Promise<string> {
+export async function hashFile(path: string): Promise<string> {
 	return createHash("sha256")
 		.update(await Bun.file(path).bytes())
 		.digest("hex");

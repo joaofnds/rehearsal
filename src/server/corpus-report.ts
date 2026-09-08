@@ -1,8 +1,17 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { CheckpointRecord } from "#benchmark/checkpoint";
-import { hashDirectory, parseCheckpointRecord } from "#benchmark/checkpoint";
+import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
+import {
+	hashDirectory,
+	hashFile,
+	parseCheckpointRecord,
+} from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
+import { pathExists } from "#benchmark/file-presence";
+import {
+	CORPUS_INSTRUCTIONS_PATH,
+	CORPUS_LAYOUT_DIRECTORIES,
+} from "#benchmark/corpus-file";
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
 import { recordedCheckpoints } from "#cli/list-command";
 import { corpusDigest } from "./corpus-digest";
@@ -47,11 +56,40 @@ async function readCountsByPath(
 	);
 }
 
+/**
+ * The corpus is the instruction file and the layout directories beside it, the
+ * same reading `corpusLayoutEntries` takes. Hashing the root whole instead
+ * sweeps in whatever else lives under it, which for a corpus rooted at a real
+ * `~/.claude` means caches, logs, and credentials, none of which any stage
+ * reads and none of which belong in a digest or on a screen.
+ */
+async function hashCorpusLayout(root: string): Promise<HashedFile[]> {
+	const files: HashedFile[] = [];
+
+	const instructions = join(root, CORPUS_INSTRUCTIONS_PATH);
+	if (await Bun.file(instructions).exists()) {
+		files.push({
+			path: CORPUS_INSTRUCTIONS_PATH,
+			sha256: await hashFile(instructions),
+		});
+	}
+
+	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {
+		const absolute = join(root, directory);
+		if (!(await pathExists(absolute))) {
+			continue;
+		}
+		files.push(...(await hashDirectory(absolute, directory)));
+	}
+
+	return files;
+}
+
 export async function corpusReport(
 	source: CorpusRoot,
 	runsDirectory: string,
 ): Promise<CorpusReport> {
-	const hashedFiles = await hashDirectory(source.root, "");
+	const hashedFiles = await hashCorpusLayout(source.root);
 	const readCounts = await readCountsByPath(runsDirectory);
 
 	const files: CorpusFileReport[] = [];
