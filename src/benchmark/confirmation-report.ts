@@ -37,6 +37,18 @@ export interface ReliabilitySummary {
 	readonly passK: number;
 }
 
+export function reliabilitySummaryNamed(
+	quality: readonly ReliabilitySummary[],
+	name: string,
+): ReliabilitySummary {
+	const summary = quality.find((candidate) => candidate.name === name);
+	if (summary === undefined) {
+		throw new Error(`Comparison arm has no ${name} quality summary`);
+	}
+
+	return summary;
+}
+
 interface ReliabilityObservation {
 	readonly attempted: boolean;
 	readonly successful: boolean;

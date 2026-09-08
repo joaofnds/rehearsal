@@ -1,6 +1,9 @@
 import type { ConfirmationRepRecord } from "./confirmation-record";
 import type { ReliabilitySummary } from "./confirmation-report";
-import { buildReliabilityReport } from "./confirmation-report";
+import {
+	buildReliabilityReport,
+	reliabilitySummaryNamed,
+} from "./confirmation-report";
 import type { ComparisonProjectionInput } from "./comparison-evidence";
 import type {
 	ComparisonContrast,
@@ -64,18 +67,6 @@ function armQuality(
 		: quality;
 }
 
-function qualitySummary(
-	quality: readonly ReliabilitySummary[],
-	name: string,
-): ReliabilitySummary {
-	const summary = quality.find((candidate) => candidate.name === name);
-	if (summary === undefined) {
-		throw new Error(`Comparison arm has no ${name} quality summary`);
-	}
-
-	return summary;
-}
-
 interface BuildQualityContrastRequest {
 	readonly names: readonly string[];
 	readonly cases: readonly ComparisonQualityCase[];
@@ -90,8 +81,11 @@ function buildQualityContrast(
 		quality: request.names.map((name) => {
 			const summaries = request.cases.map((benchmarkCase) => ({
 				caseId: benchmarkCase.caseId,
-				minuend: qualitySummary(benchmarkCase.arms[request.minuend], name),
-				subtrahend: qualitySummary(
+				minuend: reliabilitySummaryNamed(
+					benchmarkCase.arms[request.minuend],
+					name,
+				),
+				subtrahend: reliabilitySummaryNamed(
 					benchmarkCase.arms[request.subtrahend],
 					name,
 				),

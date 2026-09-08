@@ -2,7 +2,7 @@ import type {
 	ComparisonReport,
 	LegacyComparisonReport,
 } from "#benchmark/comparison-record";
-import type { ReliabilitySummary } from "#benchmark/confirmation-report";
+import { reliabilitySummaryNamed } from "#benchmark/confirmation-report";
 import { armPairs, pairKey } from "./comparison-arm-pair";
 import type { ComparisonAttribution } from "./comparison-attribution";
 import { comparisonAttribution } from "./comparison-attribution";
@@ -20,18 +20,6 @@ export interface ComparisonReportWithAttribution {
 			Readonly<Record<string, Readonly<Record<string, QualityReading>>>>
 		>
 	>;
-}
-
-function summaryFor(
-	quality: readonly ReliabilitySummary[],
-	name: string,
-): ReliabilitySummary {
-	const summary = quality.find((candidate) => candidate.name === name);
-	if (summary === undefined) {
-		throw new Error(`Comparison arm has no ${name} quality summary`);
-	}
-
-	return summary;
 }
 
 /**
@@ -66,8 +54,14 @@ export function comparisonReport(
 			const byMeasure: Record<string, QualityReading> = {};
 			for (const name of measures) {
 				byMeasure[name] = qualityReading({
-					minuend: summaryFor(benchmarkCase.arms[minuend].quality, name),
-					subtrahend: summaryFor(benchmarkCase.arms[subtrahend].quality, name),
+					minuend: reliabilitySummaryNamed(
+						benchmarkCase.arms[minuend].quality,
+						name,
+					),
+					subtrahend: reliabilitySummaryNamed(
+						benchmarkCase.arms[subtrahend].quality,
+						name,
+					),
 					minuendArm: minuend,
 					subtrahendArm: subtrahend,
 				});
