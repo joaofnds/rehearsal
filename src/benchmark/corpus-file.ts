@@ -28,11 +28,13 @@ export class CorpusFileError extends Error {
 /**
  * A declared path is data, and `..` in it would name a file the corpus install
  * does not hold, whose bytes would then be hashed into lineage and whose
- * resolved path would be printed in the attempt record.
+ * resolved path would be printed in the attempt record. This reads the path as
+ * written and resolves no link in it: where the bytes actually land is
+ * `resolvesOutside`, which the reads and hashes consult before opening them.
  */
-function confinedTo(root: string, layoutPath: string): string {
+function withoutTraversal(root: string, layoutPath: string): string {
 	const absolute = resolve(root, layoutPath);
-	if (!absolute.startsWith(`${root}/`)) {
+	if (!absolute.startsWith(`${root}${sep}`)) {
 		throw new CorpusFileError(
 			`Corpus file ${layoutPath} names a path outside the corpus install`,
 		);
@@ -85,7 +87,7 @@ export function resolveCorpusFile(
 	layoutPath: string,
 ): string {
 	if (isCorpusLayoutPath(layoutPath)) {
-		return confinedTo(source.root, layoutPath);
+		return withoutTraversal(source.root, layoutPath);
 	}
 
 	throw new CorpusFileError(
@@ -96,7 +98,7 @@ export function resolveCorpusFile(
 /**
  * A declared path that lands inside the root can still be a link, or sit under
  * a linked directory, and opening it reads bytes the corpus does not hold while
- * filing them under a path that says it does. `confinedTo` is lexical and never
+ * filing them under a path that says it does. `withoutTraversal` is lexical and never
  * resolves a link; an `lstat` on the leaf sees a link one level down but not an
  * intermediate directory that is one. Only resolving every component answers it,
  * and both sides get resolved because macOS resolves `/tmp` to `/private/tmp`,
