@@ -1,0 +1,201 @@
+import { describe, expect, it } from "bun:test";
+import type { ReliabilitySummary } from "#benchmark/confirmation-report";
+import { qualityReading } from "./comparison-quality-reading";
+
+function stageSummary(
+	gradeDistribution: Readonly<Record<string, number>>,
+	successful: number,
+	requested: number,
+): ReliabilitySummary {
+	return {
+		name: "build",
+		requested,
+		attempted: requested,
+		notReached: 0,
+		failed: requested - successful,
+		successful,
+		gradeDistribution,
+		successRate: successful / requested,
+		standardError: 0,
+		passK: 0,
+	};
+}
+
+function finalSummary(
+	gradeDistribution: Readonly<Record<string, number>>,
+	successful: number,
+	requested: number,
+): ReliabilitySummary {
+	return {
+		...stageSummary(gradeDistribution, successful, requested),
+		name: "final",
+	};
+}
+
+describe(qualityReading.name, () => {
+	it("reads inside rerun noise when a declared-stage measure's grade spans overlap", () => {
+		const minuend = stageSummary(
+			Object.fromEntries([
+				["B", 3],
+				["C", 1],
+			]),
+			3,
+			4,
+		);
+		const subtrahend = stageSummary(
+			Object.fromEntries([
+				["B", 1],
+				["C", 3],
+			]),
+			1,
+			4,
+		);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading).toEqual({
+			interval: {
+				minuend: { low: "B", high: "C" },
+				subtrahend: { low: "B", high: "C" },
+			},
+			verdict: { kind: "insideRerunNoise" },
+		});
+	});
+
+	it("reads unchanged already clear when both arms have every rep successful", () => {
+		const minuend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
+		const subtrahend = stageSummary(
+			Object.fromEntries([
+				["A", 2],
+				["B", 2],
+			]),
+			4,
+			4,
+		);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "unchangedAlreadyClear" });
+	});
+
+	it("names the arm with the higher successful-of-requested count when grade spans do not overlap and neither arm is at ceiling", () => {
+		const minuend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
+		const subtrahend = stageSummary(Object.fromEntries([["D", 4]]), 0, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "separated", arm: "candidate" });
+	});
+
+	it("names the subtrahend arm when it succeeds more often", () => {
+		const minuend = stageSummary(Object.fromEntries([["D", 4]]), 0, 4);
+		const subtrahend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "separated", arm: "baseline" });
+	});
+
+	it("reads the binomial 0/n edge as inside rerun noise when both arms fail every rep with overlapping grades", () => {
+		const minuend = stageSummary(Object.fromEntries([["F", 4]]), 0, 4);
+		const subtrahend = stageSummary(
+			Object.fromEntries([
+				["D", 2],
+				["F", 2],
+			]),
+			0,
+			4,
+		);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "insideRerunNoise" });
+	});
+
+	it("reads the binomial n/n edge as unchanged already clear when both arms succeed every rep", () => {
+		const minuend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
+		const subtrahend = stageSummary(Object.fromEntries([["B", 4]]), 4, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "unchangedAlreadyClear" });
+	});
+
+	it("reads the final row's PASS/FAIL axis instead of the five-letter scale", () => {
+		const minuend = finalSummary(
+			Object.fromEntries([
+				["PASS", 3],
+				["FAIL", 1],
+			]),
+			3,
+			4,
+		);
+		const subtrahend = finalSummary(
+			Object.fromEntries([
+				["PASS", 1],
+				["FAIL", 3],
+			]),
+			1,
+			4,
+		);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading).toEqual({
+			interval: {
+				minuend: { low: "PASS", high: "FAIL" },
+				subtrahend: { low: "PASS", high: "FAIL" },
+			},
+			verdict: { kind: "insideRerunNoise" },
+		});
+	});
+
+	it("names the higher-succeeding arm on the final row's PASS/FAIL axis when spans do not overlap", () => {
+		const minuend = finalSummary(Object.fromEntries([["PASS", 3]]), 3, 3);
+		const subtrahend = finalSummary(Object.fromEntries([["FAIL", 4]]), 0, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "separated", arm: "candidate" });
+	});
+});
