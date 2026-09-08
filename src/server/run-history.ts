@@ -1,6 +1,7 @@
 import { readCheckpointRecord } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { loadRunManifest } from "#benchmark/manifest";
+import type { BenchmarkRunPaths } from "#benchmark/run-layout";
 import {
 	benchmarkRunPaths,
 	checkpointStageNames,
@@ -63,6 +64,29 @@ interface RunIdentity {
 	readonly gradeByStage: ReadonlyMap<string, string>;
 }
 
+/**
+ * A run known only from its manifest (no graded artifact): the STOPPED and
+ * INTERRUPTED statuses both read the case ID from there, and both refuse a
+ * run whose manifest never got written rather than reporting it with no
+ * case ID.
+ */
+async function manifestBackedIdentity(
+	paths: BenchmarkRunPaths,
+	status: string,
+): Promise<RunIdentity> {
+	if (!(await Bun.file(paths.manifestFile).exists())) {
+		throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
+	}
+
+	const manifest = await loadRunManifest(paths.manifestFile);
+
+	return {
+		status,
+		caseId: manifest.caseId,
+		gradeByStage: new Map(),
+	};
+}
+
 async function statusAndCaseId(
 	runsDirectory: string,
 	run: string,
@@ -88,17 +112,7 @@ async function statusAndCaseId(
 
 	const stopped = await stoppedStage(runsDirectory, run);
 	if (stopped !== undefined) {
-		if (!(await Bun.file(paths.manifestFile).exists())) {
-			throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
-		}
-
-		const manifest = await loadRunManifest(paths.manifestFile);
-
-		return {
-			status: `STOPPED:${stopped.stage}`,
-			caseId: manifest.caseId,
-			gradeByStage: new Map(),
-		};
+		return manifestBackedIdentity(paths, `STOPPED:${stopped.stage}`);
 	}
 
 	/**
@@ -108,17 +122,7 @@ async function statusAndCaseId(
 	 * the one status this reader derives from SQLite instead of a file.
 	 */
 	if (runEvents.latestEvent(run)?.kind === "run-interrupted") {
-		if (!(await Bun.file(paths.manifestFile).exists())) {
-			throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
-		}
-
-		const manifest = await loadRunManifest(paths.manifestFile);
-
-		return {
-			status: "INTERRUPTED",
-			caseId: manifest.caseId,
-			gradeByStage: new Map(),
-		};
+		return manifestBackedIdentity(paths, "INTERRUPTED");
 	}
 
 	return undefined;

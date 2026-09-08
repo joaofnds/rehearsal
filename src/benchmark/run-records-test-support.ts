@@ -545,6 +545,26 @@ export class RecordedRunsFixture {
 		store.close();
 	}
 
+	/**
+	 * An interrupted run whose manifest never got written, so loading it to
+	 * report its case ID throws an error naming the missing manifest's path.
+	 */
+	public async writeInterruptedRunWithoutManifest(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.interruptedRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		const store = await openRunEventStore(
+			runEventsDatabaseFile(this.runsDirectory),
+		);
+		store.append({
+			runId: this.interruptedRun,
+			kind: "run-interrupted",
+			stage: "build",
+			spentUsd: 1,
+			elapsedMs: 5000,
+		});
+		store.close();
+	}
+
 	public async writeUnreadableGroup(groupId: string): Promise<void> {
 		const paths = confirmationGroupPaths(this.runsDirectory, groupId);
 		await mkdir(paths.directory, { recursive: true });

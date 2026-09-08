@@ -171,6 +171,21 @@ describe(runHistoryReport.name, () => {
 		).toBe(true);
 	});
 
+	it("collects a run reconciled to INTERRUPTED with no manifest as unreadable, matching list runs, rather than dropping it silently", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeInterruptedRunWithoutManifest();
+
+		const { rows, unreadable } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+		);
+
+		expect(rows.some((row) => row.run === fixture.interruptedRun)).toBe(false);
+		expect(
+			unreadable.some((entry) => entry.id === `run:${fixture.interruptedRun}`),
+		).toBe(true);
+	});
+
 	it("reads an empty runs directory as no rows, not an error", async () => {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-empty-"));
 		roots.push(root);
