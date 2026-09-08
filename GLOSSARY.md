@@ -122,15 +122,15 @@
   prefix drops. A cut of N keeps lines [0, N).
 - **Corpus layout** — the directory shape a corpus takes once resolved, and the
   only shape the harness reads: `CLAUDE.md`, `skills/<name>/`,
-  `output-styles/<name>.md`, and `agents/<name>.md` under one root. A corpus
-  layout path names a file within it. Every corpus source resolves to this
-  layout, so the code that hashes and installs a corpus never learns where the
-  bytes came from.
+  `output-styles/<name>.md`, `agents/<name>.md`, and `rulebook/<name>.md`
+  under one root. A corpus layout path names a file within it. Every corpus
+  source resolves to this layout, so the code that hashes and installs a
+  corpus never learns where the bytes came from.
 - **Corpus layout path** — how a case names a corpus file, independent of where
   the corpus is installed: `CLAUDE.md`, `output-styles/<name>.md`,
-  `agents/<name>.md`, or `skills/<name>/...`. One resolver maps a layout path
-  onto the install, and a declared file that does not resolve is refused before
-  any provider call.
+  `agents/<name>.md`, `rulebook/<name>.md`, or `skills/<name>/...`. One
+  resolver maps a layout path onto the install, and a declared file that does
+  not resolve is refused before any provider call.
 - **Corpus snapshot** — the exact frozen project-instruction and stage/global
   skill bytes used by a confirmation group. A control-repository commit alone
   does not identify it because installed skills may live outside that repository.
