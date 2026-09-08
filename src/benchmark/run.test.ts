@@ -563,7 +563,6 @@ describe(runGradedStages.name, () => {
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
 			checkpointDirectory: (stage: string) =>
 				join(stageDirectory, "checkpoints", stage),
-			log: () => undefined,
 			writePendingStage: transitions.writePendingStage,
 			updatePendingStage: transitions.updatePendingStage,
 			writeStageProgress: transitions.writeStageProgress,

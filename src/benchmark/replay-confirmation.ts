@@ -491,7 +491,6 @@ async function runReplayConfirmationBody(
 						corpusRoots: [join(plan.worktreePath, ".claude")],
 						settingSources: "project",
 						settingsOverlay: request.loadedSettings?.json,
-						log: dependencies.log,
 					},
 					frozen.plan.definition,
 					priorArtifacts,

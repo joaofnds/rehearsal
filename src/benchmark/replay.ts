@@ -442,7 +442,6 @@ export async function runReplay(
 				corpusRoots: corpusLayoutRoots(worktreeDir),
 				settingSources: request.settingSources,
 				settingsOverlay: request.loadedSettings?.json,
-				log: dependencies.log,
 			},
 			plan.definition,
 			priorArtifacts,

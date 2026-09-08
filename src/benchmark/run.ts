@@ -477,7 +477,6 @@ export interface StageContext {
 	readonly pipeline: PipelineDefinition;
 	readonly stageFile: (stage: WorkflowStage) => string;
 	readonly checkpointDirectory: (stage: WorkflowStage) => string;
-	readonly log: (message: string) => void;
 	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
 	readonly updatePendingStage: (pending: PendingStage) => void;
 	readonly writeStageProgress: (record: StageJudgeRecord) => Promise<void>;
@@ -518,7 +517,6 @@ export interface StageSessionEnvironment {
 	readonly corpusRoots: readonly string[];
 	readonly settingSources?: "project" | undefined;
 	readonly settingsOverlay?: string | undefined;
-	readonly log: (message: string) => void;
 	readonly runEvents?: RunEventRecorder | undefined;
 	readonly elapsedMs?: (() => number) | undefined;
 }
@@ -999,7 +997,6 @@ export async function runBenchmark(
 					pipeline,
 					stageFile: runFiles.stageFile,
 					checkpointDirectory: runFiles.checkpointDirectory,
-					log: console.log,
 					writePendingStage: abort.writePendingStage,
 					updatePendingStage: abort.updatePendingStage,
 					writeStageProgress: abort.writeStageProgress,

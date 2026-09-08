@@ -424,7 +424,6 @@ async function runPipelineRep(
 					corpusRoots: [join(plan.worktreePath, ".claude")],
 					settingSources: "project",
 					settingsOverlay: request.loadedSettings?.json,
-					log: dependencies.log,
 				},
 				definition,
 				priorArtifacts,
