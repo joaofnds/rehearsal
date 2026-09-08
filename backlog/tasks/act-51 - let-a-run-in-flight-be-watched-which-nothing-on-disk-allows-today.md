@@ -4,7 +4,7 @@ title: 'let a run in flight be watched, which nothing on disk allows today'
 status: To Do
 assignee: []
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 12:51'
+updated_date: '2026-09-08 12:59'
 labels: []
 milestone: m-6
 dependencies:
@@ -33,31 +33,96 @@ Depends on the gap inventory, which is what establishes the real scope.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A run in progress is observable by a second process while it runs, and what that process reads is written down
-- [ ] #2 The monitor shows the running step, spend against the ceiling, and elapsed time, observed against a real run rather than a fixture
-- [ ] #3 A run killed partway leaves state a later reader can reconcile into an interrupted outcome, observed by killing one
-- [ ] #4 Harness progress no longer goes to stdout as prose, satisfying ACT-26.7 or superseding it explicitly
-- [ ] #5 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system, per decision-2
+- [ ] #1 A second process (e.g. curl against the server's SSE endpoint) receives a run-event record while a real run is in flight, before that run writes its terminal record
+- [ ] #2 That SSE stream, read against a real run, shows the current stage name, spend against the run's cost ceiling, and elapsed wall time updating at each stage transition and each turn boundary
+- [ ] #3 kill -9 against a running rehearsal process, followed by a server restart, leaves that run's status as INTERRUPTED (not FAILED) in the record a reader sees, via the startup reconciliation pass
+- [ ] #4 grep for console.log across src/benchmark/ (the 14 sites from ACT-26.7) returns none touching stage progress; the SIGINT/SIGTERM/SIGHUP path in run-abort.ts still writes FAILED for a graceful kill, unchanged
+- [ ] #5 GLOSSARY.md gains 'run event' and 'interrupted run' entries in the wording decision-3/this card's answers gave; no lint/lint:css failure and no new raw value or component outside the design system (decision-2)
+- [ ] #6 contracts.ts's run-status union includes INTERRUPTED distinct from FAILED; every reader of that union across src/ and client/ (not just src/benchmark) is updated, including client/src/run-history/run-status.ts's switch, which today maps FAILED to the UI state 'interrupted' and falls unrecognized values to 'pending' — INTERRUPTED needs its own case rather than hitting that default; typecheck clean
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Vocabulary: this card's labels, routes, and API shapes follow decision-5 and GLOSSARY.md — code/records/CLI keep run, stage, pipeline, case, attempt, rep, confirmation run; the design's task, step, and plural "attempts"/"group" are UI labels only, mapped in GLOSSARY.md.
+Adversarial review, 2026-09-08, one reviewer, on the shaping record above.
 
-Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+Blocking, folded above (AC #5 rewritten): "every existing reader of run status"
+undercounted its own grep scope to src/benchmark only. client/src/run-history/run-status.ts
+(read this session) has its own switch on run status, unmentioned by the original
+note, that maps FAILED to the UI state "interrupted" today and falls every
+unrecognized value to "pending". Without its own INTERRUPTED case, the new status
+literal silently renders as neutral-pending there. AC #5 now names the file and the
+default-case trap directly.
 
-Answers, 2026-09-08 (typed into the iterate session by Joao, "agree" to the four questions as recommended):
+Two findings are real open questions this session cannot close by reading more
+code, since decision-3 is silent on both and nothing measures them. Not folded;
+left for Joao:
 
-1. Storage is not an open question. decision-3 settles it: SQLite in WAL mode, derived and rebuildable, records on disk stay authoritative, SSE for push. Add the live writes at the existing transition points in src/benchmark/run-abort.ts (writePendingStage, writeStageProgress, completeStage) and the per-turn loop in src/benchmark/workflow.ts that already computes spentUsd and providerCalls. No parallel mechanism.
+1. The reconciliation rule as answered ("a run whose event state says running with
+   no terminal record on disk reconciles to INTERRUPTED", applied at server
+   startup) does not distinguish a genuinely crashed run from a run that is still
+   executing when only the server process restarts independently of the harness
+   process. AC #3's kill -9 test only exercises the true-crash path and would not
+   catch a false-positive interruption of a healthy run. Closing this needs either
+   a liveness signal (PID check, heartbeat, event recency) the card doesn't
+   specify, or a decision that server and harness process lifetimes are coupled
+   closely enough that this can't happen in practice — unverified either way.
 
-2. AC #2 needs turn-and-stage-boundary granularity only: current stage, spend against the ceiling, elapsed time. Live tool-call chips, the task graph's in/out counts, and mid-turn token streaming are ACT-96 through ACT-100's, not this card's. The harness invokes claude as a subprocess per turn and receives one complete envelope, so sub-turn streaming would be new plumbing this card never scoped.
+2. Whether the SQLite event store must survive a server restart for a still-healthy
+   in-flight run to keep showing live progress (current stage, spend, elapsed
+   time — AC #2's payload), or whether losing live progress across a restart is
+   acceptable because the run keeps going and eventually writes its terminal
+   record on disk normally. decision-3 says SQLite "stays derived… can be deleted
+   and rebuilt from the records," which covers rebuilding a crashed run's known
+   state, but says nothing about a healthy run's ongoing, not-yet-recorded
+   progress during the restart window.
 
-3. Add INTERRUPTED to the run status union in src/benchmark/contracts.ts as a state distinct from FAILED. Today a killed run writes FAILED (markAborted in run-abort.ts) and the design renders a stopped run as neutral rather than a failure. This is a contract change touching every reader of run status.
+Both are genuine unknowns, not implementation detail: they change what "done"
+means for AC #1-#3 and are cheap to answer now, expensive to discover mid-build.
+Sent back to Joao as this shaping's open questions rather than resolved here.
 
-4. Reconciliation splits: leave run-abort.ts's existing SIGINT/SIGTERM/SIGHUP handler as it is, since it already writes a terminal state on a graceful kill. Add a startup reconciliation pass in the server for the crash case (SIGKILL, OOM, power loss) that leaves no terminal write: a run whose event state says running with no terminal record on disk reconciles to INTERRUPTED. This keeps the card almost entirely out of rehearsal run.
+Adversarial review, 2026-09-08, one reviewer, on the shaping record above.
 
-5. Add both terms to GLOSSARY.md, wording as proposed: run event (one durable, timestamped fact about a run in progress, held in the derived SQLite store per decision-3, replayed to a client over SSE) and interrupted run (a run whose process ended without writing a terminal status, reconciled from run events on server startup into a distinct, non-failure outcome). Neither collides with a term in the glossary today.
+Blocking, folded above (AC #5 rewritten): "every existing reader of run status"
+undercounted its own grep scope to src/benchmark only. client/src/run-history/run-status.ts
+(read this session) has its own switch on run status, unmentioned by the original
+note, that maps FAILED to the UI state "interrupted" today and falls every
+unrecognized value to "pending". Without its own INTERRUPTED case, the new status
+literal silently renders as neutral-pending there. AC #5 now names the file and the
+default-case trap directly.
 
-Probed this session before the answers were given: no RUNNING or INTERRUPTED appears in contracts.ts (its status unions are AWAITING_HUMAN_REVIEW|COMPLETE|FAILED and FAILED); the run-abort.ts and workflow.ts symbols above exist as named; ACT-96 through ACT-100 do own the task-graph detail deferred in answer 2.
+Two findings are real open questions this session cannot close by reading more
+code, since decision-3 is silent on both and nothing measures them. Not folded;
+left for Joao:
+
+1. The reconciliation rule as answered ("a run whose event state says running with
+   no terminal record on disk reconciles to INTERRUPTED", applied at server
+   startup) does not distinguish a genuinely crashed run from a run that is still
+   executing when only the server process restarts independently of the harness
+   process. AC #3's kill -9 test only exercises the true-crash path and would not
+   catch a false-positive interruption of a healthy run. Closing this needs either
+   a liveness signal (PID check, heartbeat, event recency) the card doesn't
+   specify, or a decision that server and harness process lifetimes are coupled
+   closely enough that this can't happen in practice — unverified either way.
+
+2. Whether the SQLite event store must survive a server restart for a still-healthy
+   in-flight run to keep showing live progress (current stage, spend, elapsed
+   time — AC #2's payload), or whether losing live progress across a restart is
+   acceptable because the run keeps going and eventually writes its terminal
+   record on disk normally. decision-3 says SQLite "stays derived… can be deleted
+   and rebuilt from the records," which covers rebuilding a crashed run's known
+   state, but says nothing about a healthy run's ongoing, not-yet-recorded
+   progress during the restart window.
+
+Both are genuine unknowns, not implementation detail: they change what "done"
+means for AC #1-#3 and are cheap to answer now, expensive to discover mid-build.
+Sent back to Joao as this shaping's open questions rather than resolved here.
+
+Answers, 2026-09-08 (second round; typed into the iterate session by Joao, "agree" to both as recommended):
+
+6. Reconciliation checks liveness before marking a run INTERRUPTED. Without it, a server restart while the harness is still running renders a healthy in-flight run as dead. The harness already records process.pid (src/benchmark/target.ts:143), so a PID or heartbeat check is the cheap path; the builder picks which.
+
+7. Live progress does not need to survive a server restart. Losing it during the restart window is acceptable: the run keeps going and writes its terminal record normally, and nothing in the design asks for restart-survival of in-flight progress. Adding it is scope this card never asked for.
+
+Probed this session: client/src/run-history/run-status.ts exists and switches on COMPLETE, FAILED, and AWAITING_HUMAN_REVIEW, so it is a real reader that INTERRUPTED must be added to, as the review found. process.pid is recorded at src/benchmark/target.ts:143.
 <!-- SECTION:NOTES:END -->
