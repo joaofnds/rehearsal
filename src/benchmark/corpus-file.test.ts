@@ -127,6 +127,26 @@ describe("hashing a directory source's own bytes", () => {
 		);
 		expect(variant?.sha256).not.toBe(installed?.sha256 ?? "");
 	});
+
+	it("hashes a declared rulebook file the same way an agents or output-styles file is hashed", async () => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(
+			join(root, "rulebook/coding-style.md"),
+			"a rulebook variant\n",
+		);
+		const source = await resolveCorpusSource(root);
+
+		const [variant] = await hashCorpusFiles(source, [
+			"rulebook/coding-style.md",
+		]);
+
+		expect(variant?.resolvedPath).toBe(join(root, "rulebook/coding-style.md"));
+		expect(variant?.sha256).toBe(
+			new Bun.CryptoHasher("sha256")
+				.update("a rulebook variant\n")
+				.digest("hex"),
+		);
+	});
 });
 
 describe(readCorpusInstructions.name, () => {

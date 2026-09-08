@@ -58,17 +58,19 @@ describe("refusing a source that names no corpus", () => {
 		expect(failure.message).toContain(root);
 	});
 
-	it.each(["CLAUDE.md", "skills/build/SKILL.md", "agents/reviewer.md"])(
-		"accepts a directory holding %s alone",
-		async (layoutPath) => {
-			const root = await resources.createControlDirectory();
-			await Bun.write(join(root, layoutPath), "corpus\n");
+	it.each([
+		"CLAUDE.md",
+		"skills/build/SKILL.md",
+		"agents/reviewer.md",
+		"rulebook/coding-style.md",
+	])("accepts a directory holding %s alone", async (layoutPath) => {
+		const root = await resources.createControlDirectory();
+		await Bun.write(join(root, layoutPath), "corpus\n");
 
-			const source = await resolveCorpusSource(root);
+		const source = await resolveCorpusSource(root);
 
-			expect(source.kind).toBe("directory");
-		},
-	);
+		expect(source.kind).toBe("directory");
+	});
 
 	/**
 	 * A corpus source is a directory in corpus layout. Anything else is refused

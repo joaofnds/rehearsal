@@ -57,6 +57,15 @@ describe(observedManifest.name, () => {
 		).toContain("skills/verify/SKILL.md");
 	});
 
+	it("names the layout path of a rulebook file read by its real, absolute path", () => {
+		expect(
+			observedManifest(
+				[readUse("/Users/joaofnds/.claude/rulebook/coding-style.md")],
+				[],
+			).paths,
+		).toContain("rulebook/coding-style.md");
+	});
+
 	it("names no path for a Read of a file outside the corpus install's .claude layout", () => {
 		expect(
 			observedManifest([readUse("/tmp/attempt/NOTES.md")], []).paths,
@@ -113,6 +122,14 @@ describe(reconcileManifest.name, () => {
 
 		expect(reconcileManifest(manifest, ["skills/verify/SKILL.md"])).toEqual([
 			{ kind: "unloaded-file", path: "skills/verify/SKILL.md" },
+		]);
+	});
+
+	it("reports an unloaded-file divergence for a declared rulebook file the session never read", () => {
+		const manifest = observedManifest([], []);
+
+		expect(reconcileManifest(manifest, ["rulebook/coding-style.md"])).toEqual([
+			{ kind: "unloaded-file", path: "rulebook/coding-style.md" },
 		]);
 	});
 });
