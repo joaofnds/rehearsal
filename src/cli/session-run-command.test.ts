@@ -329,6 +329,70 @@ describe("running a session case against a corpus source", () => {
 		expect(second.record.lineage).toBe(first.record.lineage);
 	});
 
+	/**
+	 * The declared file resolves and hashes successfully in hashCorpusFiles, so
+	 * the attempt still runs; the fake session's transcript carries no tool_use
+	 * that would name it, which is what reaches the divergence path rather than
+	 * short-circuiting on the pre-flight missing-file refusal (ACT-59 AC#6).
+	 */
+	it("reports an unloaded-file divergence for a declared corpus file the session never read", async () => {
+		const outcome = await attemptWith(await corpusDirectory("marker brief\n"));
+
+		expect(outcome.record.divergences).toEqual([
+			{ kind: "unloaded-file", path: "output-styles/brief.md" },
+		]);
+	});
+
+	it("reports an undeclared-file divergence for a skill the session invoked but the case never declared", async () => {
+		const projects = await temporary("rehearsal-projects-");
+		const runsDirectory = await temporary("rehearsal-runs-");
+		const runClaude: ClaudeRunner = async (command, cwd) => {
+			const sessionId = command[command.indexOf("--session-id") + 1] ?? "";
+			const slug = join(projects, projectSlug(await realpath(cwd)));
+			await mkdir(slug, { recursive: true });
+			await writeFile(
+				join(slug, `${sessionId}.jsonl`),
+				`${JSON.stringify({
+					type: "assistant",
+					message: {
+						content: [
+							{ type: "tool_use", name: "Skill", input: { skill: "verify" } },
+							{ type: "text", text: "OK" },
+						],
+					},
+				})}\n`,
+			);
+
+			return JSON.stringify({
+				session_id: sessionId,
+				is_error: false,
+				result: "OK",
+				total_cost_usd: 0.0011,
+				num_turns: 1,
+				duration_ms: 800,
+				duration_api_ms: 700,
+				usage: {
+					input_tokens: 10,
+					output_tokens: 2,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 0,
+				},
+			});
+		};
+
+		const outcome = await runSessionDebugAttempt({
+			sessionCase: sessionCase(),
+			config,
+			runsDirectory,
+			runClaude,
+			projectsDirectory: projects,
+		});
+
+		expect(outcome.record.divergences).toEqual([
+			{ kind: "undeclared-file", path: "skills/verify/SKILL.md" },
+		]);
+	});
+
 	it("records the live install's bytes and their live paths when no source is named", async () => {
 		const outcome = await attemptWith(undefined);
 

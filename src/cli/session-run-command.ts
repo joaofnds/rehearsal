@@ -7,6 +7,7 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
+import { reconcileManifest } from "#benchmark/context-manifest";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
@@ -135,6 +136,8 @@ interface MutableAttemptRecord extends SessionAttemptRecord {
 	effort?: SessionAttemptRecord["effort"];
 	reply?: SessionAttemptRecord["reply"];
 	metrics?: SessionAttemptRecord["metrics"];
+	contextManifest?: SessionAttemptRecord["contextManifest"];
+	divergences?: SessionAttemptRecord["divergences"];
 }
 
 /**
@@ -169,6 +172,12 @@ function buildAttemptRecord(
 	}
 	if (attempt.metrics !== undefined) {
 		record.metrics = { ...attempt.metrics };
+	}
+	if (attempt.contextManifest !== undefined) {
+		record.contextManifest = { paths: [...attempt.contextManifest.paths] };
+		record.divergences = [
+			...reconcileManifest(attempt.contextManifest, sessionCase.corpusFiles),
+		];
 	}
 
 	return record;
