@@ -5,7 +5,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 01:22'
+updated_date: '2026-09-08 01:43'
 labels: []
 milestone: m-7
 dependencies:
@@ -273,4 +273,35 @@ Two defects found that the test suite could not see, each fixed in its own commi
 The second one is the more useful finding: the suite was green on a policy the app does not use. Any future client test that builds its own QueryClient re-opens that gap.
 
 Verified after both fixes: corpus screen lists 35 corpus files with the corpus root@ label and unredacted root as directed; the comparison screen shows its empty state immediately; typecheck, lint, fmt:check clean; 1162 server and 99 client tests pass.
+
+Code review 2026-09-08 (review-code skill), scoped to the two post-browser-check fix commits (bdd72a1, 0fabb78) that landed after the card's earlier six-axis review and were not seen by it. Six reviewer agents in parallel, one round: Spec conformance, Style, Architecture, Security, Testing, Refactoring. Full suite green before dispatch (1162 server + 99 client, bun run test). Diffs reviewed: bdd72a1 and 0fabb78 individually, each materialized as its own patch.
+
+Spec conformance: AC #8 ("corpus root@<hash> ... over every file in the live corpus tree") partial for bdd72a1 -- hashCorpusLayout's CORPUS_LAYOUT_DIRECTORIES (skills, agents, output-styles) omits rulebook, which checkpoint.ts's LAYOUT_DIRECTORY_KINDS shows is a real whole-directory corpus kind every captureStageCorpus/snapshotStageCorpus call hashes into a stage's lineage; verified rulebook exists with content on the reviewing machine's own ~/.claude. For 0fabb78: the "the client now comes from a factory the tests use too" claim holds for one new test only -- 7 sites across 4 pre-existing test files still build their own ad hoc QueryClient with retry:false, leaving the commit's own named root cause open everywhere but the new file (note, not blocking; no live gap found in those 4 files today).
+
+Style: two should-fix import-ordering nits (an internal alias import interleaved between external package imports in corpus-report.ts and main.tsx) -- FIXED for main.tsx (reorder); left as-is in corpus-report.ts's #benchmark/checkpoint-style type/value split, which matches the file's own established verbatimModuleSyntax convention elsewhere (not a defect, confirmed by grep across src/server/*.ts). Independently corroborated the rulebook gap (framed as a pre-existing gap, not introduced by the fix).
+
+Architecture: corroborated and sharpened the rulebook finding with git history (91495ba, ab05bc2 show rulebook was deliberately added to a stage's real corpus) -- FIXED, see below. Also found: the shared QueryClient factory (client/src/query-client.ts) imports one feature's error class (ComparisonNotFoundError) to decide retry policy for the whole app, a backward dependency for a cross-cutting factory (should-fix, no concrete wrong-output input found for the other two pages today -- TRACKED as a design note, not fixed this round, since no caller is currently affected and the fix shape depends on how corpus/run-history screens eventually signal not-found, which is undecided product surface).
+
+Security: reproduced directly that hashDirectory (shared by corpus-report.ts and 3 other callers) follows symlinks with no realpath containment check -- a symlink planted inside skills/, agents/, or output-styles/ is walked, read, hashed, and reported, undercutting bdd72a1's own stated guarantee one level down. Pre-existing in shared code (not introduced by either reviewed commit, confirmed via the revert test), so not fixed in this batch -- FILED as ACT-113. No other findings; corpus root path exposure reconfirmed as the signed-off product decision; hashFile export reconfirmed to have no attacker-reachable input.
+
+Testing: mutation-tested both new tests directly -- both genuinely pin their fixes (reverting either production fix makes its new test fail). One real gap: mutating MAX_ATTEMPTS to 0 (dropping retries for every non-404 error) does not fail query-client.test.tsx, so the commit's "everything else keeps its retries" claim is unpinned (note, not blocking -- the shipped bug was specifically the 404 case, which is proven). Flagged a stray untracked scratch file that broke typecheck/lint mid-session and vanished by itself, unrelated to either commit; confirmed clean afterward.
+
+Refactoring (advisory): reproduced a real flake in client/src/query-client.test.tsx -- 1 failure in 6 full-suite runs, hung on "Loading..." past waitFor's default 1000ms timeout; confirmed the retry predicate itself resolves in <100ms in isolation, so this is scheduler-jitter margin, not a logic defect. Tagged [correctness] since it's a concrete wrong-output-on-this-input result. Also noted the same rulebook/skills list divergence as a duplicated-traversal observation (no remedy prescribed, contract mismatch between hashCorpusLayout and corpusLayoutEntries), and a cosmetic pathExists vs Bun.file().exists() inconsistency within one function (note, no behavior difference).
+
+Disposition:
+1. SHOULD-FIX (Spec, corroborated Architecture/Style/Refactoring): corpus screen's digest omits rulebook/, a directory a stage's own corpus really includes -- FIXED, commit 23d297a (corpus-report.ts now walks CORPUS_LAYOUT_DIRECTORIES plus rulebook; kept skills in the walk too, since dropping it would have regressed the screen's existing "every file in the live corpus tree" job against AC #8 -- verified by reproducing the regression first when the fix used checkpoint.ts's LAYOUT_DIRECTORY_KINDS alone, which silently drops skills). New test added and mutation-checked: reverting the directory list to its pre-fix state makes it fail.
+2. SHOULD-FIX (Refactoring, reproduced directly): query-client.test.tsx flakes under load on the default waitFor timeout -- FIXED, commit e47070f (explicit 5000ms timeout on the one test that drives the real, unstubbed retry scheduler rather than every sibling test's instant retry:false settle). Verified: 13/13 full-suite reruns green after the fix (5 before discovering Refactoring's finding, 8 after fixing it), versus the reviewer's reproduced 1-in-6 failure rate before.
+3. SHOULD-FIX (Style): import-ordering in main.tsx -- FIXED, same commit e47070f. The analogous corpus-report.ts pattern is NOT a defect: matches the file's own verbatimModuleSyntax type/value-import convention, confirmed against sibling files.
+4. SHOULD-FIX (Security, reproduced directly): hashDirectory follows symlinks with no containment check, shared by 4 production call sites -- NOT FIXED this round (pre-existing in shared code predating both reviewed commits; the revert test confirms it's not this diff's defect). TRACKED as ACT-113.
+5. SHOULD-FIX (Architecture): shared QueryClient factory imports one feature's error type -- NOT FIXED (no concrete wrong-output input found for any other page today; the right fix shape depends on undecided product surface for corpus/run-history not-found signaling). Left as a design note on this record rather than a task, since no caller is affected.
+6. NOTE (Spec/Architecture): 7 pre-existing client test sites still bypass the shared retry-policy factory -- no action; dormant today, confirmed no live 404 path is masked in those files.
+7. NOTE (Testing): "other errors still retry" half of the retry-fix commit message is untested -- no action; the shipped bug (404 case) is proven, and the untested half is a claim in prose, not an observed defect.
+8. NOTE (Testing): stray untracked scratch file broke typecheck/lint mid-review, unrelated to either commit and gone by session's end -- no action, confirmed clean.
+9. NOTE (Refactoring): cosmetic pathExists vs Bun.file().exists() inconsistency within hashCorpusLayout -- no action, no behavior difference.
+
+Full suite re-verified green after every fix: 1163 server + 99 client tests (bun run test, run 8x to confirm the flake's resolution), tsc --noEmit clean on both tsconfigs, oxlint --type-aware clean, oxfmt --check clean.
+
+Post-review probes, 2026-09-08. The second review corrected my own corpus fix: my version walked CLAUDE.md plus skills, agents, and output-styles, taking CORPUS_LAYOUT_DIRECTORIES as the definition, but a real checkpoint on disk records rulebook too. Verified directly: the top-level entries in 2026-09-06T21-58-29.508Z/shape are CLAUDE.md, agents, output-styles, rulebook, skills. My fix dropped a directory every stage reads. Corrected in 23d297a.
+
+Verified after: the live /api/corpus serves exactly those five top-level entries, 120 files, no non-layout path. Suite green at 1163 server and 99 client, typecheck, lint and fmt clean.
 <!-- SECTION:NOTES:END -->
