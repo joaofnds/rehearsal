@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-07 10:44'
+updated_date: '2026-09-08 10:33'
 labels: []
 milestone: m-3
 dependencies: []
@@ -51,4 +51,6 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-07: assigned m-3, per doc-16/doc-22/doc-23's unopposed recommendation carried across three prior triage runs.
+
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->

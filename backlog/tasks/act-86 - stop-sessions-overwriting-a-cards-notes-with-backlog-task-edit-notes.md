@@ -4,7 +4,7 @@ title: stop sessions overwriting a card's notes with backlog task edit --notes
 status: To Do
 assignee: []
 created_date: '2026-09-05 22:48'
-updated_date: '2026-09-07 10:44'
+updated_date: '2026-09-08 10:32'
 labels: []
 dependencies: []
 type: chore
@@ -49,4 +49,9 @@ An unprimed reviewer called for cutting both lines as a duplicate of the board r
 This is prose, which is the mechanism that already failed once. It is weaker than the hook João ruled out. Whether it holds is only observable by watching a future shape or build session write a card. Criterion #1 is therefore not checkable yet.
 
 Triage 2026-09-07: the claim above ('landed 2026-09-06 as dotfiles commit e33c7abf') is false. Verified directly: commit e33c7abf does not exist in ~/code/dotfiles history, and neither skills/shape/SKILL.md nor skills/build/SKILL.md names --append-notes at the point each tells a session to write the record (checked both source files under ~/.agents/skills). The prose fix described was never made. Criterion #1 is therefore unverifiable as claimed and the mechanism this card settled on is not yet in place.
+
+Triage 2026-09-08, corrected by the overseeing session the same day: the 2026-09-08 triage note claiming commit 30645173 reverted this fix as collateral is false, and so was the 2026-09-07 note calling e33c7abf nonexistent. Probed directly in ~/code/dotfiles: e33c7abf exists as a reachable object and did add the --append-notes line to dot_agents/skills/{shape,build}/SKILL.md, but it is on no branch. `git rev-list main | grep e33c7abf` returns zero hits, `git branch -a --contains e33c7abf` and `git for-each-ref --contains e33c7abf` both return empty, and `git log -S append-notes -- dot_agents/skills/shape/SKILL.md` (and the build path) find no commit at all. It was written on a session checkpoint ref (refs/t3/checkpoints/...) and never merged. 30645173 did not touch the string; it could not have reverted what was never on main.
+
+Net effect is the same as every prior note and unchanged from doc-36: no rendered skill under ~/.agents/skills names --append-notes, so the prose fix is not in force and criterion #1 stays unverifiable. What changes is the cause, and it matters for the fix: this was never a revert to guard against, it was a commit that never reached main. Re-landing it is a normal edit on main, not an isolated commit defended from future sweeps.
+
 <!-- SECTION:NOTES:END -->
