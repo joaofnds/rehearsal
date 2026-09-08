@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { JsonValue } from "#benchmark/json-value";
 import {
 	filesRead,
+	outputStyles,
 	parseTranscript,
 	parseTranscriptFile,
 	toolUses,
@@ -136,5 +137,29 @@ describe(filesRead.name, () => {
 		const transcript = parseTranscript(assistantWith(readBlock, bashBlock));
 
 		expect(filesRead(toolUses(transcript))).toEqual(["/tmp/x.md"]);
+	});
+});
+
+function attachmentLine(attachment: JsonValue): string {
+	return line({ type: "attachment", attachment });
+}
+
+describe(outputStyles.name, () => {
+	it("returns the style name of every output_style attachment in order", () => {
+		const transcript = parseTranscript(
+			[
+				attachmentLine({ type: "output_style", style: "brief" }),
+				attachmentLine({ type: "skill_listing", names: ["verify"] }),
+				attachmentLine({ type: "output_style", style: "concise" }),
+			].join("\n"),
+		);
+
+		expect(outputStyles(transcript)).toEqual(["brief", "concise"]);
+	});
+
+	it("returns nothing for a transcript with no output_style attachment", () => {
+		expect(
+			outputStyles(parseTranscript(attachmentLine({ type: "budget_usd" }))),
+		).toEqual([]);
 	});
 });

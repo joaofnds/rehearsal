@@ -23,21 +23,53 @@ const transcriptRecordSchema = z.looseObject({
 		.optional(),
 });
 
+const outputStyleAttachmentSchema = z.looseObject({
+	type: z.literal("output_style"),
+	style: z.string().min(1),
+});
+
+const attachmentRecordSchema = z.looseObject({
+	type: z.literal("attachment"),
+	attachment: z.unknown(),
+});
+
+const skillUseSchema = z.looseObject({
+	type: z.literal("tool_use"),
+	name: z.literal("Skill"),
+	input: z.looseObject({ skill: z.string().min(1) }),
+});
+
 export type ToolUse = z.infer<typeof toolUseSchema>;
 
 export interface TranscriptLine {
 	readonly toolUses: readonly ToolUse[];
+	readonly outputStyle: string | undefined;
+}
+
+function readOutputStyle(record: JsonValue): string | undefined {
+	const attachmentRecord = attachmentRecordSchema.safeParse(record);
+	if (!attachmentRecord.success) {
+		return undefined;
+	}
+
+	const outputStyle = outputStyleAttachmentSchema.safeParse(
+		attachmentRecord.data.attachment,
+	);
+
+	return outputStyle.success ? outputStyle.data.style : undefined;
 }
 
 function readLine(line: string): TranscriptLine {
-	const record = transcriptRecordSchema.safeParse(readJson(line));
+	const parsed = readJson(line);
+	const record = transcriptRecordSchema.safeParse(parsed);
 	const blocks = record.success ? (record.data.message?.content ?? []) : [];
 
 	return {
 		toolUses: blocks
 			.map((block) => toolUseSchema.safeParse(block))
-			.filter((parsed) => parsed.success)
-			.map((parsed) => parsed.data),
+			.filter((use) => use.success)
+			.map((use) => use.data),
+		outputStyle: readOutputStyle(parsed),
 	};
 }
 
@@ -95,4 +127,21 @@ export function filesRead(
 		.filter((use) => use.name === "Read")
 		.map((use) => use.input.file_path)
 		.filter((path) => path !== undefined);
+}
+
+export function outputStyles(
+	lines: Immutable<readonly TranscriptLine[]>,
+): readonly string[] {
+	return lines
+		.map((line) => line.outputStyle)
+		.filter((style) => style !== undefined);
+}
+
+export function skillsInvoked(
+	uses: Immutable<readonly ToolUse[]>,
+): readonly string[] {
+	return uses
+		.map((use) => skillUseSchema.safeParse(use))
+		.filter((parsed) => parsed.success)
+		.map((parsed) => parsed.data.input.skill);
 }
