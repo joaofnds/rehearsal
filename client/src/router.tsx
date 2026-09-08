@@ -5,6 +5,7 @@ import {
 	Outlet,
 } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
+import { ComparisonPage } from "#client/comparison/comparison-page";
 import { RunHistoryPage } from "#client/run-history/run-history-page";
 import { SystemPage } from "#client/system/system-page";
 
@@ -24,7 +25,23 @@ const systemRoute = createRoute({
 	component: SystemPage,
 });
 
-const routeTree = rootRoute.addChildren([runHistoryRoute, systemRoute]);
+const comparisonRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/comparisons/$digest",
+	component: ComparisonRoute,
+});
+
+function ComparisonRoute(): React.JSX.Element {
+	const params: { readonly digest: string } = comparisonRoute.useParams();
+
+	return <ComparisonPage digest={params.digest} />;
+}
+
+const routeTree = rootRoute.addChildren([
+	runHistoryRoute,
+	systemRoute,
+	comparisonRoute,
+]);
 
 export interface CreateAppRouterOptions {
 	readonly history?: RouterHistory | undefined;

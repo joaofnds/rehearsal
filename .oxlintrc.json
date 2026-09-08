@@ -76,7 +76,8 @@
 					"Subprocess",
 					"ReactNode",
 					"RouterHistory",
-					"Context"
+					"Request",
+					"URL"
 				]
 			}
 		],

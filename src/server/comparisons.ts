@@ -4,7 +4,6 @@ import type {
 	LegacyComparisonReport,
 } from "#benchmark/comparison-record";
 import { COMPARISON_ARMS } from "#benchmark/comparison-record";
-import type { Immutable } from "#benchmark/contracts";
 import type { ComparisonAttribution } from "./comparison-attribution";
 import { comparisonAttribution } from "./comparison-attribution";
 
@@ -27,7 +26,7 @@ function armPairs(): readonly {
 }
 
 export interface ComparisonReportWithAttribution {
-	readonly report: Immutable<ComparisonReport | LegacyComparisonReport>;
+	readonly report: ComparisonReport | LegacyComparisonReport;
 	readonly attribution: Readonly<
 		Record<string, Readonly<Record<string, ComparisonAttribution>>>
 	>;
@@ -40,7 +39,7 @@ export interface ComparisonReportWithAttribution {
  * not something a browser re-derives from raw file lists.
  */
 export function comparisonReport(
-	report: Immutable<ComparisonReport | LegacyComparisonReport>,
+	report: ComparisonReport | LegacyComparisonReport,
 ): ComparisonReportWithAttribution {
 	const attribution: Record<string, Record<string, ComparisonAttribution>> = {};
 

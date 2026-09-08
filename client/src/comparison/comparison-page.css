@@ -1,0 +1,28 @@
+.rh-comparison {
+	padding: var(--space-14) var(--space-20) var(--space-12);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+}
+
+.rh-comparison__arm {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.rh-comparison__measure {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.rh-comparison__measure-name {
+	color: var(--color-text-dim);
+	font-size: var(--font-size-11);
+}
+
+.rh-comparison__grade-count {
+	font-family: var(--font-mono);
+	font-weight: 700;
+}

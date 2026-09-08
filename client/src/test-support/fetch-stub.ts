@@ -14,3 +14,22 @@ export function stubFetch(body: RunHistoryResponseBody): void {
 	stub.preconnect = fetch.preconnect;
 	globalThis.fetch = stub;
 }
+
+/**
+ * A `fetch` stub for a page that calls more than one endpoint, keyed by
+ * pathname rather than by response shape: each entry supplies the exact body
+ * its own route's test already types against the server's response schema, so
+ * this stub adds no shape of its own to get wrong.
+ */
+export function stubFetchByPath(byPath: ReadonlyMap<string, unknown>): void {
+	const stub = (request: string | URL | Request): Promise<Response> => {
+		const { pathname } = new URL(
+			request instanceof Request ? request.url : request,
+			"http://localhost",
+		);
+
+		return Promise.resolve(Response.json(byPath.get(pathname)));
+	};
+	stub.preconnect = fetch.preconnect;
+	globalThis.fetch = stub;
+}

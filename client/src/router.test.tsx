@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { stubFetch } from "#client/test-support/fetch-stub";
+import { stubFetch, stubFetchByPath } from "#client/test-support/fetch-stub";
 import { createAppRouter } from "./router";
 
 const originalFetch = globalThis.fetch;
@@ -40,6 +40,35 @@ describe(createAppRouter.name, () => {
 
 		await waitFor(() => {
 			expect(screen.getByText("Rehearsal design system")).toBeInTheDocument();
+		});
+	});
+
+	it("renders the comparison screen at /comparisons/$digest", async () => {
+		const digest = "e".repeat(64);
+		stubFetchByPath(
+			new Map([
+				[
+					`/api/comparisons/${digest}`,
+					{ report: { cases: [] }, attribution: {} },
+				],
+			]),
+		);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const router = createAppRouter({
+			history: createMemoryHistory({
+				initialEntries: [`/comparisons/${digest}`],
+			}),
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Comparison")).toBeInTheDocument();
 		});
 	});
 });
