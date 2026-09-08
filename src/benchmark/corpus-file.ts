@@ -193,9 +193,6 @@ export async function hashCorpusFiles(
 			);
 		}
 
-		if (source.kind === "live") {
-			throw new SymlinkedEntryError("live refused");
-		}
 		await refuseUncontained(source, layoutPath, resolvedPath);
 
 		hashed.push({
