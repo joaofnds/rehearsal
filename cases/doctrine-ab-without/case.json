@@ -1,0 +1,34 @@
+{
+	"id": "doctrine-ab-without",
+	"kind": "session",
+	"title": "Order change history, without the pre-cut doctrine read whole first",
+	"fixture": "fixture",
+	"prompt": "Customers phone the order desk asking what happened to their order and when. Product wants every change to an order to be visible to the desk: who made it, what changed, and when. Add that to this repository. Implement it and test it, then run the whole suite. End your reply with what you built and what you verified.",
+	"tools": [
+		"Read",
+		"Edit",
+		"Write",
+		"Bash",
+		"Glob",
+		"Grep"
+	],
+	"settings": {
+		"outputStyle": "brief"
+	},
+	"corpusFiles": [
+		"CLAUDE.md",
+		"rulebook/engineering-judgment.md",
+		"rulebook/coding-style.md",
+		"rulebook/coding-style-typescript.md",
+		"rulebook/testing/00-index.md",
+		"output-styles/brief.md"
+	],
+	"checks": [
+		{
+			"kind": "tool-calls",
+			"max": 400
+		}
+	],
+	"model": "sonnet",
+	"sessionBudgetUsd": 6
+}
