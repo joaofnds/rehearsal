@@ -157,4 +157,17 @@ buildPairedEstimate, so the fuller summary has to be kept rather than
 discarded. The reading is computed from those summaries and not from the
 paired estimate, per decision 1.
 
+9. The third verdict, settled 2026-09-08. Decisions 4 and 7 left a hole: they
+gave the magnitude label to meter rows, then removed meter rows, so a graded
+row whose arms neither overlap nor both sit at ceiling had no verdict. That
+case is the common one, a candidate that is clearly better but not perfect,
+and rendering no phrase there would stay silent exactly where the row has
+something to say.
+
+The closed set is therefore three: inside rerun noise, unchanged already
+clear, and a directional reading for separated arms, naming which arm
+succeeds more often. The direction comes from comparing the two arms'
+recorded successful-of-requested counts, the same structural comparison the
+other two rules use. No synthesized statistic, on either axis.
+
 <!-- SECTION:NOTES:END -->
