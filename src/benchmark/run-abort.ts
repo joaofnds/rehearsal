@@ -24,6 +24,19 @@ export interface PendingStage {
 	readonly scorecard?: StageScorecard | undefined;
 }
 
+export type RunEventKind =
+	| "stage-started"
+	| "stage-completed"
+	| "run-completed";
+
+export interface RunEventRecorder {
+	readonly record: (kind: RunEventKind, stage: string) => void;
+}
+
+export const noopRunEventRecorder: RunEventRecorder = {
+	record: () => undefined,
+};
+
 export interface RunAbortDependencies {
 	readonly killActiveCommands: () => Promise<void>;
 	readonly registerSignal: (
@@ -37,6 +50,7 @@ export interface RunAbortDependencies {
 	readonly exit: (code: number) => void;
 	readonly reportError: (message: string) => void;
 	readonly persistence: RunArtifactPersistence;
+	readonly runEvents?: RunEventRecorder | undefined;
 }
 
 export interface RunAbortRequest {
@@ -134,6 +148,7 @@ export function createRunAbort(
 	let signalAbortStarted = false;
 	let abortRequested = false;
 	let transitionReady = Promise.resolve();
+	const runEvents = dependencies.runEvents ?? noopRunEventRecorder;
 
 	const enqueueTransition = async (
 		transition: () => Promise<void>,
@@ -168,6 +183,7 @@ export function createRunAbort(
 		}
 
 		pendingStage = pending;
+		runEvents.record("stage-started", pending.stage);
 
 		return enqueueNormalTransition(() =>
 			dependencies.persistence.write(
@@ -209,7 +225,8 @@ export function createRunAbort(
 			return Promise.reject(new Error("No stage transition is pending"));
 		}
 
-		const { file } = pendingStage;
+		const { file, stage } = pendingStage;
+		runEvents.record("stage-completed", stage);
 
 		return enqueueNormalTransition(async () => {
 			await dependencies.persistence.write(

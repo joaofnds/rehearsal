@@ -14,7 +14,12 @@ import type { PipelineDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
 import type { RunArtifactBaseInputs, RunArtifactInputs } from "./run";
 import { buildFailedJudgeRunArtifact, buildRunArtifact } from "./run";
-import type { PendingStage, RunArtifactPersistence } from "./run-abort";
+import type {
+	PendingStage,
+	RunArtifactPersistence,
+	RunEventKind,
+	RunEventRecorder,
+} from "./run-abort";
 import {
 	createRunAbort,
 	fileRunArtifactPersistence,
@@ -390,7 +395,90 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 });
 
+interface FakeRunEventRecorder extends RunEventRecorder {
+	readonly events: { readonly kind: RunEventKind; readonly stage: string }[];
+}
+
+function fakeRunEventRecorder(): FakeRunEventRecorder {
+	const events: { readonly kind: RunEventKind; readonly stage: string }[] = [];
+
+	return {
+		events,
+		record: (kind, stage) => {
+			events.push({ kind, stage });
+		},
+	};
+}
+
 describe(createRunAbort.name, () => {
+	it("records a stage-started run event before the pending stage write settles", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writePendingStage({
+			file: "/runs/shape.json",
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		expect(runEvents.events).toEqual([
+			{ kind: "stage-started", stage: "shape" },
+		]);
+	});
+
+	it("records a stage-completed run event when a stage finishes", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const runEvents = fakeRunEventRecorder();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		await abort.writePendingStage({
+			file: "/runs/shape.json",
+			stage: "shape",
+			input: stageJudgeInput("shape"),
+		});
+
+		await abort.completeStage({
+			...stageScorecard("PASS"),
+			corpusFiles: [],
+			model: "sonnet",
+			judgeModel: "opus",
+			sessionBudgetUsd: 5,
+		});
+
+		expect(runEvents.events).toEqual([
+			{ kind: "stage-started", stage: "shape" },
+			{ kind: "stage-completed", stage: "shape" },
+		]);
+	});
+
 	it("records an interrupted pending stage as failed after the active write settles", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const stageFile = "/runs/shape.json";
