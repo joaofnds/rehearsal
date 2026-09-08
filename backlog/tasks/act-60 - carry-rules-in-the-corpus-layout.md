@@ -1,7 +1,7 @@
 ---
 id: ACT-60
 title: carry rulebook/ in the corpus layout
-status: To Do
+status: Build
 assignee: []
 created_date: '2026-09-04 15:11'
 updated_date: '2026-09-08 16:57'
