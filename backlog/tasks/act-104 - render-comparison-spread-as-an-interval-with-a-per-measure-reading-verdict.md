@@ -1,11 +1,11 @@
 ---
 id: ACT-104
 title: render comparison spread as an interval with a per-measure reading verdict
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-08 21:25'
+updated_date: '2026-09-08 21:41'
 labels: []
 dependencies:
   - ACT-49
@@ -21,16 +21,16 @@ The design's 'What moved' comparison layout shows, per measure, a spread across 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A comparison report states, per measure, a spread across attempts in a form a UI can render as an interval
-- [ ] #2 A comparison report states, per measure, one of a small fixed set of reading verdicts derived from that spread
-- [ ] #3 Given a candidateMinusBaseline (or any contrast) quality row for a declared-stage measure whose two arms' gradeDistribution spans overlap, the served comparison report's row carries an interval field built from each arm's low-to-high grade span on the A-F scale and a verdict of "inside rerun noise"
-- [ ] #4 Given a declared-stage quality row whose arms both have successful === requested (every rep graded A or B, the only grades stageObservation in confirmation-report.ts counts as successful today), the row's verdict is "unchanged, already clear" regardless of grade spread
-- [ ] #5 Given a declared-stage quality row whose arms' grade spans do not overlap and are not both at ceiling, the row's verdict names the arm with the higher successful-of-requested count as succeeding more often
-- [ ] #6 Given the "final" row (pipeline mode), the interval and verdict are computed over the two-value PASS/FAIL axis from finalObservation's verdict field, not the five-letter grade scale, using the same three structural rules (overlap, ceiling, direction)
-- [ ] #7 The binomial edge cases 0/n and n/n (Wald standard error zero) are covered by a passing test for both the overlap and ceiling rules
-- [ ] #8 The served comparison report carries the interval-and-verdict field per measure per case (see open question below on where it is computed and stored)
-- [ ] #9 The computation reads the two arms' full ReliabilitySummary (gradeDistribution, successful, requested), not a narrowed successRate/passK pair and not PairedEstimate, and is keyed per (case, measure) per decision 3, never pooled across all cases into one interval per measure
-- [ ] #10 The client's What moved block still renders as PlannedFeatureBlock (comparison-page.tsx, pinned by comparison-page.test.tsx); this card ships no UI change
+- [x] #1 A comparison report states, per measure, a spread across attempts in a form a UI can render as an interval
+- [x] #2 A comparison report states, per measure, one of a small fixed set of reading verdicts derived from that spread
+- [x] #3 Given a candidateMinusBaseline (or any contrast) quality row for a declared-stage measure whose two arms' gradeDistribution spans overlap, the served comparison report's row carries an interval field built from each arm's low-to-high grade span on the A-F scale and a verdict of "inside rerun noise"
+- [x] #4 Given a declared-stage quality row whose arms both have successful === requested (every rep graded A or B, the only grades stageObservation in confirmation-report.ts counts as successful today), the row's verdict is "unchanged, already clear" regardless of grade spread
+- [x] #5 Given a declared-stage quality row whose arms' grade spans do not overlap and are not both at ceiling, the row's verdict names the arm with the higher successful-of-requested count as succeeding more often
+- [x] #6 Given the "final" row (pipeline mode), the interval and verdict are computed over the two-value PASS/FAIL axis from finalObservation's verdict field, not the five-letter grade scale, using the same three structural rules (overlap, ceiling, direction)
+- [x] #7 The binomial edge cases 0/n and n/n (Wald standard error zero) are covered by a passing test for both the overlap and ceiling rules
+- [x] #8 The served comparison report carries the interval-and-verdict field per measure per case (see open question below on where it is computed and stored)
+- [x] #9 The computation reads the two arms' full ReliabilitySummary (gradeDistribution, successful, requested), not a narrowed successRate/passK pair and not PairedEstimate, and is keyed per (case, measure) per decision 3, never pooled across all cases into one interval per measure
+- [x] #10 The client's What moved block still renders as PlannedFeatureBlock (comparison-page.tsx, pinned by comparison-page.test.tsx); this card ships no UI change
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -315,4 +315,26 @@ rule.
 interval and verdict are derived at serve time from the persisted record. No
 new persisted field, no schema version bump.
 
+Build complete, 2026-09-08. Four commits: qualityReading (comparison-quality-reading.ts, pure function), its serve-time wiring into comparisonReport (comparisons.ts, mirroring comparisonAttribution), a find-by-name lookup extraction (reliabilitySummaryNamed, confirmation-report.ts), and a fix commit for two correctness bugs the review round found (see below).
+
+Six-axis independent code review ran (Spec, Style, Architecture, Security, Testing, Refactoring-advisory). Spec: all 10 ACs present with code path and test. Security: no findings, the new field only summarizes data already unredacted in the same response. Two should-fix [correctness] findings, confirmed independently by both Style and Architecture axes with matching evidence, both fixed and covered by new tests before this card closed:
+  1. higherSucceedingArm named the subtrahend arm as "succeeding more often" on an exact tie (equal successful/requested rate, non-overlapping grade spans) instead of reporting no direction. Now returns undefined on a tie; verdictFor routes that to insideRerunNoise.
+  2. spanOf threw when an arm's gradeDistribution was empty, which every declared stage after an earlier STOP verdict produces (a normal NOT_REACHED outcome, not a malformed input). Previously this throw only ran at persist time, on a path that never needed a grade span; wiring qualityReading into the live GET /api/comparisons/:digest handler made it newly reachable, turning a routine early-stop pipeline into an uncaught 500 for the whole comparison report. Fixed: spanOf returns undefined; QualityInterval per arm is now optional; an undefined span is treated as overlapping (no evidence to separate on), which also resolves to insideRerunNoise.
+Also fixed from the same review round: comparisonReport's per-pair body extracted to qualityReadingsByMeasure (Refactoring axis, capped the loop nesting at two visible levels); its docstring now names qualityReadings' rationale, not only attribution's (Style, note); comparisons.test.ts gained a test asserting every declared-stage measure and the pipeline-mode final row render through the real server wiring (Testing, two should-fix — the prior test's name overclaimed coverage of "build" and "final" it never asserted).
+
+What changed: served comparison report now carries qualityReadings[caseId][armPairKey][measureName], each a { interval: { minuend, subtrahend }, verdict } computed at serve time from the persisted per-case ReliabilitySummary[] already on the record. No schema change, no persisted field added.
+
+What isn't wired up: the client's What moved block (comparison-page.tsx) still renders PlannedFeatureBlock, unchanged, per AC #10 and the card's own decision 5. Whoever picks up that screen card can now build the interval/verdict UI directly off GET /api/comparisons/:digest's new qualityReadings field; the planned-block copy claiming a paired estimate can't supply the interval is now false and should be corrected when that card starts.
+
+What I did not verify: the "unreached measure" case (empty gradeDistribution, now returning insideRerunNoise with undefined intervals) is unit-tested but not exercised through the live server wiring, since no fixture in this repo currently produces a persisted record with an all-NOT_REACHED stage for one arm. If that shape turns up in a real recorded comparison, confirm the served response degrades to undefined intervals rather than 500ing, the same way the unit tests predict.
+
+Verified this session: full suite green (1277 pass / 0 fail root, 100 pass / 0 fail client), typecheck clean, lint clean on every touched file, oxfmt clean. All fixes observed via fresh test runs, not asserted from memory.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Served comparison report now carries a per-measure, per-case, per-arm-pair quality reading (grade-span interval plus a closed-set verdict: inside rerun noise, unchanged already clear, or separated naming the stronger arm), computed at serve time from already-persisted reliability data. No schema change. Client's What moved block intentionally untouched (AC #10).
+
+Independent six-axis review found and this session fixed two real correctness bugs before closing: a tie-break defect that misattributed direction on equal success rates, and a throw that turned a routine early-stopped pipeline outcome into a server 500. Full suite green, all 10 acceptance criteria checked with code path and test evidence on the card.
+<!-- SECTION:FINAL_SUMMARY:END -->
