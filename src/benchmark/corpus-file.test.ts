@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, symlink } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, symlink } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
 import { SymlinkedEntryError } from "#benchmark/file-presence";
@@ -282,7 +282,50 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
 		);
 	});
 
-	it("reports through the live install's symlinked CLAUDE.md", async () => {
-		expect(await readCorpusInstructions(liveCorpusSource())).not.toBe("");
+	it("refuses a link into a sibling directory whose name extends the root's", async () => {
+		const parent = await resources.createControlDirectory();
+		const root = join(parent, "corpus");
+		await Bun.write(join(root, "real.md"), "inside bytes\n");
+		await Bun.write(join(parent, "corpus-evil/secret.md"), "SECRET BYTES\n");
+		await symlink(
+			join(parent, "corpus-evil/secret.md"),
+			join(root, "CLAUDE.md"),
+		);
+
+		const failure = await failureOf(
+			hashCorpusFiles({ kind: "directory", root }, ["CLAUDE.md"]),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+	});
+
+	it("reads a root reached through a symlinked parent directory, which resolves the root differently from the way it was named", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-parent-"));
+		resources.track(parent);
+		const root = join(parent, "corpus");
+		await Bun.write(join(root, "CLAUDE.md"), "instructions\n");
+		const linkedParent = join(await resources.createControlDirectory(), "link");
+		await symlink(parent, linkedParent);
+
+		expect(
+			await readCorpusInstructions({
+				kind: "directory",
+				root: join(linkedParent, "corpus"),
+			}),
+		).toBe("instructions\n");
+	});
+
+	it("follows a symlinked CLAUDE.md when the source is the live install", async () => {
+		const root = await resources.createControlDirectory();
+		const outside = await resources.createControlDirectory();
+		await Bun.write(
+			join(outside, "agents.md"),
+			"the live corpus instructions\n",
+		);
+		await symlink(join(outside, "agents.md"), join(root, "CLAUDE.md"));
+
+		expect(await readCorpusInstructions({ kind: "live", root })).toBe(
+			"the live corpus instructions\n",
+		);
 	});
 });
