@@ -769,6 +769,26 @@ describe(runSessionAttempt.name, () => {
 		expect(attempt.contextManifest?.paths).toContain("output-styles/brief.md");
 	});
 
+	it("excludes a skill invoked only in the seeded transcript prefix from the recorded context manifest", async () => {
+		const prefix = await writtenPrefix(
+			`${skillUseLine(SOURCE_SESSION, "verify")}\n`,
+		);
+		const projects = await projectsRoot();
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: resumingCase(prefix.path, prefix.sha256),
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: appendingClaude(projects, "OK"),
+			}),
+		);
+
+		expect(attempt.contextManifest?.paths).not.toContain(
+			"skills/verify/SKILL.md",
+		);
+	});
+
 	it("counts every tool use in the turn when the case declares no transcript prefix", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "OK");

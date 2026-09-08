@@ -334,9 +334,10 @@ async function recordAttempt(
 
 	const transcript = await parseTranscriptFile(transcriptFile);
 	const cut = request.sessionCase.declaration.transcript?.cut ?? 0;
+	const turn = transcript.slice(cut);
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
-		toolUses: toolUses(transcript.slice(cut)),
+		toolUses: toolUses(turn),
 	});
 
 	return {
@@ -346,10 +347,7 @@ async function recordAttempt(
 		metrics,
 		outcome: result.outcome,
 		checks: result.results,
-		contextManifest: observedManifest(
-			toolUses(transcript),
-			outputStyles(transcript),
-		),
+		contextManifest: observedManifest(toolUses(turn), outputStyles(turn)),
 	};
 }
 
