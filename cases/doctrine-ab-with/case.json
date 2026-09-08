@@ -11,8 +11,8 @@
 	"corpusFiles": [
 		"CLAUDE.md",
 		"rulebook/engineering-judgment.md",
-		"rulebook/coding-style.md",
-		"rulebook/coding-style-typescript.md",
+		"rulebook/coding-style/core.md",
+		"rulebook/coding-style/typescript.md",
 		"rulebook/testing/00-index.md",
 		"output-styles/brief.md"
 	],
