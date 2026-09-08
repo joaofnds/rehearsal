@@ -76,6 +76,24 @@ export interface RunAbort {
 
 const RUN_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
+/**
+ * The event store is derived and disposable (GLOSSARY.md: "the run artifact
+ * on disk remains authoritative"), so a failure recording to it must never
+ * block or skip the authoritative write it accompanies.
+ */
+function recordRunEvent(
+	reportError: (message: string) => void,
+	record: () => void,
+): void {
+	try {
+		record();
+	} catch (error) {
+		reportError(
+			`Failed to record run event: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+}
+
 export interface RunArtifactPersistence {
 	readonly write: (path: string, contents: string) => Promise<void>;
 }
@@ -199,12 +217,14 @@ export function createRunAbort(
 		pendingStage = pending;
 
 		return enqueueNormalTransition(async () => {
-			runEvents.record(
-				"stage-judging",
-				pending.stage,
-				pending.input.transcript.costUsd,
-				elapsedMs(),
-			);
+			recordRunEvent(dependencies.reportError, () => {
+				runEvents.record(
+					"stage-judging",
+					pending.stage,
+					pending.input.transcript.costUsd,
+					elapsedMs(),
+				);
+			});
 			await dependencies.persistence.write(
 				pending.file,
 				`${JSON.stringify(
@@ -247,12 +267,14 @@ export function createRunAbort(
 		const { file, stage } = pendingStage;
 
 		return enqueueNormalTransition(async () => {
-			runEvents.record(
-				"stage-completed",
-				stage,
-				record.input.transcript.costUsd + record.costUsd,
-				elapsedMs(),
-			);
+			recordRunEvent(dependencies.reportError, () => {
+				runEvents.record(
+					"stage-completed",
+					stage,
+					record.input.transcript.costUsd + record.costUsd,
+					elapsedMs(),
+				);
+			});
 			await dependencies.persistence.write(
 				file,
 				`${JSON.stringify(record, null, 2)}\n`,
@@ -283,18 +305,20 @@ export function createRunAbort(
 		pendingArtifact = artifact;
 
 		return enqueueNormalTransition(async () => {
-			runEvents.record(
-				"run-completed",
-				"",
-				totalSpentUsd(artifact),
-				elapsedMs(),
-			);
-			terminalEventRecorded = true;
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
 				dependencies.persistence,
 			);
+			recordRunEvent(dependencies.reportError, () => {
+				runEvents.record(
+					"run-completed",
+					"",
+					totalSpentUsd(artifact),
+					elapsedMs(),
+				);
+			});
+			terminalEventRecorded = true;
 			pendingArtifact = undefined;
 		});
 	};
@@ -306,13 +330,16 @@ export function createRunAbort(
 	 */
 	const awaitArtifactReview = (): Promise<void> =>
 		enqueueNormalTransition(() => {
-			if (pendingArtifact !== undefined) {
-				runEvents.record(
-					"run-completed",
-					"",
-					totalSpentUsd(pendingArtifact),
-					elapsedMs(),
-				);
+			const artifact = pendingArtifact;
+			if (artifact !== undefined) {
+				recordRunEvent(dependencies.reportError, () => {
+					runEvents.record(
+						"run-completed",
+						"",
+						totalSpentUsd(artifact),
+						elapsedMs(),
+					);
+				});
 				terminalEventRecorded = true;
 			}
 			pendingArtifact = undefined;
@@ -325,13 +352,20 @@ export function createRunAbort(
 		pendingArtifact = artifact;
 
 		return enqueueTransition(async () => {
-			runEvents.record("run-failed", "", totalSpentUsd(artifact), elapsedMs());
-			terminalEventRecorded = true;
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
 				dependencies.persistence,
 			);
+			recordRunEvent(dependencies.reportError, () => {
+				runEvents.record(
+					"run-failed",
+					"",
+					totalSpentUsd(artifact),
+					elapsedMs(),
+				);
+			});
+			terminalEventRecorded = true;
 			pendingArtifact = undefined;
 		});
 	};
@@ -342,14 +376,16 @@ export function createRunAbort(
 			const artifactToFail = pendingArtifact;
 			abortRecorded = enqueueTransition(async () => {
 				if (!terminalEventRecorded) {
-					runEvents.record(
-						"run-failed",
-						stageToFail?.stage ?? "",
-						artifactToFail === undefined
-							? (stageToFail?.input.transcript.costUsd ?? 0)
-							: totalSpentUsd(artifactToFail),
-						elapsedMs(),
-					);
+					recordRunEvent(dependencies.reportError, () => {
+						runEvents.record(
+							"run-failed",
+							stageToFail?.stage ?? "",
+							artifactToFail === undefined
+								? (stageToFail?.input.transcript.costUsd ?? 0)
+								: totalSpentUsd(artifactToFail),
+							elapsedMs(),
+						);
+					});
 					terminalEventRecorded = true;
 				}
 				if (stageToFail !== undefined) {
