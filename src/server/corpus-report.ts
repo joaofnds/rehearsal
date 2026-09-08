@@ -16,6 +16,17 @@ import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
 import { recordedCheckpoints } from "#cli/list-command";
 import { corpusDigest } from "./corpus-digest";
 
+/**
+ * `CORPUS_LAYOUT_DIRECTORIES` names what the live corpus tree holds; a stage's
+ * own corpus additionally freezes `rulebook` whole (checkpoint.ts's
+ * `LAYOUT_DIRECTORY_KINDS`), so a stage session can read rules a corpus-only
+ * listing would otherwise leave off the screen.
+ */
+const CORPUS_SCREEN_DIRECTORIES: readonly string[] = [
+	...CORPUS_LAYOUT_DIRECTORIES,
+	"rulebook",
+];
+
 export interface CorpusFileReport {
 	readonly path: string;
 	readonly sha256: string;
@@ -57,11 +68,11 @@ async function readCountsByPath(
 }
 
 /**
- * The corpus is the instruction file and the layout directories beside it, the
- * same reading `corpusLayoutEntries` takes. Hashing the root whole instead
- * sweeps in whatever else lives under it, which for a corpus rooted at a real
- * `~/.claude` means caches, logs, and credentials, none of which any stage
- * reads and none of which belong in a digest or on a screen.
+ * The corpus is the instruction file and `CORPUS_SCREEN_DIRECTORIES` beside
+ * it. Hashing the root whole instead sweeps in whatever else lives under it,
+ * which for a corpus rooted at a real `~/.claude` means caches, logs, and
+ * credentials, none of which any stage reads and none of which belong in a
+ * digest or on a screen.
  */
 async function hashCorpusLayout(root: string): Promise<HashedFile[]> {
 	const files: HashedFile[] = [];
@@ -74,7 +85,7 @@ async function hashCorpusLayout(root: string): Promise<HashedFile[]> {
 		});
 	}
 
-	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {
+	for (const directory of CORPUS_SCREEN_DIRECTORIES) {
 		const absolute = join(root, directory);
 		if (!(await pathExists(absolute))) {
 			continue;

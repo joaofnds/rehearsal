@@ -41,6 +41,20 @@ describe(corpusReport.name, () => {
 		]);
 	});
 
+	it("reports a rulebook file, since a stage session's corpus freezes rulebook whole", async () => {
+		const root = await fullCorpusDirectory();
+		await mkdir(join(root, "rulebook"), { recursive: true });
+		await writeFile(join(root, "rulebook", "coding-style.md"), "style\n");
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.files.map(({ path }) => path)).toContain(
+			"rulebook/coding-style.md",
+		);
+	});
+
 	async function fullCorpusDirectory(): Promise<string> {
 		const root = await corpusDirectory();
 		await mkdir(join(root, "skills", "build"), { recursive: true });
