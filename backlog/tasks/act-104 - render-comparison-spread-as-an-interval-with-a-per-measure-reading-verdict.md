@@ -129,4 +129,32 @@ arms, which reads off successRate directly and stays correct when a case
 configures a different minimum. Testing all-A would call a run of straight
 Bs "not yet clear" when the harness has been scoring it as a clean sweep.
 
+7. Row set and axes, corrected 2026-09-08 after reading the record. Decisions
+1 and 6 above named a "binary measures" row and a "meter" row. Neither exists.
+buildQualityContrast produces one row per declared stage plus, in pipeline
+mode, "final" (comparison-quality.ts:132-135), and nothing else.
+comparison-resources.ts computes cost, token and turn distributions per role,
+not a user-declared meter measure. So this card implements the reading only
+for the rows that exist, and a binary or meter reading is filed separately
+once such a measure exists. This is the same split that already deferred
+"fires less often" and "clearest movement".
+
+Correction to decision 6: the two existing row kinds do not share one axis.
+A declared-stage row's gradeDistribution is over the five letters. The
+"final" row's is over PASS and FAIL, because finalObservation records
+grade: outcome.verdict (confirmation-report.ts:123), the verdict string
+itself, never a letter. The overlap and ceiling readings keep their names on
+both, but the final row is a two-value axis and its overlap is not the
+five-point span math. Write it as its own rule rather than a special case of
+the letter scale.
+
+8. Where the reading attaches. A new field on qualityContrastSchema
+(comparison-record.ts) beside successRate and passK, carrying the interval and
+the verdict, computed in buildQualityContrast from the two arms'
+ReliabilitySummary already in scope at comparison-quality.ts:91-98. Today that
+function narrows each summary to a bare successRate and passK before calling
+buildPairedEstimate, so the fuller summary has to be kept rather than
+discarded. The reading is computed from those summaries and not from the
+paired estimate, per decision 1.
+
 <!-- SECTION:NOTES:END -->
