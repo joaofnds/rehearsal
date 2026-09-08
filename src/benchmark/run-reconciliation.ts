@@ -32,39 +32,44 @@ export async function reconcileInterruptedRuns(
 	const reconciled: string[] = [];
 
 	for (const runId of store.runIds()) {
-		const latest = store.latestEvent(runId);
-		if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
-			continue;
-		}
+		try {
+			const latest = store.latestEvent(runId);
+			if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
+				continue;
+			}
 
-		const artifactFile = join(dependencies.runsDirectory, `${runId}.json`);
-		if (await dependencies.artifactExists(artifactFile)) {
-			continue;
-		}
+			const artifactFile = join(dependencies.runsDirectory, `${runId}.json`);
+			if (await dependencies.artifactExists(artifactFile)) {
+				continue;
+			}
 
-		const manifestFile = join(
-			dependencies.runsDirectory,
-			`${runId}.checkpoints`,
-			"manifest.json",
-		);
-		const manifest = await dependencies.loadManifest(manifestFile);
-		if (manifest === undefined) {
-			continue;
-		}
+			const manifestFile = join(
+				dependencies.runsDirectory,
+				`${runId}.checkpoints`,
+				"manifest.json",
+			);
+			const manifest = await dependencies.loadManifest(manifestFile);
+			if (manifest === undefined) {
+				continue;
+			}
 
-		const marker = await dependencies.readMarker(manifest.sourceRoot);
-		if (marker === undefined || dependencies.isAlive(marker.pid)) {
-			continue;
-		}
+			const marker = await dependencies.readMarker(manifest.sourceRoot);
+			if (marker === undefined || dependencies.isAlive(marker.pid)) {
+				continue;
+			}
 
-		store.append({
-			runId,
-			kind: "run-interrupted",
-			stage: latest.stage,
-			spentUsd: latest.spentUsd,
-			elapsedMs: latest.elapsedMs,
-		});
-		reconciled.push(runId);
+			store.append({
+				runId,
+				kind: "run-interrupted",
+				stage: latest.stage,
+				spentUsd: latest.spentUsd,
+				elapsedMs: latest.elapsedMs,
+			});
+			reconciled.push(runId);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(`Failed to reconcile run ${runId}: ${message}`);
+		}
 	}
 
 	return reconciled;

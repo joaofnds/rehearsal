@@ -235,6 +235,48 @@ describe(reconcileInterruptedRuns.name, () => {
 		expect(reconciled.toSorted()).toEqual(["run-1"]);
 		store.close();
 	});
+
+	it("reconciles the other runs when one run's manifest is corrupt, rather than letting it crash the whole pass", async () => {
+		const store = await openRunEventStore(":memory:");
+		store.append({
+			runId: "run-1",
+			kind: "stage-started",
+			stage: "shape",
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+		store.append({
+			runId: "run-2",
+			kind: "stage-started",
+			stage: "discuss",
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+		const dependencies: ReconciliationDependencies = {
+			...fakeDependencies("/runs", {
+				manifests: new Map([
+					[
+						"/runs/run-2.checkpoints/manifest.json",
+						{ sourceRoot: "/target-2" },
+					],
+				]),
+				markers: new Map([["/target-2", { pid: 222 }]]),
+				alivePids: new Set(),
+			}),
+			loadManifest: (path: string) => {
+				if (path === "/runs/run-1.checkpoints/manifest.json") {
+					throw new Error("malformed manifest.json");
+				}
+
+				return Promise.resolve({ sourceRoot: "/target-2" });
+			},
+		};
+
+		const reconciled = await reconcileInterruptedRuns(store, dependencies);
+
+		expect(reconciled).toEqual(["run-2"]);
+		store.close();
+	});
 });
 
 describe(liveReconciliationDependencies.name, () => {
