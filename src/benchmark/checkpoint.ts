@@ -80,6 +80,13 @@ async function hashFile(path: string): Promise<string> {
  * state and a session case's fixture hash through here, because two copies of
  * this walk could disagree about ordering or about what counts as a file, and
  * a lineage key that differs by walk is a stale checkpoint nobody can explain.
+ *
+ * An entry `readdir` lists but that no longer resolves by the time this walk
+ * reaches it (a broken symlink, or a file removed between the listing and the
+ * read) is skipped rather than thrown: a frozen snapshot this function's other
+ * callers hash never loses a file mid-walk, so this tolerance is a no-op for
+ * them, but the live corpus root the corpus screen hashes is a directory
+ * another process can still be writing to.
  */
 export async function hashDirectory(
 	root: string,
@@ -90,7 +97,12 @@ export async function hashDirectory(
 
 	for (const entry of entries.toSorted()) {
 		const absolute = join(root, entry);
-		const entryStats = await stat(absolute);
+		let entryStats: Awaited<ReturnType<typeof stat>>;
+		try {
+			entryStats = await stat(absolute);
+		} catch {
+			continue;
+		}
 		if (!entryStats.isFile()) {
 			continue;
 		}

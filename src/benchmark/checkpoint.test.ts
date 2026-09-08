@@ -1,5 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	mkdtemp,
+	readdir,
+	rm,
+	stat,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
@@ -8,6 +17,7 @@ import {
 	corpusDifferences,
 	corpusLayoutRoots,
 	deriveStaleness,
+	hashDirectory,
 	initialCheckpointInputs,
 	installStageCorpusSnapshot,
 	lineageKey,
@@ -882,5 +892,29 @@ describe(stageCorpusRoots.name, () => {
 				"/target",
 			),
 		).toEqual(["/variants/brief"]);
+	});
+});
+
+describe(hashDirectory.name, () => {
+	it("skips an entry readdir lists but whose target no longer resolves, rather than throwing", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "rehearsal-hash-directory-"),
+		);
+		testResources.track(directory);
+		await writeFile(join(directory, "CLAUDE.md"), "instructions");
+		await symlink(
+			join(directory, "does-not-exist"),
+			join(directory, "broken-link"),
+		);
+
+		const files = await hashDirectory(directory, "");
+
+		expect(files).toEqual([
+			{
+				path: "CLAUDE.md",
+				sha256:
+					"238fa28a94976c7da14563bc873c2729bd5cd325389085bb4c6dd0de28923590",
+			},
+		]);
 	});
 });
