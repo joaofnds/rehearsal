@@ -85,16 +85,22 @@ export class SymlinkedEntryError extends Error {
 	public override name = "SymlinkedEntryError";
 }
 
-function symlinkedEntry(entry: string, root: string): SymlinkedEntryError {
+/**
+ * The path is named the way the hashes are, `join(prefix, entry)`, because the
+ * corpus screen redacts the absolute root before a reader sees the message. An
+ * entry named alone leaves that reader knowing something called `escape.md` is
+ * a link, with no way to tell which layout directory holds it.
+ */
+function symlinkedEntry(path: string): SymlinkedEntryError {
 	return new SymlinkedEntryError(
-		`Entry ${entry} under ${root} is a symlink, which would hash bytes from outside the walked tree`,
+		`${path} is a symlink, which would hash bytes from outside the walked tree`,
 	);
 }
 
 async function refuseIfLink(root: string, prefix: string): Promise<void> {
 	const stats = await lstatIfPresent(root);
 	if (stats?.isSymbolicLink() === true) {
-		throw symlinkedEntry(prefix === "" ? root : prefix, root);
+		throw symlinkedEntry(prefix === "" ? root : prefix);
 	}
 }
 
@@ -144,7 +150,7 @@ export async function hashDirectory(
 			continue;
 		}
 		if (entryStats.isSymbolicLink()) {
-			throw symlinkedEntry(entry, root);
+			throw symlinkedEntry(join(prefix, entry));
 		}
 		if (!entryStats.isFile()) {
 			continue;
