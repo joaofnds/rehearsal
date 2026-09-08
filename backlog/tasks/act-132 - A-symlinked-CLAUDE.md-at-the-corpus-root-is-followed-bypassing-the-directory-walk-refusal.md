@@ -7,7 +7,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-08 22:44'
-updated_date: '2026-09-08 23:32'
+updated_date: '2026-09-08 23:33'
 labels: []
 dependencies: []
 priority: high
@@ -304,4 +304,12 @@ it.
 Not probed, left for build: whether resolving the root once per call is worth
 caching, and how the two catch sites read once SymlinkedEntryError reaches
 them.
+
+Oversight probe, 2026-09-09, on the shape stage's claims. Two held, one is narrower than written.
+
+Held: realpath rewrites /tmp to /private/tmp on this machine, so a containment check that resolves only one side rejects every fixture under /tmp. Held: a layout directory that is itself a symlink hands over a regular file inside it, and a per-file link check on that file reports nothing, so a naive guard would miss it.
+
+Narrower than written: that intermediate-directory case does NOT leak on a directory corpus today. hashDirectory refuseIfLink (checkpoint.ts:100-105) already throws SymlinkedEntryError for it before reading anything inside, observed on a corpus whose agents/ linked outside. It leaks only on kind 'live', where hashCorpusLayout passes rootMayBeALink true and the refusal is deliberately switched off; observed on the same layout, where the outside file was reported as agents/rule.md with its outside bytes.
+
+This matters for the exemption decision. The stage exempted the live corpus because ~/.claude/CLAUDE.md is a symlink into ~/.agents, which is sound for the instruction file. But the same exemption is what opens the intermediate-directory leak, so 'live is exempt' and 'the intermediate case is closed' cannot both be true as stated. The containment check is what reconciles them: a live corpus may follow a link, and what it follows to must still resolve inside the corpus's own resolved root. Build against that, and let the first test be the live intermediate case rather than the directory one, which already passes.
 <!-- SECTION:NOTES:END -->
