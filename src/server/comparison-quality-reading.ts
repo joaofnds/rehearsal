@@ -16,8 +16,8 @@ export type QualityVerdict =
 
 export interface QualityReading {
 	readonly interval: {
-		readonly minuend: QualityInterval;
-		readonly subtrahend: QualityInterval;
+		readonly minuend: QualityInterval | undefined;
+		readonly subtrahend: QualityInterval | undefined;
 	};
 	readonly verdict: QualityVerdict;
 }
@@ -36,24 +36,25 @@ function scaleFor(summary: ReliabilitySummary): readonly string[] {
 function spanOf(
 	summary: ReliabilitySummary,
 	scale: readonly string[],
-): QualityInterval {
+): QualityInterval | undefined {
 	const observed = scale.filter(
 		(grade) => (summary.gradeDistribution[grade] ?? 0) > 0,
 	);
 	const [low] = observed;
 	const high = observed.at(-1);
-	if (low === undefined || high === undefined) {
-		throw new Error(`Reliability summary ${summary.name} has no graded reps`);
-	}
 
-	return { low, high };
+	return low === undefined || high === undefined ? undefined : { low, high };
 }
 
 function spansOverlap(
 	scale: readonly string[],
-	left: QualityInterval,
-	right: QualityInterval,
+	left: QualityInterval | undefined,
+	right: QualityInterval | undefined,
 ): boolean {
+	if (left === undefined || right === undefined) {
+		return true;
+	}
+
 	const leftLow = scale.indexOf(left.low);
 	const leftHigh = scale.indexOf(left.high);
 	const rightLow = scale.indexOf(right.low);
@@ -66,10 +67,16 @@ function atCeiling(summary: ReliabilitySummary): boolean {
 	return summary.successful === summary.requested;
 }
 
-function higherSucceedingArm(request: QualityReadingRequest): ComparisonArm {
+function higherSucceedingArm(
+	request: QualityReadingRequest,
+): ComparisonArm | undefined {
 	const minuendRate = request.minuend.successful / request.minuend.requested;
 	const subtrahendRate =
 		request.subtrahend.successful / request.subtrahend.requested;
+
+	if (minuendRate === subtrahendRate) {
+		return undefined;
+	}
 
 	return minuendRate > subtrahendRate
 		? request.minuendArm
@@ -79,8 +86,8 @@ function higherSucceedingArm(request: QualityReadingRequest): ComparisonArm {
 function verdictFor(
 	request: QualityReadingRequest,
 	scale: readonly string[],
-	minuendSpan: QualityInterval,
-	subtrahendSpan: QualityInterval,
+	minuendSpan: QualityInterval | undefined,
+	subtrahendSpan: QualityInterval | undefined,
 ): QualityVerdict {
 	if (atCeiling(request.minuend) && atCeiling(request.subtrahend)) {
 		return { kind: "unchangedAlreadyClear" };
@@ -89,7 +96,11 @@ function verdictFor(
 		return { kind: "insideRerunNoise" };
 	}
 
-	return { kind: "separated", arm: higherSucceedingArm(request) };
+	const arm = higherSucceedingArm(request);
+
+	return arm === undefined
+		? { kind: "insideRerunNoise" }
+		: { kind: "separated", arm };
 }
 
 export function qualityReading(request: QualityReadingRequest): QualityReading {

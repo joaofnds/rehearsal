@@ -1,4 +1,5 @@
 import type {
+	ComparisonArm,
 	ComparisonReport,
 	LegacyComparisonReport,
 } from "#benchmark/comparison-record";
@@ -22,11 +23,39 @@ export interface ComparisonReportWithAttribution {
 	>;
 }
 
+function qualityReadingsByMeasure(
+	benchmarkCase: (ComparisonReport | LegacyComparisonReport)["cases"][number],
+	minuend: ComparisonArm,
+	subtrahend: ComparisonArm,
+	measures: readonly string[],
+): Readonly<Record<string, QualityReading>> {
+	return Object.fromEntries(
+		measures.map((name) => [
+			name,
+			qualityReading({
+				minuend: reliabilitySummaryNamed(
+					benchmarkCase.arms[minuend].quality,
+					name,
+				),
+				subtrahend: reliabilitySummaryNamed(
+					benchmarkCase.arms[subtrahend].quality,
+					name,
+				),
+				minuendArm: minuend,
+				subtrahendArm: subtrahend,
+			}),
+		]),
+	);
+}
+
 /**
  * One attribution claim per case per arm pair, so the client renders the
  * refusal or the claim without recomputing `corpusDifferences` itself: the
  * dedup-by-path rule (`comparison-attribution.ts`) is a server-owned contract,
- * not something a browser re-derives from raw file lists.
+ * not something a browser re-derives from raw file lists. `qualityReadings`
+ * is the same server-owned-contract rationale applied to the per-measure
+ * interval and verdict (`comparison-quality-reading.ts`), keyed the same way
+ * with one further level, the measure name.
  */
 export function comparisonReport(
 	report: ComparisonReport | LegacyComparisonReport,
@@ -50,24 +79,12 @@ export function comparisonReport(
 				benchmarkCase.arms[minuend].executedCorpus,
 				benchmarkCase.arms[subtrahend].executedCorpus,
 			);
-
-			const byMeasure: Record<string, QualityReading> = {};
-			for (const name of measures) {
-				byMeasure[name] = qualityReading({
-					minuend: reliabilitySummaryNamed(
-						benchmarkCase.arms[minuend].quality,
-						name,
-					),
-					subtrahend: reliabilitySummaryNamed(
-						benchmarkCase.arms[subtrahend].quality,
-						name,
-					),
-					minuendArm: minuend,
-					subtrahendArm: subtrahend,
-				});
-			}
-
-			qualityByPair[pair] = byMeasure;
+			qualityByPair[pair] = qualityReadingsByMeasure(
+				benchmarkCase,
+				minuend,
+				subtrahend,
+				measures,
+			);
 		}
 
 		attribution[benchmarkCase.caseId] = byPair;

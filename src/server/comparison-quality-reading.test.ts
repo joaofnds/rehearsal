@@ -102,6 +102,20 @@ describe(qualityReading.name, () => {
 		expect(reading.verdict).toEqual({ kind: "separated", arm: "candidate" });
 	});
 
+	it("reads inside rerun noise, not a directional verdict, when neither arm is at ceiling and the two arms tie on successful-of-requested", () => {
+		const minuend = stageSummary(Object.fromEntries([["C", 4]]), 0, 4);
+		const subtrahend = stageSummary(Object.fromEntries([["F", 4]]), 0, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading.verdict).toEqual({ kind: "insideRerunNoise" });
+	});
+
 	it("names the subtrahend arm when it succeeds more often", () => {
 		const minuend = stageSummary(Object.fromEntries([["D", 4]]), 0, 4);
 		const subtrahend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
@@ -197,5 +211,42 @@ describe(qualityReading.name, () => {
 		});
 
 		expect(reading.verdict).toEqual({ kind: "separated", arm: "candidate" });
+	});
+
+	it("reads inside rerun noise with no interval for an arm that never reached the measure", () => {
+		const minuend = stageSummary({}, 0, 4);
+		const subtrahend = stageSummary(Object.fromEntries([["A", 4]]), 4, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading).toEqual({
+			interval: {
+				minuend: undefined,
+				subtrahend: { low: "A", high: "A" },
+			},
+			verdict: { kind: "insideRerunNoise" },
+		});
+	});
+
+	it("reads inside rerun noise with no interval on either side when neither arm ever reached the measure", () => {
+		const minuend = stageSummary({}, 0, 4);
+		const subtrahend = stageSummary({}, 0, 4);
+
+		const reading = qualityReading({
+			minuend,
+			subtrahend,
+			minuendArm: "candidate",
+			subtrahendArm: "baseline",
+		});
+
+		expect(reading).toEqual({
+			interval: { minuend: undefined, subtrahend: undefined },
+			verdict: { kind: "insideRerunNoise" },
+		});
 	});
 });

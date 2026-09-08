@@ -16,10 +16,13 @@ const attributionSchema = z.discriminatedUnion("claim", [
 		differingPaths: z.array(z.string()),
 	}),
 ]);
+const qualityIntervalSchema = z
+	.object({ low: z.string(), high: z.string() })
+	.optional();
 const qualityReadingSchema = z.object({
 	interval: z.object({
-		minuend: z.object({ low: z.string(), high: z.string() }),
-		subtrahend: z.object({ low: z.string(), high: z.string() }),
+		minuend: qualityIntervalSchema,
+		subtrahend: qualityIntervalSchema,
 	}),
 	verdict: z.discriminatedUnion("kind", [
 		z.object({ kind: z.literal("insideRerunNoise") }),
@@ -89,7 +92,7 @@ describe("GET /api/comparisons/:digest", () => {
 		});
 	});
 
-	it("renders a quality reading per case per contrast per declared-stage measure", async () => {
+	it("renders a quality reading for the discuss measure, per case per contrast", async () => {
 		const fixture = await writtenFixture();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
@@ -118,6 +121,40 @@ describe("GET /api/comparisons/:digest", () => {
 				subtrahend: { low: "D", high: "D" },
 			},
 			verdict: { kind: "separated", arm: "candidate" },
+		});
+	});
+
+	it("renders a quality reading for every declared-stage measure and, in pipeline mode, the final row", async () => {
+		const fixture = await writtenFixture();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(await corpusDirectory()),
+		});
+
+		const response = await app.request(
+			`/api/comparisons/${fixture.comparisonDigest}`,
+		);
+		const body = await comparisonResponseFrom(response);
+		const readings = body.qualityReadings["case-1"]?.["candidateMinusBaseline"];
+
+		expect(Object.keys(readings ?? {}).toSorted()).toEqual([
+			"build",
+			"discuss",
+			"final",
+		]);
+		expect(readings?.["build"]).toEqual({
+			interval: {
+				minuend: { low: "A", high: "A" },
+				subtrahend: { low: "A", high: "D" },
+			},
+			verdict: { kind: "insideRerunNoise" },
+		});
+		expect(readings?.["final"]).toEqual({
+			interval: {
+				minuend: { low: "PASS", high: "PASS" },
+				subtrahend: { low: "PASS", high: "FAIL" },
+			},
+			verdict: { kind: "insideRerunNoise" },
 		});
 	});
 
