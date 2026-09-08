@@ -1,10 +1,11 @@
 ---
 id: ACT-104
 title: render comparison spread as an interval with a per-measure reading verdict
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-08 21:24'
+updated_date: '2026-09-08 21:25'
 labels: []
 dependencies:
   - ACT-49
