@@ -60,6 +60,7 @@ describe(openRunEventStore.name, () => {
 			{ kind: "stage-started", spentUsd: 0 },
 			{ kind: "turn-completed", spentUsd: 0.5 },
 		]);
+		store.close();
 	});
 
 	it("keeps events for different runs separate", async () => {
@@ -82,6 +83,7 @@ describe(openRunEventStore.name, () => {
 
 		expect(store.eventsSince("run-1", 0)).toHaveLength(1);
 		expect(store.eventsSince("run-2", 0)).toHaveLength(1);
+		store.close();
 	});
 
 	it("returns only events after the requested sequence, for a reader that reconnects mid-stream", async () => {
@@ -106,6 +108,7 @@ describe(openRunEventStore.name, () => {
 		expect(
 			store.eventsSince("run-1", first?.sequence ?? 0).map(({ kind }) => kind),
 		).toEqual(["turn-completed"]);
+		store.close();
 	});
 
 	it("reports the latest event recorded for a run", async () => {
@@ -127,12 +130,14 @@ describe(openRunEventStore.name, () => {
 		});
 
 		expect(store.latestEvent("run-1")?.kind).toBe("run-completed");
+		store.close();
 	});
 
 	it("reports no latest event for a run nothing was appended to", async () => {
 		const store = await openRunEventStore(":memory:");
 
 		expect(store.latestEvent("run-1")).toBeUndefined();
+		store.close();
 	});
 
 	it("lists the run id of every run holding at least one event", async () => {
@@ -153,6 +158,7 @@ describe(openRunEventStore.name, () => {
 		});
 
 		expect(store.runIds().toSorted()).toEqual(["run-1", "run-2"]);
+		store.close();
 	});
 });
 
@@ -177,14 +183,17 @@ describe(runEventRecorderFor.name, () => {
 			{ kind: "stage-started", stage: "shape", spentUsd: 0, elapsedMs: 0 },
 			{ kind: "stage-completed", stage: "shape", spentUsd: 1, elapsedMs: 1000 },
 		]);
+		store.close();
 	});
 });
 
 describe(isTerminalRunEventKind.name, () => {
 	it.each([
 		["run-completed", true],
+		["run-failed", true],
 		["run-interrupted", true],
 		["stage-started", false],
+		["stage-judging", false],
 		["stage-completed", false],
 		["turn-completed", false],
 	] as const)("reads %s as terminal: %s", (kind, expected) => {

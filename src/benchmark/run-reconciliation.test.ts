@@ -93,6 +93,7 @@ describe(reconcileInterruptedRuns.name, () => {
 
 		expect(reconciled).toEqual(["run-1"]);
 		expect(store.latestEvent("run-1")?.kind).toBe("run-interrupted");
+		store.close();
 	});
 
 	it("leaves a run alone when its claimed target's pid is still alive", async () => {
@@ -116,6 +117,7 @@ describe(reconcileInterruptedRuns.name, () => {
 
 		expect(reconciled).toEqual([]);
 		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+		store.close();
 	});
 
 	it("leaves a run alone once its terminal record already exists on disk", async () => {
@@ -135,6 +137,7 @@ describe(reconcileInterruptedRuns.name, () => {
 
 		expect(reconciled).toEqual([]);
 		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+		store.close();
 	});
 
 	it("treats a missing manifest as nothing to reconcile, not an error, since the crash may have preceded it", async () => {
@@ -152,6 +155,7 @@ describe(reconcileInterruptedRuns.name, () => {
 
 		expect(reconciled).toEqual([]);
 		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+		store.close();
 	});
 
 	it("treats a missing claim marker as nothing to reconcile, since the target may already have been restored", async () => {
@@ -173,6 +177,7 @@ describe(reconcileInterruptedRuns.name, () => {
 
 		expect(reconciled).toEqual([]);
 		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+		store.close();
 	});
 
 	it("does not re-reconcile a run already marked INTERRUPTED", async () => {
@@ -194,6 +199,7 @@ describe(reconcileInterruptedRuns.name, () => {
 		const reconciled = await reconcileInterruptedRuns(store, dependencies);
 
 		expect(reconciled).toEqual([]);
+		store.close();
 	});
 
 	it("reconciles every crashed run among several, independently", async () => {
@@ -227,6 +233,7 @@ describe(reconcileInterruptedRuns.name, () => {
 		const reconciled = await reconcileInterruptedRuns(store, dependencies);
 
 		expect(reconciled.toSorted()).toEqual(["run-1"]);
+		store.close();
 	});
 });
 
@@ -257,6 +264,7 @@ describe(liveReconciliationDependencies.name, () => {
 
 		expect(reconciled).toEqual([]);
 		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+		store.close();
 	});
 
 	it("treats a run with no manifest on disk as nothing to reconcile", async () => {
@@ -279,5 +287,6 @@ describe(liveReconciliationDependencies.name, () => {
 		);
 
 		expect(reconciled).toEqual([]);
+		store.close();
 	});
 });
