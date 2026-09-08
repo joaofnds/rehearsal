@@ -72,4 +72,17 @@ describe(corpusReport.name, () => {
 		const instructions = report.files.find((file) => file.path === "CLAUDE.md");
 		expect(instructions?.readBy).toBe(1);
 	});
+
+	it("reports a run whose checkpoint directory holds no checkpoint.json as read-by zero, rather than throwing", async () => {
+		const corpus = await corpusDirectory();
+		await writeFile(join(corpus, "CLAUDE.md"), "instructions");
+		const runs = await runsDirectory();
+		const fixture = new RecordedRunsFixture(runs);
+		await fixture.writeEmptyCheckpointDirectory("discuss");
+
+		const report = await corpusReport(directorySource(corpus), runs);
+
+		const instructions = report.files.find((file) => file.path === "CLAUDE.md");
+		expect(instructions?.readBy).toBe(0);
+	});
 });

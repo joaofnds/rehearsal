@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
+import type { CheckpointRecord } from "#benchmark/checkpoint";
 import { hashDirectory, parseCheckpointRecord } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
@@ -27,7 +28,13 @@ async function readCountsByPath(
 	for (const { run, stage } of await recordedCheckpoints(runsDirectory)) {
 		const paths = benchmarkRunPaths(runsDirectory, run);
 		const recordFile = checkpointRecordFile(paths.checkpointDirectory(stage));
-		const record = parseCheckpointRecord(await Bun.file(recordFile).text());
+		let record: CheckpointRecord;
+		try {
+			record = parseCheckpointRecord(await Bun.file(recordFile).text());
+		} catch {
+			continue;
+		}
+
 		for (const file of record.corpusFiles) {
 			const runs = runsByPath.get(file.path) ?? new Set<string>();
 			runs.add(run);
