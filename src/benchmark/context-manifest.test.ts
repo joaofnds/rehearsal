@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
+import { casesRoot, readCaseDeclaration } from "#benchmark/case";
 import type { ToolUse } from "#benchmark/transcript";
+import {
+	outputStyles,
+	parseTranscriptFile,
+	toolUses,
+} from "#benchmark/transcript";
 import {
 	observedManifest,
 	reconcileManifest,
@@ -85,5 +92,36 @@ describe(reconcileManifest.name, () => {
 		expect(reconcileManifest(manifest, ["skills/verify/SKILL.md"])).toEqual([
 			{ kind: "unloaded-file", path: "skills/verify/SKILL.md" },
 		]);
+	});
+});
+
+describe("over the manifest-probe fixture", () => {
+	it("builds the manifest from disk records alone and reconciles it against the case's declaration", async () => {
+		const declaration = await readCaseDeclaration("manifest-probe");
+		if (
+			declaration.kind !== "session" ||
+			declaration.transcript === undefined
+		) {
+			throw new Error(
+				"manifest-probe is expected to be a session case with a transcript",
+			);
+		}
+
+		const transcriptPath = join(
+			casesRoot(),
+			"manifest-probe",
+			declaration.transcript.file,
+		);
+		const transcript = await parseTranscriptFile(transcriptPath);
+		const uses = toolUses(transcript);
+		const styles = outputStyles(transcript);
+
+		const manifest = observedManifest(uses, styles);
+
+		expect(manifest.paths.toSorted()).toEqual([
+			"output-styles/brief.md",
+			"skills/verify/SKILL.md",
+		]);
+		expect(reconcileManifest(manifest, declaration.corpusFiles)).toEqual([]);
 	});
 });
