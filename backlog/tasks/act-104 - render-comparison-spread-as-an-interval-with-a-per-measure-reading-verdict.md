@@ -4,7 +4,7 @@ title: render comparison spread as an interval with a per-measure reading verdic
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-08 21:17'
+updated_date: '2026-09-08 21:24'
 labels: []
 dependencies:
   - ACT-49
@@ -129,13 +129,15 @@ rather than folded into overlap, because the design names it separately and
 it says something different: not that the two arms are indistinguishable,
 but that both already succeed every time and there is no room above.
 
-Note for the builder: the ceiling for a graded stage measure is not all-A.
-A rep counts as successful when its grade meets the run's configured
-minimum, DEFAULT_MINIMUM_STAGE_GRADE of "B" (config.ts:22, applied at
-stage-grading.ts:356). The ceiling test is successful === requested in both
-arms, which reads off successRate directly and stays correct when a case
-configures a different minimum. Testing all-A would call a run of straight
-Bs "not yet clear" when the harness has been scoring it as a clean sweep.
+Note for the builder: the ceiling for a graded stage measure is not all-A,
+and it is not the configured minimum grade either. stageObservation
+(confirmation-report.ts:99-105) hardcodes grade === "A" || grade === "B" and
+never reads DEFAULT_MINIMUM_STAGE_GRADE, so a rep counts as successful at A or
+B whatever a case configures. The ceiling test is successful === requested in
+both arms, which reads off the recorded counts and stays correct without
+restating that rule. Corrected 2026-09-08: an earlier note here claimed the
+success threshold follows the configured minimum. It does not, at this call
+site.
 
 7. Row set and axes, corrected 2026-09-08 after reading the record. Decisions
 1 and 6 above named a "binary measures" row and a "meter" row. Neither exists.
@@ -249,5 +251,67 @@ requested, which is every input the overlap, ceiling and direction rules take.
 So the reading is derived at serve time from the record, as decision 2 says,
 and no new persisted field is added. Do not reopen this a third time without
 first checking that schema.
+
+Shaping pass, 2026-09-08 (second pass). Verified every load-bearing fact
+decisions 1-10 rest on, directly against source, rather than trusting the
+prior pass's citations:
+
+- reliabilitySummarySchema (comparison-record.ts:148-163) carries
+  gradeDistribution, successful, requested, exactly as decision 10 says, and
+  IS persisted per case per arm at reportArmSchema.quality
+  (comparison-record.ts:235). Decision 10's reversal of the "reopen decision
+  2" proposal holds: serve-time computation from the record is available,
+  no new persisted field needed.
+- STAGE_LETTER_GRADES = ["A","B","C","D","F"] (config.ts:18) is the ordered
+  scale decision 1's low/high span reads off.
+- stageObservation's hardcoded A-or-B success check (confirmation-report.ts:
+  93-99) matches AC #4 as corrected in the prior pass; DEFAULT_MINIMUM_STAGE_
+  GRADE (config.ts:22) does not reach this function today, confirmed by
+  reading buildReliabilityReport's call sites.
+- finalObservation (confirmation-report.ts:112-119) stores grade: outcome.
+  verdict, a "PASS"|"FAIL" string, never a letter, confirming decision 7's
+  correction that the final row is a two-value axis needing its own rule,
+  not a special case of the five-letter scale.
+
+Remaining gap the nine decisions did not name: where in src/server/ the new
+serve-time derivation lives and what shape it walks. Checked and answered
+from precedent, not left open:
+
+reportContrast.quality (comparison-record.ts:296, qualityContrastSchema) is
+the cross-case-paired estimate (name, successRate, passK) already computed
+at compare time by buildQualityContrast. reportCase.arms[arm].quality
+(comparison-record.ts:235) is the per-case, per-arm ReliabilitySummary[]
+decision 10 points to, keyed by stage/measure name via the same lookup
+buildQualityContrast's qualitySummary helper already does
+(comparison-quality.ts:64-72). These are two different arrays on two
+different schema nodes; the new field reads the case-level one and attaches
+per (case, measure), per decision 9, so it cannot live merely beside
+successRate/passK on qualityContrastSchema (that node is already pooled
+across cases) — it needs a per-case carrier, e.g. a map or array keyed by
+caseId, alongside reportContrast.quality, or nested under reportCase itself
+read against both arms of the given contrast.
+
+Precedent for the whole shape: src/server/comparisons.ts's comparisonReport
+function already does exactly this loop today for attribution, walking
+report.cases[...] and, per case, per arm pair (armPairs()/pairKey()), reading
+each arm's executedCorpus and deriving a value the client wasn't sent
+pre-computed. The new function is a sibling to comparisonAttribution
+(src/server/comparison-attribution.ts): same iteration shape (per case, per
+arm pair, per named measure this time), same file organization (its own
+module, wired into comparisonReport's return value next to attribution),
+same reasoning for serve-time placement. No new numbered decision needed;
+this is convention already established in the file the card's own decision
+2 cites.
+
+Card is build-ready. No unknowns remain open. First test to write is
+unchanged from the prior pass's note: a comparison-quality.test.ts (or a new
+server-side test beside comparison-attribution.test.ts, matching wherever
+the new function lands) case with two arms whose gradeDistribution spans
+touch, asserting "inside rerun noise"; then ceiling; then the directional
+case; then 0/n and n/n edges; then the "final" row PASS/FAIL case for each
+rule.
+11. AC #8's parenthetical open question is closed by decision 10 above. The
+interval and verdict are derived at serve time from the persisted record. No
+new persisted field, no schema version bump.
 
 <!-- SECTION:NOTES:END -->
