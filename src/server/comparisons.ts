@@ -1,44 +1,10 @@
 import type {
-	ComparisonArm,
 	ComparisonReport,
 	LegacyComparisonReport,
 } from "#benchmark/comparison-record";
-import { COMPARISON_ARMS } from "#benchmark/comparison-record";
+import { armPairs, pairKey } from "./comparison-arm-pair";
 import type { ComparisonAttribution } from "./comparison-attribution";
 import { comparisonAttribution } from "./comparison-attribution";
-
-export type ComparisonArmPair =
-	`${ComparisonArm}Minus${Capitalize<ComparisonArm>}`;
-
-function pairKey(minuend: ComparisonArm, subtrahend: ComparisonArm): string {
-	return `${minuend}Minus${subtrahend[0]?.toUpperCase()}${subtrahend.slice(1)}`;
-}
-
-/**
- * The one place that decodes a `pairKey` back into its two arm names, so the
- * client renders a label from the same rule that built the key rather than
- * re-deriving the `Minus` convention on its own.
- */
-export function armPairLabel(pair: string): string {
-	const [minuend, subtrahend] = pair.split("Minus");
-	const lowercasedSubtrahend =
-		subtrahend === undefined
-			? undefined
-			: `${subtrahend[0]?.toLowerCase()}${subtrahend.slice(1)}`;
-
-	return `${minuend} vs ${lowercasedSubtrahend}`;
-}
-
-function armPairs(): readonly {
-	readonly minuend: ComparisonArm;
-	readonly subtrahend: ComparisonArm;
-}[] {
-	return COMPARISON_ARMS.flatMap((minuend) =>
-		COMPARISON_ARMS.filter((subtrahend) => subtrahend !== minuend).map(
-			(subtrahend) => ({ minuend, subtrahend }),
-		),
-	);
-}
 
 export interface ComparisonReportWithAttribution {
 	readonly report: ComparisonReport | LegacyComparisonReport;

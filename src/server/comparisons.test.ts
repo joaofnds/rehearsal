@@ -8,7 +8,6 @@ import {
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
 import { createApiApp } from "./api";
-import { armPairLabel } from "./comparisons";
 
 const attributionSchema = z.discriminatedUnion("claim", [
 	z.object({ claim: z.literal("identical") }),
@@ -29,19 +28,6 @@ async function comparisonResponseFrom(
 ): Promise<z.infer<typeof comparisonResponseSchema>> {
 	return comparisonResponseSchema.parse(await response.json());
 }
-
-describe(armPairLabel.name, () => {
-	it("decodes a pair key into its minuend and subtrahend arm names", () => {
-		expect(armPairLabel("candidateMinusBaseline")).toBe(
-			"candidate vs baseline",
-		);
-	});
-
-	it("decodes every arm pair the server itself constructs", () => {
-		expect(armPairLabel("baselineMinusControl")).toBe("baseline vs control");
-		expect(armPairLabel("controlMinusCandidate")).toBe("control vs candidate");
-	});
-});
 
 describe("GET /api/comparisons/:digest", () => {
 	const roots: string[] = [];
@@ -86,6 +72,25 @@ describe("GET /api/comparisons/:digest", () => {
 			claim: "refused",
 			differingPaths: ["inputs/corpus/SKILL.md"],
 		});
+	});
+
+	it("renders exactly the report's three canonical contrasts per case, not all six ordered pairs", async () => {
+		const fixture = await writtenFixture();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(await corpusDirectory()),
+		});
+
+		const response = await app.request(
+			`/api/comparisons/${fixture.comparisonDigest}`,
+		);
+		const body = await comparisonResponseFrom(response);
+
+		expect(Object.keys(body.attribution["case-1"] ?? {}).toSorted()).toEqual([
+			"baselineMinusControl",
+			"candidateMinusBaseline",
+			"candidateMinusControl",
+		]);
 	});
 
 	it("refuses a digest whose segment escapes the runs directory, without a 500", async () => {
