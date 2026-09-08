@@ -6,6 +6,7 @@ import { EmptyState } from "#client/system/components/empty-state";
 import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
 import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
+import { armPairLabel } from "#server/comparison-arm-pair";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
 import "./comparison-page.css";
 
@@ -68,16 +69,6 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 		<GradeDistribution key="candidate" arm={benchmarkCase.arms.candidate} />,
 		<GradeDistribution key="control" arm={benchmarkCase.arms.control} />,
 	];
-}
-
-function armPairLabel(pairKey: string): string {
-	const [minuend, subtrahend] = pairKey.split("Minus");
-	const lowercasedSubtrahend =
-		subtrahend === undefined
-			? undefined
-			: `${subtrahend[0]?.toLowerCase()}${subtrahend.slice(1)}`;
-
-	return `${minuend} vs ${lowercasedSubtrahend}`;
 }
 
 function AttributionCard({
