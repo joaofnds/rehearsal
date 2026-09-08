@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-07 23:55'
+updated_date: '2026-09-08 00:16'
 labels: []
 milestone: m-7
 dependencies:
@@ -143,4 +143,8 @@ NOTE #7 (plan's first-test choice confirmed as the cheapest gating step) -- no a
 NOTE #8 (sign-off provenance, 'per João's direction,' is not independently verifiable by any tool) -- not fixed, disposition: accepted as an inherent limit. The quoted direction is the only record of it and is already quoted rather than asserted as fact; no tool in this repository can verify authorship of a prior conversation turn.
 
 One round run, no second round needed: both blocking findings were fixed and re-verified against the same code the review cited (checkpoint.ts:454-479 for #4; the AC text itself for #1).
+
+Oversight probes, 2026-09-08, at the build's mid-card checkpoint. Verified directly rather than taken from the session's report: full suite green from a fresh run (1149 server, up from 1142; 81 client, up from 78), typecheck and lint clean, tree clean across the three commits. The crafted-digest refusal is really pinned: replacing parseRecordId on the comparison route with an unvalidated id fails all three tests in src/server/comparisons.test.ts, including the escape-refusal one. Restored after the probe.
+
+Directed to continue the remaining criteria in the same sequence.
 <!-- SECTION:NOTES:END -->
