@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 11:55'
+updated_date: '2026-09-08 20:41'
 labels: []
 dependencies: []
 priority: medium
@@ -29,3 +30,9 @@ The two consumers disagree about where a prefix lives. Deciding which location i
 - [ ] #1 A session case with a committed transcript prefix runs from a fresh clone with no file copied by hand
 - [ ] #2 The AC#7 manifest fixture test and the harness runtime read the prefix from the same declared location
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage 2026-09-08 (e): citation error. context-manifest.test.ts:149 is an unrelated test; the actual casesRoot() read the card means is at line 227-228. .gitignore line 2 and the session-attempt.ts:173 error message are correctly cited.
+<!-- SECTION:NOTES:END -->

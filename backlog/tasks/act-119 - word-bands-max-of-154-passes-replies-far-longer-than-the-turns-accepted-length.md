@@ -1,10 +1,10 @@
 ---
 id: ACT-119
 title: brief-reply replies run longer than the accepted length on three of four turns
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-08 12:25'
-updated_date: '2026-09-08 12:30'
+updated_date: '2026-09-08 20:41'
 labels: []
 dependencies: []
 priority: medium
@@ -67,4 +67,6 @@ Filed from ACT-35's runs, 2026-09-08. Referenced by ACT-35's completion notes.
 Per-case bands rejected by Joao, 2026-09-08, after the glossary's documented design was cited: cases declare a ceiling and never a floor, so a per-turn band would fail replies shorter than lengths he accepts on other turns. Acceptance criteria rewritten to match; the original two demanded the rejected design.
 
 The 154-to-145 ceiling question is deliberately left open. It was raised as an option in the same exchange and not decided, so it is not this session's to settle.
+
+Triage 2026-09-08 (e): routed to Shape. AC#1 asks João to decide between keeping the 154 ceiling or moving to 145; that decision is not this session's to make, per the card's own implementation notes. Joins this run's questions list.
 <!-- SECTION:NOTES:END -->

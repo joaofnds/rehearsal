@@ -4,7 +4,7 @@ title: render comparison spread as an interval with a per-measure reading verdic
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-07 23:07'
+updated_date: '2026-09-08 20:42'
 labels: []
 dependencies:
   - ACT-49
@@ -32,4 +32,8 @@ Ambiguity found 2026-09-07, verified in code before this card is picked up. This
 Whoever builds this card settles which quantity the interval represents before drawing it, since the two answers differ numerically and the screen asserts a claim about rerun noise either way.
 
 Separately: a 95% interval as meanDelta +/- 1.96*standardError is a routine default, since docs/research.md adopts that error-bar framing and both terms already exist. The per-measure reading verdict is not. Three of SPEC 5b's five phrases ('clearest movement', 'unchanged, already clear', 'fires less often') cannot be derived from a single PairedEstimate under any threshold: 'clearest movement' ranks measures against each other, and blocker rows are counted rather than graded. Designing that vocabulary is the substance of AC #2.
+
+Triage 2026-09-08 (e): citation drift only. buildPairedEstimate is at comparison-estimator.ts:54, not the cited :57 (function moved since filing). Substance unchanged: it still divides by caseDeltas.length and still throws below two cases.
+
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-07 17:58'
+updated_date: '2026-09-08 20:41'
 labels: []
 dependencies: []
 ordinal: 102008
@@ -42,4 +43,6 @@ void as it does now. This changes runBenchmark's signature in
 src/benchmark/run.ts and confirmRun's call graph in src/cli/run-command.ts,
 both outside what ACT-88 touched, which is why it was deferred rather than
 folded in.
+
+Triage 2026-09-08 (e): citation drift only. assertControlReady/assertSourceReady calls in runBenchmark are at run.ts:857-858 now, not wherever the card implied. Substance confirmed live: assertPipelinePreflight runs at run-command.ts:148, runBenchmark re-checks again at run.ts:857-858, and confirmRun re-checks a third time at run-command.ts:328-329.
 <!-- SECTION:NOTES:END -->
