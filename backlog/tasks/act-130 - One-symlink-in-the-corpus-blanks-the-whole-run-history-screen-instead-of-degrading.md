@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 22:41'
-updated_date: '2026-09-08 23:16'
+updated_date: '2026-09-08 23:19'
 labels: []
 milestone: m-5
 dependencies: []
@@ -51,4 +51,6 @@ Correction to the line above: the sentence should read "This one and the stale c
 Triage 2026-09-09, premise check on AC#2. The criterion cites src/cli/stale-command.ts:81 as calling staleCheckpoints unguarded. Read this run: line 80 already wraps that call in refusingCorpusFailures. The wrapper (stale-command.ts:35-50) catches only CorpusSourceError and CorpusFileError and rethrows everything else, and SymlinkedEntryError (checkpoint.ts:84) extends Error directly, so it is not caught. The criterion's behavior stands; its stated cause does not. The writer's evidence stays as written above.
 
 The reproducing command, per decision-1: plant a symlink in a corpus layout directory, then run mise exec -- ./rehearsal.ts stale --corpus <that root>.
+
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 <!-- SECTION:NOTES:END -->

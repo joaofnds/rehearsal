@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 22:44'
-updated_date: '2026-09-08 23:15'
+updated_date: '2026-09-08 23:20'
 labels: []
 dependencies: []
 priority: high
@@ -39,4 +39,6 @@ in, so each change stays reviewable alone.
 Same shape as the root-position leak ACT-113 did close (commit 47ed48b): a link one level
 above where the guard looks. Worth settling with ACT-129, which covers the three separate
 symlink refusals, since a fourth site here would be a fourth encoding of one rule.
+
+Premise verified 2026-09-09 by the iterating session, before the fix ran: a corpus root holding only CLAUDE.md -> /tmp/act132/outside/secret.md. corpusReport returned one file at path CLAUDE.md whose sha256 equals shasum of the outside file, so the outside bytes are hashed and reported under the in-root path. corpus-report.ts hashCorpusLayout hashes the instruction file via hashFile while the layout directories go via hashDirectory with its rootMayBeALink guard, so the two paths differ as the card records.
 <!-- SECTION:NOTES:END -->
