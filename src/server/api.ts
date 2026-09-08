@@ -1,16 +1,45 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { displayPath } from "#benchmark/config";
+import { parseComparisonReport } from "#benchmark/comparison-record";
 import { recordFileFor } from "#cli/show-command";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
+import { comparisonReport } from "./comparisons";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
 
 export interface ApiDependencies {
 	readonly runsDirectory: string;
 	readonly corpusSource: CorpusRoot;
+}
+
+/**
+ * The one place a route id's refusal becomes an HTTP status: a malformed id
+ * (`UsageError`, from `parseRecordId`'s confinement check) is the caller's
+ * mistake, a well-formed id naming nothing (`RefusedPreconditionError`) is a
+ * precondition the server refuses. Shared so every route that resolves a
+ * record id renders the same two failures the same way, rather than each
+ * route re-deciding the status code.
+ */
+async function withRecordIdRefusals(
+	context: Context,
+	handle: () => Promise<Response>,
+): Promise<Response> {
+	try {
+		return await handle();
+	} catch (error) {
+		if (error instanceof UsageError) {
+			return context.json({ error: redactAbsolutePaths(error.message) }, 400);
+		}
+		if (error instanceof RefusedPreconditionError) {
+			return context.json({ error: redactAbsolutePaths(error.message) }, 404);
+		}
+
+		throw error;
+	}
 }
 
 /**
@@ -37,8 +66,23 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 
 			return context.json(report);
 		})
-		.get("/api/records/:id", async (context) => {
-			try {
+		.get("/api/comparisons/:digest", (context) =>
+			withRecordIdRefusals(context, async () => {
+				const id = parseRecordId(`comparison:${context.req.param("digest")}`);
+				const file = await recordFileFor(id, dependencies.runsDirectory);
+				if (!(await Bun.file(file).exists())) {
+					throw new RefusedPreconditionError(
+						`No record comparison:${context.req.param("digest")} at ${displayPath(file)}`,
+					);
+				}
+
+				const report = parseComparisonReport(await Bun.file(file).text());
+
+				return context.json(comparisonReport(report));
+			}),
+		)
+		.get("/api/records/:id", (context) =>
+			withRecordIdRefusals(context, async () => {
 				const id = parseRecordId(context.req.param("id"));
 				const file = await recordFileFor(id, dependencies.runsDirectory);
 				if (!(await Bun.file(file).exists())) {
@@ -50,23 +94,8 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 				return context.body(await Bun.file(file).text(), 200, {
 					"content-type": "application/json",
 				});
-			} catch (error) {
-				if (error instanceof UsageError) {
-					return context.json(
-						{ error: redactAbsolutePaths(error.message) },
-						400,
-					);
-				}
-				if (error instanceof RefusedPreconditionError) {
-					return context.json(
-						{ error: redactAbsolutePaths(error.message) },
-						404,
-					);
-				}
-
-				throw error;
-			}
-		});
+			}),
+		);
 
 	/**
 	 * No route-level throw reaches the browser with an absolute path: a route

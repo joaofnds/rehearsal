@@ -75,7 +75,8 @@
 					"BunFile",
 					"Subprocess",
 					"ReactNode",
-					"RouterHistory"
+					"RouterHistory",
+					"Context"
 				]
 			}
 		],
