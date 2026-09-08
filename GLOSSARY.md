@@ -189,6 +189,12 @@
   a person or the agent standing in for one; the name says whose judgment the
   record carries, not which hand typed it. `rehearsal review` writes it from
   flags or from a file, and calibration reads it.
+- **Interrupted run** — a run whose process ended (a `kill -9` or a crash)
+  without writing a terminal artifact or stop record. It has no status of its
+  own on disk; the server's startup reconciliation pass finds it by checking
+  whether the pid the run's claimed target recorded is still alive, and if
+  not, marks the run's event stream `run-interrupted`, distinct from `FAILED`,
+  which a graceful signal handler still writes on its own.
 - **Judge** — evaluator attached to a stage transition: deterministic check or
   rubric-scored LLM with rationale.
 - **Judge agreement baseline** — accumulated binary Judge and human decisions
@@ -276,6 +282,14 @@
 - **Run artifact transition** — one persistence operation that advances a run's
   main or stage record. Transitions are serialized; abort recording is terminal
   and cannot be overwritten by a later normal transition.
+- **Run event** — one timestamped fact about a run in progress (a stage
+  starting, a turn completing, a stage or the run finishing, a run reconciled
+  interrupted), appended to the SQLite store one shared database under
+  `.benchmark-runs/` holds, keyed by run id. It stays derived per decision-3:
+  the run artifact on disk remains authoritative for what a run concluded,
+  the event store can be deleted and rebuilt from those records, and a
+  reader replays it over the server's SSE endpoint, either live or from the
+  start for one attaching mid-run.
 - **Project slug** — the name the provider gives the directory it writes a
   session file into: the working directory's real path with every `/` replaced
   by `-`. On macOS `/tmp/x` resolves through its real path first, so it is
