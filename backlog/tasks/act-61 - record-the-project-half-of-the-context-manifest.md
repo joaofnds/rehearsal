@@ -1,11 +1,11 @@
 ---
 id: ACT-61
 title: record the project half of the context manifest
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-04 15:11'
-updated_date: '2026-09-08 17:31'
+updated_date: '2026-09-08 17:51'
 labels: []
 dependencies:
   - ACT-41
@@ -34,11 +34,11 @@ Design: backlog/docs/doc-9 - context-manifest-design.md
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A session attempt whose transcript carries a Read tool_use on a declared project file (a fixture-relative path, resolved under the attempt directory rather than under .claude/) reports that file as a project-half manifest entry, named by its fixture-relative path
-- [ ] #2 A declared project-file entry the session never reads is reported as an unloaded-file divergence, and a project-half Read the case never declared is reported as an undeclared-file divergence, both distinguishable from a corpus-half divergence by the half tag on the entry (mirrors ACT-59 AC#5/#6 for the corpus half, applied to the project half this card adds)
-- [ ] #3 Building the extended manifest and its divergence report makes no provider call, exercised by a test over a committed fixture the way ACT-59's manifest-probe fixture does for the corpus half
-- [ ] #4 A session case declares its project context explicitly as a new field shaped like corpusFiles (fixture-relative paths). This covers project instructions and GLOSSARY.md, and a session-case fixture document reachable the same way; a pipeline stage's own 'documents a stage reads off a card' (the card description's third project-half example) is out of this card's scope, filed as ACT-123, because a pipeline stage session's raw transcript is not captured anywhere today so it cannot be observed (Implementation Notes below; direction, 2026-09-07, quoted below, on declared-not-discovered)
-- [ ] #5 An attempt's recorded context manifest tags every entry with its half, corpus or project, as one field on each manifest entry (not two parallel path lists a reader must cross-reference), so a reader can tell which vary with --corpus by reading one entry (card description: 'The manifest distinguishes corpus-half entries from project-half entries')
+- [x] #1 A session attempt whose transcript carries a Read tool_use on a declared project file (a fixture-relative path, resolved under the attempt directory rather than under .claude/) reports that file as a project-half manifest entry, named by its fixture-relative path
+- [x] #2 A declared project-file entry the session never reads is reported as an unloaded-file divergence, and a project-half Read the case never declared is reported as an undeclared-file divergence, both distinguishable from a corpus-half divergence by the half tag on the entry (mirrors ACT-59 AC#5/#6 for the corpus half, applied to the project half this card adds)
+- [x] #3 Building the extended manifest and its divergence report makes no provider call, exercised by a test over a committed fixture the way ACT-59's manifest-probe fixture does for the corpus half
+- [x] #4 A session case declares its project context explicitly as a new field shaped like corpusFiles (fixture-relative paths). This covers project instructions and GLOSSARY.md, and a session-case fixture document reachable the same way; a pipeline stage's own 'documents a stage reads off a card' (the card description's third project-half example) is out of this card's scope, filed as ACT-123, because a pipeline stage session's raw transcript is not captured anywhere today so it cannot be observed (Implementation Notes below; direction, 2026-09-07, quoted below, on declared-not-discovered)
+- [x] #5 An attempt's recorded context manifest tags every entry with its half, corpus or project, as one field on each manifest entry (not two parallel path lists a reader must cross-reference), so a reader can tell which vary with --corpus by reading one entry (card description: 'The manifest distinguishes corpus-half entries from project-half entries')
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -177,4 +177,69 @@ pins today's silent-drop as intended behavior. The first test named above is not
 a pure addition: that existing case must be rewritten (a Read outside the corpus
 layout and outside the declared project set still names no path), or the build
 session will read a red test as its own regression.
+
+Build, 2026-09-08. Committed as 198c706.
+
+Implemented per the Notes' approach with two corrections found by review
+(spec + architecture axes, both verified directly): readProjectLayoutPath
+now excludes any path the corpus classifier already claims, closing two
+real bugs the reviewers reproduced - a Read under .claude/ getting
+wrongly tagged project-half (AC#1's own exclusion clause, which the first
+draft omitted), and a Read of a file like CLAUDE.md being double-tagged
+both corpus-half and project-half for one physical Read when a declared
+project file's name coincides with a corpus layout name. Both fixed and
+pinned with regression tests in context-manifest.test.ts.
+
+One residual, accepted limitation, documented in context-manifest.ts's
+comment on readProjectLayoutPath: a multi-segment declared project file
+(e.g. "a/NOTES.md") can still suffix-match an unrelated file at a
+different depth ending in the same segments. Ruling that out needs the
+real attempt directory threaded through observedManifest, which the
+committed-fixture replay test (AC#3, no live attempt, no provider call)
+structurally cannot supply. Accepted on the same case-author-trust basis
+the corpus half's own suffix matching already carries (security review:
+reachable only by whoever writes the case's own fixture/declaration,
+producing a wrong grading record with no privilege boundary crossed;
+should-fix severity, not blocking). Not filed as a follow-up card: the
+proportionate fix is bigger plumbing than this should-fix warrants, and
+no caller is known to need multi-segment declared project files today.
+
+Also closed during review disposal, all verified with fresh test runs:
+- corpusEntries/projectEntries extracted and exported from
+  context-manifest.ts, replacing three independent hand-written
+  {path, half} literal sites (style + architecture + refactoring axes
+  converged on this one).
+- sessionUpstreamDigest (session-lineage.ts) now hashes projectFiles:
+  two cases sharing one fixture tree but declaring a different project
+  file were getting the same lineage before this, which is wrong since
+  they're checked against a different contract. Moved one golden lineage
+  hash in session-run-command.test.ts as a result (expected, not a
+  regression).
+- Added integration coverage through the real runSessionAttempt and
+  runSessionDebugAttempt paths for a declared project file (previously
+  only the pure observedManifest/fixture-replay tests exercised this).
+- Added a test pinning the schema's projectFiles default ([]) directly.
+
+Verified this session: full suite green (1272 backend + 100 client
+tests, mise exec -- bun run test), typecheck clean, lint clean on every
+file this task touched (oxlint --type-aware). Six-axis independent code
+review run (spec, style, architecture, security, testing, refactoring
+via reviewer sub-agents); every finding disposed - fixed (2 correctness
+bugs, 1 duplication pattern, 3 coverage gaps, 1 lineage-sensitivity
+decision) or recorded as accepted with reasoning (the one residual
+suffix-match limitation above; projectFiles' lack of path confinement,
+verified not a defect since no consumer ever resolves it to a real
+filesystem path).
+
+Not verified: no live Claude session was run against the manifest-probe
+fixture in this session (would cost real budget); AC#1's real-path
+behavior is verified through the fixture's committed, previously
+captured transcript and through a fake-transcript integration test in
+session-attempt.test.ts, not a fresh live run.
+
+Pre-existing, out of path: cases/doctrine-ab-with and
+cases/doctrine-ab-without fixtures fail bun run fmt:check and bun run
+lint (oxlint) before this task touched anything (confirmed via git
+stash). Not fixed here since they're unrelated fixture data this card
+never touched; flagging for whoever owns that card.
 <!-- SECTION:NOTES:END -->
