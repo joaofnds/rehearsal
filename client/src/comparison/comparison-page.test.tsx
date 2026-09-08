@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComparisonReport } from "#benchmark/comparison-record";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
@@ -131,5 +131,31 @@ describe(ComparisonPage.name, () => {
 		expect(screen.getAllByText("A×3").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("D×1").length).toBeGreaterThan(0);
 		expect(screen.queryByText(/range/iu)).not.toBeInTheDocument();
+	});
+
+	it("shows the attempt-pairs table by default, with both switcher options offered", async () => {
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("case-1")).toBeInTheDocument();
+		});
+		expect(
+			screen.getByRole("button", { name: "Attempt pairs", pressed: true }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "What moved", pressed: false }),
+		).toBeInTheDocument();
+	});
+
+	it("renders the planned-feature block instead of a working tab when What moved is selected", async () => {
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("case-1")).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: "What moved" }));
+
+		expect(screen.getByText("PLANNED")).toBeInTheDocument();
+		expect(screen.queryByRole("table")).not.toBeInTheDocument();
 	});
 });

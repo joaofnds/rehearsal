@@ -3,6 +3,7 @@ import { FilterPill } from "./components/filter-pill";
 import { GRADE_SIZES, Grade } from "./components/grade";
 import { PlannedFeatureBlock } from "./components/planned-feature-block";
 import { SectionLabel } from "./components/section-label";
+import { Switcher } from "./components/switcher";
 import { STATUS_STATES, Status } from "./components/status";
 import { TableShell } from "./components/table-shell";
 import {
@@ -195,6 +196,16 @@ export function SystemPage(): React.JSX.Element {
 				<FilterPill pressed={true} onPress={noop}>
 					Running
 				</FilterPill>
+			</section>
+
+			<section>
+				<SectionLabel>SWITCHER</SectionLabel>
+				<Switcher
+					label="Example switcher"
+					options={["Attempt pairs", "What moved"]}
+					selected="Attempt pairs"
+					onSelect={noop}
+				/>
 			</section>
 
 			<section>

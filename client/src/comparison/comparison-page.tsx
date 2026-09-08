@@ -1,8 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
+import { useState } from "react";
 import { apiClient } from "#client/api-client";
+import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
+import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
 import "./comparison-page.css";
+
+const PRESENTATIONS = ["Attempt pairs", "What moved"] as const;
+type Presentation = (typeof PRESENTATIONS)[number];
 
 type ComparisonResponse = InferResponseType<
 	(typeof apiClient.api.comparisons)[":digest"]["$get"],
@@ -60,6 +66,8 @@ export function ComparisonPage({
 }: {
 	readonly digest: string;
 }): React.JSX.Element {
+	const [presentation, setPresentation] =
+		useState<Presentation>("Attempt pairs");
 	const query = useQuery({
 		queryKey: ["comparison", digest],
 		queryFn: () => fetchComparison(digest),
@@ -73,6 +81,15 @@ export function ComparisonPage({
 			{query.isError ? <p role="alert">Could not load comparison.</p> : null}
 
 			{query.isSuccess ? (
+				<Switcher
+					label="Comparison presentation"
+					options={PRESENTATIONS}
+					selected={presentation}
+					onSelect={setPresentation}
+				/>
+			) : null}
+
+			{query.isSuccess && presentation === "Attempt pairs" ? (
 				<TableShell
 					caption="ATTEMPT PAIRS"
 					columns={[...COLUMNS]}
@@ -80,6 +97,15 @@ export function ComparisonPage({
 						rowFor(benchmarkCase),
 					)}
 				/>
+			) : null}
+
+			{query.isSuccess && presentation === "What moved" ? (
+				<PlannedFeatureBlock heading="What moved">
+					<p>
+						Needs a per-measure interval and a reading verdict a paired estimate
+						cannot supply yet.
+					</p>
+				</PlannedFeatureBlock>
 			) : null}
 		</main>
 	);
