@@ -92,7 +92,8 @@ async function requireCorpus(
 	} catch (error) {
 		if (
 			error instanceof CorpusFileError ||
-			error instanceof SessionCorpusError
+			error instanceof SessionCorpusError ||
+			error instanceof SymlinkedEntryError
 		) {
 			throw new RefusedPreconditionError(error.message);
 		}
