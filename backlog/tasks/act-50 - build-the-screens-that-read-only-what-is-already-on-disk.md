@@ -5,7 +5,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 00:56'
+updated_date: '2026-09-08 01:01'
 labels: []
 milestone: m-7
 dependencies:
@@ -255,4 +255,10 @@ client/dist/assets/index-C8CVoTEm.js                                   319.76 kB
 10. Refactoring's aside on stubFetchByPath silently returning 200/null-body on an unstubbed path — NOT FIXED, cited only as evidence for how finding #3 went unnoticed, no axis scored it as its own defect.
 
 Full suite re-verified green after every fix: 1160 server + 98 client tests (bun run test), tsc --noEmit clean on both tsconfigs, oxlint --type-aware clean.
+
+Live check 2026-09-08, after the code review: started the real server (bun run serve, :4173) and the client dev server, fetched GET /api/corpus and GET /api/comparisons/:digest against real data on disk (.benchmark-runs has real runs but no comparisons). Found and fixed a third bug this session's reviewers did not catch (no reviewer ran the app against real data): hashDirectory (src/benchmark/checkpoint.ts, shared by 3 other callers) threw ENOENT hashing the live ~/.claude root, because a file readdir listed (sessions/2847.json, a Claude Code session artifact) no longer existed by the time the walk's stat call reached it. Fixed in commit af27afb: hashDirectory now skips an entry that no longer resolves, reproduced deterministically with a broken symlink rather than the real race window. Re-verified against the live server after the fix: GET /api/corpus returns real file data successfully.
+
+Re-fetched GET /api/comparisons/<64 nines> directly: confirmed 404, matching exactly the status code ComparisonPage's ComparisonNotFoundError branches on.
+
+Not observed: the rendered page in an actual browser. No browser-automation tool was available in this session (checked via ToolSearch). What was observed instead: the real HTTP responses both screens fetch from (root path, digest, and file list for corpus; 404 for a missing comparison), and the component tree's real rendering through React Testing Library's actual DOM output in every test in the suite. This is not a substitute for a paint-and-look browser check; it stops short of what the build skill asks for. If a comparison record is ever produced (a real  run) or someone opens the app in a browser, that would be the missing check.
 <!-- SECTION:NOTES:END -->
