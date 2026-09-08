@@ -489,6 +489,7 @@ export interface StageContext {
 		currentCalibrations: readonly JudgeAgreementCalibration[],
 	) => Promise<JudgeAgreementReport>;
 	readonly runEvents?: RunEventRecorder | undefined;
+	readonly elapsedMs?: (() => number) | undefined;
 }
 
 export interface StageOutcome {
@@ -519,6 +520,7 @@ export interface StageSessionEnvironment {
 	readonly settingsOverlay?: string | undefined;
 	readonly log: (message: string) => void;
 	readonly runEvents?: RunEventRecorder | undefined;
+	readonly elapsedMs?: (() => number) | undefined;
 }
 
 export interface StageSessionResult {
@@ -548,7 +550,6 @@ export async function executeStageSession(
 		environment.instructions,
 		environment.corpusRoots,
 	);
-	environment.log(`\n${stage[0]?.toUpperCase()}${stage.slice(1)} session`);
 	const transcript = await dependencies.runWorkflowStage({
 		targetDir: environment.targetDir,
 		model: environment.model,
@@ -561,6 +562,7 @@ export async function executeStageSession(
 		settingSources: environment.settingSources,
 		settingsOverlay: environment.settingsOverlay,
 		runEvents: environment.runEvents,
+		elapsedMs: environment.elapsedMs,
 	});
 
 	const currentTaskOutput = await dependencies.readTaskOutput(
@@ -709,7 +711,6 @@ export async function runGradedStages(
 			({ buildEvidence } = session);
 		}
 
-		context.log(`\n${stage} stage Judge`);
 		const stageFile = context.stageFile(stage);
 		const pendingStage = { file: stageFile, stage, input, corpusFiles };
 		await context.writePendingStage(pendingStage);
@@ -751,7 +752,6 @@ export async function runGradedStages(
 				? context.writeStageProgress
 				: context.completeStage;
 		await writeStageRecord(stageRecord);
-		context.log(JSON.stringify(scorecard.grade, null, 2));
 		if (scorecard.grade.verdict === "STOP") {
 			context.updatePendingStage({ ...pendingStage, scorecard });
 			const calibration = await context.calibrateStageFailure(stageScorecards);
@@ -860,6 +860,9 @@ export async function runBenchmark(
 	const runEventStore = openRunEventStore(
 		runEventsDatabaseFile(runFiles.runsDirectory),
 	);
+	const runStartedAtMs = Date.now();
+	const elapsedMs = (): number => Date.now() - runStartedAtMs;
+	const runEvents = runEventRecorderFor(runEventStore, runFiles.name);
 	const abort = createRunAbort(
 		{
 			killActiveCommands,
@@ -872,7 +875,8 @@ export async function runBenchmark(
 			exit: (code) => process.exit(code),
 			reportError: console.error,
 			persistence: fileRunArtifactPersistence,
-			runEvents: runEventRecorderFor(runEventStore, runFiles.name),
+			runEvents,
+			elapsedMs,
 		},
 		{
 			artifactFile: runFiles.artifactFile,
@@ -994,7 +998,8 @@ export async function runBenchmark(
 					updatePendingStage: abort.updatePendingStage,
 					writeStageProgress: abort.writeStageProgress,
 					completeStage: abort.completeStage,
-					runEvents: runEventRecorderFor(runEventStore, runFiles.name),
+					runEvents,
+					elapsedMs,
 					calibrateStageFailure: async (scorecards) => {
 						if (!config.pause) {
 							return undefined;

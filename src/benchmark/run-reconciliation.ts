@@ -2,8 +2,7 @@ import { join } from "node:path";
 import { loadRunManifest } from "./manifest";
 import { readRunMarker } from "./target";
 import type { RunEventStore } from "./run-events";
-
-const TERMINAL_RUN_EVENT_KINDS = new Set(["run-completed", "run-interrupted"]);
+import { isTerminalRunEventKind } from "./run-events";
 
 export interface ReconciliationDependencies {
 	readonly runsDirectory: string;
@@ -34,7 +33,7 @@ export async function reconcileInterruptedRuns(
 
 	for (const runId of store.runIds()) {
 		const latest = store.latestEvent(runId);
-		if (latest === undefined || TERMINAL_RUN_EVENT_KINDS.has(latest.kind)) {
+		if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
 			continue;
 		}
 

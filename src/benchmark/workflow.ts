@@ -54,7 +54,14 @@ export interface WorkflowStageRequest {
 	readonly settingSources?: "project" | undefined;
 	readonly settingsOverlay?: string | undefined;
 	readonly runEvents?: RunEventRecorder | undefined;
-	readonly now?: (() => number) | undefined;
+	/**
+	 * Milliseconds elapsed since the run started, not a raw clock: shares its
+	 * shape with run-abort.ts's RunAbortDependencies.elapsedMs so both modules
+	 * report against the one origin the caller owns, rather than each stage
+	 * session capturing its own start time and making elapsed time jump
+	 * backward at every stage boundary.
+	 */
+	readonly elapsedMs?: (() => number) | undefined;
 }
 
 function reasonOf(cause: unknown): string {
@@ -174,9 +181,8 @@ export async function runWorkflowStage(
 		settingSources,
 		settingsOverlay,
 		runEvents,
-		now = () => Date.now(),
+		elapsedMs = () => 0,
 	} = request;
-	const startedAtMs = now();
 	let sessionId: string = randomUUID();
 	let spentUsd = 0;
 	const providerCalls: ProviderCall[] = [];
@@ -222,14 +228,14 @@ export async function runWorkflowStage(
 
 		if (agent.status === "COMPLETE") {
 			exchanges.push({ agent });
-			runEvents?.record("turn-completed", stage, spentUsd, now() - startedAtMs);
+			runEvents?.record("turn-completed", stage, spentUsd, elapsedMs());
 
 			return { stage, sessionId, costUsd: spentUsd, providerCalls, exchanges };
 		}
 
 		const productOwnerAnswer = await productOwner.ask(stage, agent.message);
 		exchanges.push({ agent, productOwnerAnswer });
-		runEvents?.record("turn-completed", stage, spentUsd, now() - startedAtMs);
+		runEvents?.record("turn-completed", stage, spentUsd, elapsedMs());
 		prompt = continueStagePrompt(skill, productOwnerAnswer);
 	}
 

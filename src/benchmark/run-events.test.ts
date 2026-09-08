@@ -2,15 +2,35 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openRunEventStore, runEventRecorderFor } from "./run-events";
+import {
+	isTerminalRunEventKind,
+	openRunEventStore,
+	runEventRecorderFor,
+} from "./run-events";
+import { TestResources } from "./test-support";
+
+const testResources = TestResources.forEachTest();
 
 describe(openRunEventStore.name, () => {
 	it("opens a file-backed database in WAL mode, per decision-3", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
+		testResources.track(directory);
 
 		const store = openRunEventStore(join(directory, "events.sqlite"));
 
 		expect(store.journalMode()).toBe("wal");
+		store.close();
+	});
+
+	it("creates a database file's parent directory when it does not exist yet, since the runs directory is never created ahead of the first run", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
+		testResources.track(parent);
+		const path = join(parent, "not-yet-created", "events.sqlite");
+
+		const store = openRunEventStore(path);
+
+		expect(await Bun.file(path).exists()).toBe(true);
+		store.close();
 	});
 
 	it("replays every appended event for a run in append order", () => {
@@ -157,5 +177,17 @@ describe(runEventRecorderFor.name, () => {
 			{ kind: "stage-started", stage: "shape", spentUsd: 0, elapsedMs: 0 },
 			{ kind: "stage-completed", stage: "shape", spentUsd: 1, elapsedMs: 1000 },
 		]);
+	});
+});
+
+describe(isTerminalRunEventKind.name, () => {
+	it.each([
+		["run-completed", true],
+		["run-interrupted", true],
+		["stage-started", false],
+		["stage-completed", false],
+		["turn-completed", false],
+	] as const)("reads %s as terminal: %s", (kind, expected) => {
+		expect(isTerminalRunEventKind(kind)).toBe(expected);
 	});
 });

@@ -43,7 +43,14 @@ export interface RunAbortDependencies {
 	readonly reportError: (message: string) => void;
 	readonly persistence: RunArtifactPersistence;
 	readonly runEvents?: RunEventRecorder | undefined;
-	readonly now?: (() => number) | undefined;
+	/**
+	 * Milliseconds elapsed since the run started, not a raw clock: the caller
+	 * owns the one origin a run has, so this and workflow.ts's WorkflowStageRequest
+	 * carry the same shape rather than each capturing its own `Date.now()` at
+	 * construction. Two independent origins previously made elapsed time jump
+	 * backward at every stage boundary.
+	 */
+	readonly elapsedMs?: (() => number) | undefined;
 }
 
 export interface RunAbortRequest {
@@ -154,8 +161,7 @@ export function createRunAbort(
 	let abortRequested = false;
 	let transitionReady = Promise.resolve();
 	const runEvents = dependencies.runEvents ?? noopRunEventRecorder;
-	const now = dependencies.now ?? (() => Date.now());
-	const startedAtMs = now();
+	const elapsedMs = dependencies.elapsedMs ?? (() => 0);
 
 	const enqueueTransition = async (
 		transition: () => Promise<void>,
@@ -194,7 +200,7 @@ export function createRunAbort(
 			"stage-started",
 			pending.stage,
 			pending.input.transcript.costUsd,
-			now() - startedAtMs,
+			elapsedMs(),
 		);
 
 		return enqueueNormalTransition(() =>
@@ -242,7 +248,7 @@ export function createRunAbort(
 			"stage-completed",
 			stage,
 			record.input.transcript.costUsd + record.costUsd,
-			now() - startedAtMs,
+			elapsedMs(),
 		);
 
 		return enqueueNormalTransition(async () => {
@@ -278,7 +284,7 @@ export function createRunAbort(
 			"run-completed",
 			"",
 			totalSpentUsd(artifact),
-			now() - startedAtMs,
+			elapsedMs(),
 		);
 
 		return enqueueNormalTransition(async () => {
@@ -303,7 +309,7 @@ export function createRunAbort(
 					"run-completed",
 					"",
 					totalSpentUsd(pendingArtifact),
-					now() - startedAtMs,
+					elapsedMs(),
 				);
 			}
 			pendingArtifact = undefined;

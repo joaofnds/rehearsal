@@ -8,13 +8,12 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { parseRecordId } from "#cli/record-id";
 import { runEventsDatabaseFile } from "#benchmark/run-layout";
-import { openRunEventStore } from "#benchmark/run-events";
+import { isTerminalRunEventKind, openRunEventStore } from "#benchmark/run-events";
 import { comparisonReport } from "./comparisons";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
 
-const TERMINAL_RUN_EVENT_KINDS = new Set(["run-completed", "run-interrupted"]);
 const RUN_EVENTS_POLL_MS = 500;
 
 export interface ApiDependencies {
@@ -101,7 +100,7 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 							const { kind, sequence: eventSequence } = event;
 							await stream.writeSSE({ data: JSON.stringify(event) });
 							sequence = eventSequence;
-							if (TERMINAL_RUN_EVENT_KINDS.has(kind)) {
+							if (isTerminalRunEventKind(kind)) {
 								sawTerminalEvent = true;
 							}
 						}

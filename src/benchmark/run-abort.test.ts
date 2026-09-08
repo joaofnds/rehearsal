@@ -489,10 +489,9 @@ describe(createRunAbort.name, () => {
 		expect(runEvents.events.at(-1)?.spentUsd).toBe(2);
 	});
 
-	it("records elapsed time against the clock injected at construction", async () => {
+	it("records elapsed time exactly as the injected elapsedMs function reports it, with no origin of its own", async () => {
 		const persistence = new ControlledRunArtifactPersistence();
 		const runEvents = fakeRunEventRecorder();
-		const times = [1000, 1500];
 		const abort = createRunAbort(
 			{
 				killActiveCommands: () => Promise.resolve(),
@@ -502,7 +501,7 @@ describe(createRunAbort.name, () => {
 				reportError: () => undefined,
 				persistence,
 				runEvents,
-				now: () => times.shift() ?? 1500,
+				elapsedMs: () => 500,
 			},
 			{
 				artifactFile: "/runs/run.json",

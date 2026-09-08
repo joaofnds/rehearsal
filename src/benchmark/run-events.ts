@@ -1,4 +1,6 @@
 import { Database } from "bun:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 export type RunEventKind =
 	| "stage-started"
@@ -6,6 +8,21 @@ export type RunEventKind =
 	| "stage-completed"
 	| "run-completed"
 	| "run-interrupted";
+
+const TERMINAL_RUN_EVENT_KINDS: ReadonlySet<RunEventKind> = new Set([
+	"run-completed",
+	"run-interrupted",
+]);
+
+/**
+ * A run's event stream needs nothing further once it reaches one of these:
+ * the SSE route stops polling, and reconciliation has nothing to do. The
+ * single source both readers share, so a future RunEventKind added here
+ * cannot desync which kinds end a stream between them.
+ */
+export function isTerminalRunEventKind(kind: RunEventKind): boolean {
+	return TERMINAL_RUN_EVENT_KINDS.has(kind);
+}
 
 export interface NewRunEvent {
 	readonly runId: string;
@@ -93,6 +110,9 @@ function toRunEvent(row: RunEventRow): RunEvent {
 }
 
 export function openRunEventStore(path: string): RunEventStore {
+	if (path !== ":memory:") {
+		mkdirSync(dirname(path), { recursive: true });
+	}
 	const database = new Database(path);
 	database.run("PRAGMA journal_mode = WAL");
 	database.run(SCHEMA);
