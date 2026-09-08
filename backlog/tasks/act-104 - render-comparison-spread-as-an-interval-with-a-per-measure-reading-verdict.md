@@ -102,4 +102,31 @@ Card premise corrected: the note above calling meanDelta +/- 1.96*standardError
 a routine default does not hold for the contrast estimate. At two cases the
 interval can be zero-width, and 1.96 is a large-sample multiplier being applied
 at one degree of freedom. It is not the basis for this card's interval.
+6. The two threshold rules, settled 2026-09-08. Both take the structural
+answer over a synthesized statistic, for the reason already on this card:
+a large-sample multiplier at these rep counts asserts precision the data
+does not carry.
+
+"inside rerun noise" is structural range overlap. Two arms read as inside
+rerun noise when their observed ranges share any point: the low-to-high
+grade span from gradeDistribution for a graded measure, the
+successful-of-requested count for a binary one. No Wald interval, no
+confidence level, no tunable z. This matches the design's own wording,
+"arms overlap by 2 steps", which describes observed spans touching rather
+than intervals intersecting. The recorded standardError
+(confirmation-report.ts:83) stays unused by this rule.
+
+"unchanged, already clear" is the exact ceiling, kept as its own category
+rather than folded into overlap, because the design names it separately and
+it says something different: not that the two arms are indistinguishable,
+but that both already succeed every time and there is no room above.
+
+Note for the builder: the ceiling for a graded stage measure is not all-A.
+A rep counts as successful when its grade meets the run's configured
+minimum, DEFAULT_MINIMUM_STAGE_GRADE of "B" (config.ts:22, applied at
+stage-grading.ts:356). The ceiling test is successful === requested in both
+arms, which reads off successRate directly and stays correct when a case
+configures a different minimum. Testing all-A would call a run of straight
+Bs "not yet clear" when the harness has been scoring it as a clean sweep.
+
 <!-- SECTION:NOTES:END -->
