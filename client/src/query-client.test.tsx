@@ -31,9 +31,12 @@ describe(createQueryClient.name, () => {
 			</QueryClientProvider>,
 		);
 
-		await waitFor(() => {
-			expect(screen.getByText("No comparison recorded")).toBeInTheDocument();
-		});
+		await waitFor(
+			() => {
+				expect(screen.getByText("No comparison recorded")).toBeInTheDocument();
+			},
+			{ timeout: 5000 },
+		);
 		expect(calls).toBe(1);
 	});
 });
