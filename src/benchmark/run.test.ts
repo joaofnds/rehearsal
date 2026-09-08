@@ -593,6 +593,7 @@ describe(runGradedStages.name, () => {
 
 	it("records a stage-started run event for each stage before its session runs, so a monitor can name the stage in flight", async () => {
 		const { dependencies, executed } = fakeStageDependencies();
+		const executedCountAtEachStart: number[] = [];
 		const recorded: {
 			readonly kind: RunEventKind;
 			readonly stage: string;
@@ -610,7 +611,7 @@ describe(runGradedStages.name, () => {
 				) => {
 					recorded.push({ kind, stage, spentUsd, elapsedMs });
 					if (kind === "stage-started") {
-						expect(executed).not.toContain(stage);
+						executedCountAtEachStart.push(executed.length);
 					}
 				},
 			},
@@ -623,6 +624,7 @@ describe(runGradedStages.name, () => {
 			{ kind: "stage-started", stage: "shape", spentUsd: 0, elapsedMs: 500 },
 			{ kind: "stage-started", stage: "build", spentUsd: 0, elapsedMs: 500 },
 		]);
+		expect(executedCountAtEachStart).toEqual([0, 1]);
 	});
 
 	it("records the stage session inputs beside a continued scorecard", async () => {
