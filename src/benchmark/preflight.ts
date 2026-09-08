@@ -53,7 +53,13 @@ export async function asRefusedPrecondition<Loaded>(
 export type ModelProbe = () => Promise<string>;
 
 const MODEL_PROBE_PROMPT = "hi";
-const MODEL_PROBE_BUDGET_USD = 0.02;
+/**
+ * Sized for a cold prompt cache, not just a warm one: a cache-creation write
+ * on the probe's own system prompt measured $0.021876 in this session, which
+ * a $0.02 ceiling rejected as `budget_exhausted` and this module then
+ * misreported as the model being unavailable.
+ */
+const MODEL_PROBE_BUDGET_USD = 0.1;
 const modelProbeSchema = z.object({}).loose();
 
 export type CommandRunner = (
