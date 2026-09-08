@@ -1160,6 +1160,43 @@ describe(createRunAbort.name, () => {
 		expect(persistence.writes).toHaveLength(1);
 	});
 
+	it("records a single run-failed event when abort follows a persisted final Judge failure, not a second empty one", async () => {
+		const persistence = new ControlledRunArtifactPersistence();
+		const artifactFile = "/runs/run.json";
+		const pipeline = await loadDefaultPipeline();
+		const runEvents = fakeRunEventRecorder();
+		const judgeFailure = new JudgeOutputValidationError({
+			message: "invalid Judge output",
+			prompt: "judge prompt",
+			attempts: [],
+			costUsd: 0,
+		});
+		const artifact = buildFailedJudgeRunArtifact(
+			artifactBaseInputs(pipeline, AUDIT_LOG_PIPELINE_PATH),
+			judgeFailure,
+		);
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+				runEvents,
+			},
+			{
+				artifactFile,
+				teardown: () => Promise.resolve(),
+			},
+		);
+
+		await abort.writeFailedArtifact(artifact);
+		await abort.markAborted("later failure");
+
+		expect(runEvents.events.map(({ kind }) => kind)).toEqual(["run-failed"]);
+	});
+
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
 		testResources.track(directory);

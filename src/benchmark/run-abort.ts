@@ -155,6 +155,7 @@ export function createRunAbort(
 ): RunAbort {
 	let pendingArtifact: RunArtifact | undefined;
 	let pendingStage: PendingStage | undefined;
+	let terminalEventRecorded = false;
 	let abortRecorded: Promise<void> | undefined;
 	let teardownStarted: Promise<void> | undefined;
 	let signalAbortStarted = false;
@@ -288,6 +289,7 @@ export function createRunAbort(
 				totalSpentUsd(artifact),
 				elapsedMs(),
 			);
+			terminalEventRecorded = true;
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
@@ -311,6 +313,7 @@ export function createRunAbort(
 					totalSpentUsd(pendingArtifact),
 					elapsedMs(),
 				);
+				terminalEventRecorded = true;
 			}
 			pendingArtifact = undefined;
 
@@ -323,6 +326,7 @@ export function createRunAbort(
 
 		return enqueueTransition(async () => {
 			runEvents.record("run-failed", "", totalSpentUsd(artifact), elapsedMs());
+			terminalEventRecorded = true;
 			await writeRunArtifact(
 				request.artifactFile,
 				artifact,
@@ -337,14 +341,17 @@ export function createRunAbort(
 			const stageToFail = pendingStage;
 			const artifactToFail = pendingArtifact;
 			abortRecorded = enqueueTransition(async () => {
-				runEvents.record(
-					"run-failed",
-					stageToFail?.stage ?? "",
-					artifactToFail === undefined
-						? (stageToFail?.input.transcript.costUsd ?? 0)
-						: totalSpentUsd(artifactToFail),
-					elapsedMs(),
-				);
+				if (!terminalEventRecorded) {
+					runEvents.record(
+						"run-failed",
+						stageToFail?.stage ?? "",
+						artifactToFail === undefined
+							? (stageToFail?.input.transcript.costUsd ?? 0)
+							: totalSpentUsd(artifactToFail),
+						elapsedMs(),
+					);
+					terminalEventRecorded = true;
+				}
 				if (stageToFail !== undefined) {
 					try {
 						await writeStageJudgeFailure(

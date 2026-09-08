@@ -593,25 +593,35 @@ describe(runGradedStages.name, () => {
 
 	it("records a stage-started run event for each stage before its session runs, so a monitor can name the stage in flight", async () => {
 		const { dependencies, executed } = fakeStageDependencies();
-		const recorded: { readonly kind: RunEventKind; readonly stage: string }[] =
-			[];
+		const recorded: {
+			readonly kind: RunEventKind;
+			readonly stage: string;
+			readonly spentUsd: number;
+			readonly elapsedMs: number;
+		}[] = [];
 		const context = {
 			...(await stageContext()),
 			runEvents: {
-				record: (kind: RunEventKind, stage: string) => {
-					recorded.push({ kind, stage });
+				record: (
+					kind: RunEventKind,
+					stage: string,
+					spentUsd: number,
+					elapsedMs: number,
+				) => {
+					recorded.push({ kind, stage, spentUsd, elapsedMs });
 					if (kind === "stage-started") {
 						expect(executed).not.toContain(stage);
 					}
 				},
 			},
+			elapsedMs: () => 500,
 		};
 
 		await runGradedStages(dependencies, context);
 
 		expect(recorded.filter(({ kind }) => kind === "stage-started")).toEqual([
-			{ kind: "stage-started", stage: "shape" },
-			{ kind: "stage-started", stage: "build" },
+			{ kind: "stage-started", stage: "shape", spentUsd: 0, elapsedMs: 500 },
+			{ kind: "stage-started", stage: "build", spentUsd: 0, elapsedMs: 500 },
 		]);
 	});
 
