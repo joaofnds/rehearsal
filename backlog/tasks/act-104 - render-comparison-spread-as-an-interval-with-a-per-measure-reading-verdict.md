@@ -4,7 +4,7 @@ title: render comparison spread as an interval with a per-measure reading verdic
 status: To Do
 assignee: []
 created_date: '2026-09-07 16:29'
-updated_date: '2026-09-08 21:12'
+updated_date: '2026-09-08 21:17'
 labels: []
 dependencies:
   - ACT-49
@@ -22,6 +22,14 @@ The design's 'What moved' comparison layout shows, per measure, a spread across 
 <!-- AC:BEGIN -->
 - [ ] #1 A comparison report states, per measure, a spread across attempts in a form a UI can render as an interval
 - [ ] #2 A comparison report states, per measure, one of a small fixed set of reading verdicts derived from that spread
+- [ ] #3 Given a candidateMinusBaseline (or any contrast) quality row for a declared-stage measure whose two arms' gradeDistribution spans overlap, the served comparison report's row carries an interval field built from each arm's low-to-high grade span on the A-F scale and a verdict of "inside rerun noise"
+- [ ] #4 Given a declared-stage quality row whose arms both have successful === requested (every rep graded A or B, the only grades stageObservation in confirmation-report.ts counts as successful today), the row's verdict is "unchanged, already clear" regardless of grade spread
+- [ ] #5 Given a declared-stage quality row whose arms' grade spans do not overlap and are not both at ceiling, the row's verdict names the arm with the higher successful-of-requested count as succeeding more often
+- [ ] #6 Given the "final" row (pipeline mode), the interval and verdict are computed over the two-value PASS/FAIL axis from finalObservation's verdict field, not the five-letter grade scale, using the same three structural rules (overlap, ceiling, direction)
+- [ ] #7 The binomial edge cases 0/n and n/n (Wald standard error zero) are covered by a passing test for both the overlap and ceiling rules
+- [ ] #8 The served comparison report carries the interval-and-verdict field per measure per case (see open question below on where it is computed and stored)
+- [ ] #9 The computation reads the two arms' full ReliabilitySummary (gradeDistribution, successful, requested), not a narrowed successRate/passK pair and not PairedEstimate, and is keyed per (case, measure) per decision 3, never pooled across all cases into one interval per measure
+- [ ] #10 The client's What moved block still renders as PlannedFeatureBlock (comparison-page.tsx, pinned by comparison-page.test.tsx); this card ships no UI change
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -169,5 +177,77 @@ clear, and a directional reading for separated arms, naming which arm
 succeeds more often. The direction comes from comparing the two arms'
 recorded successful-of-requested counts, the same structural comparison the
 other two rules use. No synthesized statistic, on either axis.
+
+Shaping pass, 2026-09-08. Adversarial review (unprimed reviewer, reading only
+this card and the cited source files) caught three defects in an earlier draft
+of this pass and they are fixed in what is now on the card:
+
+- The first draft of this shaping pass overwrote the nine decisions above with
+  a compressed summary, editing the notes section wholesale instead of
+  appending. Restored verbatim; nothing above this paragraph was written by
+  this pass.
+- AC #4 originally said the ceiling test holds "at or above the configured
+  minimum grade." False as written: stageObservation
+  (confirmation-report.ts:101-104) hardcodes `outcome.grade === "A" ||
+  outcome.grade === "B"`, and buildReliabilityReport is never passed a
+  minimum-grade argument, so no case-configured minimum reaches
+  ReliabilitySummary.successful today. Decision 6's own builder note made the
+  same claim; it is equally unsupported by this file and should be read as
+  aspirational, not current behavior. AC #4 now cites the actual hardcoded
+  A-or-B check instead.
+- AC #8 first placed the new field directly on qualityContrastSchema
+  (comparison-record.ts), computed inside buildQualityContrast
+  (comparison-quality.ts), which runs at compare-time inside
+  buildComparisonReport (comparison-report.ts:84, called from
+  comparison-command.ts:73) — persist time, not serve time. That contradicts
+  decision 2, which this pass had just restored, and which places the field at
+  serve time by the same route src/server/comparisons.ts uses for attribution.
+  That route works for attribution because its raw input, executedCorpus, is
+  itself already a persisted field (comparison-record.ts:234) that the server
+  re-derives a presentation value from on each request. ReliabilitySummary
+  (gradeDistribution, successful, requested) is not persisted anywhere today;
+  only the narrowed successRate/passK survive onto qualityContrastSchema. So
+  decision 2's serve-time route is not available for this field without first
+  persisting the fuller ReliabilitySummary per arm, which is itself a schema
+  change decision 2 said this card does not need.
+
+OPEN QUESTION for whoever builds this, unresolved by anything on the card:
+where does the interval/verdict field actually get computed and stored?
+Two ways forward, neither cheaper by inspection:
+(a) persist ReliabilitySummary (or just gradeDistribution) per arm per
+measure onto qualityContrastSchema, alongside successRate and passK, and
+compute the interval/verdict at serve time from that stored data, matching
+decision 2's server-owned-contract reasoning but adding a stored field
+decision 2 said wasn't needed; or
+(b) compute the interval/verdict at compare-time inside buildQualityContrast,
+same place successRate/passK are already computed, and persist the result
+directly, abandoning decision 2's serve-time placement but adding no new
+raw-data field, only the computed one AC #8/#9 already describe.
+(b) is the smaller change and matches where every other field on
+QualityContrastEstimate is already computed, but it means decision 2 as
+written is wrong and should be corrected rather than followed. Recommend (b),
+with decision 2 struck and replaced, but this is a reversal of a decision the
+card twice called settled, so it goes back as a question rather than being
+decided a third time in this pass.
+
+First test to write once the open question is answered: a
+comparison-quality.test.ts case with two arms whose gradeDistribution spans
+touch (e.g. one arm all B, one arm mixed B/C) asserting verdict "inside rerun
+noise"; then the ceiling case (both arms successful === requested under the
+hardcoded A/B check); then a separated case asserting the directional verdict
+names the higher-successful arm; then the 0/n and n/n edge cases; then a
+"final" row PASS/FAIL case for each of the three rules.
+10. Decision 2 stands, 2026-09-08. A shaping pass proposed striking it and
+computing the reading at compare time, on the grounds that the reliability
+data the reading needs is not persisted and so cannot be reached at serve
+time. That premise is false, checked in the schema: each arm persists its
+whole array of reliability summaries at comparison-record.ts:235, beside the
+executedCorpus field that attribution already derives from at serve time, and
+reliabilitySummarySchema (:148-163) carries gradeDistribution, successful and
+requested, which is every input the overlap, ceiling and direction rules take.
+
+So the reading is derived at serve time from the record, as decision 2 says,
+and no new persisted field is added. Do not reopen this a third time without
+first checking that schema.
 
 <!-- SECTION:NOTES:END -->
