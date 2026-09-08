@@ -1,4 +1,4 @@
-import { CORPUS_LAYOUT_DIRECTORIES } from "./corpus-file";
+import { isCorpusLayoutPath } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import type { ToolUse } from "./transcript";
 import { filesRead, skillsInvoked } from "./transcript";
@@ -16,10 +16,32 @@ export type ManifestDivergence =
 	| { readonly kind: "undeclared-file"; readonly path: string }
 	| { readonly kind: "unloaded-file"; readonly path: string };
 
-function isCorpusLayoutPath(path: string): boolean {
-	return CORPUS_LAYOUT_DIRECTORIES.some((directory) =>
-		path.startsWith(`${directory}/`),
-	);
+/**
+ * A `Read` tool_use never carries a bare layout path: the session reads a real
+ * file, so `input.file_path` is absolute, either under the live install
+ * (`~/.claude/<layoutPath>`) or under an attempt's corpus overlay
+ * (`<attemptDirectory>/.claude/<layoutPath>`, `session-corpus.ts`). Both
+ * shapes share the `.claude/` segment immediately before the layout path, so
+ * the manifest entry is the suffix after the last one, not the read path
+ * itself.
+ */
+function corpusLayoutSuffix(path: string): string | undefined {
+	const marker = "/.claude/";
+	const at = path.lastIndexOf(marker);
+
+	return at === -1 ? undefined : path.slice(at + marker.length);
+}
+
+function readCorpusLayoutPath(path: string): string | undefined {
+	if (isCorpusLayoutPath(path)) {
+		return path;
+	}
+
+	const suffix = corpusLayoutSuffix(path);
+
+	return suffix !== undefined && isCorpusLayoutPath(suffix)
+		? suffix
+		: undefined;
 }
 
 /**
@@ -40,7 +62,9 @@ export function observedManifest(
 	const skillPaths = skillsInvoked(uses).map(
 		(skill) => `skills/${skill}/SKILL.md`,
 	);
-	const readPaths = filesRead(uses).filter((path) => isCorpusLayoutPath(path));
+	const readPaths = filesRead(uses)
+		.map((path) => readCorpusLayoutPath(path))
+		.filter((path) => path !== undefined);
 	const stylePath = outputStyleLayoutPath(styles);
 
 	const paths = [

@@ -42,6 +42,27 @@ describe(observedManifest.name, () => {
 		).toContain("skills/verify/SKILL.md");
 	});
 
+	it("names CLAUDE.md read directly, the corpus layout's other kind of path", () => {
+		expect(observedManifest([readUse("CLAUDE.md")], []).paths).toContain(
+			"CLAUDE.md",
+		);
+	});
+
+	it("names the layout path of a corpus file the session read by its real, absolute path", () => {
+		expect(
+			observedManifest(
+				[readUse("/Users/joaofnds/.claude/skills/verify/SKILL.md")],
+				[],
+			).paths,
+		).toContain("skills/verify/SKILL.md");
+	});
+
+	it("names no path for a Read of a file outside the corpus install's .claude layout", () => {
+		expect(
+			observedManifest([readUse("/tmp/attempt/NOTES.md")], []).paths,
+		).toEqual([]);
+	});
+
 	it("names the last output_style attachment's layout path, not an earlier one", () => {
 		expect(observedManifest([], ["brief", "concise"]).paths).toContain(
 			"output-styles/concise.md",

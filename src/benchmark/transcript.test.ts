@@ -8,6 +8,7 @@ import {
 	outputStyles,
 	parseTranscript,
 	parseTranscriptFile,
+	skillsInvoked,
 	toolUses,
 } from "#benchmark/transcript";
 import { TestResources } from "#benchmark/test-support";
@@ -137,6 +138,27 @@ describe(filesRead.name, () => {
 		const transcript = parseTranscript(assistantWith(readBlock, bashBlock));
 
 		expect(filesRead(toolUses(transcript))).toEqual(["/tmp/x.md"]);
+	});
+});
+
+const skillBlock = {
+	type: "tool_use",
+	id: "toolu_3",
+	name: "Skill",
+	input: { skill: "verify" },
+};
+
+describe(skillsInvoked.name, () => {
+	it("returns the skill name of every Skill call and nothing else", () => {
+		const transcript = parseTranscript(assistantWith(skillBlock, bashBlock));
+
+		expect(skillsInvoked(toolUses(transcript))).toEqual(["verify"]);
+	});
+
+	it("returns nothing for a transcript with no Skill call", () => {
+		const transcript = parseTranscript(assistantWith(bashBlock));
+
+		expect(skillsInvoked(toolUses(transcript))).toEqual([]);
 	});
 });
 

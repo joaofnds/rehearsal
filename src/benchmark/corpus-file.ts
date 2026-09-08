@@ -58,6 +58,20 @@ export const CORPUS_LAYOUT_DIRECTORIES: readonly string[] = [
 ];
 
 /**
+ * The one predicate that knows what a corpus layout path looks like, so a
+ * second reader (observing what a session loaded, rather than resolving it to
+ * bytes) answers the same question the same way instead of drifting from it.
+ */
+export function isCorpusLayoutPath(path: string): boolean {
+	return (
+		path === CORPUS_INSTRUCTIONS_PATH ||
+		CORPUS_LAYOUT_DIRECTORIES.some((directory) =>
+			path.startsWith(`${directory}/`),
+		)
+	);
+}
+
+/**
  * The one place that knows where a corpus layout path lands. A case names a
  * file in corpus layout paths, and this maps that layout onto the root the
  * resolved source carries, so the reader never learns where the bytes came
@@ -67,14 +81,8 @@ export function resolveCorpusFile(
 	source: CorpusRoot,
 	layoutPath: string,
 ): string {
-	if (layoutPath === CORPUS_INSTRUCTIONS_PATH) {
-		return confinedTo(source.root, CORPUS_INSTRUCTIONS_PATH);
-	}
-
-	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {
-		if (layoutPath.startsWith(`${directory}/`)) {
-			return confinedTo(source.root, layoutPath);
-		}
+	if (isCorpusLayoutPath(layoutPath)) {
+		return confinedTo(source.root, layoutPath);
 	}
 
 	throw new CorpusFileError(
