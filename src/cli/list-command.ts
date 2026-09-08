@@ -163,12 +163,12 @@ async function listRuns(runsDirectory: string): Promise<RecordListing> {
 	);
 }
 
-interface RunCheckpoint {
+export interface RunCheckpoint {
 	readonly run: string;
 	readonly stage: string;
 }
 
-async function recordedCheckpoints(
+export async function recordedCheckpoints(
 	runsDirectory: string,
 ): Promise<readonly RunCheckpoint[]> {
 	const checkpoints: RunCheckpoint[] = [];
