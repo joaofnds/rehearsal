@@ -4,7 +4,7 @@ title: run the three unrun brief-reply turns and record their word bands
 status: To Do
 assignee: []
 created_date: '2026-09-03 11:56'
-updated_date: '2026-09-04 01:50'
+updated_date: '2026-09-08 12:21'
 labels: []
 milestone: m-3
 dependencies:
@@ -37,3 +37,40 @@ Filed at triage 2026-09-03 because an obligation recorded only in a Done card's 
 - [ ] #3 `rehearsal stale` reports none of the four cases stale against the live corpus and all four stale against a corpus directory whose brief.md differs by one byte
 - [ ] #4 ACT-25's criteria #9, #10, and #11 are each either checked with the observation that satisfies them or restated on this card as still unobserved with the reason
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Bet, 2026-09-08: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Oversight probe, 2026-09-08 (iterate, no provider call spent):
+
+ACT-32's fix is confirmed on real data, not only in tests. The second recorded
+attempt of brief-reply-92b2e8b0 (936e9ee1) reports tool-calls PASS "0 tool calls"
+where the first (935649b6) reported FAIL "211 tool calls". The blocker this card
+named is genuinely cleared, so the three runs would now record evidence about the
+corpus rather than about the check.
+
+AC#3 is unsatisfiable as written, and not for a fixable reason. `rehearsal stale`
+compares a corpus against the sha recorded in a case's latest attempt record, and
+src/benchmark/staleness-report.ts:304 skips any case with no attempt record. Only
+brief-reply-92b2e8b0 has ever run, so it is the only one of the four that `stale`
+can name. Observed directly: against the live corpus, `stale` reports
+`case:brief-reply-92b2e8b0  output-styles/brief.md changed` and does not mention
+the other three; against a full mirror of the live corpus with one byte appended
+to output-styles/brief.md, the same one case is named plus manifest-probe. The
+other three stay invisible in both runs.
+
+This refutes the card's premise that "the stale half needs no provider call". The
+stale half depends on the paid half. AC#3 can only be checked after AC#1 runs.
+
+Also note the live corpus has drifted since the recorded runs: attempts recorded
+output-styles/brief.md at sha 1d1bc829..., the live file is now 16f2833a....
+That drift is ordinary editing, not a defect, but it means the three new runs
+would record the current sha and AC#3's first clause ("none of the four stale")
+would then hold for those three while 92b2e8b0 stays stale until it is re-run.
+Satisfying AC#3 as written needs all four re-run, not three.
+
+Not spent: the ~7 USD for the runs. Stopped here for the money decision rather
+than starting it unasked.
+<!-- SECTION:NOTES:END -->
