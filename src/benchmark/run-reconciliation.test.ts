@@ -1,7 +1,50 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { RunManifest } from "./manifest";
+import { writeRunManifest } from "./manifest";
 import type { ReconciliationDependencies } from "./run-reconciliation";
-import { reconcileInterruptedRuns } from "./run-reconciliation";
+import {
+	liveReconciliationDependencies,
+	reconcileInterruptedRuns,
+} from "./run-reconciliation";
 import { openRunEventStore } from "./run-events";
+import { benchmarkRunPaths } from "./run-layout";
+import { assertSourceReady, claimTarget } from "./target";
+import { TEST_TARGET, TestResources } from "./test-support";
+
+const testResources = TestResources.forEachTest();
+
+function manifestFixture(sourceRoot: string): RunManifest {
+	return {
+		caseId: "audit-log",
+		timestamp: "2026-08-30T00:00:00.000Z",
+		controlSha: "control-sha",
+		sourceRoot,
+		sourceSha: "source-sha",
+		taskId: "TASK-1",
+		taskSha: "task-sha",
+		task: "Task text",
+		productBrief: "Brief text",
+		model: "sonnet",
+		judgeModel: "opus",
+		sessionBudgetUsd: 5,
+		pipeline: {
+			statuses: ["To Do", "Done"],
+			target: TEST_TARGET,
+			stages: [
+				{
+					name: "build",
+					kind: "delivery",
+					skill: "build",
+					rubric: "rubrics/build.json",
+				},
+			],
+		},
+		pipelinePath: "pipelines/default.json",
+	};
+}
 
 interface FakeDependencies {
 	readonly artifactFiles: Set<string>;
@@ -184,5 +227,57 @@ describe(reconcileInterruptedRuns.name, () => {
 		const reconciled = await reconcileInterruptedRuns(store, dependencies);
 
 		expect(reconciled.toSorted()).toEqual(["run-1"]);
+	});
+});
+
+describe(liveReconciliationDependencies.name, () => {
+	it("leaves a run alone when its claimed target's pid is this live test process", async () => {
+		const runsDirectory = await mkdtemp(
+			join(tmpdir(), "rehearsal-reconciliation-"),
+		);
+		testResources.track(runsDirectory);
+		const repository = await testResources.createRepository();
+		const source = await assertSourceReady(repository.directory);
+		await claimTarget(source);
+		const paths = benchmarkRunPaths(runsDirectory, "run-1");
+		await writeRunManifest(paths.manifestFile, manifestFixture(source.root));
+		const store = openRunEventStore(":memory:");
+		store.append({
+			runId: "run-1",
+			kind: "stage-started",
+			stage: "shape",
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+
+		const reconciled = await reconcileInterruptedRuns(
+			store,
+			liveReconciliationDependencies(runsDirectory),
+		);
+
+		expect(reconciled).toEqual([]);
+		expect(store.latestEvent("run-1")?.kind).toBe("stage-started");
+	});
+
+	it("treats a run with no manifest on disk as nothing to reconcile", async () => {
+		const runsDirectory = await mkdtemp(
+			join(tmpdir(), "rehearsal-reconciliation-"),
+		);
+		testResources.track(runsDirectory);
+		const store = openRunEventStore(":memory:");
+		store.append({
+			runId: "run-1",
+			kind: "stage-started",
+			stage: "shape",
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+
+		const reconciled = await reconcileInterruptedRuns(
+			store,
+			liveReconciliationDependencies(runsDirectory),
+		);
+
+		expect(reconciled).toEqual([]);
 	});
 });

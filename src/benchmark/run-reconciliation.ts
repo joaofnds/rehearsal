@@ -1,4 +1,6 @@
 import { join } from "node:path";
+import { loadRunManifest } from "./manifest";
+import { readRunMarker } from "./target";
 import type { RunEventStore } from "./run-events";
 
 const TERMINAL_RUN_EVENT_KINDS = new Set(["run-completed", "run-interrupted"]);
@@ -67,4 +69,37 @@ export async function reconcileInterruptedRuns(
 	}
 
 	return reconciled;
+}
+
+/**
+ * The real collaborators `reconcileInterruptedRuns` needs against the
+ * filesystem and the OS: `loadRunManifest` throws on a missing file, where
+ * this pass wants "nothing to reconcile", so the existence check comes
+ * first; `process.kill(pid, 0)` throws for a dead pid rather than returning
+ * false, per Node's documented signal-0 liveness probe.
+ */
+export function liveReconciliationDependencies(
+	runsDirectory: string,
+): ReconciliationDependencies {
+	return {
+		runsDirectory,
+		artifactExists: (path) => Bun.file(path).exists(),
+		loadManifest: async (path) => {
+			if (!(await Bun.file(path).exists())) {
+				return undefined;
+			}
+
+			return loadRunManifest(path);
+		},
+		readMarker: readRunMarker,
+		isAlive: (pid) => {
+			try {
+				process.kill(pid, 0);
+
+				return true;
+			} catch {
+				return false;
+			}
+		},
+	};
 }
