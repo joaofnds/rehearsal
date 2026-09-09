@@ -231,6 +231,27 @@ describe(runStale.name, () => {
 			]);
 		});
 
+		it("names no absolute filesystem path when the corpus lacks the declared file", async () => {
+			const root = await temporaryDirectory("rehearsal-stale-cli-missing-");
+			const fixture = new RecordedRunsFixture(root);
+			await fixture.writeAttemptReading(
+				await corpusDirectory("build skill\n"),
+				"smoke",
+				["output-styles/brief.md"],
+			);
+			const empty = await temporaryDirectory("rehearsal-stale-cli-empty-");
+			await Bun.write(join(empty, "CLAUDE.md"), "the instructions\n");
+			const recorder = recordOutput();
+
+			await runStale(
+				{ corpus: empty, runsDirectory: root },
+				{ output: recorder.output },
+			);
+
+			expect(recorder.stdout.join("")).toContain("case:smoke");
+			expect(recorder.stdout.join("")).not.toContain(empty);
+		});
+
 		describe("and a run recorded a checkpoint", () => {
 			it("refuses the precondition naming the file the corpus lacks", async () => {
 				const corpus = await corpusDirectory("build skill\n");
