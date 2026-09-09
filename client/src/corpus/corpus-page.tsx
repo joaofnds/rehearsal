@@ -42,12 +42,26 @@ export function CorpusPage(): React.JSX.Element {
 			{query.isSuccess ? (
 				<p className="rh-corpus__root">
 					<span>{query.data.root}</span>
-					<span> · </span>
-					<span>{`corpus root@${query.data.digest}`}</span>
+					{query.data.digest === undefined ? null : (
+						<>
+							<span> · </span>
+							<span>{`corpus root@${query.data.digest}`}</span>
+						</>
+					)}
 				</p>
 			) : null}
 
-			{query.isSuccess && query.data.files.length === 0 ? (
+			{query.isSuccess && query.data.refusals.length > 0 ? (
+				<ul className="rh-corpus__refusals" role="alert">
+					{query.data.refusals.map((refusal) => (
+						<li key={refusal}>{refusal}</li>
+					))}
+				</ul>
+			) : null}
+
+			{query.isSuccess &&
+			query.data.files.length === 0 &&
+			query.data.refusals.length === 0 ? (
 				<EmptyState heading="No corpus files found">
 					<p>
 						The corpus root holds no files in corpus layout. Add a CLAUDE.md, a

@@ -77,6 +77,66 @@ describe(CorpusPage.name, () => {
 		expect(screen.getByText("PLANNED")).toBeInTheDocument();
 	});
 
+	describe("when the report carries a refusal", () => {
+		function renderRefusing(files: CorpusResponse["files"]): void {
+			stubFetchByPath(
+				new Map([
+					[
+						"/api/corpus",
+						{
+							root: "/home/user/.claude",
+							digest: undefined,
+							files,
+							refusals: [
+								"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+							],
+						},
+					],
+				]),
+			);
+			const client = new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			});
+			render(
+				<QueryClientProvider client={client}>
+					<CorpusPage />
+				</QueryClientProvider>,
+			);
+		}
+
+		it("renders the files it could hash alongside the refusal, rather than one failure line", async () => {
+			renderRefusing(corpusResponseBody().files);
+
+			await waitFor(() => {
+				expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
+			});
+			expect(
+				screen.getByText(/agents\/escape\.md resolves outside the tree/u),
+			).toBeInTheDocument();
+			expect(screen.queryByText("Could not load the corpus.")).toBeNull();
+		});
+
+		it("renders no corpus root digest, since the report carries none for a partial tree", async () => {
+			renderRefusing(corpusResponseBody().files);
+
+			await waitFor(() => {
+				expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
+			});
+			expect(screen.queryByText(/corpus root@/u)).toBeNull();
+		});
+
+		it("renders the refusal rather than the empty state when no layout directory hashed", async () => {
+			renderRefusing([]);
+
+			await waitFor(() => {
+				expect(
+					screen.getByText(/agents\/escape\.md resolves outside the tree/u),
+				).toBeInTheDocument();
+			});
+			expect(screen.queryByText("No corpus files found")).toBeNull();
+		});
+	});
+
 	it("renders the empty state instead of a table when the corpus tree holds no files", async () => {
 		stubFetchByPath(
 			new Map([
