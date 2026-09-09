@@ -12,6 +12,7 @@ import {
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
 import { recordedCheckpoints } from "#cli/list-command";
 import { corpusDigest } from "./corpus-digest";
+import { redactAbsolutePaths } from "./redact-path";
 
 export interface CorpusFileReport {
 	readonly path: string;
@@ -93,7 +94,7 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 			if (!(error instanceof SymlinkedEntryError)) {
 				throw error;
 			}
-			refusals.push(error.message);
+			refusals.push(redactAbsolutePaths(error.message));
 		}
 	}
 

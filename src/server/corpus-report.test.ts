@@ -116,6 +116,20 @@ describe(corpusReport.name, () => {
 		]);
 	});
 
+	it("redacts an absolute path out of a refusal, since a refusal is served to a browser", async () => {
+		const root = await fullCorpusDirectory();
+		const outside = await corpusDirectory();
+		await symlink(outside, join(root, "agents"));
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"agents resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+		]);
+	});
+
 	it("reports a rulebook file exactly once, not once per list that carries it", async () => {
 		const root = await fullCorpusDirectory();
 		await mkdir(join(root, "rulebook"), { recursive: true });
