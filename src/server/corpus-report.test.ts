@@ -175,6 +175,28 @@ describe(corpusReport.name, () => {
 		expect(failure.message).toContain("EACCES");
 	});
 
+	it("names the refusal rather than the read failure, so an unreadable file cannot hide an escaping one", async () => {
+		const root = await fullCorpusDirectory();
+		const outside = await corpusDirectory();
+		await writeFile(join(outside, "secret.md"), "secret bytes\n");
+		await mkdir(join(root, "agents"), { recursive: true });
+		await symlink(
+			join(outside, "secret.md"),
+			join(root, "agents", "escape.md"),
+		);
+		await writeFile(join(root, "agents", "zz-unreadable.md"), "an agent\n");
+		await chmod(join(root, "agents", "zz-unreadable.md"), 0o000);
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+		]);
+		expect(JSON.stringify(report.refusals)).not.toContain("EACCES");
+	});
+
 	it("reports a rulebook file exactly once, not once per list that carries it", async () => {
 		const root = await fullCorpusDirectory();
 		await mkdir(join(root, "rulebook"), { recursive: true });

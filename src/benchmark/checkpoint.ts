@@ -171,6 +171,13 @@ export async function hashDirectory(
  * other callers hash never loses a file mid-walk, so this tolerance is a no-op
  * for them, but the live corpus root the corpus screen hashes is a directory
  * another process can still be writing to.
+ *
+ * An entry that cannot be read at all still fails the whole walk, since a
+ * directory nobody can hash is not a partial corpus to display. A refusal
+ * already found outranks it: the walk carries on past the offending entry now,
+ * so an unreadable file later in the tree would otherwise replace a named
+ * refusal with a raw `EACCES` carrying an absolute path, and which one the
+ * caller saw would turn on where the two sat in sorted order.
  */
 export async function walkDirectory(
 	root: string,
@@ -186,33 +193,45 @@ export async function walkDirectory(
 	const refusals: SymlinkedEntryError[] = [];
 	const refused: string[] = [];
 
-	for (const entry of entries.toSorted()) {
-		if (refused.some((above) => entry.startsWith(`${above}${sep}`))) {
-			continue;
+	try {
+		for (const entry of entries.toSorted()) {
+			if (refused.some((above) => entry.startsWith(`${above}${sep}`))) {
+				continue;
+			}
+
+			const absolute = join(root, entry);
+			const linkStats = await lstatIfPresent(absolute);
+			if (linkStats === undefined) {
+				continue;
+			}
+
+			const entryStats = await statIfExists(absolute);
+			if (entryStats === undefined) {
+				refusals.push(danglingEntry(join(prefix, entry)));
+				refused.push(entry);
+				continue;
+			}
+			if (await resolvesOutside(root, absolute)) {
+				refusals.push(symlinkedEntry(join(prefix, entry)));
+				refused.push(entry);
+				continue;
+			}
+			if (!entryStats.isFile()) {
+				continue;
+			}
+
+			files.push({
+				path: join(prefix, entry),
+				sha256: await hashFile(absolute),
+			});
+		}
+	} catch (error) {
+		const [first] = refusals;
+		if (first === undefined) {
+			throw error;
 		}
 
-		const absolute = join(root, entry);
-		const linkStats = await lstatIfPresent(absolute);
-		if (linkStats === undefined) {
-			continue;
-		}
-
-		const entryStats = await statIfExists(absolute);
-		if (entryStats === undefined) {
-			refusals.push(danglingEntry(join(prefix, entry)));
-			refused.push(entry);
-			continue;
-		}
-		if (await resolvesOutside(root, absolute)) {
-			refusals.push(symlinkedEntry(join(prefix, entry)));
-			refused.push(entry);
-			continue;
-		}
-		if (!entryStats.isFile()) {
-			continue;
-		}
-
-		files.push({ path: join(prefix, entry), sha256: await hashFile(absolute) });
+		throw first;
 	}
 
 	return { files, refusals };
