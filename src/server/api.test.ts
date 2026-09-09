@@ -216,7 +216,7 @@ describe(createApiApp.name, () => {
 			expect(body.digest).toBeUndefined();
 		});
 
-		it("refuses the whole corpus when CLAUDE.md is itself a link out of the tree, naming it", async () => {
+		it("names CLAUDE.md as a refusal when it is itself a link out of the tree, rather than failing the screen", async () => {
 			const corpus = await emptyDirectory("rehearsal-api-corpus-");
 			const outside = await emptyDirectory("rehearsal-api-outside-");
 			await writeFile(join(outside, "secret.md"), "secret bytes\n");
@@ -227,11 +227,15 @@ describe(createApiApp.name, () => {
 			});
 
 			const response = await app.request("/api/corpus");
-			const body = z.object({ error: z.string() }).parse(await response.json());
+			const text = await response.text();
+			const body = corpusResponseSchema.parse(JSON.parse(text));
 
-			expect(response.status).toBe(500);
-			expect(body.error).toContain("CLAUDE.md");
-			expect(body.error).not.toContain("secret bytes");
+			expect(response.status).toBe(200);
+			expect(body.refusals).toEqual([
+				"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
+			]);
+			expect(body.digest).toBeUndefined();
+			expect(text).not.toContain("secret bytes");
 		});
 	});
 
