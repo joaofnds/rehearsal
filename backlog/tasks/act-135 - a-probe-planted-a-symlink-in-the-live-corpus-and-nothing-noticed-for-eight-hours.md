@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 10:30'
-updated_date: '2026-09-09 10:39'
+updated_date: '2026-09-09 10:42'
 labels: []
 dependencies: []
 documentation:
@@ -58,4 +58,6 @@ CORRECTION, triage 2026-09-09, after adversarial review of doc-54. Two claims in
 Priority stays High. The narrower blast radius still includes an operator-visible screen failing for eight hours with nothing reporting it, and the unknown route makes recurrence more likely rather than less.
 
 Both corrections came from an unprimed reviewer probing claims I had stated as settled. The first was inference from a name match presented as fact, which is ACT-127's pattern committed by triage itself.
+
+Bet, 2026-09-09: first card in the ready queue (backlog task list --ready --sort priority), the board's only High. Placed by the overseeing iterate session rather than by iterate itself, which skipped this card through the picker defect recorded on ACT-50 and filed as its own card.
 <!-- SECTION:NOTES:END -->

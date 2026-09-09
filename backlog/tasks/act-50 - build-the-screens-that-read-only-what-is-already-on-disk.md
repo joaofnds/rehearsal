@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-09 10:28'
+updated_date: '2026-09-09 10:41'
 labels: []
 milestone: m-7
 dependencies:
@@ -336,6 +336,10 @@ Note for whoever picks this up: no comparison record exists under .benchmark-run
 Premise re-verified 2026-09-09: comparison-page.tsx:172-178 still renders PlannedFeatureBlock for the What moved tab with the copy 'Needs a per-measure interval and a reading verdict a paired estimate cannot supply yet', and qualityReadings appears nowhere under client/src/, so the tab is genuinely unbuilt.
 
 CLI fact learned this run, for whoever edits criteria next: --ac APPENDS and --acceptance-criteria REPLACES but clears every check mark, and the two cannot be combined with --check-ac in one command. Restoring checks takes a second command. ACT-50's own earlier notes record a session losing criteria to this same mixup.
+
+Bet, 2026-09-09: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Bet retracted by the overseeing iterate session, 2026-09-09. The bet above was written on this card by mistake: iterate's pick() regex is /^\s*\[?\w*\]?\s*([A-Z]+-[0-9]+...)/m, whose single \w* matches only one bracketed tag, so a two-tag queue line like '[HIGH] [bug] ACT-135 - ...' does not match and the picker falls through to the first single-tag line, this card. Reproduced this session against the literal queue lines: ACT-135's line yields null, ACT-50's yields ACT-50. ACT-135 is the ready queue's actual first card and is the one this iteration runs. This card keeps its column and its place; nothing here was worked.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
