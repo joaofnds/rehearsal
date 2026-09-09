@@ -4,7 +4,7 @@ title: stale's live-corpus branch has no test
 status: To Do
 assignee: []
 created_date: '2026-09-07 01:22'
-updated_date: '2026-09-07 16:24'
+updated_date: '2026-09-09 10:43'
 labels: []
 milestone: m-1
 dependencies: []
@@ -38,4 +38,10 @@ What would close it: an injectable home resolver threaded into stageCorpusRoots 
 Cost: the behavior is a decision João made twice, against a plausible alternative, and the code now carries a comment explaining it. A future session that reads the comment and disagrees has nothing to stop it. The blast radius is the same class as ACT-73: stale reporting the wrong answer, which is the failure mode that makes an operator stop trusting the tool.
 
 Related: ACT-92 covers a different untested seam from the same card (executeReplay's production wiring of corpusRoots) and also needs injectable dependencies. Worth checking whether one seam serves both before building either.
+
+Decision by the overseeing iterate session, 2026-09-09, settling the question doc-54 left open: whether m-1's last two cards must finish before the UI work. They need not, and this card is NOT raised above the UI cards.
+
+Read this run, doc-7 'The order': m-1 is 'Prove the loop once', its stated substance is that 'the tool has never answered its own question', and its named gate is ACT-41 -> ACT-39. Both are Done, as are the other 11 of 13. What remains under the milestone label is this card and ACT-93, neither of which is the loop: one is an interface inconsistency, the other a missing test on a branch that already works. So 'prove the loop once' is already met in the sense doc-7 wrote it, and holding the UI behind these two would be reading the milestone's counter rather than its goal.
+
+Recorded here rather than in a doc because triage owns the triage docs. Whoever runs triage next should carry this into the next one, or overturn it with the reason.
 <!-- SECTION:NOTES:END -->
