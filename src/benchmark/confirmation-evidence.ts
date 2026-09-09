@@ -11,17 +11,25 @@ import type { ClaudeCallMetrics, ProviderCall } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
+	SessionConfirmationGroupRecord,
 } from "./confirmation-record";
 import {
 	confirmationGroupRecordSchema,
-	confirmationRepRecordSchema,
+	parseConfirmationRepRecord,
+	sessionConfirmationGroupRecordSchema,
 } from "./confirmation-record";
 import {
 	buildReliabilityReport,
 	buildResourceReport,
 } from "./confirmation-report";
 
-export type FrozenFile = ConfirmationGroupRecord["inputs"]["files"][number];
+export interface FrozenFile {
+	readonly kind:
+		| ConfirmationGroupRecord["inputs"]["files"][number]["kind"]
+		| SessionConfirmationGroupRecord["inputs"]["files"][number]["kind"];
+	readonly path: string;
+	readonly sha256: string;
+}
 
 export async function writeFrozenFile(
 	groupDirectory: string,
@@ -123,12 +131,12 @@ export async function settleDiagnosticConfirmationRep(
 }
 
 interface ConfirmationGroupFinalization {
-	readonly mode: "stage" | "pipeline";
+	readonly mode: "stage" | "pipeline" | "session";
 	readonly caseId: string;
 	readonly groupId: string;
 	readonly reps: number;
 	readonly declaredStages: readonly string[];
-	readonly inputs: ConfirmationGroupInputs;
+	readonly inputs: ConfirmationGroupInputs | SessionConfirmationGroupInputs;
 	readonly projectedCost: ConfirmationCostProjection;
 	readonly approvalMethod: "interactive" | "yes";
 	readonly repResults: readonly ConfirmationRepResult[];
@@ -138,6 +146,7 @@ interface ConfirmationGroupFinalization {
 	readonly groupFile: string;
 	readonly reportFile: string;
 	readonly makespanMs: number;
+	readonly preflight?: SessionConfirmationGroupRecord["preflight"] | undefined;
 }
 
 type ConfirmationGroupLineage =
@@ -159,6 +168,14 @@ interface ConfirmationGroupInputs {
 	readonly pipelinePath: string;
 }
 
+interface SessionConfirmationGroupInputs {
+	readonly lineage: { readonly kind: "SESSION"; readonly lineage: string };
+	readonly files: readonly Readonly<FrozenFile>[];
+	readonly model: string;
+	readonly effort?: Effort | undefined;
+	readonly sessionBudgetUsd: number;
+}
+
 export interface ConfirmationGroupOutcome {
 	readonly groupRecordFile: string;
 	readonly reportFile: string;
@@ -173,13 +190,11 @@ export async function finalizeConfirmationGroup(
 	);
 	const records = await Promise.all(
 		repRecordFiles.map(async (path) =>
-			confirmationRepRecordSchema.parse(
-				JSON.parse(await Bun.file(path).text()),
-			),
+			parseConfirmationRepRecord(await Bun.file(path).text()),
 		),
 	);
 	const reliabilityInputs = records.map((record) => {
-		if (finalization.mode === "stage") {
+		if (finalization.mode === "stage" || finalization.mode === "session") {
 			return {
 				metricsComplete: record.metrics.status === "COMPLETE",
 				stages: record.stages,
@@ -202,14 +217,9 @@ export async function finalizeConfirmationGroup(
 		finalization.declaredStages,
 		reliabilityInputs,
 	);
-	const judgeAgreement = filterJudgeAgreementReport(
-		await loadJudgeAgreementReport(finalization.runsDirectory),
-		[finalization.inputs.judgeModel],
-	);
-	const report = {
-		judgeAgreement,
+	const commonReport = {
 		reliability:
-			finalization.mode === "stage"
+			finalization.mode === "stage" || finalization.mode === "session"
 				? reliability.slice(0, finalization.declaredStages.length)
 				: reliability,
 		resources: buildResourceReport(
@@ -218,15 +228,27 @@ export async function finalizeConfirmationGroup(
 			finalization.makespanMs,
 		),
 	};
+	const report =
+		finalization.mode === "session"
+			? commonReport
+			: {
+					...commonReport,
+					judgeAgreement: filterJudgeAgreementReport(
+						await loadJudgeAgreementReport(finalization.runsDirectory),
+						[
+							"judgeModel" in finalization.inputs
+								? finalization.inputs.judgeModel
+								: "",
+						],
+					),
+				};
 	await Bun.write(
 		finalization.reportFile,
 		`${JSON.stringify(report, null, 2)}\n`,
 	);
-	const group = confirmationGroupRecordSchema.parse({
-		schemaVersion: 1,
+	const sharedGroup = {
 		caseId: finalization.caseId,
 		groupId: finalization.groupId,
-		mode: finalization.mode,
 		reps: finalization.reps,
 		declaredStages: finalization.declaredStages,
 		inputs: finalization.inputs,
@@ -239,7 +261,20 @@ export async function finalizeConfirmationGroup(
 		})),
 		reportFile: relative(finalization.groupDirectory, finalization.reportFile),
 		makespanMs: finalization.makespanMs,
-	});
+	};
+	const group =
+		finalization.mode === "session"
+			? sessionConfirmationGroupRecordSchema.parse({
+					schemaVersion: 2,
+					mode: "session",
+					preflight: finalization.preflight,
+					...sharedGroup,
+				})
+			: confirmationGroupRecordSchema.parse({
+					schemaVersion: 1,
+					mode: finalization.mode,
+					...sharedGroup,
+				});
 	await Bun.write(
 		finalization.groupFile,
 		`${JSON.stringify(group, null, 2)}\n`,

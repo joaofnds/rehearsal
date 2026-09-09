@@ -129,7 +129,7 @@ const legacyCaseIdSchema = identitySchema.optional().default(LEGACY_CASE_ID);
 
 const declaredCaseIdSchema = z.object({ caseId: identitySchema });
 
-export const confirmationRepRecordSchema = z
+const legacyConfirmationRepRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
 		caseId: legacyCaseIdSchema,
@@ -202,12 +202,128 @@ export const confirmationRepRecordSchema = z
 		}
 	});
 
-export type ConfirmationRepRecord = z.infer<typeof confirmationRepRecordSchema>;
+const sessionResultEvidenceSchema = z
+	.object({
+		recordFile: z.string().min(1),
+		resultSha: z.never().optional(),
+	})
+	.strict();
+
+const sessionStageOutcomeSchema = z.union([
+	z
+		.object({
+			stage: z.literal("checks"),
+			status: z.literal("JUDGED"),
+			grade: z.enum(["A", "F"]),
+			verdict: z.enum(["CONTINUE", "STOP"]),
+			elapsedMs: elapsedSchema,
+			evidence: sessionResultEvidenceSchema,
+		})
+		.strict(),
+	z
+		.object({
+			stage: z.literal("checks"),
+			status: z.literal("EXECUTION_FAILED"),
+			elapsedMs: elapsedSchema.optional(),
+			error: z.string().min(1),
+			evidence: sessionResultEvidenceSchema,
+		})
+		.strict(),
+	z
+		.object({
+			stage: z.literal("checks"),
+			status: z.literal("METRICS_MISSING"),
+			elapsedMs: elapsedSchema.optional(),
+			error: z.string().min(1),
+			evidence: sessionResultEvidenceSchema,
+		})
+		.strict(),
+	z
+		.object({
+			stage: z.literal("checks"),
+			status: z.literal("NOT_REACHED"),
+			reason: z.string().min(1),
+			evidence: sessionResultEvidenceSchema,
+		})
+		.strict(),
+]);
+
+export const sessionConfirmationRepRecordSchema = z
+	.object({
+		schemaVersion: z.literal(2),
+		caseId: identitySchema,
+		groupId: identitySchema,
+		repId: identitySchema,
+		ordinal: z.number().int().positive(),
+		mode: z.literal("session"),
+		worktreePath: z.string().min(1),
+		lineage: z
+			.object({ kind: z.literal("SESSION"), lineage: z.string().min(1) })
+			.strict(),
+		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL"]),
+		stages: z.array(sessionStageOutcomeSchema).length(1),
+		finalOutcome: z.object({ status: z.literal("NOT_APPLICABLE") }).strict(),
+		metrics: metricsEvidenceSchema,
+		workerTrajectorySteps: z.number().int().nonnegative(),
+		elapsedMs: elapsedSchema,
+	})
+	.strict()
+	.superRefine((record, context) => {
+		if (record.repId !== `${record.groupId}-rep-${record.ordinal}`) {
+			context.addIssue({
+				code: "custom",
+				message: "Rep identity must match its group and ordinal",
+				path: ["repId"],
+			});
+		}
+		const workerTurns = record.metrics.calls
+			.filter(({ role }) => role === "worker")
+			.reduce((total, call) => total + call.metrics.turns, 0);
+		if (record.workerTrajectorySteps !== workerTurns) {
+			context.addIssue({
+				code: "custom",
+				message:
+					"Worker trajectory steps must equal provider-reported worker turns",
+				path: ["workerTrajectorySteps"],
+			});
+		}
+		const [checks] = record.stages;
+		if (
+			record.outcome === "SUCCESSFUL" &&
+			(record.metrics.status === "MISSING" ||
+				checks?.status !== "JUDGED" ||
+				checks.verdict !== "CONTINUE" ||
+				checks.grade !== "A")
+		) {
+			context.addIssue({
+				code: "custom",
+				message: "Successful session reps require passing checks and metrics",
+				path: ["outcome"],
+			});
+		}
+	});
+
+const parsedConfirmationRepRecordSchema = z.union([
+	legacyConfirmationRepRecordSchema,
+	sessionConfirmationRepRecordSchema,
+]);
+
+export const confirmationRepRecordSchema = legacyConfirmationRepRecordSchema;
+
+export type ConfirmationRepRecord = z.infer<
+	typeof legacyConfirmationRepRecordSchema
+>;
+export type SessionConfirmationRepRecord = z.infer<
+	typeof sessionConfirmationRepRecordSchema
+>;
+export type ParsedConfirmationRepRecord = z.infer<
+	typeof parsedConfirmationRepRecordSchema
+>;
 
 export function parseConfirmationRepRecord(
 	text: string,
-): ConfirmationRepRecord {
-	return confirmationRepRecordSchema.parse(JSON.parse(text));
+): ParsedConfirmationRepRecord {
+	return parsedConfirmationRepRecordSchema.parse(JSON.parse(text));
 }
 
 const frozenFileSchema = z
@@ -247,6 +363,32 @@ const projectedCostSchema = z
 	})
 	.strict();
 
+const sessionFrozenFileSchema = z
+	.object({
+		kind: z.enum(["case", "fixture", "transcript", "corpus"]),
+		path: z.string().min(1),
+		sha256: z.string().regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
+	})
+	.strict();
+
+const sessionProjectedCostSchema = projectedCostSchema.extend({
+	preflightMaximumUsd: z.number().nonnegative(),
+});
+
+const preflightEvidenceSchema = z.discriminatedUnion("status", [
+	z
+		.object({
+			status: z.literal("COMPLETE"),
+			call: callEvidenceSchema.refine(({ role }) => role === "worker", {
+				message: "Session preflight is a worker provider call",
+			}),
+		})
+		.strict(),
+	z
+		.object({ status: z.literal("MISSING"), missing: z.string().min(1) })
+		.strict(),
+]);
+
 const repRecordReferenceSchema = z
 	.object({
 		repId: identitySchema,
@@ -255,7 +397,7 @@ const repRecordReferenceSchema = z
 	})
 	.strict();
 
-export const confirmationGroupRecordSchema = z
+const legacyConfirmationGroupRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
 		caseId: legacyCaseIdSchema,
@@ -300,18 +442,91 @@ export const confirmationGroupRecordSchema = z
 		}
 	});
 
+export const sessionConfirmationGroupRecordSchema = z
+	.object({
+		schemaVersion: z.literal(2),
+		caseId: identitySchema,
+		groupId: identitySchema,
+		mode: z.literal("session"),
+		reps: z.number().int().min(2),
+		declaredStages: z.tuple([z.literal("checks")]),
+		inputs: z
+			.object({
+				lineage: z
+					.object({ kind: z.literal("SESSION"), lineage: z.string().min(1) })
+					.strict(),
+				files: z.array(sessionFrozenFileSchema).min(1),
+				model: z.string().min(1),
+				effort: effortSchema.optional(),
+				judgeModel: z.never().optional(),
+				judgeEffort: z.never().optional(),
+				sessionBudgetUsd: z.number().positive(),
+				pipelinePath: z.never().optional(),
+			})
+			.strict(),
+		projectedCost: sessionProjectedCostSchema,
+		preflight: preflightEvidenceSchema,
+		approval: z
+			.object({
+				method: z.enum(["interactive", "yes"]),
+				approved: z.literal(true),
+			})
+			.strict(),
+		repRecords: z.array(repRecordReferenceSchema),
+		reportFile: z.string().min(1),
+		makespanMs: elapsedSchema,
+	})
+	.strict()
+	.superRefine((record, context) => {
+		const referencesEveryRep =
+			record.repRecords.length === record.reps &&
+			record.repRecords.every(
+				(reference, index) =>
+					reference.ordinal === index + 1 &&
+					reference.repId === `${record.groupId}-rep-${index + 1}`,
+			);
+		if (!referencesEveryRep) {
+			context.addIssue({
+				code: "custom",
+				message: "Group must reference every requested rep exactly once",
+				path: ["repRecords"],
+			});
+		}
+		if (record.projectedCost.reps !== record.reps) {
+			context.addIssue({
+				code: "custom",
+				message: "Projected cost rep count must match the group",
+				path: ["projectedCost", "reps"],
+			});
+		}
+	});
+
+const parsedConfirmationGroupRecordSchema = z.union([
+	legacyConfirmationGroupRecordSchema,
+	sessionConfirmationGroupRecordSchema,
+]);
+
+export const confirmationGroupRecordSchema =
+	legacyConfirmationGroupRecordSchema;
+
 export type ConfirmationGroupRecord = z.infer<
-	typeof confirmationGroupRecordSchema
+	typeof legacyConfirmationGroupRecordSchema
+>;
+export type SessionConfirmationGroupRecord = z.infer<
+	typeof sessionConfirmationGroupRecordSchema
+>;
+export type ParsedConfirmationGroupRecord = z.infer<
+	typeof parsedConfirmationGroupRecordSchema
 >;
 
 export function parseConfirmationGroupRecord(
 	text: string,
-): ConfirmationGroupRecord {
-	return confirmationGroupRecordSchema.parse(JSON.parse(text));
+): ParsedConfirmationGroupRecord {
+	return parsedConfirmationGroupRecordSchema.parse(JSON.parse(text));
 }
 
 export interface DeclaredConfirmationGroup {
-	readonly record: ConfirmationGroupRecord;
+	readonly record: ParsedConfirmationGroupRecord;
 	readonly declaredCaseId: string | undefined;
 }
 
@@ -324,7 +539,7 @@ export function parseDeclaredConfirmationGroup(
 	text: string,
 ): DeclaredConfirmationGroup {
 	const document: unknown = JSON.parse(text);
-	const record = confirmationGroupRecordSchema.parse(document);
+	const record = parsedConfirmationGroupRecordSchema.parse(document);
 	const declared = declaredCaseIdSchema.safeParse(document);
 
 	return { record, declaredCaseId: declared.data?.caseId };

@@ -231,7 +231,14 @@ async function loadRepRecords(
 		});
 		let record: ConfirmationRepRecord;
 		try {
-			record = parseConfirmationRepRecord(source.text);
+			const parsed = parseConfirmationRepRecord(source.text);
+			if (parsed.schemaVersion !== 1) {
+				throw evidenceError(
+					{ caseId: request.caseId, arm: request.role, field: `${field}.mode` },
+					"session comparison is not supported yet; ACT-151 owns the multi-case session path",
+				);
+			}
+			record = parsed;
 		} catch {
 			throw evidenceError(
 				{ caseId: request.caseId, arm: request.role, field: `${field}.record` },
@@ -277,6 +284,12 @@ async function loadArm(
 	}
 
 	const group = declared.record;
+	if (group.mode === "session") {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: "group.mode" },
+			"session comparison is not supported yet; ACT-151 owns the multi-case session path",
+		);
+	}
 
 	const frozen = await assertFrozenFiles(request, groupPath, group);
 	const reps = await loadRepRecords(request, groupPath, group);

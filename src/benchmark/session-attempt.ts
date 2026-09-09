@@ -52,7 +52,11 @@ export interface SessionAttempt {
 	readonly reply: string | undefined;
 	readonly transcriptFile: string;
 	readonly metrics: ClaudeCallMetrics | undefined;
-	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
+	readonly outcome:
+		| "SUCCESSFUL"
+		| "UNSUCCESSFUL"
+		| "NO_REPLY"
+		| "EXECUTION_FAILED";
 	readonly checks: readonly CheckResult[];
 	readonly contextManifest: ContextManifest | undefined;
 }

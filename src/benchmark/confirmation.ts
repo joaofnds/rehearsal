@@ -23,6 +23,7 @@ export type ConfirmationCostRequest =
 export interface ConfirmationCostProjection {
 	readonly reps: number;
 	readonly perRepMaximumUsd: number;
+	readonly preflightMaximumUsd?: number | undefined;
 	readonly totalMaximumUsd: number;
 }
 

@@ -55,9 +55,14 @@ const manifestDivergenceSchema = z
 	.strict();
 
 interface RecordedOutcome {
-	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
+	readonly outcome:
+		| "SUCCESSFUL"
+		| "UNSUCCESSFUL"
+		| "NO_REPLY"
+		| "EXECUTION_FAILED";
 	readonly reply?: string | undefined;
 	readonly checks: readonly { readonly status: "PASS" | "FAIL" }[];
+	readonly error?: string | undefined;
 }
 
 interface RecordProblem {
@@ -73,11 +78,40 @@ interface RecordProblem {
  * only when every one of them passes.
  */
 function problemsWith(record: RecordedOutcome): readonly RecordProblem[] {
+	if (record.outcome === "EXECUTION_FAILED") {
+		return executionFailureProblems(record);
+	}
 	if (record.outcome === "NO_REPLY") {
 		return noReplyProblems(record);
 	}
 
 	return checkedProblems(record);
+}
+
+function executionFailureProblems(
+	record: RecordedOutcome,
+): readonly RecordProblem[] {
+	const problems: RecordProblem[] = [];
+	if (record.error === undefined || record.error === "") {
+		problems.push({
+			message: "A failed session invocation records its error",
+			path: "error",
+		});
+	}
+	if (record.reply !== undefined) {
+		problems.push({
+			message: "A failed session invocation records no reply",
+			path: "reply",
+		});
+	}
+	if (record.checks.length > 0) {
+		problems.push({
+			message: "A failed session invocation evaluates no check",
+			path: "checks",
+		});
+	}
+
+	return problems;
 }
 
 function noReplyProblems(record: RecordedOutcome): readonly RecordProblem[] {
@@ -143,9 +177,15 @@ export const sessionAttemptRecordSchema = z
 		divergences: z.array(manifestDivergenceSchema).optional(),
 		prompt: z.string().min(1),
 		reply: z.string().optional(),
+		error: z.string().min(1).optional(),
 		transcriptFile: z.string().min(1),
 		metrics: claudeCallMetricsSchema.optional(),
-		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
+		outcome: z.enum([
+			"SUCCESSFUL",
+			"UNSUCCESSFUL",
+			"NO_REPLY",
+			"EXECUTION_FAILED",
+		]),
 		checks: z.array(checkResultSchema),
 		elapsedMs: z.number().nonnegative(),
 	})

@@ -3,7 +3,7 @@ import type {
 	ComparisonReport,
 	LegacyComparisonReport,
 } from "./comparison-record";
-import type { ConfirmationGroupRecord } from "./confirmation-record";
+import type { ParsedConfirmationGroupRecord } from "./confirmation-record";
 import type { Immutable } from "./contracts";
 
 /**
@@ -141,7 +141,7 @@ export function parseGroupReportSummaryRecord(
 }
 
 export function groupSummary(
-	record: Immutable<ConfirmationGroupRecord>,
+	record: Immutable<ParsedConfirmationGroupRecord>,
 	report: GroupReportSummaryRecord,
 ): string {
 	const costs = report.resources.total.costUsd;

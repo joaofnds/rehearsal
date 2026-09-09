@@ -93,6 +93,28 @@ export async function snapshotSessionCorpus(
 	return snapshotOf(source, destination, declaredPaths);
 }
 
+/**
+ * A confirmation group cannot keep a live corpus pointer: every repetition
+ * must read the bytes captured before the first provider call. This always
+ * copies the declared, currently deliverable corpus files and retains the
+ * original source only as provenance.
+ */
+export async function freezeSessionCorpus(
+	source: ResolvedCorpusSource,
+	destination: string,
+	declaredPaths: readonly string[],
+): Promise<SessionCorpusSnapshot> {
+	refuseDeclaredSkills(declaredPaths);
+	await copyDeclared(source, destination, declaredPaths);
+
+	return {
+		kind: "directory",
+		root: destination,
+		origin: originOf(source),
+		declaredPaths: [...declaredPaths],
+	};
+}
+
 function snapshotOf(
 	source: ResolvedCorpusSource,
 	root: string,
