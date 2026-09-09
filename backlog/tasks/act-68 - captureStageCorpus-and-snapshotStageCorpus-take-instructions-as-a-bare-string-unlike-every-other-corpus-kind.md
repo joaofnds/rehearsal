@@ -6,12 +6,12 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 22:48'
-updated_date: '2026-09-09 15:12'
+updated_date: '2026-09-09 15:19'
 labels: []
 milestone: m-1
 dependencies:
   - ACT-65
-priority: medium
+priority: low
 type: bug
 ordinal: 64008
 ---

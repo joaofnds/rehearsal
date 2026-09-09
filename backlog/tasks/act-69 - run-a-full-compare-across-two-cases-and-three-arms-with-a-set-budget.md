@@ -4,9 +4,10 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-09 15:11'
+updated_date: '2026-09-09 15:20'
 labels: []
-dependencies: []
+dependencies:
+  - ACT-140
 type: feature
 ordinal: 65008
 ---
@@ -55,4 +56,20 @@ Pricing from 72 recorded costUsd values across .benchmark-runs, totalling 83.02 
 At 2 cases x 3 arms x 2 reps = 12 runs: session-mode expects about 9.82 and runs about 20.45 if every run lands at p90. Pipeline-mode expects about 41.40 and about 104.23 at the p90 tail.
 
 The old scale figure on this card, 0.43 to 0.53 USD, came from two failed shape attempts, which are the cheapest runs on record and understate a completed run.
+
+Budget authorized 2026-09-09 by João, typed into the iterate session: 25 USD, session mode, for a two-case three-arm two-rep compare. Pipeline mode is deferred until the comparison path has run once cheaply.
+
+This is the budget AC#4 requires to be set before the run, and it is set before any spend on this card. Expected spend is about 10 USD at the recorded median and about 20 USD if every one of the twelve runs lands at the p90 of recorded costs, so 25 covers the pessimistic case with margin. Stop the run and report rather than exceeding it.
+
+The second pipeline case is no longer a blocker, per the pricing note above: the comparison is assembled from the session cases already in cases/.
+
+Stop before spending, 2026-09-09. The authorized session-mode compare cannot run: session confirmation groups are not built.
+
+Verified directly this session, at no cost. 'rehearsal run --case smoke --model sonnet --confirm --reps 2 --yes' prints 'Projected maximum cost: $0.40 (2 reps x $0.20)' and then 'A session confirmation group is not built yet; run the case without --confirm', exiting without a provider call. The refusal is deliberate: run-command.ts line 392 documents that the projection is shown and the group refused before any provider call, so the ordering holds whether or not the group exists.
+
+So the earlier pricing note was right that the report schema accepts session mode, and wrong about what the harness can produce today. The schema would take it; the runner cannot build it. That is the correction: the blocker was never a second pipeline case, and it is not the schema either, it is the unbuilt session confirmation path.
+
+Pipeline and replay confirmation groups are built (runPipelineConfirmation, runReplayConfirmation). 'rehearsal list groups' and 'list comparisons' are both empty, so no confirmation evidence exists yet in any mode, and 'compare' runs no session of its own: it reports over evidence that a prior --confirm run produced.
+
+The 25 USD authorization stands unspent and is recorded above. Two routes, neither taken without a typed direction: build the session confirmation path first, then spend the 25 in the authorized mode; or spend it in pipeline mode, which the earlier note priced at about 41 USD expected and about 104 USD at the p90 tail for 2 cases x 3 arms x 2 reps, so 25 does not cover a full pipeline compare and the shape would have to shrink.
 <!-- SECTION:NOTES:END -->
