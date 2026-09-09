@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
 	deriveStaleness,
+	hashedCorpus,
 	snapshotStageCorpus,
 	installStageCorpusSnapshot,
 	INITIAL_CHECKPOINT_STAGE,
 } from "./checkpoint";
-import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import type { CheckpointRecord, StageCorpus } from "./checkpoint";
 import type { Immutable, ProviderCall, StageScorecard } from "./contracts";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
@@ -111,7 +112,7 @@ async function freezeReplayInputs(
 		plan.definition,
 	];
 	const corpusRoot = join(inputsDirectory, "corpus");
-	const corpusByStage = new Map<string, readonly HashedFile[]>();
+	const corpusByStage = new Map<string, StageCorpus>();
 	for (const definition of definitions) {
 		if (corpusByStage.has(definition.name)) {
 			continue;
@@ -119,11 +120,13 @@ async function freezeReplayInputs(
 
 		corpusByStage.set(
 			definition.name,
-			await snapshotStageCorpus(
-				definition.skill,
-				request.instructions,
-				request.corpusRoots,
-				join(corpusRoot, definition.name),
+			hashedCorpus(
+				await snapshotStageCorpus(
+					definition.skill,
+					request.instructions,
+					request.corpusRoots,
+					join(corpusRoot, definition.name),
+				),
 			),
 		);
 	}

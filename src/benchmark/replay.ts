@@ -5,12 +5,14 @@ import { z } from "zod";
 import type {
 	CheckpointRecord,
 	HashedFile,
+	StageCorpus,
 	installStageCorpusSnapshot,
 	materializeCheckpoint,
 } from "./checkpoint";
 import type { LoadedStageSettings } from "./stage-settings";
 import {
 	deriveStaleness,
+	hashedCorpus,
 	hashArtifacts,
 	hashedFileSchema,
 	INITIAL_CHECKPOINT_STAGE,
@@ -319,8 +321,8 @@ async function currentChainCorpus(
 	instructions: string,
 	roots: readonly string[],
 	captureStageCorpus: StageSessionDependencies["captureStageCorpus"],
-): Promise<Map<string, readonly HashedFile[]>> {
-	const corpus = new Map<string, readonly HashedFile[]>();
+): Promise<Map<string, StageCorpus>> {
+	const corpus = new Map<string, StageCorpus>();
 
 	for (const record of plan.chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {
@@ -338,7 +340,9 @@ async function currentChainCorpus(
 
 		corpus.set(
 			record.stage,
-			await captureStageCorpus(definition.skill, instructions, roots),
+			hashedCorpus(
+				await captureStageCorpus(definition.skill, instructions, roots),
+			),
 		);
 	}
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, utimes } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CASES_DIRECTORY } from "./case";
@@ -115,6 +115,66 @@ describe(staleCheckpoints.name, () => {
 			});
 
 			expect(stale).toEqual([]);
+		});
+	});
+
+	describe("when a corpus directory holds a symlink out of the tree", () => {
+		it("stales the stage that reads it, naming the entry as the cause", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const stale = await staleCheckpoints(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			expect(stale.map(({ id }) => id)).toEqual([
+				`checkpoint:${fixture.replayableRun}/build`,
+			]);
+			expect(stale.at(0)?.causes.join(" ")).toContain("skills/build/escape.md");
+		});
+
+		it("judges a stage that does not read the broken tree normally", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const stale = await staleCheckpoints(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			expect(stale.map(({ id }) => id)).not.toContain(
+				`checkpoint:${fixture.replayableRun}/discuss`,
+			);
+		});
+
+		it("names no absolute filesystem path in the cause", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const stale = await staleCheckpoints(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			expect(stale.flatMap(({ causes }) => causes).join(" ")).not.toContain(
+				corpus,
+			);
 		});
 	});
 

@@ -1,13 +1,15 @@
 import { stat } from "node:fs/promises";
 import type { CaseDeclaration, SessionCaseDeclaration } from "./case";
 import { listCases } from "./case";
-import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import type { CheckpointRecord, HashedFile, StageCorpus } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
 	deriveStaleness,
+	hashedCorpus,
 	INITIAL_CHECKPOINT_STAGE,
 	parseCheckpointRecord,
+	refusedCorpus,
 } from "./checkpoint";
 import { SymlinkedEntryError } from "./file-presence";
 import type { Effort } from "./config";
@@ -69,6 +71,29 @@ export interface CurrentSessionKnobs {
 }
 
 /**
+ * A tree `captureStageCorpus` refuses to hash stales the stage that reads it
+ * rather than failing the report: this command and the run-history screen both
+ * answer for every recorded run, and one unhashable corpus directory must not
+ * take the other runs' answers with it. The refusal carries the entry it
+ * names, so the reader can find the link that caused it.
+ */
+async function hashedOrRefused(
+	skill: string,
+	instructions: string,
+	roots: readonly string[],
+): Promise<StageCorpus> {
+	try {
+		return hashedCorpus(await captureStageCorpus(skill, instructions, roots));
+	} catch (error) {
+		if (error instanceof SymlinkedEntryError) {
+			return refusedCorpus(error.message);
+		}
+
+		throw error;
+	}
+}
+
+/**
  * `stale` answers one question per invocation: what the corpus the operator
  * named invalidated. So a live corpus here is the operator's install, not the
  * target each run recorded, even though `replay` resolves the same source
@@ -82,8 +107,8 @@ async function currentStageCorpus(
 	chain: readonly CheckpointRecord[],
 	source: CorpusRoot,
 	instructions: string,
-): Promise<ReadonlyMap<string, readonly HashedFile[]>> {
-	const corpus = new Map<string, readonly HashedFile[]>();
+): Promise<ReadonlyMap<string, StageCorpus>> {
+	const corpus = new Map<string, StageCorpus>();
 	const roots = [source.root];
 
 	for (const record of chain) {
@@ -100,7 +125,7 @@ async function currentStageCorpus(
 
 		corpus.set(
 			record.stage,
-			await captureStageCorpus(definition.skill, instructions, roots),
+			await hashedOrRefused(definition.skill, instructions, roots),
 		);
 	}
 

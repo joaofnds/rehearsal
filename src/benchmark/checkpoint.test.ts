@@ -11,19 +11,21 @@ import {
 } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import type { CheckpointRecord, HashedFile, StageCorpus } from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
 	corpusLayoutRoots,
 	deriveStaleness,
 	hashDirectory,
+	hashedCorpus,
 	hashWorkflowState,
 	initialCheckpointInputs,
 	installStageCorpusSnapshot,
 	lineageKey,
 	materializeCheckpoint,
 	recordCheckpoint,
+	refusedCorpus,
 	rootLineage,
 	snapshotStageCorpus,
 	stageCorpusRoots,
@@ -669,15 +671,15 @@ describe(deriveStaleness.name, () => {
 	const chain = [initial, planning, build] as const;
 
 	function currentCorpus(
-		...edits: readonly (readonly [string, readonly HashedFile[]])[]
-	): Map<string, readonly HashedFile[]> {
-		const corpus = new Map<string, readonly HashedFile[]>(
+		...edits: readonly (readonly [string, StageCorpus])[]
+	): Map<string, StageCorpus> {
+		const corpus = new Map<string, StageCorpus>(
 			chain
 				.filter(({ stage }) => stage !== "initial")
-				.map((record) => [record.stage, record.corpusFiles]),
+				.map((record) => [record.stage, hashedCorpus(record.corpusFiles)]),
 		);
-		for (const [stage, files] of edits) {
-			corpus.set(stage, files);
+		for (const [stage, edit] of edits) {
+			corpus.set(stage, edit);
 		}
 
 		return corpus;
@@ -700,11 +702,11 @@ describe(deriveStaleness.name, () => {
 			chain,
 			currentCorpus([
 				"shape",
-				[
+				hashedCorpus([
 					claudeMd,
 					doctrine,
 					{ path: "skills/shape/SKILL.md", sha256: "changed" },
-				],
+				]),
 			]),
 			request,
 		);
@@ -755,12 +757,12 @@ describe(deriveStaleness.name, () => {
 			doctrine,
 			{ path: "skills/shape/SKILL.md", sha256: "changed" },
 		];
-		const corpus = new Map<string, readonly HashedFile[]>(
+		const corpus = new Map<string, StageCorpus>(
 			longer
 				.filter(({ stage }) => stage !== "initial")
 				.map((record) => [
 					record.stage,
-					record.stage === "shape" ? edited : record.corpusFiles,
+					hashedCorpus(record.stage === "shape" ? edited : record.corpusFiles),
 				]),
 		);
 
@@ -782,11 +784,19 @@ describe(deriveStaleness.name, () => {
 			currentCorpus(
 				[
 					"shape",
-					[edited, doctrine, { path: "skills/shape/SKILL.md", sha256: "bb22" }],
+					hashedCorpus([
+						edited,
+						doctrine,
+						{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+					]),
 				],
 				[
 					"build",
-					[edited, doctrine, { path: "skills/build/SKILL.md", sha256: "cc33" }],
+					hashedCorpus([
+						edited,
+						doctrine,
+						{ path: "skills/build/SKILL.md", sha256: "cc33" },
+					]),
 				],
 			),
 			request,
@@ -806,11 +816,19 @@ describe(deriveStaleness.name, () => {
 			currentCorpus(
 				[
 					"shape",
-					[claudeMd, edited, { path: "skills/shape/SKILL.md", sha256: "bb22" }],
+					hashedCorpus([
+						claudeMd,
+						edited,
+						{ path: "skills/shape/SKILL.md", sha256: "bb22" },
+					]),
 				],
 				[
 					"build",
-					[claudeMd, edited, { path: "skills/build/SKILL.md", sha256: "cc33" }],
+					hashedCorpus([
+						claudeMd,
+						edited,
+						{ path: "skills/build/SKILL.md", sha256: "cc33" },
+					]),
 				],
 			),
 			request,
@@ -845,14 +863,14 @@ describe(deriveStaleness.name, () => {
 			new Map([
 				[
 					"shape",
-					[
+					hashedCorpus([
 						claudeMd,
 						doctrine,
 						edited,
 						{ path: "skills/shape/SKILL.md", sha256: "bb22" },
-					],
+					]),
 				],
-				["build", ruledBuild.corpusFiles],
+				["build", hashedCorpus(ruledBuild.corpusFiles)],
 			]),
 			request,
 		);
@@ -882,10 +900,40 @@ describe(deriveStaleness.name, () => {
 		expect(staleness[0]?.causes).toEqual(["effort high is now low"]);
 	});
 
+	describe("when a stage's corpus could not be hashed", () => {
+		it("marks that stage stale with the refusal as its cause", () => {
+			const staleness = deriveStaleness(
+				chain,
+				currentCorpus([
+					"shape",
+					refusedCorpus("skills/shape resolves outside"),
+				]),
+				request,
+			);
+
+			expect(staleness[1]?.stale).toBe(true);
+			expect(staleness[1]?.causes).toEqual(["skills/shape resolves outside"]);
+		});
+
+		it("carries the refusal downstream as an upstream cause", () => {
+			const staleness = deriveStaleness(
+				chain,
+				currentCorpus([
+					"shape",
+					refusedCorpus("skills/shape resolves outside"),
+				]),
+				request,
+			);
+
+			expect(staleness.map(({ stale }) => stale)).toEqual([false, true, true]);
+			expect(staleness[2]?.causes).toEqual(["upstream stage shape is stale"]);
+		});
+	});
+
 	it("names a corpus file the record has and the corpus no longer does", () => {
 		const staleness = deriveStaleness(
 			chain,
-			currentCorpus(["shape", [claudeMd, doctrine]]),
+			currentCorpus(["shape", hashedCorpus([claudeMd, doctrine])]),
 			request,
 		);
 
@@ -898,12 +946,12 @@ describe(deriveStaleness.name, () => {
 			chain,
 			currentCorpus([
 				"shape",
-				[
+				hashedCorpus([
 					claudeMd,
 					doctrine,
 					{ path: "skills/shape/SKILL.md", sha256: "bb22" },
 					{ path: "skills/shape/references/new.md", sha256: "ee55" },
-				],
+				]),
 			]),
 			request,
 		);

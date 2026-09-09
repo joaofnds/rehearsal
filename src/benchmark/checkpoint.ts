@@ -456,6 +456,25 @@ export interface CheckpointStaleness {
 }
 
 /**
+ * A stage's corpus as it stands today: the files it hashes to, or the reason
+ * the tree could not be hashed at all. A refusal is a comparison the reader
+ * cannot be given, and reading it as no difference would badge the checkpoint
+ * fresh on a corpus nobody can reproduce, so it stales the stage the same way
+ * an edited file does.
+ */
+export type StageCorpus =
+	| { readonly hashed: readonly HashedFile[] }
+	| { readonly refused: string };
+
+export function hashedCorpus(files: readonly HashedFile[]): StageCorpus {
+	return { hashed: files };
+}
+
+export function refusedCorpus(reason: string): StageCorpus {
+	return { refused: reason };
+}
+
+/**
  * How a reader is told about each way two corpora can differ. Staleness and
  * the comparison guard ask the same question of the same data and differ only
  * in what the answer means to their reader, so the traversal is shared and
@@ -528,6 +547,17 @@ const STALENESS_WORDING: CorpusDifferenceWording = {
 	missingFromLeft: (path) => `${path} added`,
 };
 
+function stageCorpusCauses(
+	recorded: readonly HashedFile[],
+	current: StageCorpus,
+): readonly string[] {
+	if ("refused" in current) {
+		return [current.refused];
+	}
+
+	return corpusDifferences(recorded, current.hashed, STALENESS_WORDING);
+}
+
 /**
  * Walks the chain in order, so an upstream stale checkpoint carries forward:
  * a checkpoint produced from state that can no longer be reproduced is stale
@@ -539,7 +569,7 @@ const STALENESS_WORDING: CorpusDifferenceWording = {
  */
 export function deriveStaleness(
 	chain: readonly CheckpointRecord[],
-	current: ReadonlyMap<string, readonly HashedFile[]>,
+	current: ReadonlyMap<string, StageCorpus>,
 	request: StalenessRequest,
 ): CheckpointStaleness[] {
 	const staleness: CheckpointStaleness[] = [];
@@ -566,13 +596,7 @@ export function deriveStaleness(
 
 		const currentCorpus = current.get(record.stage);
 		if (currentCorpus !== undefined) {
-			causes.push(
-				...corpusDifferences(
-					record.corpusFiles,
-					currentCorpus,
-					STALENESS_WORDING,
-				),
-			);
+			causes.push(...stageCorpusCauses(record.corpusFiles, currentCorpus));
 		}
 
 		const stale = causes.length > 0;
