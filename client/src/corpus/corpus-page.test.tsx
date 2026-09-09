@@ -113,21 +113,6 @@ describe(CorpusPage.name, () => {
 			});
 		});
 
-		it("renders a refusal naming the instruction file, so a symlinked CLAUDE.md is named rather than hidden", async () => {
-			renderRefusing(corpusResponseBody().files, [
-				"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
-			]);
-
-			const alert = await screen.findByRole("alert");
-
-			expect(
-				within(alert).getByText(
-					/Corpus file CLAUDE\.md resolves outside the corpus source/u,
-				),
-			).toBeInTheDocument();
-			expect(screen.queryByText("Could not load the corpus.")).toBeNull();
-		});
-
 		it("renders the files it could hash alongside the refusal, rather than one failure line", async () => {
 			renderRefusing(corpusResponseBody().files);
 

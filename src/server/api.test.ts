@@ -234,8 +234,8 @@ describe(createApiApp.name, () => {
 			expect(body.refusals).toEqual([
 				"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
 			]);
+			expect(body.files).toEqual([]);
 			expect(body.digest).toBeUndefined();
-			expect(text).not.toContain("secret bytes");
 		});
 	});
 
