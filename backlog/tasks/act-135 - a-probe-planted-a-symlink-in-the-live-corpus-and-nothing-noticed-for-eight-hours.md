@@ -7,7 +7,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-09 10:30'
-updated_date: '2026-09-09 10:56'
+updated_date: '2026-09-09 10:57'
 labels: []
 dependencies: []
 documentation:
@@ -31,20 +31,15 @@ The instance is already fixed. What this card is for is the guard: a probe that 
 <!-- AC:BEGIN -->
 - [ ] #1 a session probe that writes into the live corpus tree is prevented, or detected and reported, rather than silently leaving the live corpus unreadable (observed 2026-09-09: ~/.claude/agents/escape.md, a symlink to /tmp/stale-out-8nUK/secret.md dated Sep 9 02:43, made corpusReport(liveCorpusSource()) throw SymlinkedEntryError; removed by triage 2026-09-09)
 - [ ] #2 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [ ] #3 with a corpus root whose agents/ holds a symlink resolving outside it, corpusReport resolves rather than rejecting, and its files include every layout directory it could hash (reproduced 2026-09-09: corpusReport({kind:'live'}) on such a root THREW SymlinkedEntryError; with the link removed it returned CLAUDE.md, skills/build/SKILL.md, agents/normal.md, so two unaffected directories were lost with the third)
-- [ ] #4 that same report carries a named refusal for the entry it could not hash, naming the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds')
-- [ ] #5 GET /api/corpus against that root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
-- [ ] #6 the corpus screen against that root renders the files it could hash and the refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
-- [ ] #7 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [ ] #8 with a corpus root whose agents/ holds a symlink resolving outside it, corpusReport resolves rather than rejecting, and its files include every file under every layout directory that hashed whole (reproduced 2026-09-09: corpusReport({kind:'live'}) on such a root THREW SymlinkedEntryError; with the link removed it returned CLAUDE.md, skills/build/SKILL.md, agents/normal.md, so two unaffected directories were lost with the third)
-- [ ] #9 that same report carries a named refusal for each layout directory it could not hash, naming the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds')
-- [ ] #10 that same report carries no corpus root digest when any layout directory refused, and the corpus screen renders no 'corpus root@<hash>' label in that state (GLOSSARY.md:117-120 defines corpus root@<hash> as a digest over every file in the live corpus tree; adversarial review 2026-09-09 built the per-directory catch and observed GET /api/corpus return 200 with digest 467f90 computed over a set missing a whole layout directory)
-- [ ] #11 a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md (adversarial review 2026-09-09: this route throws from hashCorpusFiles/refuseUncontained at corpus-file.ts:132-136, reached at corpus-report.ts:68, outside the layout-directory loop; src/server/corpus-report.test.ts:150 pins it and stays green under the per-directory catch)
-- [ ] #12 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
-- [ ] #13 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
-- [ ] #14 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
-- [ ] #15 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
-- [ ] #16 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [ ] #3 with a corpus root whose agents/ holds a symlink resolving outside it, corpusReport resolves rather than rejecting, and its files include every file under every layout directory that hashed whole (reproduced 2026-09-09: corpusReport({kind:'live'}) on such a root THREW SymlinkedEntryError; with the link removed it returned CLAUDE.md, skills/build/SKILL.md, agents/normal.md, so two unaffected directories were lost with the third)
+- [ ] #4 that same report carries a named refusal for each layout directory it could not hash, naming the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds')
+- [ ] #5 that same report carries no corpus root digest when any layout directory refused, and the corpus screen renders no 'corpus root@<hash>' label in that state (GLOSSARY.md:117-120 defines corpus root@<hash> as a digest over every file in the live corpus tree; adversarial review 2026-09-09 built the per-directory catch and observed GET /api/corpus return 200 with digest 467f90 computed over a set missing a whole layout directory)
+- [ ] #6 a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md (adversarial review 2026-09-09: this route throws from hashCorpusFiles/refuseUncontained at corpus-file.ts:132-136, reached at corpus-report.ts:68, outside the layout-directory loop; src/server/corpus-report.test.ts:150 pins it and stays green under the per-directory catch)
+- [ ] #7 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
+- [ ] #8 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
+- [ ] #9 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
+- [ ] #10 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
+- [ ] #11 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -296,4 +291,8 @@ built it and confirmed GET /api/corpus returns 200 with files and refusals, and
 that the live corpus today reports 122 files with zero refusals under the change.
 What did not survive was the response shape, which now must withhold the digest
 rather than compute it partially.
+
+Criteria pruned by the overseeing iterate session, 2026-09-09, before the build ran. The shape stage left 16 criteria: its pre-review draft (then #3-#7) and its post-review revision (then #8-#16), both appended, because --ac appends rather than replaces. Removed the five superseded ones. Nothing was checked, so no evidence was lost, and the surviving set is byte-identical to the revision the adversarial review produced.
+
+This was not cosmetic. Old #3 asked that the report's files 'include every layout directory it could hash'; its replacement asks for 'every file under every layout directory that hashed whole'. A build satisfying the weaker wording would hash a directory partially and read as done. The pair also disagreed on the digest: the superseded set had no equivalent of the criterion withholding the corpus root digest whenever a directory refuses, which is the defect the review caught in the first design.
 <!-- SECTION:NOTES:END -->
