@@ -389,6 +389,34 @@ describe(writeStageJudgeFailure.name, () => {
 			costUsd: scorecard.costUsd,
 		});
 	});
+
+	it("carries the model, judge model, effort settings, and budget into the failed artifact", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		testResources.track(directory);
+		const file = join(directory, "build.json");
+		const scorecard = stageScorecard("FAIL");
+		const pending: PendingStage = {
+			file,
+			stage: "build",
+			input: scorecard.input,
+			scorecard,
+			model: "claude-3-5-sonnet-20241022",
+			effort: "high",
+			judgeModel: "claude-3-7-sonnet-20250219",
+			judgeEffort: "medium",
+			sessionBudgetUsd: 15,
+		};
+
+		await writeStageJudgeFailure(pending, "build stage graded F");
+
+		expect(JSON.parse(await Bun.file(file).text())).toMatchObject({
+			model: "claude-3-5-sonnet-20241022",
+			effort: "high",
+			judgeModel: "claude-3-7-sonnet-20250219",
+			judgeEffort: "medium",
+			sessionBudgetUsd: 15,
+		});
+	});
 });
 
 interface RecordedRunEvent {

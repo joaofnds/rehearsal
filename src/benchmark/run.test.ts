@@ -892,6 +892,64 @@ describe(runGradedStages.name, () => {
 		});
 	});
 
+	it("records workflow model, judge model, effort settings, and budget in the aborted stage artifact when judgment fails", async () => {
+		const { dependencies, scorecardFor } = fakeStageDependencies();
+		const persistence = new ControlledRunArtifactPersistence();
+		const abort = createRunAbort(
+			{
+				killActiveCommands: () => Promise.resolve(),
+				registerSignal: () => undefined,
+				releaseSignal: () => undefined,
+				exit: () => undefined,
+				reportError: () => undefined,
+				persistence,
+			},
+			{
+				artifactFile: "/runs/run.json",
+				teardown: () => Promise.resolve(),
+			},
+		);
+		const context = {
+			...(await stageContext()),
+			model: "claude-3-5-sonnet-20241022",
+			effort: "high" as const,
+			judgeModel: "claude-3-7-sonnet-20250219",
+			judgeEffort: "low" as const,
+			sessionBudgetUsd: 12,
+			writePendingStage: abort.writePendingStage,
+			updatePendingStage: abort.updatePendingStage,
+			writeStageProgress: abort.writeStageProgress,
+			completeStage: abort.completeStage,
+			calibrateStageFailure: (): Promise<CalibrationResult | undefined> =>
+				Promise.resolve(undefined),
+		};
+		const failing = {
+			...dependencies,
+			runStageJudge: (
+				_model: string,
+				_effort: undefined | "low" | "medium" | "high" | "xhigh" | "max",
+				_budget: number,
+				input: StageJudgeInput,
+			) => Promise.resolve(scorecardFor(input, "STOP")),
+		};
+
+		const outcome = runGradedStages(failing, context);
+		await outcome.catch(() => undefined);
+		await abort.markAborted("shape stage graded F; minimum grade is B");
+
+		const record: unknown = JSON.parse(
+			persistence.files.get(context.stageFile("shape")) ?? "",
+		);
+		expect(record).toMatchObject({
+			status: "STAGE_JUDGE_FAILED",
+			model: "claude-3-5-sonnet-20241022",
+			effort: "high",
+			judgeModel: "claude-3-7-sonnet-20250219",
+			judgeEffort: "low",
+			sessionBudgetUsd: 12,
+		});
+	});
+
 	function planningStage(
 		name: string,
 		artifact: string,

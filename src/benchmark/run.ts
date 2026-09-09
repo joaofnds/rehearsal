@@ -716,7 +716,17 @@ export async function runGradedStages(
 		}
 
 		const stageFile = context.stageFile(stage);
-		const pendingStage = { file: stageFile, stage, input, corpusFiles };
+		const pendingStage: PendingStage = {
+			file: stageFile,
+			stage,
+			input,
+			corpusFiles,
+			model: context.model,
+			effort: context.effort,
+			judgeModel: context.judgeModel,
+			judgeEffort: context.judgeEffort,
+			sessionBudgetUsd: context.sessionBudgetUsd,
+		};
 		await context.writePendingStage(pendingStage);
 		let scorecard: StageScorecard;
 		try {

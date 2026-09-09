@@ -1,5 +1,5 @@
 import type { HashedFile } from "./checkpoint";
-import type { WorkflowStage } from "./config";
+import type { Effort, WorkflowStage } from "./config";
 import type {
 	FailedJudgeRunArtifact,
 	RunArtifact,
@@ -14,6 +14,11 @@ export interface PendingStage {
 	readonly file: string;
 	readonly stage: WorkflowStage;
 	readonly input: StageJudgeInput;
+	readonly model?: string | undefined;
+	readonly effort?: Effort | undefined;
+	readonly judgeModel?: string | undefined;
+	readonly judgeEffort?: Effort | undefined;
+	readonly sessionBudgetUsd?: number | undefined;
 	readonly corpusFiles?: readonly HashedFile[] | undefined;
 	readonly failure?:
 		| {
@@ -158,6 +163,11 @@ export async function writeStageJudgeFailure(
 				error: reason,
 				input: pending.input,
 				corpusFiles: pending.corpusFiles,
+				model: pending.model,
+				effort: pending.effort,
+				judgeModel: pending.judgeModel,
+				judgeEffort: pending.judgeEffort,
+				sessionBudgetUsd: pending.sessionBudgetUsd,
 				...findings,
 				...pending.failure,
 			},
@@ -232,6 +242,11 @@ export function createRunAbort(
 						status: "AWAITING_STAGE_JUDGE",
 						stage: pending.stage,
 						input: pending.input,
+						model: pending.model,
+						effort: pending.effort,
+						judgeModel: pending.judgeModel,
+						judgeEffort: pending.judgeEffort,
+						sessionBudgetUsd: pending.sessionBudgetUsd,
 					},
 					null,
 					2,
