@@ -12,6 +12,9 @@ import {
 	runSessionConfirmation,
 	SessionInvocationError,
 } from "./session-confirmation";
+import { parseGroupReportSummaryRecord } from "./record-summary";
+import { runList } from "#cli/list-command";
+import { runShow } from "#cli/show-command";
 
 const metrics = {
 	costUsd: 0.02,
@@ -188,6 +191,9 @@ describe(runSessionConfirmation.name, () => {
 				),
 			).text(),
 		);
+		const report = parseGroupReportSummaryRecord(
+			await Bun.file(outcome.reportFile).text(),
+		);
 
 		expect(observedInputs).toHaveLength(3);
 		expect(new Set(observedInputs)).toHaveLength(1);
@@ -206,5 +212,164 @@ describe(runSessionConfirmation.name, () => {
 			outcome: "EXECUTION_FAILED",
 			error: "provider rejected rep 2",
 		});
+		expect(report.resources.commandTotal).toEqual({
+			status: "COMPLETE",
+			metrics: {
+				costUsd: 0.08,
+				inputTokens: 40,
+				outputTokens: 8,
+				cacheReadTokens: 12,
+				cacheWriteTokens: 16,
+			},
+		});
+
+		const listed: string[] = [];
+		await runList(
+			{ kind: "groups", runsDirectory: join(root, "runs") },
+			{
+				stdout: (text) => {
+					listed.push(text);
+				},
+				stderr: () => undefined,
+			},
+		);
+		expect(listed.join("")).toContain("group:session-group");
+
+		const shown: string[] = [];
+		await runShow(
+			{
+				id: "group:session-group",
+				json: false,
+				runsDirectory: join(root, "runs"),
+			},
+			{
+				stdout: (text) => {
+					shown.push(text);
+				},
+				stderr: () => undefined,
+			},
+		);
+		expect(shown.join("")).toContain("Case smoke, session mode, 3 reps.");
+		expect(shown.join("")).toContain("Cost $0.08 for the confirmed command.");
+	});
+
+	it("maps pass, failed checks, no reply, and provider failure without dropping named evidence", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-outcomes-"));
+		temporaryDirectories.push(root);
+		const corpusRoot = join(root, "corpus");
+		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
+		const sessionCase = {
+			kind: "session",
+			declaration: {
+				id: "outcomes",
+				kind: "session",
+				title: "Outcomes",
+				prompt: "Reply.",
+				tools: [],
+				corpusFiles: [],
+				projectFiles: [],
+				checks: [{ kind: "word-band", max: 1 }],
+			},
+			fixturePath: undefined,
+			transcriptPath: undefined,
+			prompt: "Reply.",
+			tools: [],
+			settings: undefined,
+			agents: undefined,
+			corpusFiles: [],
+			projectFiles: [],
+			checks: [{ kind: "word-band", max: 1 }],
+		} satisfies SessionCase;
+		const outcome = await runSessionConfirmation(
+			{
+				executeAttempt: async (plan) => {
+					const transcriptFile = join(plan.recordDirectory, "transcript.jsonl");
+					await Bun.write(transcriptFile, "transcript\n");
+					const common = {
+						attemptDirectory: join(plan.recordDirectory, "execution"),
+						transcriptFile,
+						metrics,
+						contextManifest: undefined,
+					};
+					if (plan.ordinal === 1) {
+						return {
+							...common,
+							reply: "OK",
+							outcome: "SUCCESSFUL",
+							checks: [
+								{ kind: "word-band", status: "PASS", detail: "named pass" },
+							],
+						};
+					}
+					if (plan.ordinal === 2) {
+						return {
+							...common,
+							reply: "too many words",
+							outcome: "UNSUCCESSFUL",
+							checks: [
+								{ kind: "word-band", status: "FAIL", detail: "named failure" },
+							],
+						};
+					}
+					if (plan.ordinal === 3) {
+						return {
+							...common,
+							reply: undefined,
+							outcome: "NO_REPLY",
+							checks: [],
+						};
+					}
+
+					throw new SessionInvocationError("provider failure", {
+						...common,
+						reply: undefined,
+						outcome: "EXECUTION_FAILED",
+						checks: [],
+					});
+				},
+			},
+			{
+				runsDirectory: join(root, "runs"),
+				groupId: "outcomes-group",
+				reps: 4,
+				projectedCost: {
+					reps: 4,
+					perRepMaximumUsd: 0.2,
+					preflightMaximumUsd: 0.1,
+					totalMaximumUsd: 0.9,
+				},
+				approvalMethod: "yes",
+				sessionCase,
+				corpus: corpusRoot,
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+				preflight: { status: "COMPLETE", call: { metrics } },
+			},
+		);
+
+		const reps = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseConfirmationRepRecord(await Bun.file(path).text()),
+			),
+		);
+		expect(reps.map((rep) => rep.stages[0]?.status)).toEqual([
+			"JUDGED",
+			"JUDGED",
+			"NOT_REACHED",
+			"EXECUTION_FAILED",
+		]);
+		expect(reps.slice(0, 2).map((rep) => rep.stages[0])).toMatchObject([
+			{ grade: "A", verdict: "CONTINUE" },
+			{ grade: "F", verdict: "STOP" },
+		]);
+		const attempts = await Promise.all(
+			outcome.repRecordFiles.map(async (path) =>
+				parseSessionAttemptRecord(
+					await Bun.file(join(path, "..", "attempt.json")).text(),
+				),
+			),
+		);
+		expect(attempts[0]?.checks[0]?.detail).toBe("named pass");
+		expect(attempts[1]?.checks[0]?.detail).toBe("named failure");
 	});
 });

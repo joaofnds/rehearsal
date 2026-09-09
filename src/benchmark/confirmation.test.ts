@@ -9,16 +9,19 @@ import {
 } from "./confirmation";
 
 describe(projectConfirmationCost.name, () => {
-	it("projects a session group as reps x one session at the budget", () => {
+	it("projects a session group as one preflight plus every requested rep", () => {
 		const projection = projectConfirmationCost({
 			mode: "session",
 			reps: 3,
 			sessionBudgetUsd: 0.2,
 		});
 
-		expect(projection.reps).toBe(3);
-		expect(projection.perRepMaximumUsd).toBe(0.2);
-		expect(projection.totalMaximumUsd).toBeCloseTo(0.6, 10);
+		expect(projection).toEqual({
+			reps: 3,
+			perRepMaximumUsd: 0.2,
+			preflightMaximumUsd: 0.1,
+			totalMaximumUsd: 0.7,
+		});
 	});
 
 	it("prints a session group's projection as the dollars it will spend", () => {
@@ -30,7 +33,7 @@ describe(projectConfirmationCost.name, () => {
 					sessionBudgetUsd: 0.2,
 				}),
 			),
-		).toBe("Projected maximum cost: $0.60 (3 reps x $0.20)");
+		).toBe("Projected maximum cost: $0.70 ($0.10 preflight + 3 reps x $0.20)");
 	});
 
 	it("projects the bounded maximum before a confirmation", () => {

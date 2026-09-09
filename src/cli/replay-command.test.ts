@@ -35,7 +35,7 @@ const sessionArgs = [
 	"1",
 ];
 
-const passingProbe = (): Promise<void> => Promise.resolve();
+const passingProbe = (): Promise<undefined> => Promise.resolve(undefined);
 
 /**
  * Replay now reads the run's own manifest to find the case it replayed, so a

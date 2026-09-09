@@ -219,6 +219,16 @@ export interface ConfirmationResourceReport {
 	readonly makespanMs: number;
 }
 
+export type ConfirmationCommandTotal =
+	| {
+			readonly status: "COMPLETE";
+			readonly metrics: Omit<
+				ClaudeCallMetrics,
+				"turns" | "durationMs" | "apiDurationMs"
+			>;
+	  }
+	| { readonly status: "MISSING"; readonly missing: readonly string[] };
+
 interface MutableMetricDistributions {
 	readonly costUsd: number[];
 	readonly inputTokens: number[];
@@ -366,5 +376,44 @@ export function buildResourceReport(
 		stageElapsedMs: sortedStageElapsedMs,
 		repElapsedMs: repElapsedMs.toSorted((left, right) => left - right),
 		makespanMs,
+	};
+}
+
+export function buildSessionCommandTotal(
+	report: ConfirmationResourceReport,
+	preflight:
+		| { readonly status: "COMPLETE"; readonly metrics: ClaudeCallMetrics }
+		| { readonly status: "MISSING"; readonly missing: string },
+): ConfirmationCommandTotal {
+	const missing = [
+		...(preflight.status === "MISSING" ? [preflight.missing] : []),
+		...(report.missingMetricReps === 0
+			? []
+			: [`${String(report.missingMetricReps)} rep call metrics`]),
+	];
+	if (missing.length > 0) {
+		return { status: "MISSING", missing };
+	}
+
+	if (preflight.status === "MISSING") {
+		throw new Error("Complete session total requires preflight metrics");
+	}
+
+	const sum = (values: readonly number[]): number =>
+		values.reduce((total, value) => total + value, 0);
+
+	return {
+		status: "COMPLETE",
+		metrics: {
+			costUsd: preflight.metrics.costUsd + sum(report.total.costUsd),
+			inputTokens:
+				preflight.metrics.inputTokens + sum(report.total.inputTokens),
+			outputTokens:
+				preflight.metrics.outputTokens + sum(report.total.outputTokens),
+			cacheReadTokens:
+				preflight.metrics.cacheReadTokens + sum(report.total.cacheReadTokens),
+			cacheWriteTokens:
+				preflight.metrics.cacheWriteTokens + sum(report.total.cacheWriteTokens),
+		},
 	};
 }

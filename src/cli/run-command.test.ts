@@ -10,7 +10,11 @@ import type { PipelineDefinition } from "#benchmark/pipeline";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import type { RunCommandDependencies } from "#cli/run-command";
-import { buildConfirmationRequest, runRunCommand } from "#cli/run-command";
+import {
+	buildConfirmationRequest,
+	executeSessionRun,
+	runRunCommand,
+} from "#cli/run-command";
 import { UsageError } from "#cli/commands";
 
 const args = [
@@ -31,7 +35,7 @@ const passingPreflight: RunCommandDependencies["assertPreflight"] = () =>
 	Promise.resolve();
 
 const passingProbe: RunCommandDependencies["probeModel"] = () =>
-	Promise.resolve();
+	Promise.resolve(undefined);
 
 const smokeCase: SessionCase = {
 	kind: "session",
@@ -269,7 +273,7 @@ describe(runRunCommand.name, () => {
 				assertPreflight: (inputs) => {
 					preflighted.push(inputs);
 
-					return Promise.resolve();
+					return Promise.resolve(undefined);
 				},
 				probeModel: passingProbe,
 				executeSession: neverASession,
@@ -671,6 +675,75 @@ describe("runRunCommand for a session case", () => {
 		expect(stdout.join("")).toBe("/runs/attempt.json\n");
 	});
 
+	it("approves the whole confirmed command before the model probe and reps", async () => {
+		const { output } = recordOutput();
+		const events: string[] = [];
+		const orderedOutput = {
+			stdout: output.stdout,
+			stderr: (text: string) => {
+				events.push(`output:${text.trim()}`);
+				output.stderr(text);
+			},
+		};
+
+		await runRunCommand(
+			{
+				args: [
+					"--case",
+					"smoke",
+					...sessionArgs,
+					"--confirm",
+					"--reps",
+					"2",
+					"--yes",
+				],
+				json: false,
+				stdinIsTerminal: false,
+			},
+			{
+				output: orderedOutput,
+				requireCase: loadsSmoke(),
+				assertPreflight: passingPreflight,
+				probeModel: () => {
+					events.push("probe");
+
+					return Promise.resolve(undefined);
+				},
+				execute: () => Promise.reject(new Error("no pipeline here")),
+				executeSession: (config, commandOutput, loaded, boundary) =>
+					executeSessionRun(config, commandOutput, loaded, {
+						...boundary,
+						runDebug: () =>
+							Promise.reject(new Error("debug attempt must not start")),
+						runConfirmed: (request) => {
+							events.push("reps");
+							expect(request.projectedCost).toEqual({
+								reps: 2,
+								perRepMaximumUsd: 0.2,
+								preflightMaximumUsd: 0.1,
+								totalMaximumUsd: 0.5,
+							});
+
+							return Promise.resolve({
+								groupRecordFile: "/runs/group.json",
+								reportFile: "/runs/report.json",
+								repRecordFiles: ["/runs/rep-1.json", "/runs/rep-2.json"],
+							});
+						},
+					}),
+			},
+		);
+
+		expect(events).toEqual([
+			"output:Projected maximum cost: $0.50 ($0.10 preflight + 2 reps x $0.20)",
+			"probe",
+			"reps",
+			"output:Confirmation group: /runs/group.json",
+			"output:Confirmation rep: /runs/rep-1.json",
+			"output:Confirmation rep: /runs/rep-2.json",
+		]);
+	});
+
 	it("halts before the session attempt when the declared model is not available", async () => {
 		const { output } = recordOutput();
 
@@ -690,12 +763,102 @@ describe("runRunCommand for a session case", () => {
 							new RefusedPreconditionError("Model haiku is not available"),
 						),
 					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							runDebug: () =>
+								Promise.reject(new Error("a session attempt must not start")),
+						}),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+	});
+
+	it("refuses confirmation without a terminal before probing the model", async () => {
+		const { output } = recordOutput();
+		const probes: string[] = [];
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: ["--case", "smoke", ...sessionArgs, "--confirm", "--reps", "2"],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: loadsSmoke(),
+					assertPreflight: passingPreflight,
+					probeModel: (model) => {
+						probes.push(model);
+
+						return Promise.resolve(undefined);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
 					executeSession: neverASession,
 				},
 			),
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(probes).toEqual([]);
+	});
+
+	it("refuses mutable global corpus input before the model probe, naming ACT-143", async () => {
+		const { output } = recordOutput();
+		const calls: string[] = [];
+		const unsupportedCase: SessionCase = {
+			...smokeCase,
+			declaration: {
+				...smokeCase.declaration,
+				corpusFiles: ["CLAUDE.md"],
+			},
+			corpusFiles: ["CLAUDE.md"],
+		};
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [
+						"--case",
+						"smoke",
+						...sessionArgs,
+						"--confirm",
+						"--reps",
+						"2",
+						"--yes",
+					],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: () => Promise.resolve(unsupportedCase),
+					assertPreflight: passingPreflight,
+					probeModel: () => {
+						calls.push("probe");
+
+						return Promise.resolve(undefined);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							runConfirmed: () => {
+								calls.push("rep");
+
+								return Promise.reject(new Error("must not run"));
+							},
+						}),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("ACT-143");
+		expect(calls).toEqual([]);
 	});
 
 	it.each(["--target", "--pipeline"])(

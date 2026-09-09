@@ -4,7 +4,7 @@ import type { SessionCase } from "./case";
 import type { SessionSettings } from "./claude";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
-import type { ClaudeCallMetrics, Immutable } from "./contracts";
+import type { Immutable } from "./contracts";
 import {
 	corpusEntries,
 	projectEntries,
@@ -26,6 +26,7 @@ import type {
 } from "./confirmation-evidence";
 import { RefusedPreconditionError } from "./exit-codes";
 import { confirmationGroupPaths } from "./run-layout";
+import type { ModelPreflightEvidence } from "./preflight";
 import type { SessionAttempt } from "./session-attempt";
 import { SessionInvocationError } from "./session-invocation-error";
 import type { SessionCorpusSnapshot } from "./session-corpus";
@@ -35,13 +36,6 @@ import type { SessionAttemptRecord } from "./session-record";
 import { sessionAttemptRecordSchema } from "./session-record";
 
 export { SessionInvocationError } from "./session-invocation-error";
-
-export type SessionPreflightEvidence =
-	| {
-			readonly status: "COMPLETE";
-			readonly call: { readonly metrics: ClaudeCallMetrics };
-	  }
-	| { readonly status: "MISSING"; readonly missing: string };
 
 export interface SessionConfirmationRequest {
 	readonly runsDirectory: string;
@@ -56,7 +50,7 @@ export interface SessionConfirmationRequest {
 	readonly model: string;
 	readonly effort?: SessionSettings["effort"] | undefined;
 	readonly sessionBudgetUsd: number;
-	readonly preflight: SessionPreflightEvidence;
+	readonly preflight: ModelPreflightEvidence;
 }
 
 export interface SessionConfirmationRepPlan {
@@ -86,7 +80,9 @@ interface FrozenSessionInputs {
 	readonly files: readonly FrozenFile[];
 }
 
-function refuseUnsupportedCorpus(sessionCase: SessionCase): void {
+export function assertSessionConfirmationInputsSupported(
+	sessionCase: SessionCase,
+): void {
 	const unsupported = sessionCase.corpusFiles.find(
 		(path) => path === CORPUS_INSTRUCTIONS_PATH || path.startsWith("skills/"),
 	);
@@ -102,7 +98,7 @@ async function freezeInputs(
 	groupDirectory: string,
 	inputsDirectory: string,
 ): Promise<FrozenSessionInputs> {
-	refuseUnsupportedCorpus(request.sessionCase);
+	assertSessionConfirmationInputsSupported(request.sessionCase);
 	await mkdir(inputsDirectory, { recursive: true });
 	const source = await resolveCorpusSource(request.corpus);
 	const corpusDirectory = join(inputsDirectory, "corpus");

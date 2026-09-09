@@ -183,11 +183,16 @@ async function copyDeclared(
 	for (const entry of entries.filter((candidate) =>
 		declares(declaredPaths, candidate.layoutPath),
 	)) {
-		await refuseSymlinks(source.root, entry);
+		if (source.kind === "directory") {
+			await refuseSymlinks(source.root, entry);
+		}
 
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });
-		await cp(entry.sourcePath, target, { recursive: true });
+		await cp(entry.sourcePath, target, {
+			recursive: true,
+			dereference: source.kind === "live",
+		});
 	}
 }
 

@@ -24,10 +24,52 @@ function fakeProbe(envelope: FakeEnvelope): () => Promise<string> {
 
 describe(probeModelAvailable.name, () => {
 	it("returns cleanly when the provider accepts the model", async () => {
-		await probeModelAvailable(
+		const evidence = await probeModelAvailable(
 			"sonnet",
 			fakeProbe({ session_id: "session-1", is_error: false }),
 		);
+
+		expect(evidence).toEqual({
+			status: "MISSING",
+			missing: "preflight call metrics",
+		});
+	});
+
+	it("retains the accepted probe's provider metrics", async () => {
+		const evidence = await probeModelAvailable("sonnet", () =>
+			Promise.resolve(
+				JSON.stringify({
+					session_id: "session-1",
+					is_error: false,
+					total_cost_usd: 0.012,
+					num_turns: 1,
+					duration_ms: 100,
+					duration_api_ms: 80,
+					usage: {
+						input_tokens: 2,
+						output_tokens: 3,
+						cache_read_input_tokens: 4,
+						cache_creation_input_tokens: 5,
+					},
+				}),
+			),
+		);
+
+		expect(evidence).toEqual({
+			status: "COMPLETE",
+			call: {
+				metrics: {
+					costUsd: 0.012,
+					inputTokens: 2,
+					outputTokens: 3,
+					cacheReadTokens: 4,
+					cacheWriteTokens: 5,
+					turns: 1,
+					durationMs: 100,
+					apiDurationMs: 80,
+				},
+			},
+		});
 	});
 
 	it("refuses naming the model and the fix when the provider rejects it", () => {
@@ -122,7 +164,7 @@ describe(assertPipelinePreflight.name, () => {
 		json: "{}",
 		hashed: { path: "/settings.json", sha256: "b".repeat(64) },
 	};
-	const passingProbe = (): Promise<void> => Promise.resolve();
+	const passingProbe = (): Promise<undefined> => Promise.resolve(undefined);
 
 	function dependencies(
 		overrides: Partial<Parameters<typeof assertPipelinePreflight>[1]> = {},

@@ -1,6 +1,7 @@
 import type { ConfirmationConfig } from "./config";
 import { unhandled } from "./contracts";
 import { MAX_JUDGE_ATTEMPTS } from "./judge-attempt";
+import { MODEL_PREFLIGHT_MAXIMUM_USD } from "./preflight";
 
 export type ConfirmationCostRequest =
 	| {
@@ -54,6 +55,19 @@ export function projectConfirmationCost(
 ): ConfirmationCostProjection {
 	const sessionsPerRep = sessionsPerRepFor(request);
 	const perRepMaximumUsd = sessionsPerRep * request.sessionBudgetUsd;
+	if (request.mode === "session") {
+		return {
+			reps: request.reps,
+			perRepMaximumUsd,
+			preflightMaximumUsd: MODEL_PREFLIGHT_MAXIMUM_USD,
+			totalMaximumUsd: Number(
+				(
+					MODEL_PREFLIGHT_MAXIMUM_USD +
+					request.reps * perRepMaximumUsd
+				).toPrecision(15),
+			),
+		};
+	}
 
 	return {
 		reps: request.reps,
@@ -65,6 +79,10 @@ export function projectConfirmationCost(
 export function formatProjectedCost(
 	projection: ConfirmationCostProjection,
 ): string {
+	if (projection.preflightMaximumUsd !== undefined) {
+		return `Projected maximum cost: $${projection.totalMaximumUsd.toFixed(2)} ($${projection.preflightMaximumUsd.toFixed(2)} preflight + ${projection.reps} reps x $${projection.perRepMaximumUsd.toFixed(2)})`;
+	}
+
 	return `Projected maximum cost: $${projection.totalMaximumUsd.toFixed(2)} (${projection.reps} reps x $${projection.perRepMaximumUsd.toFixed(2)})`;
 }
 

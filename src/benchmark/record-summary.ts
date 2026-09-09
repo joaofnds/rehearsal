@@ -125,7 +125,21 @@ export const groupReportSummarySchema = z
 	.object({
 		reliability: z.array(reliabilitySummarySchema),
 		resources: z
-			.object({ total: z.object({ costUsd: z.array(z.number()) }).loose() })
+			.object({
+				total: z.object({ costUsd: z.array(z.number()) }).loose(),
+				commandTotal: z
+					.discriminatedUnion("status", [
+						z.object({
+							status: z.literal("COMPLETE"),
+							metrics: z.object({ costUsd: z.number() }).loose(),
+						}),
+						z.object({
+							status: z.literal("MISSING"),
+							missing: z.array(z.string().min(1)),
+						}),
+					])
+					.optional(),
+			})
 			.loose(),
 	})
 	.loose();
@@ -146,6 +160,13 @@ export function groupSummary(
 ): string {
 	const costs = report.resources.total.costUsd;
 	const total = costs.reduce((sum, cost) => sum + cost, 0);
+	const { commandTotal } = report.resources;
+	let costLine = `Cost ${usd(total)} over ${String(costs.length)} reps.`;
+	if (commandTotal?.status === "MISSING") {
+		costLine = `Cost unavailable: ${commandTotal.missing.join(", ")}.`;
+	} else if (commandTotal?.status === "COMPLETE") {
+		costLine = `Cost ${usd(commandTotal.metrics.costUsd)} for the confirmed command.`;
+	}
 
 	return [
 		`## group:${record.groupId}`,
@@ -163,7 +184,7 @@ export function groupSummary(
 			]),
 		),
 		"",
-		`Cost ${usd(total)} over ${String(costs.length)} reps.`,
+		costLine,
 		"",
 	].join("\n");
 }

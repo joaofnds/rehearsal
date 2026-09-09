@@ -124,6 +124,26 @@ Cost $4.00 over 2 reps.
 `,
 		);
 	});
+
+	it("does not present a rep-only number as command cost when preflight metrics are missing", () => {
+		const report = parseGroupReportSummaryRecord(
+			JSON.stringify({
+				...GROUP_REPORT,
+				resources: {
+					total: { costUsd: [1.25, 2.75] },
+					commandTotal: {
+						status: "MISSING",
+						missing: ["preflight call metrics"],
+					},
+				},
+			}),
+		);
+
+		expect(groupSummary(GROUP_RECORD, report)).toContain(
+			"Cost unavailable: preflight call metrics.",
+		);
+		expect(groupSummary(GROUP_RECORD, report)).not.toContain("Cost $4.00");
+	});
 });
 
 describe(comparisonSummary.name, () => {

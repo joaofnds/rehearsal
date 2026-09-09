@@ -34,10 +34,18 @@ import {
 } from "#benchmark/config";
 import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
-import type { PipelinePreflightInputs } from "#benchmark/preflight";
+import type {
+	ModelPreflightEvidence,
+	PipelinePreflightInputs,
+} from "#benchmark/preflight";
 import { asRefusedPrecondition } from "#benchmark/preflight";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
+import type { SessionConfirmationRequest } from "#benchmark/session-confirmation";
+import {
+	assertSessionConfirmationInputsSupported,
+	runSessionConfirmation,
+} from "#benchmark/session-confirmation";
 import {
 	projectConfirmationCost,
 	runRequestedExecution,
@@ -61,7 +69,6 @@ import type { SourceBaseline } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
 import {
-	RefusedPreconditionError,
 	refuseStageCorpus,
 	requireInteractiveStdin,
 	requireSpendAuthorization,
@@ -72,6 +79,7 @@ import { terminalQuestioner } from "#cli/questioner";
 import {
 	defaultSessionRunRequest,
 	reportSessionChecks,
+	runPreparedSessionAttempt,
 	runSessionDebugAttempt,
 } from "#cli/session-run-command";
 
@@ -95,7 +103,9 @@ export interface RunCommandDependencies {
 	readonly output: CommandOutput;
 	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
 	readonly assertPreflight: (inputs: PipelinePreflightInputs) => Promise<void>;
-	readonly probeModel: (model: string) => Promise<void>;
+	readonly probeModel: (
+		model: string,
+	) => Promise<ModelPreflightEvidence | undefined>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
@@ -105,7 +115,12 @@ export interface RunCommandDependencies {
 		config: SessionRunConfig,
 		output: CommandOutput,
 		sessionCase: SessionCase,
+		boundary: SessionExecutionBoundary,
 	) => Promise<RunOutcome>;
+}
+
+export interface SessionExecutionBoundary {
+	readonly probeModel: RunCommandDependencies["probeModel"];
 }
 
 /**
@@ -196,12 +211,15 @@ async function runSessionCase(
 	);
 
 	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
-	await dependencies.probeModel(config.model);
+	if (config.confirmation !== undefined && !config.confirmation.approved) {
+		requireInteractiveStdin(request.stdinIsTerminal, COST_APPROVAL_REASON);
+	}
 
 	const outcome = await dependencies.executeSession(
 		config,
 		dependencies.output,
 		sessionCase,
+		{ probeModel: dependencies.probeModel },
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);
@@ -388,17 +406,43 @@ async function confirmRun(
 	);
 }
 
-/**
- * A session confirmation group is not built yet, so the projection is shown
- * and the group refused before any provider call rather than after: the
- * ordering the vision asks for holds whether or not the group exists.
- */
+export interface SessionRunExecutionDependencies extends SessionExecutionBoundary {
+	readonly runDebug?: typeof runSessionDebugAttempt;
+	readonly runConfirmed?: (
+		request: SessionConfirmationRequest,
+	) => Promise<Awaited<ReturnType<typeof runSessionConfirmation>>>;
+}
+
+function preflightEvidence(
+	evidence: ModelPreflightEvidence | undefined,
+): ModelPreflightEvidence {
+	return (
+		evidence ?? {
+			status: "MISSING",
+			missing: "preflight call metrics",
+		}
+	);
+}
+
 export function executeSessionRun(
 	config: SessionRunConfig,
 	output: CommandOutput,
 	sessionCase: SessionCase,
+	dependencies: SessionRunExecutionDependencies,
 ): Promise<RunOutcome> {
 	const questioner = terminalQuestioner();
+	const runDebug = dependencies.runDebug ?? runSessionDebugAttempt;
+	const runConfirmed =
+		dependencies.runConfirmed ??
+		((request: SessionConfirmationRequest) =>
+			runSessionConfirmation(
+				{ executeAttempt: runPreparedSessionAttempt },
+				request,
+			));
+
+	if (config.confirmation !== undefined) {
+		assertSessionConfirmationInputsSupported(sessionCase);
+	}
 
 	return runRequestedExecution<RunOutcome>({
 		confirmation: config.confirmation,
@@ -415,7 +459,8 @@ export function executeSessionRun(
 			prompt: (message) => questioner.question(message),
 		},
 		runDebug: async () => {
-			const outcome = await runSessionDebugAttempt(
+			await dependencies.probeModel(config.model);
+			const outcome = await runDebug(
 				defaultSessionRunRequest(
 					sessionCase,
 					config,
@@ -426,12 +471,42 @@ export function executeSessionRun(
 
 			return { kind: "debug", recordFile: outcome.recordFile };
 		},
-		runConfirmed: () =>
-			Promise.reject(
-				new RefusedPreconditionError(
-					"A session confirmation group is not built yet; run the case without --confirm",
-				),
-			),
+		runConfirmed: async (projectedCost) => {
+			const preflight = preflightEvidence(
+				await dependencies.probeModel(config.model),
+			);
+			if (config.confirmation === undefined) {
+				throw new Error(
+					"Confirmed session execution requires confirmation config",
+				);
+			}
+			if (projectedCost.preflightMaximumUsd === undefined) {
+				throw new Error("Session projection requires a preflight maximum");
+			}
+
+			const outcome = await runConfirmed({
+				runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+				groupId: randomUUID(),
+				reps: config.confirmation.reps,
+				projectedCost: {
+					...projectedCost,
+					preflightMaximumUsd: projectedCost.preflightMaximumUsd,
+				},
+				approvalMethod: config.confirmation.approved ? "yes" : "interactive",
+				sessionCase,
+				corpus: config.corpus,
+				model: config.model,
+				effort: config.effort,
+				sessionBudgetUsd: config.sessionBudgetUsd,
+				preflight,
+			});
+			output.stderr(`Confirmation group: ${outcome.groupRecordFile}\n`);
+			for (const recordFile of outcome.repRecordFiles) {
+				output.stderr(`Confirmation rep: ${recordFile}\n`);
+			}
+
+			return { kind: "confirmation", recordFile: outcome.reportFile };
+		},
 	}).finally(() => {
 		questioner.close();
 	});

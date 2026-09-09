@@ -21,6 +21,7 @@ import {
 import {
 	buildReliabilityReport,
 	buildResourceReport,
+	buildSessionCommandTotal,
 } from "./confirmation-report";
 
 export interface FrozenFile {
@@ -217,16 +218,36 @@ export async function finalizeConfirmationGroup(
 		finalization.declaredStages,
 		reliabilityInputs,
 	);
+	const resources = buildResourceReport(
+		finalization.declaredStages,
+		records,
+		finalization.makespanMs,
+	);
+	const sessionResources =
+		finalization.mode === "session"
+			? {
+					...resources,
+					commandTotal: buildSessionCommandTotal(
+						resources,
+						finalization.preflight?.status === "COMPLETE"
+							? {
+									status: "COMPLETE",
+									metrics: finalization.preflight.call.metrics,
+								}
+							: {
+									status: "MISSING",
+									missing:
+										finalization.preflight?.missing ?? "preflight call metrics",
+								},
+					),
+				}
+			: resources;
 	const commonReport = {
 		reliability:
 			finalization.mode === "stage" || finalization.mode === "session"
 				? reliability.slice(0, finalization.declaredStages.length)
 				: reliability,
-		resources: buildResourceReport(
-			finalization.declaredStages,
-			records,
-			finalization.makespanMs,
-		),
+		resources: sessionResources,
 	};
 	const report =
 		finalization.mode === "session"

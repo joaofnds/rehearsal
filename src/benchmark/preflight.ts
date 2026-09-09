@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { CaseDeclarationError } from "./case";
-import { claudeArgs, readClaudeEnvelope } from "./claude";
+import {
+	claudeArgs,
+	readClaudeCallMetrics,
+	readClaudeEnvelope,
+} from "./claude";
 import { CommandError, runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
 import { RefusedPreconditionError } from "./exit-codes";
@@ -9,6 +13,7 @@ import type { LoadedStageSettings } from "./stage-settings";
 import { loadStageSettings, StageSettingsError } from "./stage-settings";
 import { assertControlReady, assertSourceReady } from "./target";
 import type { SourceBaseline } from "./target";
+import type { ClaudeCallMetrics } from "./contracts";
 
 const DECLARED_REFERENCE_ERRORS = [
 	CaseDeclarationError,
@@ -52,6 +57,13 @@ export async function asRefusedPrecondition<Loaded>(
 
 export type ModelProbe = () => Promise<string>;
 
+export type ModelPreflightEvidence =
+	| {
+			readonly status: "COMPLETE";
+			readonly call: { readonly metrics: ClaudeCallMetrics };
+	  }
+	| { readonly status: "MISSING"; readonly missing: string };
+
 const MODEL_PROBE_PROMPT = "hi";
 /**
  * Sized for a cold prompt cache, not just a warm one: a cache-creation write
@@ -59,7 +71,7 @@ const MODEL_PROBE_PROMPT = "hi";
  * a $0.02 ceiling rejected as `budget_exhausted` and this module then
  * misreported as the model being unavailable.
  */
-const MODEL_PROBE_BUDGET_USD = 0.1;
+export const MODEL_PREFLIGHT_MAXIMUM_USD = 0.1;
 const modelProbeSchema = z.object({}).loose();
 
 export type CommandRunner = (
@@ -82,7 +94,7 @@ export function defaultModelProbe(
 		try {
 			return await run(
 				claudeArgs({
-					settings: { model, budgetUsd: MODEL_PROBE_BUDGET_USD },
+					settings: { model, budgetUsd: MODEL_PREFLIGHT_MAXIMUM_USD },
 					schema: modelProbeSchema,
 					access: "sealed",
 				}),
@@ -112,10 +124,15 @@ export function defaultModelProbe(
 export async function probeModelAvailable(
 	model: string,
 	invoke: ModelProbe,
-): Promise<void> {
+): Promise<ModelPreflightEvidence> {
 	const output = await invoke();
 	try {
-		readClaudeEnvelope(output);
+		const envelope = readClaudeEnvelope(output);
+		const metrics = readClaudeCallMetrics(envelope);
+
+		return metrics === undefined
+			? { status: "MISSING", missing: "preflight call metrics" }
+			: { status: "COMPLETE", call: { metrics } };
 	} catch (error) {
 		if (!(error instanceof Error) || !isBareError(error)) {
 			throw error;
@@ -135,7 +152,7 @@ export async function probeModelAvailable(
 export function defaultProbeModel(
 	model: string,
 	run?: CommandRunner,
-): Promise<void> {
+): Promise<ModelPreflightEvidence> {
 	return probeModelAvailable(model, defaultModelProbe(model, run));
 }
 
@@ -149,7 +166,9 @@ export interface PipelinePreflightDependencies {
 	readonly assertControlReady: () => Promise<string>;
 	readonly assertSourceReady: (sourceDir: string) => Promise<SourceBaseline>;
 	readonly loadStageSettings: (path: string) => Promise<LoadedStageSettings>;
-	readonly probeModel: (model: string) => Promise<void>;
+	readonly probeModel: (
+		model: string,
+	) => Promise<ModelPreflightEvidence | undefined>;
 }
 
 const defaultPipelinePreflightDependencies: PipelinePreflightDependencies = {

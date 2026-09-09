@@ -31,6 +31,7 @@ import { sessionAttemptPaths } from "#benchmark/run-layout";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { sessionLineage } from "#benchmark/session-lineage";
+import type { SessionConfirmationRepPlan } from "#benchmark/session-confirmation";
 import type {
 	CorpusSnapshotOrigin,
 	SessionAttemptRecord,
@@ -265,6 +266,24 @@ export async function runSessionDebugAttempt(
 	await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
 
 	return { recordFile, record };
+}
+
+/**
+ * Confirmation has already resolved and frozen every input shared by the
+ * group. This seam runs only the provider attempt, placing its durable
+ * transcript in the rep directory selected by the group adapter.
+ */
+export function runPreparedSessionAttempt(
+	plan: Immutable<SessionConfirmationRepPlan>,
+): Promise<SessionAttempt> {
+	return attempted({
+		sessionCase: plan.sessionCase,
+		settings: plan.settings,
+		projectsDirectory: claudeProjectsDirectory(),
+		recordDirectory: plan.recordDirectory,
+		runClaude: runClaudeCommand,
+		corpusSnapshot: plan.corpusSnapshot,
+	});
 }
 
 export function defaultSessionRunRequest(

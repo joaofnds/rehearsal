@@ -5,6 +5,7 @@ import { hashCorpusFiles } from "#benchmark/corpus-file";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
+	freezeSessionCorpus,
 	SessionCorpusError,
 	installSessionCorpusSnapshot,
 	snapshotSessionCorpus,
@@ -193,6 +194,31 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(failure).toBeInstanceOf(SessionCorpusError);
 		expect(failure.message).toContain("agents/reviewer.md");
 		expect(failure.message).not.toContain("OUTSIDE AGENT");
+	});
+});
+
+describe(freezeSessionCorpus.name, () => {
+	it("materializes symlink-backed live entries as immutable group bytes", async () => {
+		const outside = await directoryCorpus({
+			"agents/reviewer.md": "original live agent\n",
+		});
+		const liveRoot = await resources.createControlDirectory();
+		await symlink(join(outside, "agents"), join(liveRoot, "agents"));
+		const destination = await resources.createControlDirectory();
+
+		const snapshot = await freezeSessionCorpus(
+			{ kind: "live", root: liveRoot },
+			join(destination, "corpus"),
+			["agents/reviewer.md"],
+		);
+		await Bun.write(
+			join(outside, "agents", "reviewer.md"),
+			"mutated live agent\n",
+		);
+
+		expect(
+			await Bun.file(join(snapshot.root, "agents", "reviewer.md")).text(),
+		).toBe("original live agent\n");
 	});
 });
 
