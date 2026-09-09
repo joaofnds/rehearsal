@@ -66,6 +66,12 @@ async function readCountsByPath(
  * which for a corpus rooted at a real `~/.claude` means caches, logs, and
  * credentials, none of which any stage reads and none of which belong in a
  * digest or on a screen.
+ *
+ * One unhashable entry refuses its own layout directory and no other, so the
+ * caller gets the directories that hashed whole beside a refusal naming each
+ * one that did not. The instruction file is hashed outside that tolerance: a
+ * corpus whose CLAUDE.md is not the corpus's own bytes is one the harness
+ * cannot identify, rather than a partial corpus to show.
  */
 async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const { root } = source;
