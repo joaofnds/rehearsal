@@ -4,9 +4,11 @@ title: build the session confirmation group path
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:20'
-updated_date: '2026-09-09 15:22'
+updated_date: '2026-09-09 15:50'
 labels: []
 dependencies: []
+references:
+  - backlog/docs/doc-59 - Session-skill-benchmark-scope.md
 priority: high
 type: feature
 ordinal: 136008
@@ -17,6 +19,9 @@ ordinal: 136008
 - [ ] #1 rehearsal run on a session case with --confirm --reps N executes N reps and writes a confirmation group record, instead of refusing with 'A session confirmation group is not built yet' (observed 2026-09-09: 'run --case smoke --model sonnet --confirm --reps 2 --yes' printed the projection then refused, exiting without a provider call)
 - [ ] #2 rehearsal list groups returns the written group and rehearsal show on its id prints the record (observed 2026-09-09: list groups is empty and no command produces a session group)
 - [ ] #3 the projected cost is shown and approved before any provider call, as it is today (run-command.ts line 392 records that ordering as deliberate)
+- [ ] #4 Each repetition runs in its own attempt directory from the group’s frozen shared inputs (João’s approved session benchmark scope, doc-59)
+- [ ] #5 If one repetition fails, peer repetitions complete and the group records the failed repetition rather than silently dropping it (João’s approved session benchmark scope, doc-59)
+- [ ] #6 Each repetition’s named check results remain available through its recorded attempt evidence (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -47,4 +52,10 @@ What NOT to copy. runPipelineConfirmation and runReplayConfirmation both create 
 Verification available at no provider cost: 'mise exec -- ./rehearsal.ts run --case smoke --model sonnet --confirm --reps 2 --yes' currently prints 'Projected maximum cost: $0.40 (2 reps x $0.20)' then refuses. That command is AC#1's probe. 'rehearsal list groups' is empty today, which is AC#2's starting state.
 
 Budget note: this card's own spend is its reps, at about 0.20 USD per rep on the smoke case. It is not ACT-69's 25 USD, which stays unspent for the compare after this lands.
+
+Approved session benchmark scope, 2026-09-09 (doc-59): reuse this existing card for confirmation execution. ACT-143 adds frozen skill delivery; ACT-144 adds generated fixture inputs; ACT-145 adds preserved state and named grading results; ACT-146 owns session comparison, single-case statistics and partial-score reporting; ACT-147 owns regrading. This card can deliver repetitions of existing session cases without waiting for all those capabilities.
+
+Extend the runner's acceptance to isolated repetitions from one frozen set of shared inputs, peer failure records and group accounting. Preserve the actual named check results through the attempt evidence referenced by each rep, even if the current compatibility summary maps them to A/F. Let ACT-146 consume that evidence rather than reconstructing individual checks from the aggregate letter. The frozen-input schema's pipelinePath placeholder remains a design question: represent actual session input evidence instead of recording a fabricated pipeline as if it ran. ACT-146 also needs a session-specific quality path; a schema accepting mode session does not make comparison-quality support it.
+
+First new verification target: one rep fails while its peers complete, with all repetitions starting from the same frozen shared inputs. No new provider spend was authorized or incurred in this card-filing session.
 <!-- SECTION:NOTES:END -->

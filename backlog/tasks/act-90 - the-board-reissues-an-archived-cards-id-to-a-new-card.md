@@ -4,9 +4,11 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-09 13:00'
+updated_date: '2026-09-09 15:50'
 labels: []
 dependencies: []
+references:
+  - backlog/docs/doc-59 - Session-skill-benchmark-scope.md
 priority: low
 type: bug
 ordinal: 86008
@@ -72,4 +74,8 @@ doc-54 left open why the dependency-edit refusal doc-50 recorded had disappeared
 Dependency edits work: I added a dependency to ACT-134 this run and read it back.
 
 The duplicates themselves are unchanged. act-52, act-53 and act-89 each name both a live card and an archived one, confirmed this run by listing backlog/archive/tasks.
+
+Benchmark impact supplied by João on 2026-09-09, documented in doc-59: the my.files triage-skill report attributes six to eight repair tool calls in each of two sessions to CLI ID collisions, probed there on backlog 1.51.0, and identifies DOT-71 as the related dotfiles issue. These are that report's measurements, not a reproduction in this repository. Its saved benchmark transcripts would be needed to repeat the counts.
+
+This adds a benchmark-cost reason to resolve archived-ID reuse. Keep this card as the owner rather than filing a duplicate. During card creation here, `backlog --version` returned 1.50.1 on 2026-09-09; the earlier notes already describe differing behavior by version. Verify creation/archive and affected dependency edits on the versions at issue in a scratch board before changing the root-cause or priority claims. Priority remains unchanged in this scope-capture session.
 <!-- SECTION:NOTES:END -->
