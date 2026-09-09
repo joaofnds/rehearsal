@@ -1132,5 +1132,21 @@ describe(hashDirectory.name, () => {
 			expect(failure).toBeInstanceOf(SymlinkedEntryError);
 			expect(failure.message).toContain("broken-link");
 		});
+
+		it("says the target is missing for a link that never left the tree, rather than accusing it of resolving outside", async () => {
+			const directory = await mkdtemp(
+				join(tmpdir(), "rehearsal-hash-directory-"),
+			);
+			testResources.track(directory);
+			await symlink(join(directory, "gone.md"), join(directory, "dangle.md"));
+
+			const failure = await failureOf(
+				hashDirectory(directory, "agents", { rootMayBeALink: true }),
+			);
+
+			expect(failure.message).toBe(
+				"agents/dangle.md is a link whose target is missing, so the bytes it names cannot be read",
+			);
+		});
 	});
 });

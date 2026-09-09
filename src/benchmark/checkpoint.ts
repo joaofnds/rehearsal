@@ -91,6 +91,12 @@ function symlinkedEntry(path: string): SymlinkedEntryError {
 	);
 }
 
+function danglingEntry(path: string): SymlinkedEntryError {
+	return new SymlinkedEntryError(
+		`${path} is a link whose target is missing, so the bytes it names cannot be read`,
+	);
+}
+
 async function refuseIfLink(root: string, prefix: string): Promise<void> {
 	const stats = await lstatIfPresent(root);
 	if (stats?.isSymbolicLink() === true) {
@@ -109,9 +115,10 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
  * directory above it, and a link that resolves back inside the tree is followed
  * rather than refused: nothing escapes, and a corpus may link within itself.
  *
- * A link whose target is gone resolves to nothing, so it is refused too: the
- * walk that skipped it would report a lineage as complete while a declared file
- * was never hashed.
+ * A link whose target is gone resolves to nothing, so it is refused too, under
+ * its own message: the walk that skipped it would report a lineage as complete
+ * while a declared file was never hashed, and a reader told it escaped the tree
+ * would go looking for a leak that is not there.
  *
  * `rootMayBeALink` is the caller's answer for the root itself, which `readdir`
  * follows before this walk sees anything. Only a caller that resolved the root
@@ -152,7 +159,10 @@ export async function hashDirectory(
 		}
 
 		const entryStats = await statIfExists(absolute);
-		if (entryStats === undefined || (await resolvesOutside(root, absolute))) {
+		if (entryStats === undefined) {
+			throw danglingEntry(join(prefix, entry));
+		}
+		if (await resolvesOutside(root, absolute)) {
 			throw symlinkedEntry(join(prefix, entry));
 		}
 		if (!entryStats.isFile()) {
