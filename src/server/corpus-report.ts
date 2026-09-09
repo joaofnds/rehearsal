@@ -69,9 +69,12 @@ async function readCountsByPath(
  *
  * One unhashable entry refuses its own layout directory and no other, so the
  * caller gets the directories that hashed whole beside a refusal naming each
- * one that did not. The instruction file is hashed outside that tolerance: a
- * corpus whose CLAUDE.md is not the corpus's own bytes is one the harness
- * cannot identify, rather than a partial corpus to show.
+ * one that did not. The instruction file is inside that tolerance: this report
+ * is what the corpus screen renders, and a refusal naming CLAUDE.md tells the
+ * operator which file broke the corpus, where a thrown error reaches the
+ * screen as "Could not load the corpus." and names nothing. The digest is
+ * withheld either way, so an unidentifiable corpus is never served as an
+ * identified one.
  */
 async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const { root } = source;
@@ -79,10 +82,17 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const refusals: string[] = [];
 
 	if (await Bun.file(join(root, CORPUS_INSTRUCTIONS_PATH)).exists()) {
-		const instructions = await hashCorpusFiles(source, [
-			CORPUS_INSTRUCTIONS_PATH,
-		]);
-		files.push(...instructions.map(({ path, sha256 }) => ({ path, sha256 })));
+		try {
+			const instructions = await hashCorpusFiles(source, [
+				CORPUS_INSTRUCTIONS_PATH,
+			]);
+			files.push(...instructions.map(({ path, sha256 }) => ({ path, sha256 })));
+		} catch (error) {
+			if (!(error instanceof SymlinkedEntryError)) {
+				throw error;
+			}
+			refusals.push(redactAbsolutePaths(error.message));
+		}
 	}
 
 	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {

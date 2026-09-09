@@ -272,17 +272,20 @@ describe(corpusReport.name, () => {
 		const instructions = report.files.find((file) => file.path === "CLAUDE.md");
 		expect(instructions?.readBy).toBe(0);
 	});
-	it("refuses a corpus root whose CLAUDE.md is a symlink to a file outside it", async () => {
+	it("refuses a corpus root whose CLAUDE.md is a symlink to a file outside it, naming it rather than throwing", async () => {
 		const root = await corpusDirectory();
 		const outside = await corpusDirectory();
 		await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
 		await symlink(join(outside, "secret.md"), join(root, "CLAUDE.md"));
 		const runs = await runsDirectory();
 
-		const failure = await failureOf(corpusReport(directorySource(root), runs));
+		const report = await corpusReport(directorySource(root), runs);
 
-		expect(failure).toBeInstanceOf(SymlinkedEntryError);
-		expect(failure.message).not.toContain("SECRET BYTES");
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
+		]);
+		expect(report.digest).toBeUndefined();
+		expect(JSON.stringify(report)).not.toContain("SECRET BYTES");
 	});
 
 	it("reports a root reached through a symlinked parent directory, since the link does not leave the corpus", async () => {
