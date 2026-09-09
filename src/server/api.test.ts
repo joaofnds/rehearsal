@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -33,6 +33,13 @@ function parseSSEFrames(
 		);
 }
 
+const corpusResponseSchema = z.object({
+	root: z.string(),
+	digest: z.string().optional(),
+	files: z.array(z.object({ path: z.string() }).loose()),
+	refusals: z.array(z.string()),
+});
+
 const runHistoryRowSchema = z
 	.object({ run: z.string(), stale: z.boolean() })
 	.loose();
@@ -65,6 +72,13 @@ describe(createApiApp.name, () => {
 			roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
 		);
 	});
+
+	async function emptyDirectory(prefix: string): Promise<string> {
+		const root = await mkdtemp(join(tmpdir(), prefix));
+		roots.push(root);
+
+		return root;
+	}
 
 	async function corpusDirectory(): Promise<string> {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-api-corpus-"));
@@ -170,6 +184,53 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBe(200);
 			expect(body).toMatchObject({ root: corpus });
+		});
+
+		it("serves the files it could hash and names the refusal, rather than failing the screen over one entry", async () => {
+			const corpus = await corpusDirectory();
+			const outside = await emptyDirectory("rehearsal-api-outside-");
+			await writeFile(join(outside, "secret.md"), "secret bytes\n");
+			await mkdir(join(corpus, "agents"), { recursive: true });
+			await symlink(
+				join(outside, "secret.md"),
+				join(corpus, "agents", "escape.md"),
+			);
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/corpus");
+			const body = corpusResponseSchema.parse(await response.json());
+
+			expect(response.status).toBe(200);
+			expect(body.files.map(({ path }) => path)).toEqual([
+				"CLAUDE.md",
+				"skills/build/SKILL.md",
+				"skills/discuss/SKILL.md",
+			]);
+			expect(body.refusals).toEqual([
+				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			]);
+			expect(body.digest).toBeUndefined();
+		});
+
+		it("refuses the whole corpus when CLAUDE.md is itself a link out of the tree, naming it", async () => {
+			const corpus = await emptyDirectory("rehearsal-api-corpus-");
+			const outside = await emptyDirectory("rehearsal-api-outside-");
+			await writeFile(join(outside, "secret.md"), "secret bytes\n");
+			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/corpus");
+			const body = z.object({ error: z.string() }).parse(await response.json());
+
+			expect(response.status).toBe(500);
+			expect(body.error).toContain("CLAUDE.md");
+			expect(body.error).not.toContain("secret bytes");
 		});
 	});
 
