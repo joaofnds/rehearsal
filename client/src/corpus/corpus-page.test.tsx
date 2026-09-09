@@ -104,6 +104,18 @@ describe(CorpusPage.name, () => {
 			);
 		}
 
+		it("says the directory was left out whole, since a refused directory loses the entries that resolve fine", async () => {
+			renderRefusing(corpusResponseBody().files);
+
+			await waitFor(() => {
+				expect(
+					screen.getByText(
+						"These layout directories were left out of the table whole:",
+					),
+				).toBeInTheDocument();
+			});
+		});
+
 		it("renders the files it could hash alongside the refusal, rather than one failure line", async () => {
 			renderRefusing(corpusResponseBody().files);
 

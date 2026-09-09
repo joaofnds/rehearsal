@@ -52,11 +52,14 @@ export function CorpusPage(): React.JSX.Element {
 			) : null}
 
 			{query.isSuccess && query.data.refusals.length > 0 ? (
-				<ul className="rh-corpus__refusals" role="alert">
-					{query.data.refusals.map((refusal) => (
-						<li key={refusal}>{refusal}</li>
-					))}
-				</ul>
+				<div className="rh-corpus__refusals" role="alert">
+					<p>These layout directories were left out of the table whole:</p>
+					<ul>
+						{query.data.refusals.map((refusal) => (
+							<li key={refusal}>{refusal}</li>
+						))}
+					</ul>
+				</div>
 			) : null}
 
 			{query.isSuccess &&

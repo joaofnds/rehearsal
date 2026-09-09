@@ -11,8 +11,12 @@
 }
 
 .rh-corpus__refusals {
-	margin: 0;
-	padding-left: var(--space-5);
 	color: var(--color-text-secondary);
+}
+
+.rh-corpus__refusals ul {
+	margin: var(--space-5) 0 0;
+	padding: 0;
+	list-style: none;
 	font-family: var(--font-mono);
 }
