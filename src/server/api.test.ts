@@ -201,9 +201,11 @@ describe(createApiApp.name, () => {
 			});
 
 			const response = await app.request("/api/corpus");
-			const body = corpusResponseSchema.parse(await response.json());
+			const text = await response.text();
+			const body = corpusResponseSchema.parse(JSON.parse(text));
 
 			expect(response.status).toBe(200);
+			assertNoAbsolutePath(JSON.stringify(body.refusals));
 			expect(body.files.map(({ path }) => path)).toEqual([
 				"CLAUDE.md",
 				"skills/build/SKILL.md",

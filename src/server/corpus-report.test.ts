@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	mkdtemp,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -59,7 +66,7 @@ describe(corpusReport.name, () => {
 	});
 
 	describe("when a layout directory holds a symlink resolving outside the root", () => {
-		async function reportOverEscapingAgents(): Promise<CorpusReport> {
+		async function reportOverEscapingSkills(): Promise<CorpusReport> {
 			const root = await fullCorpusDirectory();
 			const outside = await corpusDirectory();
 			await writeFile(join(outside, "secret.md"), "secret bytes\n");
@@ -67,7 +74,7 @@ describe(corpusReport.name, () => {
 			await writeFile(join(root, "agents", "normal.md"), "an agent\n");
 			await symlink(
 				join(outside, "secret.md"),
-				join(root, "agents", "escape.md"),
+				join(root, "skills", "escape.md"),
 			);
 			const runs = await corpusDirectory();
 			await new RecordedRunsFixture(runs).write();
@@ -75,26 +82,25 @@ describe(corpusReport.name, () => {
 			return corpusReport(directorySource(root), runs);
 		}
 
-		it("reports every file under the layout directories that hashed whole", async () => {
-			const report = await reportOverEscapingAgents();
+		it("reports every file under the layout directories that hashed whole, including one walked after the refusal", async () => {
+			const report = await reportOverEscapingSkills();
 
 			expect(report.files.map(({ path }) => path)).toEqual([
 				"CLAUDE.md",
-				"skills/build/SKILL.md",
-				"skills/discuss/SKILL.md",
+				"agents/normal.md",
 			]);
 		});
 
 		it("names the refused entry without an absolute path", async () => {
-			const report = await reportOverEscapingAgents();
+			const report = await reportOverEscapingSkills();
 
 			expect(report.refusals).toEqual([
-				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+				"skills/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
 			]);
 		});
 
 		it("carries no corpus root digest, since a digest over a partial tree names a corpus nobody holds", async () => {
-			const report = await reportOverEscapingAgents();
+			const report = await reportOverEscapingSkills();
 
 			expect(report.digest).toBeUndefined();
 		});
@@ -128,6 +134,20 @@ describe(corpusReport.name, () => {
 		expect(report.refusals).toEqual([
 			"agents resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
 		]);
+	});
+
+	it("rejects when a layout directory cannot be read at all, rather than reporting the failure as a refusal", async () => {
+		const root = await fullCorpusDirectory();
+		await mkdir(join(root, "agents"), { recursive: true });
+		await writeFile(join(root, "agents", "unreadable.md"), "an agent\n");
+		await chmod(join(root, "agents", "unreadable.md"), 0o000);
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const failure = await failureOf(corpusReport(directorySource(root), runs));
+
+		expect(failure).not.toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("EACCES");
 	});
 
 	it("reports a rulebook file exactly once, not once per list that carries it", async () => {

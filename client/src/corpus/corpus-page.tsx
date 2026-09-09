@@ -42,7 +42,7 @@ export function CorpusPage(): React.JSX.Element {
 			{query.isSuccess ? (
 				<p className="rh-corpus__root">
 					<span>{query.data.root}</span>
-					{query.data.digest === undefined ? null : (
+					{query.data.refusals.length > 0 ? null : (
 						<>
 							<span> · </span>
 							<span>{`corpus root@${query.data.digest}`}</span>

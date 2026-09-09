@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
 import type { apiClient } from "#client/api-client";
@@ -79,21 +79,15 @@ describe(CorpusPage.name, () => {
 
 	describe("when the report carries a refusal", () => {
 		function renderRefusing(files: CorpusResponse["files"]): void {
-			stubFetchByPath(
-				new Map([
-					[
-						"/api/corpus",
-						{
-							root: "/home/user/.claude",
-							digest: undefined,
-							files,
-							refusals: [
-								"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
-							],
-						},
-					],
-				]),
-			);
+			const body: CorpusResponse = {
+				root: "/home/user/.claude",
+				digest: undefined,
+				files,
+				refusals: [
+					"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+				],
+			};
+			stubFetchByPath(new Map([["/api/corpus", body]]));
 			const client = new QueryClient({
 				defaultOptions: { queries: { retry: false } },
 			});
@@ -123,7 +117,9 @@ describe(CorpusPage.name, () => {
 				expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
 			});
 			expect(
-				screen.getByText(/agents\/escape\.md resolves outside the tree/u),
+				within(screen.getByRole("alert")).getByText(
+					/agents\/escape\.md resolves outside the tree/u,
+				),
 			).toBeInTheDocument();
 			expect(screen.queryByText("Could not load the corpus.")).toBeNull();
 		});
