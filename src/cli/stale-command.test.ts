@@ -306,6 +306,44 @@ describe(runStale.name, () => {
 			expect(recorder.stdout).toEqual([]);
 		});
 	});
+	describe("when a corpus layout directory holds a symlink out of the tree", () => {
+		it("prints the records it could derive rather than refusing the whole report", async () => {
+			const corpus = await corpusDirectory("build skill\n");
+			const fixture = await fixtureRecordedAgainst(corpus);
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+			const recorder = recordOutput();
+
+			await runStale(
+				{ corpus, runsDirectory: fixture.runsDirectory },
+				{ output: recorder.output },
+			);
+
+			expect(recorder.stdout.join("")).toContain(
+				`checkpoint:${fixture.replayableRun}/build`,
+			);
+		});
+
+		it("names the entry that could not be hashed as the cause", async () => {
+			const corpus = await corpusDirectory("build skill\n");
+			const fixture = await fixtureRecordedAgainst(corpus);
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+			const recorder = recordOutput();
+
+			await runStale(
+				{ corpus, runsDirectory: fixture.runsDirectory },
+				{ output: recorder.output },
+			);
+
+			expect(recorder.stdout.join("")).toContain("skills/build/escape.md");
+		});
+	});
+
 	it("refuses a corpus whose CLAUDE.md is a symlink out of the root, as a precondition", async () => {
 		const fixture = await fixtureRecordedAgainst(
 			await corpusDirectory("build skill\n"),
