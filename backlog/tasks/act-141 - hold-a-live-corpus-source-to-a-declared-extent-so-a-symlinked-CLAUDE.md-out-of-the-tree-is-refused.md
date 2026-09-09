@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:40'
-updated_date: '2026-09-09 15:40'
+updated_date: '2026-09-09 16:08'
 labels: []
 dependencies: []
 documentation:
@@ -34,4 +34,16 @@ Why it could not ship inside ACT-137: refuseUncontained returns early for kind =
 Doc-58 counted the consumers any change to live containment reaches. Read that section before starting; the calibration.ts call site is synchronous, so making liveCorpusSource() async breaks it.
 
 The symlinked-layout-directory half of the same defect is ACT-134, which depends on ACT-137 and reads the same predicate. ACT-134 and this card are the same question asked on two call paths: this one goes through refuseUncontained, ACT-134's goes through walkDirectory's rootMayBeALink.
+
+AC#2 IS ALREADY STALE, confirmed by the overseeing iterate session, 2026-09-09, independently of the reflection that raised it.
+
+AC#2 pins the live corpus at "122 files, digest c7000b, zero refusals". Measured on this machine after ACT-137 landed:
+
+  files 122 digest 723012 refusals 0
+
+The file count and the refusal count hold; the digest does not. It changed because the corpus itself changed, which is exactly what a live corpus does by design (decision-4: "enumerated and hashed as it is today"). So this criterion fails on a perfectly healthy system, and whoever builds this card meets a red check that indicates nothing wrong.
+
+The intent behind AC#2 is sound and worth keeping: the fix must not empty the live report. The digest is the wrong instrument for it. Rewrite AC#2 as the behavior that survives a corpus edit, for instance: corpusReport(liveCorpusSource()) returns the same file count and zero refusals before and after the change, both measured in the same run. That is checkable under every approach this card leaves open, which a frozen digest is not.
+
+Not rewriting it here, because this card is in To Do and its shaping session owns its criteria. Recorded so that session fixes it rather than inheriting it.
 <!-- SECTION:NOTES:END -->
