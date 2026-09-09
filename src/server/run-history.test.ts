@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
@@ -106,6 +106,65 @@ describe(runHistoryReport.name, () => {
 		);
 		expect(row?.stale).toBe(true);
 		expect(row?.staleCauses.join(" ")).toContain("skills/build/SKILL.md");
+	});
+
+	describe("when a corpus directory holds a symlink out of the tree", () => {
+		it("renders every row it could read rather than failing the report", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const { rows } = await runHistoryReport(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			expect(rows.map(({ run }) => run)).toContain(fixture.replayableRun);
+		});
+
+		it("marks the row stale, naming the entry that could not be hashed", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const { rows } = await runHistoryReport(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			const row = rows.find(
+				(candidate) => candidate.run === fixture.replayableRun,
+			);
+			expect(row?.stale).toBe(true);
+			expect(row?.staleCauses.join(" ")).toContain("skills/build/escape.md");
+		});
+
+		it("names no absolute filesystem path in the row's causes", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory("build skill\n");
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await symlink(
+				join(corpus, "CLAUDE.md"),
+				join(corpus, "skills", "build", "escape.md"),
+			);
+
+			const { rows } = await runHistoryReport(
+				fixture.runsDirectory,
+				directorySource(corpus),
+			);
+
+			expect(
+				rows.flatMap(({ staleCauses }) => staleCauses).join(" "),
+			).not.toContain(corpus);
+		});
 	});
 
 	it("marks a row clean when its latest checkpoint's corpus still matches", async () => {
