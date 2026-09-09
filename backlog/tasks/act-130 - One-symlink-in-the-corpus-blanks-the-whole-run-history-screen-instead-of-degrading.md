@@ -3,11 +3,11 @@ id: ACT-130
 title: >-
   One symlink in the corpus blanks the whole run-history screen instead of
   degrading
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-08 22:41'
-updated_date: '2026-09-09 01:03'
+updated_date: '2026-09-09 01:14'
 labels: []
 milestone: m-5
 dependencies: []
@@ -196,4 +196,23 @@ Observed directly:
 - Planted symlink in corpus layout directory: rehearsal stale exited 0, reporting stale checkpoints and relative causes.
 - Test suite: 1321 tests pass, typecheck, lint, and formatting check clean.
 - Moved to Review.
+
+## Review 2026-09-09 (review-code)
+
+Suite before review: RED, not from this change. Two untracked probe files the
+shaping session left in the repo root (probe130.test.ts, probe130b.test.ts) failed
+lint (4 no-unsafe-type-assertion errors), typecheck (2 TS6133), and fmt:check.
+Deleted them; all four checks now pass: 1321 tests + 100 client DOM tests, exit 0,
+oxlint clean, tsc clean, oxfmt clean. AC #3 and #10 were checked against a tree that
+did not actually pass.
+
+Verified directly this session, not inherited:
+- The three new test files fail against the pre-change subject. Reverted
+  hashedOrRefused to a bare captureStageCorpus in place and ran the three suites:
+  28 of 44 failed, including the CLI exiting 3 with RefusedPreconditionError.
+  Restored. The tests are not independent of their subject.
+- The refusal message leaks neither the corpus root nor the link target. Probed
+  captureStageCorpus against a corpus with agents/escape.md linked to a file in a
+  separate temp dir: message was 'agents/escape.md resolves outside the tree it is
+  named under', containing neither root.
 <!-- SECTION:NOTES:END -->
