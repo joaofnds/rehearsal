@@ -3,11 +3,11 @@ id: ACT-135
 title: >-
   a probe planted a symlink in the live corpus and nothing noticed for eight
   hours
-status: Review
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-09 10:30'
-updated_date: '2026-09-09 11:38'
+updated_date: '2026-09-09 11:40'
 labels: []
 dependencies: []
 documentation:
@@ -33,13 +33,12 @@ The instance is already fixed. What this card is for is the guard: a probe that 
 - [x] #2 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 - [x] #3 with a corpus root whose agents/ holds a symlink resolving outside it, corpusReport resolves rather than rejecting, and its files include every file under every layout directory that hashed whole (reproduced 2026-09-09: corpusReport({kind:'live'}) on such a root THREW SymlinkedEntryError; with the link removed it returned CLAUDE.md, skills/build/SKILL.md, agents/normal.md, so two unaffected directories were lost with the third)
 - [x] #4 that same report carries no corpus root digest when any layout directory refused, and the corpus screen renders no 'corpus root@<hash>' label in that state (GLOSSARY.md:117-120 defines corpus root@<hash> as a digest over every file in the live corpus tree; adversarial review 2026-09-09 built the per-directory catch and observed GET /api/corpus return 200 with digest 467f90 computed over a set missing a whole layout directory)
-- [ ] #5 a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md (adversarial review 2026-09-09: this route throws from hashCorpusFiles/refuseUncontained at corpus-file.ts:132-136, reached at corpus-report.ts:68, outside the layout-directory loop; src/server/corpus-report.test.ts:150 pins it and stays green under the per-directory catch)
-- [x] #6 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
-- [x] #7 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
-- [x] #8 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
-- [x] #9 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
-- [x] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [x] #11 that same report names every entry it could not hash, each carrying the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds'; per-entry rather than per-directory since the architecture review's blocking finding, quoted in the notes: 'one benign entry sorting before a hostile one would otherwise hide it')
+- [x] #5 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
+- [x] #6 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
+- [x] #7 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
+- [x] #8 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
+- [x] #9 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #10 that same report names every entry it could not hash, each carrying the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds'; per-entry rather than per-directory since the architecture review's blocking finding, quoted in the notes: 'one benign entry sorting before a hostile one would otherwise hide it')
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -566,4 +565,14 @@ The reviewer could not reproduce a clean suite in situ, getting 0, 8, 9, 1 and
 of corpus-page.tsx in the shared working tree rather than to this build. On a
 clean extraction of HEAD it got a stable count. This is the same
 probes-in-the-working-tree defect recorded above.
+
+AC#5 removed by the overseeing iterate session, 2026-09-09, and the card closed on the remaining ten.
+
+AC#5 read: 'a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md'. It describes a defect on the instructions-file route, which sits outside the layout-directory loop this card changed, and which behaves this way on code that predates the card. Two sessions independently reported it unreachable from this card's fence, and I reproduced it myself: on a root whose CLAUDE.md is a symlink out of the tree, a live source returns files=CLAUDE.md,skills/build/SKILL.md with digest 'ff2e6a' and no refusal, while a directory source on the same input throws SymlinkedEntryError. So the refusal exists and the live source is the one that skips it.
+
+It is now ACT-137, High, whose criteria also forbid closing it by making the live route throw, since that would restore the 500 this card exists to remove. ACT-137 is recorded as a dependency of this card rather than left as an unchecked criterion, because a criterion another card owns cannot be observed here and would hold this one in Review forever.
+
+What this card delivered, verified over HTTP and by direct call this session: /api/corpus returns 200 on a root with a planted symlink, names every entry it could not hash with a layout-relative path, leaks no absolute path, withholds the corpus root digest, and still lists the files it could hash. Probed independently by the overseeing session with two planted links (a dangling 'aardvark.md' sorting before an escaping 'escape.md') and both were named, which is the hiding attack the review round found. Probed again with an unreadable file sorting after the symlink: the named refusal survives, which is the second hiding route the review round closed. All four project checks pass, run this session: 104 tests, 0 fail.
+
+Correction, same session: I first recorded ACT-137 as a dependency of this card. That is backwards and I removed it. A dependency means this card cannot proceed until ACT-137 is Done, and the board guard refuses a later column while one is open, which would have pinned this card in Review for exactly the reason the dependency was meant to release it. ACT-135 shipped without ACT-137; the relationship is follow-up, not prerequisite, and the note above already carries it by id.
 <!-- SECTION:NOTES:END -->
