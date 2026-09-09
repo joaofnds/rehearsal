@@ -17,29 +17,37 @@ function usableRoots(roots: readonly string[]): readonly string[] {
 }
 
 /**
- * A known root runs to the closing quote when quoted, so a directory name
- * containing a space cannot end the match early. An apostrophe inside the
- * name still does, which is the limit `redactAbsolutePaths` documents. The
- * general alternatives that follow are the net for a root this process cannot
- * read, and they stay anchored to a word boundary (start of string,
- * whitespace, an opening paren, or a quote) so a relative record id or corpus
- * path that merely contains a slash survives, e.g. `checkpoint:.../shape` or
- * `skills/build/SKILL.md`.
+ * Four rules in priority order. A known root is tried first, and when quoted
+ * it runs to the closing quote so a directory name containing a space cannot
+ * end the match early; an apostrophe inside the name still does, which is the
+ * limit `redactAbsolutePaths` documents. The two unknown-root rules are the
+ * net for a root this process cannot read, and they stay anchored to a word
+ * boundary (start of string, whitespace, an opening paren, or a quote) so a
+ * relative record id or corpus path that merely contains a slash survives,
+ * e.g. `checkpoint:.../shape` or `skills/build/SKILL.md`.
+ *
+ * The two known-root rules cannot be collapsed into one running to the closing
+ * quote: an unquoted list of paths would then match as a single run, from the
+ * first root to the end of the line.
  */
 function absolutePathPattern(roots: readonly string[]): RegExp {
 	const known = usableRoots(roots)
 		.map((root) => escapeRegExp(root))
 		.join("|");
-	const general = `(?<=['"\`])\\/[^'"\`\\n]*|(?<=^|[\\s(])\\/[^\\s,)]*`;
 
+	const quotedUnknownRoot = `(?<=['"\`])\\/[^'"\`\\n]*`;
+	const bareUnknownRoot = `(?<=^|[\\s(])\\/[^\\s,)]*`;
 	if (known === "") {
-		return new RegExp(general, "gu");
+		return new RegExp([quotedUnknownRoot, bareUnknownRoot].join("|"), "gu");
 	}
 
+	const quotedKnownRoot = `(?<=['"\`])(?:${known})[^'"\`\\n]*`;
+	const bareKnownRoot = `(?:${known})[^\\s,)'"\`]*`;
+
 	return new RegExp(
-		`(?<=['"\`])(?:${known})[^'"\`\\n]*` +
-			`|(?:${known})[^\\s,)'"\`]*` +
-			`|${general}`,
+		[quotedKnownRoot, bareKnownRoot, quotedUnknownRoot, bareUnknownRoot].join(
+			"|",
+		),
 		"gu",
 	);
 }
