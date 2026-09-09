@@ -4,7 +4,7 @@ title: iterate's ready-queue picker skips any card whose line carries two tags
 status: To Do
 assignee: []
 created_date: '2026-09-09 10:42'
-updated_date: '2026-09-09 10:42'
+updated_date: '2026-09-09 11:41'
 labels:
   - bug
 dependencies: []
@@ -29,3 +29,9 @@ The script lives at ~/.scripts/iterate, which is chezmoi-managed out of ~/code/d
 - [ ] #1 iterate's pick, given a ready-queue listing whose first line carries both a priority tag and a type tag, returns that first line's card id (observed 2026-09-09: the listing led with '[HIGH] [bug] ACT-135 - ...' and pick returned ACT-50, the first single-tag line)
 - [ ] #2 the picker's behavior on a two-tag first line is covered by a check that fails against the current regex (the defect was silent: the wrong pick printed no error and read as a normal iteration start)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Checked 2026-09-09 by the overseeing iterate session: this card is currently both the ready queue's first line and what the defective picker returns, because it carries one tag while ACT-137 above it in creation order carries two. So the next 'iterate start' will pick this card correctly, by luck rather than by the regex working. Do not read that as evidence the defect is gone; the reproduction in the description still holds.
+<!-- SECTION:NOTES:END -->
