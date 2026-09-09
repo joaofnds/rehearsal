@@ -67,10 +67,7 @@ async function readCountsByPath(
 }
 
 const UNHASHABLE_INSTRUCTION_CODES = new Map([
-	[
-		"ELOOP",
-		"is a link whose target is missing, so the bytes it names cannot be read",
-	],
+	["ELOOP", "is a link that never resolves to a file, so it names no bytes"],
 	["EACCES", "cannot be read, so its bytes cannot be hashed"],
 	["EPERM", "cannot be read, so its bytes cannot be hashed"],
 ]);
@@ -94,9 +91,10 @@ interface InstructionsEntry {
  * either as absence would report the corpus as one that has no instruction
  * file, under a digest that says so confidently.
  *
- * A link that does not resolve is refused whether its target is missing, its
- * chain loops, or its bytes cannot be read, since none of them names bytes to
- * hash and each otherwise reaches the screen as a failure that names no file:
+ * A present CLAUDE.md is refused whether its target is missing, its link chain
+ * never resolves, it names a directory, it leaves the corpus root, or its
+ * bytes cannot be read, since none of those names bytes to hash and each
+ * otherwise reaches the screen as a failure that names no file:
  * `redactAbsolutePaths` replaces the only identifying token in an EACCES
  * message with `<path>`.
  */

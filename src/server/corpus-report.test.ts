@@ -323,7 +323,7 @@ describe(corpusReport.name, () => {
 		const report = await corpusReport(directorySource(root), runs);
 
 		expect(report.refusals).toEqual([
-			"Corpus file CLAUDE.md is a link whose target is missing, so the bytes it names cannot be read",
+			"Corpus file CLAUDE.md is a link that never resolves to a file, so it names no bytes",
 		]);
 		expect(report.digest).toBeUndefined();
 	});
