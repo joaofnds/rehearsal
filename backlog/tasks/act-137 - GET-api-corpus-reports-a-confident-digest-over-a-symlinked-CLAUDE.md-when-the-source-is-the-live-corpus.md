@@ -7,7 +7,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 15:34'
+updated_date: '2026-09-09 15:40'
 labels: []
 dependencies: []
 documentation:
@@ -34,16 +34,15 @@ Why the live source is lenient, and why the fix is not just 'refuse here too': ~
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 with a corpus root whose CLAUDE.md is a symlink resolving outside it, corpusReport under a live source refuses rather than returning a report with a digest (reproduced 2026-09-09 on ACT-135: kind:'directory' threw 'Corpus file CLAUDE.md resolves outside the corpus source', kind:'live' on the same root returned digest 641445 over files [CLAUDE.md, skills/build/SKILL.md])
-- [ ] #2 the live corpus still reports its files, since ~/.claude's own layout directories are symlinks into ~/.agents and refusing them would empty every report (measured on ACT-135: corpusReport(liveCorpusSource()) returns 122 files with zero refusals)
-- [ ] #3 against that same root, GET /api/corpus returns 200 carrying a refusal that names CLAUDE.md, not a 500 (adversarial review of ACT-135's record, 2026-09-09: api.ts:76-83 wraps the route in no try/catch, so satisfying AC#1 by throwing would return the 500 that ACT-135 AC#7 exists to eliminate)
-- [ ] #4 the corpus screen against that root renders the refusal naming CLAUDE.md rather than 'Could not load the corpus.' (same review: ACT-135 AC#8 pins that text for the layout-directory case, and this route must not regress it)
-- [ ] #5 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [ ] #6 corpusReport on a directory source whose CLAUDE.md is a symlink to a file outside the root returns a report whose refusals names CLAUDE.md and whose digest is undefined, rather than throwing (reproduced 2026-09-09, tmp-probe/probe5.ts: THREW SymlinkedEntryError before any report was returned)
-- [ ] #7 GET /api/corpus with that source injected through ApiDependencies returns 200 and a body whose refusals names CLAUDE.md (ACT-135 AC#7 exists to eliminate the 500; src/server/api.ts:76-83 wraps the route in no try/catch, read 2026-09-09)
-- [ ] #8 the corpus screen given that report renders text naming CLAUDE.md and does not render 'Could not load the corpus.' (client/src/corpus/corpus-page.tsx:40 pins that text to query.isError, read 2026-09-09)
-- [ ] #9 the live corpus report is unchanged at 122 files, digest c7000b, zero refusals (measured 2026-09-09, tmp-probe/probe1.ts, as a regression guard)
-- [ ] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #1 the live corpus still reports its files, since ~/.claude's own layout directories are symlinks into ~/.agents and refusing them would empty every report (measured on ACT-135: corpusReport(liveCorpusSource()) returns 122 files with zero refusals)
+- [x] #2 against that same root, GET /api/corpus returns 200 carrying a refusal that names CLAUDE.md, not a 500 (adversarial review of ACT-135's record, 2026-09-09: api.ts:76-83 wraps the route in no try/catch, so satisfying AC#1 by throwing would return the 500 that ACT-135 AC#7 exists to eliminate)
+- [x] #3 the corpus screen against that root renders the refusal naming CLAUDE.md rather than 'Could not load the corpus.' (same review: ACT-135 AC#8 pins that text for the layout-directory case, and this route must not regress it)
+- [x] #4 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #5 corpusReport on a directory source whose CLAUDE.md is a symlink to a file outside the root returns a report whose refusals names CLAUDE.md and whose digest is undefined, rather than throwing (reproduced 2026-09-09, tmp-probe/probe5.ts: THREW SymlinkedEntryError before any report was returned)
+- [x] #6 GET /api/corpus with that source injected through ApiDependencies returns 200 and a body whose refusals names CLAUDE.md (ACT-135 AC#7 exists to eliminate the 500; src/server/api.ts:76-83 wraps the route in no try/catch, read 2026-09-09)
+- [x] #7 the corpus screen given that report renders text naming CLAUDE.md and does not render 'Could not load the corpus.' (client/src/corpus/corpus-page.tsx:40 pins that text to query.isError, read 2026-09-09)
+- [x] #8 the live corpus report is unchanged at 122 files, digest c7000b, zero refusals (measured 2026-09-09, tmp-probe/probe1.ts, as a regression guard)
+- [x] #9 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -147,4 +146,18 @@ What this does NOT decide: whether a refusal or some weaker signal is right when
 OBSERVED BY THE SAME SESSION, a cost doc-58 did not weigh, for whoever builds Change B. The instruction file's placement outside the layout loop's try/catch is deliberate and documented, not an oversight. src/server/corpus-report.ts:70-74 reads: "The instruction file is hashed outside that tolerance: a corpus whose CLAUDE.md is not the corpus's own bytes is one the harness cannot identify, rather than a partial corpus to show."
 
 Change B reverses that stated intent. AC#3 and AC#4 on this card override it, and I verified the placement is as doc-58 describes (the hash at lines 81-86 sits above the try at line 92), so the change is still right. But the builder is changing a documented decision rather than fixing an oversight, and the comment must be rewritten to say why a named refusal now beats an unidentifiable corpus. Leaving that comment standing beside the opposite behavior is the defect this note exists to prevent.
+
+BUILT 2026-09-09. Four commits: 68681af (the fix), ec2eb0e (the API test), ae65699 and 5006b6c (the client copy).
+
+WHAT CHANGED. hashCorpusLayout's instruction-file hash now sits inside the same try/catch the layout loop already used, so a SymlinkedEntryError on CLAUDE.md becomes a refusal string instead of reaching app.onError as a 500. corpusReport already withholds the digest whenever refusals is non-empty, so no other change was needed for the digest half. The comment above hashCorpusLayout, which argued the opposite ('a corpus whose CLAUDE.md is not the corpus's own bytes is one the harness cannot identify'), was rewritten to say why a named refusal now beats an unidentifiable corpus, as the previous session's note required.
+
+The client's refusal block claimed 'their layout directory is missing from the table whole', which is false for CLAUDE.md. It now reads 'These entries could not be hashed, so they are missing from the table, and a refused layout directory is missing from it whole:'. Branching on the refusal's kind was rejected: the report carries refusals as opaque strings, so the client would have to parse a message to recover a kind the server already knows.
+
+AC#1 REMOVED FROM THIS CARD, moved to ACT-141. It read: 'with a corpus root whose CLAUDE.md is a symlink resolving outside it, corpusReport under a live source refuses rather than returning a report with a digest'. It is quoted here so whoever wrote it can correct the move. It was removed because it is the extent-dependent half doc-58 fenced off: refuseUncontained returns early for kind === 'live', and removing that exemption without the declared extent empties every live report, contradicting the criterion directly beside it. ACT-134 now depends on ACT-141 as well as this card.
+
+WHAT I OBSERVED, all this session. Ran the real HTTP server with a directory source pointed at a root whose CLAUDE.md symlinks to /tmp/act137-outside/secret.md: GET /api/corpus returned status 200, body refusals ['Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold'], no digest field, and the string 'SECRET BYTES' nowhere in the response. Rendered CorpusPage against that captured server body in happy-dom: the alert read 'These entries could not be hashed, so they are missing from the table, and a refused layout directory is missing from it whole:Corpus file CLAUDE.md resolves outside the corpus source...' and 'Could not load the corpus.' was absent. Ran corpusReport against the live install: 122 files, digest c7000b, zero refusals. Full suite 1346 + 106 pass 0 fail; lint, typecheck and fmt:check clean.
+
+WHAT I DID NOT OBSERVE. The screen in a real browser. No Chrome, Chromium, Playwright or Puppeteer is installed on this machine, so the closest evidence is the component rendered in happy-dom against the running server's own response body rather than a hand-written stub. The bundle served by client/dist was rebuilt and served, but never painted by a browser engine.
+
+TDD NOTE, honestly. The corpusReport test was red first, by throwing, as predicted. The API test was written after the fix and passed immediately; I reverted the fix and re-ran to confirm it fails without it, so it guards the route rather than passing vacuously. The client copy test was red first. The second client test (a refusal naming the instruction file) passed on writing, because the component renders any refusal string.
 <!-- SECTION:NOTES:END -->
