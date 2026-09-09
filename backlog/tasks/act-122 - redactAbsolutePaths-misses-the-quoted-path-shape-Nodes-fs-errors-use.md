@@ -1,11 +1,11 @@
 ---
 id: ACT-122
 title: redactAbsolutePaths misses the quoted path shape Node's fs errors use
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-08 16:09'
-updated_date: '2026-09-09 13:32'
+updated_date: '2026-09-09 13:46'
 labels: []
 dependencies: []
 documentation:
@@ -17,12 +17,13 @@ ordinal: 118008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A real Node fs error naming a missing file under a temp directory is redacted so the temp root is absent from the output, observed by creating the directory, reading the missing file, and passing the thrown message through the redactor
-- [ ] #2 The same observation holds when the temp directory's name contains a space, and when it contains an apostrophe
-- [ ] #3 A message naming an absolute path under no known root (for example a target repository at /srv/x) still comes back with that path replaced, observed by passing 'failed at /srv/target-repo/x.md' through the redactor
-- [ ] #4 A two-path fs error (ENOENT rename 'a' -> 'b') comes back with both paths replaced and both closing quotes still present, observed by passing that message through the redactor
-- [ ] #5 A relative record id or corpus path containing a slash is left intact, observed on checkpoint:<ts>/shape, skills/build/SKILL.md, cases/act-1/case.json and agents/escape.md
-- [ ] #6 Each of the five route-level leak assertions in src/server/api.test.ts goes red when the concrete secret that test planted is inserted unredacted into the body under test, observed one site at a time; at api.test.ts:208 the secret is the symlink target directory, not the corpus root, which that file's line 188 asserts is deliberately public
+- [x] #1 A real Node fs error naming a missing file under a temp directory is redacted so the temp root is absent from the output, observed by creating the directory, reading the missing file, and passing the thrown message through the redactor
+- [x] #2 The same observation holds when the temp directory's name contains a space, and when it contains an apostrophe
+- [x] #3 A message naming an absolute path under no known root (for example a target repository at /srv/x) still comes back with that path replaced, observed by passing 'failed at /srv/target-repo/x.md' through the redactor
+- [x] #4 A two-path fs error (ENOENT rename 'a' -> 'b') comes back with both paths replaced and both closing quotes still present, observed by passing that message through the redactor
+- [x] #5 A relative record id or corpus path containing a slash is left intact, observed on checkpoint:<ts>/shape, skills/build/SKILL.md, cases/act-1/case.json and agents/escape.md
+- [x] #6 Every route-level leak assertion in src/server/api.test.ts goes red when redactAbsolutePaths is replaced by the identity function, observed one site at a time; an assertion the route cannot make red is removed rather than kept
+- [x] #7 A relative record id and a relative corpus path survive unchanged when the process reports a root of / or an empty string, observed by building the redactor against those roots
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -256,4 +257,60 @@ than a category.
 Not verified by either reviewer: the triage claim about the iterate picker and
 ACT-136, which concerns a script outside this repository. It stands as triage
 recorded it.
+
+## Built 2026-09-09
+
+Three commits on main: 95acb4c (the redactor), ac05856 (its tests), fcc1a49 (the api.test.ts detector).
+
+The pick from the shaped section landed unchanged: known roots first, then the quoted general alternative, then the original anchored one. One deviation, forced by oxlint's unicorn(no-array-callback-reference): the roots list maps through an arrow rather than passing escapeRegExp by reference.
+
+Red observed before the fix on the card's first-test string. The four behavioural tests were then checked against the pre-fix module by restoring 95acb4c^:src/server/redact-path.ts over the working file: all five fail there, all pass on the fix. The /srv case and the relative-path cases pass both ways, which is correct for regression guards.
+
+Each of the five api.test.ts sites was probed one at a time by inserting its planted secret unredacted into the body under test: each went red, and only that one.
+
+Full suite: 1341 pass / 0 fail, plus 105 client tests. Runtime observation: a route throwing a real ENOENT under $HOME returned 500 with {"error":"ENOENT: no such file or directory, open '<path>'"}.
+
+## Review 2026-09-09
+
+Six unprimed reviewers (spec, style, architecture, security, testing, refactoring). Suite before the round: 1341 server pass / 0 fail, 105 client pass / 0 fail. Every axis ran; none skipped.
+
+### Blocking, fixed
+
+1. The three real-fs-error tests asserted `not.toContain(root)`, which a partial redaction also satisfies. Verified by deleting the quoted-known-root alternative, the whole of what commit 95acb4c added: suite stayed green. They now assert the exact output, and deleting any one of the four alternatives or the root guard fails a named test. Commit 38a29d6.
+
+2. A degenerate root destroys every relative path. `tmpdir()` follows TMPDIR and `homedir()` is / for root in many container images. Reproduced: `TMPDIR=/ ...` turned 'skills/build/SKILL.md' into 'skills<path>'. An empty root is worse, replacing at every position. Roots shorter than a directory under / are now dropped. Commit 38a29d6. Found by four reviewers independently.
+
+### Should-fix, fixed
+
+3. api.test.ts:208 could not fail. The symlink refusal is built from the corpus-relative entry path in checkpoint.ts, and hashCorpusLayout always passes a non-empty prefix, so the target directory never enters the response. Verified: with redactAbsolutePaths replaced by the identity function, four sites went red and 208 stayed green. Removed; the toEqual three lines below pins the full refusal text and is strictly stronger. Commit 851be89. Found by five reviewers.
+
+   This departs from AC#6, which named the symlink target as that site's secret. The route cannot carry it, so the criterion as written could not be met by any assertion at that site. Rewritten as behavior below.
+
+4. My comment claimed the known-root anchor closed the apostrophe case, and the docstring scoped the fragment leak to unknown roots. Both false: '<home>/Bob's Projects/x' leaves ''s Projects/x'. Corrected, and the case is now asserted as what it is. Commit 38a29d6.
+
+5. The test helpers leaked a temp directory per call, none removed. 98 had accumulated. afterEach cleanup added, matching api.test.ts. Commit 38a29d6.
+
+6. Extract Variable on the four-alternative regex: the priority order is now a named list rather than a concatenation under a seven-line comment. Commit 8dd5e65.
+
+### Notes, no action
+
+- Over-redaction in the safe direction, all reproduced: a known root matches as a prefix of a longer directory ('/Users/joaofndsx/y' -> '<path>'), a known root matches mid-token ('prefix<home>/x' -> 'prefix<path>'), and any quoted run starting with / is consumed ('regex '/^abc$/'' -> 'regex '<path>''). No caller produces these shapes, and none leaks.
+- '/private'-prefixed realpaths leave '/private' behind in the 'path=' shape the card already records as out of reach.
+- Absolute paths after '=', '[' or a bare comma under an unknown root remain unredacted, as the card's options survey records.
+- ROOTS is captured at module load, so a TMPDIR set after import is invisible. No caller sets it; src/benchmark/backlog.ts has the same shape.
+- ReDoS and quote injection through a caller-supplied record id both probed clean by two reviewers.
+
+### Final state
+
+Suite: 1346 server pass / 0 fail, 105 client pass / 0 fail. Lint, typecheck, fmt clean.
+
+Runtime observation on live routes: a 500 from a real ENOENT under $HOME returns {"error":"ENOENT: no such file or directory, open '<path>'"}; under $HOME/Bob's diary it returns '<path>'s diary/secret.md'; a 404 for a missing record returns 'No record run:no-such-run at <path>'. No home directory in any body.
+
+AC#6 was rewritten this session. The original named the symlink target directory as api.test.ts:208's secret; five reviewers and my own probe showed the route builds that refusal from the corpus-relative entry path, so no assertion at that site can go red on a redactor defect. The rewrite states the behavior instead: every remaining leak assertion dies under an identity redactor, verified. AC#7 is new, from the degenerate-root defect the review found.
+
+Handoff. What changed: redactAbsolutePaths now anchors on homedir() and tmpdir() before falling back to the two general alternatives, drops a root of / or an empty string, and its tests assert exact outputs rather than an absence. api.test.ts asserts the concrete planted secret at four sites.
+
+What became possible but is not wired up: redactorFor(roots) is exported so a caller can build a redactor against roots it names. Only the tests use it; the nine production call sites all go through redactAbsolutePaths, which is unchanged in signature.
+
+Not verified: behavior under any HOME or TMPDIR besides this machine's and the two degenerate values probed. The card's triage claim about the iterate picker and ACT-136 concerns a script outside this repository and was not checked this session.
 <!-- SECTION:NOTES:END -->
