@@ -1,10 +1,11 @@
 ---
 id: ACT-136
 title: iterate's ready-queue picker skips any card whose line carries two tags
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-09 10:42'
-updated_date: '2026-09-09 13:13'
+updated_date: '2026-09-09 14:57'
 labels:
   - bug
 dependencies: []
@@ -28,8 +29,8 @@ The script lives at ~/.scripts/iterate, which is chezmoi-managed out of ~/code/d
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 iterate's pick, given a ready-queue listing whose first line carries both a priority tag and a type tag, returns that first line's card id (observed 2026-09-09: the listing led with '[HIGH] [bug] ACT-135 - ...' and pick returned ACT-50, the first single-tag line)
-- [ ] #2 the picker's behavior on a two-tag first line is covered by a check that fails against the current regex (the defect was silent: the wrong pick printed no error and read as a normal iteration start)
+- [x] #1 iterate's pick, given a ready-queue listing whose first line carries both a priority tag and a type tag, returns that first line's card id (observed 2026-09-09: the listing led with '[HIGH] [bug] ACT-135 - ...' and pick returned ACT-50, the first single-tag line)
+- [x] #2 the picker's behavior on a two-tag first line is covered by a check that fails against the current regex (the defect was silent: the wrong pick printed no error and read as a normal iteration start)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -64,4 +65,12 @@ Bet, 2026-09-09: picked first from the ready queue by iterate. The newest triage
 Overseeing note, 2026-09-09, iterate run. The picker defect was reproduced live at the start of this run, not relayed: 'backlog task list --ready --sort priority --plain' led with '[HIGH] [bug] ACT-122 - ...' and 'iterate start' printed ACT-136. So this is the second consecutive run where the picker's answer and the board's first line diverge, and this run it is a two-tag line being skipped rather than a lucky agreement.
 
 This card stays blocked behind the hard line on editing a script outside this repository. The overseeing session stepped ACT-122 instead, the queue's true first line. The queued command in the notes above is unchanged and still the action whoever authorizes it should run.
+
+Landed 2026-09-09 as dotfiles c7b9e843, applied to ~/.scripts/iterate with 'chezmoi apply'.
+
+The tag portion of queuePattern is now a repeated group, /^\s*(?:\[\w+\]\s*)*([A-Z]+-[0-9]+(?:\.[0-9]+)?) - /m, so a line with any number of bracketed tags matches and a tagless line still does.
+
+AC#1 verified on the live board's own text, not a synthetic string: with the real ready listing reordered to lead with '[HIGH] [bug] ACT-137 - ...', the old pattern returns ACT-136 and the new one returns ACT-137.
+
+AC#2 is 'the queue's first card is picked when its line carries a priority tag and a type tag' in scripts/test-iterate.test.js, registered in check-all.sh. Restoring the old regex fails that test and only that test. The fake backlog's queue line moved into the fixture so a test can set its tags. Full check-all.sh: 6 passed, 0 failed.
 <!-- SECTION:NOTES:END -->

@@ -1,10 +1,11 @@
 ---
 id: ACT-139
 title: iterate reports a reflect step as successful when the stage produced nothing
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-09 11:41'
-updated_date: '2026-09-09 13:11'
+updated_date: '2026-09-09 14:57'
 labels:
   - bug
 dependencies: []
@@ -28,8 +29,8 @@ The script lives at ~/.scripts/iterate, chezmoi-managed out of ~/code/dotfiles, 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 a reflect session that produces no document, no commit and no card note makes iterate step exit non-zero rather than printing '<card> is Done' and exiting 0 (observed 2026-09-09 on ACT-135: a 1-turn reflect session emitting only its rule-file announcement was reported as success)
-- [ ] #2 a reflect session that does produce its reflection still exits 0, so the guard does not block the normal path (the reflect stages recorded in backlog/docs as reflection-ACT-*.md are the shape it must accept)
+- [x] #1 a reflect session that produces no document, no commit and no card note makes iterate step exit non-zero rather than printing '<card> is Done' and exiting 0 (observed 2026-09-09 on ACT-135: a 1-turn reflect session emitting only its rule-file announcement was reported as success)
+- [x] #2 a reflect session that does produce its reflection still exits 0, so the guard does not block the normal path (the reflect stages recorded in backlog/docs as reflection-ACT-*.md are the shape it must accept)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -46,4 +47,12 @@ Queued command for whoever authorizes it: in the Done branch, assert the reflect
 Note for whoever builds ACT-136 and this one together: they are the same file and the same function's neighborhood, so one sitting is cheaper than two. They are separate outcomes and neither depends on the other, so no dependency is recorded.
 
 Triage correction, 2026-09-09 (doc-56), after review: this card is excluded from the selectable queue as externally blocked, for the same reason as ACT-136. Both are queued for authorization rather than for work, and the recommendation is to authorize the pair in one sitting since they are the same file.
+
+Landed 2026-09-09 as dotfiles c7b9e843, applied to ~/.scripts/iterate with 'chezmoi apply'.
+
+step's Done branch now calls refuseSilentReflection after refuseWorkLeftBehind. It compares the card's text across the reflect session, the same observable runCard already used for a stage that moved no column, and exits 1 with 'the reflect stage wrote nothing on <card>'.
+
+AC#1 is 'step on a Done card whose reflect wrote nothing exits non-zero'; deleting the guard call fails that test and only that test. AC#2 is 'step on a Done card whose reflect wrote its reflection exits 0'.
+
+One thing the fix exposed: two existing Done-branch tests were passing a reflect that writes nothing, so they had been green on exactly the shape this guard rejects. They assert other behavior, so they now run a reflect that writes. Full check-all.sh: 6 passed, 0 failed.
 <!-- SECTION:NOTES:END -->
