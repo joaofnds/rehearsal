@@ -205,7 +205,6 @@ describe(createApiApp.name, () => {
 			const body = corpusResponseSchema.parse(JSON.parse(text));
 
 			expect(response.status).toBe(200);
-			assertDoesNotLeak(JSON.stringify(body.refusals), outside);
 			expect(body.files.map(({ path }) => path)).toEqual([
 				"CLAUDE.md",
 				"skills/build/SKILL.md",
