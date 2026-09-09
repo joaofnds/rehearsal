@@ -7,7 +7,7 @@ status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-09 10:30'
-updated_date: '2026-09-09 11:17'
+updated_date: '2026-09-09 11:38'
 labels: []
 dependencies: []
 documentation:
@@ -32,14 +32,14 @@ The instance is already fixed. What this card is for is the guard: a probe that 
 - [x] #1 a session probe that writes into the live corpus tree is prevented, or detected and reported, rather than silently leaving the live corpus unreadable (observed 2026-09-09: ~/.claude/agents/escape.md, a symlink to /tmp/stale-out-8nUK/secret.md dated Sep 9 02:43, made corpusReport(liveCorpusSource()) throw SymlinkedEntryError; removed by triage 2026-09-09)
 - [x] #2 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 - [x] #3 with a corpus root whose agents/ holds a symlink resolving outside it, corpusReport resolves rather than rejecting, and its files include every file under every layout directory that hashed whole (reproduced 2026-09-09: corpusReport({kind:'live'}) on such a root THREW SymlinkedEntryError; with the link removed it returned CLAUDE.md, skills/build/SKILL.md, agents/normal.md, so two unaffected directories were lost with the third)
-- [x] #4 that same report carries a named refusal for each layout directory it could not hash, naming the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds')
-- [x] #5 that same report carries no corpus root digest when any layout directory refused, and the corpus screen renders no 'corpus root@<hash>' label in that state (GLOSSARY.md:117-120 defines corpus root@<hash> as a digest over every file in the live corpus tree; adversarial review 2026-09-09 built the per-directory catch and observed GET /api/corpus return 200 with digest 467f90 computed over a set missing a whole layout directory)
-- [ ] #6 a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md (adversarial review 2026-09-09: this route throws from hashCorpusFiles/refuseUncontained at corpus-file.ts:132-136, reached at corpus-report.ts:68, outside the layout-directory loop; src/server/corpus-report.test.ts:150 pins it and stays green under the per-directory catch)
-- [x] #7 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
-- [x] #8 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
-- [x] #9 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
-- [x] #10 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
-- [x] #11 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #4 that same report carries no corpus root digest when any layout directory refused, and the corpus screen renders no 'corpus root@<hash>' label in that state (GLOSSARY.md:117-120 defines corpus root@<hash> as a digest over every file in the live corpus tree; adversarial review 2026-09-09 built the per-directory catch and observed GET /api/corpus return 200 with digest 467f90 computed over a set missing a whole layout directory)
+- [ ] #5 a corpus root whose CLAUDE.md is itself a symlink resolving outside it still makes GET /api/corpus refuse rather than reporting a partial corpus, and the refusal names CLAUDE.md (adversarial review 2026-09-09: this route throws from hashCorpusFiles/refuseUncontained at corpus-file.ts:132-136, reached at corpus-report.ts:68, outside the layout-directory loop; src/server/corpus-report.test.ts:150 pins it and stays green under the per-directory catch)
+- [x] #6 GET /api/corpus against the AC#1 root returns 200 rather than the 500 app.onError produces today (observed 2026-09-09: /api/corpus has no try/catch at api.ts:76-83, so SymlinkedEntryError reaches app.onError, which returns 500)
+- [x] #7 the corpus screen against the AC#1 root renders the files it could hash and each refusal's text, instead of only 'Could not load the corpus.' (corpus-page.tsx:40 renders that single line on any error today)
+- [x] #8 the corpus screen against a root where every layout directory refused renders the refusals rather than the 'No corpus files found' empty state (adversarial review 2026-09-09 built the design and observed files: 0 with one refusal render corpus-page.tsx:50-58's empty state, whose body tells the operator to add a CLAUDE.md)
+- [x] #9 a dangling symlink under a layout directory, whose target is inside the root but missing, is reported as a link whose target is missing rather than as one resolving outside the tree (adversarial review 2026-09-09: checkpoint.ts:154-157 throws the escape message for entryStats === undefined, so agents/dangle.md -> <root>/gone.md surfaced 'resolves outside the tree it is named under' on a link that never escaped)
+- [x] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #11 that same report names every entry it could not hash, each carrying the layout-relative path and no absolute path (the message corpusReport already throws, observed 2026-09-09: 'agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds'; per-entry rather than per-directory since the architecture review's blocking finding, quoted in the notes: 'one benign entry sorting before a hostile one would otherwise hide it')
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -386,4 +386,184 @@ EVIDENCE FOR THE TEN CHECKED, all observed this session:
 #2, #11: bun run test 1332 server tests across 85 files and 104 client tests across 18 files, zero failures; lint, typecheck and fmt:check each exit 0 on 295 files.
 
 WHAT BECAME POSSIBLE AND IS NOT WIRED UP: walkDirectory now exists beside hashDirectory, returning every refusal rather than the first. Only corpusReport uses it. The five callers that refuse a whole tree on any refusal (session-lineage.ts:33, checkpoint.ts:284/296/305/686) still take hashDirectory and are unchanged. captureStageCorpus still throws on input the corpus screen now degrades on, which ACT-135's shaping declared out of scope and remains so.
+
+REVIEW ROUND 2, 2026-09-09, run by the /review skill after the build's own round.
+
+WHY A SECOND ROUND: the build's recorded round ends with 'The reviewer read HEAD
+rather than the patch it was given, which by then was three commits stale.' So
+7d767e7 (the architecture fix) and ea3dc86 (the doc move) had never been read by
+an unprimed reviewer. This round reviewed exactly those two commits,
+git diff 9b9399f..HEAD, with four axes: spec, style, architecture, testing.
+The card record itself went to adversarial-review as a document.
+
+TWO DEFECTS FOUND, BOTH FIXED AND COMMITTED.
+
+BLOCKING-CLASS, fixed in c6dfb08. Three axes found this independently (spec,
+style, architecture), which is why it is first. Because the walk no longer stops
+at the offending entry, it now reaches entries the old fail-fast walk never
+visited. An unreadable file among them raises EACCES, which escaped and
+discarded the refusal already collected. I reproduced it rather than relaying
+it: a directory holding agents/aaa-escape.md (escaping symlink) and
+zzz-locked.md (mode 000). At HEAD hashDirectory threw
+'EACCES: permission denied, lstat /tmp/eaccesprobe/walked/zzz-locked.md';
+against git show 9b9399f the same input threw the SymlinkedEntryError naming
+agents/aaa-escape.md. So this is change-introduced, not pre-existing.
+
+Two costs. The reader gets an absolute filesystem path where the refusal carries
+a redacted layout-relative one, and /api/corpus returns 500 again on the very
+input the per-directory degradation exists to serve. Worse, which of the two a
+caller saw turned on sort order, so planting an unreadable file after a symlink
+hid the escape. That is the same hiding attack 7d767e7 was written to close,
+one mechanism over.
+
+Fix: a refusal already collected outranks an error raised later in the walk.
+An unreadable directory still fails the whole walk, since a directory nobody
+can hash is not a partial corpus to display; only the precedence changed. The
+existing policy test at corpus-report.test.ts:164 stays green, which is what
+confirms the policy was preserved rather than overturned. New test at :178
+fails without the fix and passes with it, verified both ways.
+
+SHOULD-FIX, fixed in 033c419, found by the testing axis and reproduced by me.
+The client rendered refusals correctly but nothing pinned it. The only client
+fixture carrying refusals held ONE entry, so no test could distinguish
+'renders every refusal' from 'renders refusals[0]'. I applied the mutant
+(.slice(0, 1) on the map at corpus-page.tsx:61) and ran the full suite: 1332
+server + 104 client, ZERO failures. The mutant survived everything. That mutant
+reproduces the ACT-135 attack exactly, at the layer the card names as the
+detection mechanism. New test seeds two refusals and asserts both list items
+render; it fails under the mutant and passes at HEAD.
+
+NOT A DEFECT, evidence recorded.
+
+AC#6's disposition is CORRECT, and I verified it independently rather than
+taking the record's word. Against a root whose CLAUDE.md is a symlink to an
+outside file: kind:'live' returned digest 9bb616 over
+[CLAUDE.md, skills/build/SKILL.md, agents/normal.md]; kind:'directory' threw
+'Corpus file CLAUDE.md resolves outside the corpus source'. serve.ts:53 wires
+liveCorpusSource(), so the operator's route is the one that yields a confident
+digest over bytes the corpus does not hold. Pre-existing, not this card's:
+git diff e26b59e^..HEAD -- src/benchmark/corpus-file.ts is EMPTY, so the live
+exemption this rests on was untouched by this card. ACT-137 correctly carries it.
+
+The descendant-skip does what its comment claims. Probed a root whose
+agents/evil/link is a symlink to an outside directory holding secret.md:
+refusals named 'agents/evil/link' only, and the outside filename never appeared
+in files or refusals.
+
+hashDirectory's five other callers are genuinely unchanged. Probed at clean
+HEAD: hashDirectory still throws the first refusal. An earlier probe of mine
+suggested otherwise; it was measuring a reviewer's live mutation of the working
+tree, not HEAD, and is void.
+
+NOTES, no action.
+
+The refusal list served to the browser is unbounded: n planted strays yield n
+refusals, n list items, and an O(n squared) prefix scan. Raised by architecture
+and testing. Not fixed: whoever writes into ~/.claude already has the
+filesystem access the card is about, the messages are redacted, and the outcome
+is a degraded screen rather than disclosure. Recorded so a cap is a decision
+someone makes on purpose rather than by omission.
+
+The refusal heading on the corpus screen says 'their layout directory'
+(singular) over a list that can hold refusals from several directories at once,
+since hashCorpusLayout flattens all four layout directories into one array.
+Raised by style and architecture. The previous wording had the opposite
+mismatch, which 7d767e7 fixed. Not fixed here: it is a wording call on
+operator-facing copy, and no client test covers the two-directory render.
+
+AC#4's wording ('a named refusal for each layout directory it could not hash')
+is now stale: refusals are per-entry, not per-directory. The card's own notes
+authorize the change at the architecture-fix section, and the B2 invariant it
+protected is intact (a refusing directory still contributes zero files, and the
+digest is still withheld). Recording it so the criterion is not read literally
+on the next pass.
+
+hashDirectory's doc block no longer carries the rootMayBeALink contract, which
+moved to walkDirectory with the rest of the explanatory block. All five callers
+that must choose that flag call hashDirectory. Raised by architecture. Not
+fixed: it is a comment-placement judgment on a function this round already
+changed once, and moving prose twice in one day serves nobody.
+
+CHECKS AT THE END, run by me after both fixes: bun run test 1333 server tests
+across 85 files and 105 client tests across 18 files, zero failures; lint,
+typecheck and fmt:check each exit 0 on 295 files. fmt:check failed once before
+the format pass and passes now.
+
+PROCESS DEFECT WORTH THE CARD'S ATTENTION, given what this card is about.
+Reviewers running mutation probes wrote into the repository working tree:
+src/benchmark/scratch-ck.ts, src/benchmark/probe1.test.ts and costprobe.ts all
+appeared in the repo root or under src/ during the round, and checkpoint.ts and
+corpus-page.tsx carried live mutations while other sessions read them. Each was
+cleaned up by its author, and the tree is clean now. Two of my own probe
+measurements were invalidated by reading a file another agent was mutating.
+This is the same class of leftover ACT-135 was filed about, one directory over,
+and it is the second instance. The prevention half already queued on this card
+(a PreToolUse hook denying writes under ~/.claude and ~/.agents) does not cover
+the repository working tree.
+
+REVIEW ROUTING, per the /review skill: the code and configuration went to
+review-code (four axes above); the card record went to adversarial-review as a
+document. No instruction file was touched, so review-instructions did not run.
+
+ADVERSARIAL REVIEW OF THIS RECORD, 2026-09-09, run by the /review skill.
+An unprimed reviewer was given the card, ACT-137, and the code, and told to
+red-team the record as an argument and as a record. Verdict in its words: 'the
+record's factual spine holds up. Every claim I could check by command checked
+out, including the two I most expected to break (the AC#6 pre-existence
+argument and the live-corpus 122-file measurement). The defects I found are in
+the record's wording and internal consistency, not in its facts or in the
+shipped code.'
+
+ACTED ON, and this was the round's most valuable finding. In the reviewer's
+words: 'Whoever takes ACT-137 could satisfy ACT-137's AC#1 ("refuses rather
+than returning a report with a digest") by making live throw too, and thereby
+ship a 500 on the corpus screen - reintroducing exactly the outage ACT-135
+exists to prevent. ACT-137 has no criterion forbidding that.' Confirmed against
+the code: api.ts:76-83 wraps /api/corpus in no try/catch, so anything
+corpusReport throws becomes a 500. ACT-137 now carries two more criteria, a 200
+with a refusal naming CLAUDE.md and the screen rendering it, with the reasoning
+in its notes.
+
+ACTED ON: AC#4's wording was stale. It said 'a named refusal for each layout
+directory it could not hash' while 7d767e7 shipped one refusal per entry. The
+reviewer reproduced the mismatch and so did the spec axis. Rewritten to the
+per-entry behavior with the architecture finding quoted beside it, per the
+board's rule that a criterion must stay checkable against what shipped. The
+CLI's --ac flag appends rather than replaces, so the rewrite landed as the last
+criterion and the list renumbered: the undelivered CLAUDE.md criterion, cited
+throughout this record as AC#6, is now AC#5, and it is the only unchecked one.
+Ten of eleven checked, unchanged in substance.
+
+NOT ACTED ON, recorded with the reviewer's evidence.
+
+The record contradicts itself on the second-stray limit without saying so. Two
+earlier sections call the first-offender-only limit an accepted consequence
+costing 'one extra reload per stray'; the architecture section later overturns
+it as 'a defeat of the card's own purpose, not a cost'. The reversal is what
+the code does. Left standing because the sections are dated and ordered and the
+correction convention is already established in this record, but a reader going
+top to bottom meets the wrong answer twice before the right one.
+
+Several file:line citations in this record are stale at HEAD, having moved
+during the build: corpus-file.ts:132-136 is now :131-135, checkpoint.ts:154-157
+and :88-91 now land in doc comment rather than code, corpus-report.ts:68 is now
+:75-82. The claims they support are correct; the pointers are one edit behind.
+
+Redaction is best-effort, not total. redactAbsolutePaths anchors on
+(?<=^|[\s(]), so the reviewer showed 'prefix/Users/joaofnds/secret.md' passes
+through unredacted. No live leak, since refusal messages are always built as
+join(prefix, entry) with a non-empty prefix, but this record's security section
+overclaims by saying the invariant was removed rather than narrowed.
+
+Refusal text is attacker-chosen and reaches the operator's browser. The
+reviewer probed a symlink named with an img/onerror payload and confirmed it
+arrives in the response body, then confirmed the dismissal is earned:
+corpus-page.tsx renders it as a text child, and grep finds no
+dangerouslySetInnerHTML anywhere in client/src.
+
+The reviewer could not reproduce a clean suite in situ, getting 0, 8, 9, 1 and
+0 failures across five runs, and traced it to a concurrent session's mutation
+of corpus-page.tsx in the shared working tree rather than to this build. On a
+clean extraction of HEAD it got a stable count. This is the same
+probes-in-the-working-tree defect recorded above.
 <!-- SECTION:NOTES:END -->
