@@ -53,7 +53,10 @@ export function CorpusPage(): React.JSX.Element {
 
 			{query.isSuccess && query.data.refusals.length > 0 ? (
 				<div className="rh-corpus__refusals" role="alert">
-					<p>These layout directories were left out of the table whole:</p>
+					<p>
+						These entries could not be hashed, so their layout directory is
+						missing from the table whole:
+					</p>
 					<ul>
 						{query.data.refusals.map((refusal) => (
 							<li key={refusal}>{refusal}</li>

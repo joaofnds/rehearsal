@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
@@ -17,6 +17,11 @@ import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
 export interface HashedFile {
 	readonly path: string;
 	readonly sha256: string;
+}
+
+export interface WalkedDirectory {
+	readonly files: readonly HashedFile[];
+	readonly refusals: readonly SymlinkedEntryError[];
 }
 
 export interface LineageInputs {
@@ -144,14 +149,45 @@ export async function hashDirectory(
 	prefix: string,
 	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
 ): Promise<HashedFile[]> {
+	const { files, refusals } = await walkDirectory(root, prefix, {
+		rootMayBeALink,
+	});
+
+	const [first] = refusals;
+	if (first !== undefined) {
+		throw first;
+	}
+
+	return [...files];
+}
+
+/**
+ * The same walk `hashDirectory` performs, reporting every entry it refused
+ * rather than the first. A caller that displays refusals needs all of them:
+ * one benign entry sorting before a hostile one would otherwise hide it, and
+ * the entry that plants the hostile one chooses both names. Callers that
+ * refuse the whole tree on any refusal take `hashDirectory`, since for them
+ * the first is the only one that changes the outcome.
+ */
+export async function walkDirectory(
+	root: string,
+	prefix: string,
+	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
+): Promise<WalkedDirectory> {
 	if (!rootMayBeALink) {
 		await refuseIfLink(root, prefix);
 	}
 
 	const entries = await readdir(root, { recursive: true });
 	const files: HashedFile[] = [];
+	const refusals: SymlinkedEntryError[] = [];
+	const refused: string[] = [];
 
 	for (const entry of entries.toSorted()) {
+		if (refused.some((above) => entry.startsWith(`${above}${sep}`))) {
+			continue;
+		}
+
 		const absolute = join(root, entry);
 		const linkStats = await lstatIfPresent(absolute);
 		if (linkStats === undefined) {
@@ -160,10 +196,14 @@ export async function hashDirectory(
 
 		const entryStats = await statIfExists(absolute);
 		if (entryStats === undefined) {
-			throw danglingEntry(join(prefix, entry));
+			refusals.push(danglingEntry(join(prefix, entry)));
+			refused.push(entry);
+			continue;
 		}
 		if (await resolvesOutside(root, absolute)) {
-			throw symlinkedEntry(join(prefix, entry));
+			refusals.push(symlinkedEntry(join(prefix, entry)));
+			refused.push(entry);
+			continue;
 		}
 		if (!entryStats.isFile()) {
 			continue;
@@ -172,7 +212,7 @@ export async function hashDirectory(
 		files.push({ path: join(prefix, entry), sha256: await hashFile(absolute) });
 	}
 
-	return files;
+	return { files, refusals };
 }
 
 /**

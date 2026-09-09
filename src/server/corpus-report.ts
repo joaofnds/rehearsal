@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
-import { hashDirectory, parseCheckpointRecord } from "#benchmark/checkpoint";
+import { parseCheckpointRecord, walkDirectory } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { pathExists, SymlinkedEntryError } from "#benchmark/file-presence";
 import {
@@ -91,11 +91,17 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 			continue;
 		}
 		try {
-			files.push(
-				...(await hashDirectory(absolute, directory, {
-					rootMayBeALink: source.kind === "live",
-				})),
-			);
+			const walked = await walkDirectory(absolute, directory, {
+				rootMayBeALink: source.kind === "live",
+			});
+			if (walked.refusals.length > 0) {
+				refusals.push(
+					...walked.refusals.map(({ message }) => redactAbsolutePaths(message)),
+				);
+				continue;
+			}
+
+			files.push(...walked.files);
 		} catch (error) {
 			if (!(error instanceof SymlinkedEntryError)) {
 				throw error;

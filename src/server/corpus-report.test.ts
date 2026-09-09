@@ -91,6 +91,30 @@ describe(corpusReport.name, () => {
 			]);
 		});
 
+		it("names every offending entry in the directory, so an earlier one cannot hide a later one", async () => {
+			const root = await fullCorpusDirectory();
+			const outside = await corpusDirectory();
+			await writeFile(join(outside, "secret.md"), "secret bytes\n");
+			await mkdir(join(root, "agents"), { recursive: true });
+			await symlink(
+				join(root, "aardvark-gone.md"),
+				join(root, "agents", "aardvark.md"),
+			);
+			await symlink(
+				join(outside, "secret.md"),
+				join(root, "agents", "escape.md"),
+			);
+			const runs = await corpusDirectory();
+			await new RecordedRunsFixture(runs).write();
+
+			const report = await corpusReport(directorySource(root), runs);
+
+			expect(report.refusals).toEqual([
+				"agents/aardvark.md is a link whose target is missing, so the bytes it names cannot be read",
+				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			]);
+		});
+
 		it("names the refused entry without an absolute path", async () => {
 			const report = await reportOverEscapingSkills();
 
@@ -120,6 +144,7 @@ describe(corpusReport.name, () => {
 		expect(report.refusals).toEqual([
 			"skills/escape resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
 		]);
+		expect(JSON.stringify(report.refusals)).not.toContain("control.key");
 	});
 
 	it("redacts an absolute path out of a refusal, since a refusal is served to a browser", async () => {
