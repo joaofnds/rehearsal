@@ -91,12 +91,15 @@ interface InstructionsEntry {
  * either as absence would report the corpus as one that has no instruction
  * file, under a digest that says so confidently.
  *
- * A present CLAUDE.md is refused whether its target is missing, its link chain
- * never resolves, it names a directory, it leaves the corpus root, or its
- * bytes cannot be read, since none of those names bytes to hash and each
- * otherwise reaches the screen as a failure that names no file:
- * `redactAbsolutePaths` replaces the only identifying token in an EACCES
- * message with `<path>`.
+ * Only a regular file holds instruction bytes, so anything else present under
+ * that name is refused: a missing link target, a link chain that never
+ * resolves, a directory, a path leaving the corpus root, bytes that cannot be
+ * read, and a device or pipe. Each otherwise reaches the screen as a failure
+ * that names no file, and two do worse than that. A device is reported by
+ * `hashCorpusFiles` as a file that does not exist, which is false and sends
+ * the reader looking for a file that is there. A pipe with no writer blocks
+ * the read forever, so the request never returns and the screen waits rather
+ * than failing.
  */
 async function readInstructionsEntry(root: string): Promise<InstructionsEntry> {
 	const path = join(root, CORPUS_INSTRUCTIONS_PATH);
@@ -130,6 +133,13 @@ async function readInstructionsEntry(root: string): Promise<InstructionsEntry> {
 		return {
 			present: true,
 			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a directory, so it holds no instruction bytes to hash`,
+		};
+	}
+
+	if (!target.isFile()) {
+		return {
+			present: true,
+			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is not a regular file, so it holds no instruction bytes to hash`,
 		};
 	}
 

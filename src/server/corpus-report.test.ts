@@ -315,6 +315,32 @@ describe(corpusReport.name, () => {
 		expect(report.digest).toBeUndefined();
 	});
 
+	it("refuses a CLAUDE.md that is a device rather than a file, since a device holds no corpus bytes", async () => {
+		const root = await corpusDirectory();
+		await symlink("/dev/null", join(root, "CLAUDE.md"));
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md is not a regular file, so it holds no instruction bytes to hash",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
+	it("refuses a CLAUDE.md that is a pipe, rather than blocking the request on a reader that never returns", async () => {
+		const root = await corpusDirectory();
+		await Bun.spawn(["mkfifo", join(root, "CLAUDE.md")]).exited;
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md is not a regular file, so it holds no instruction bytes to hash",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
 	it("refuses a CLAUDE.md that points at itself, rather than failing the screen with the loop error", async () => {
 		const root = await corpusDirectory();
 		await symlink(join(root, "CLAUDE.md"), join(root, "CLAUDE.md"));
