@@ -7,7 +7,7 @@ status: Build
 assignee:
   - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 15:33'
+updated_date: '2026-09-09 15:34'
 labels: []
 dependencies: []
 documentation:
@@ -130,4 +130,21 @@ Two things the builder must handle, both from review: the refusal message names 
 CONSUMER COUNT for the extent-dependent build, when unblocked, counted across two review rounds because the first count was incomplete: corpus-report.ts:125,135; staleness-report.ts:112,286,306; corpus-source.ts:103,107,127; session-corpus.ts:70,87,164 reaching session-run-command.ts:90 which passes a SessionCorpusSnapshot where a CorpusRoot is expected; calibration.ts:459 which calls resolveCorpusFile(liveCorpusSource(), ...) synchronously so an async liveCorpusSource breaks it; checkpoint.ts:262 stageCorpusRoots which gives live a PAIR of roots so the extent must say which it is captured against. Recorded checkpoint hashes come from captureStageCorpus over LAYOUT_DIRECTORY_KINDS, a different set from the screen's, so the screen digest holding at c7000b says nothing about lineage.
 
 ACT-134 inherits no predicate, because there is not one. It inherits the finding that no derived predicate works and the same operator question. Both cards are blocked on one decision, which argues for answering it once rather than per card.
+
+DECIDED BY THE OVERSEEING ITERATE SESSION, 2026-09-09, on the extent question doc-58 raised. Nobody was at the keyboard, so the Acting rule for an unattended session applies: the shaping session's recommendation is taken, with the reason recorded here.
+
+The answer: a declared extent, not "anywhere". The extent is the live install root plus the real path of the tree its own layout entries point into, read as configuration from outside the corpus root, defaulting to [liveCorpusRoot(), <that tree>], which is [~/.claude, ~/.agents] on this machine.
+
+Doc-58 read decision-4 as saying "anywhere" and therefore as possibly invalidating this card. I read decision-4 and it does not settle the question that way. Two passages bear on it:
+
+- "A live corpus is the install on the running machine, enumerated and hashed as it is today." Doc-58 takes this as permission to resolve anywhere. It is a statement about WHEN the corpus is read (today, not frozen), not about WHERE it may point. The sentence is about staleness, which is the section's subject.
+- "The harness stops depending on the shape of one machine's dotfiles for its core behavior, and gains a boundary where a home directory is parsed once into a corpus it controls." This is the decision asking for exactly the boundary doc-58 recommends. A declared extent IS that boundary. "Anywhere" is the absence of one.
+
+So the recommendation is not merely the unattended default here; it is the reading decision-4 supports. Recorded as the decision this card and ACT-134 both build on.
+
+What this does NOT decide: whether a refusal or some weaker signal is right when an entry leaves the extent. That is design, and it belongs to the build, constrained by AC#2 (the live report must still return its files) and AC#3 (200 with a refusal, never a 500).
+
+OBSERVED BY THE SAME SESSION, a cost doc-58 did not weigh, for whoever builds Change B. The instruction file's placement outside the layout loop's try/catch is deliberate and documented, not an oversight. src/server/corpus-report.ts:70-74 reads: "The instruction file is hashed outside that tolerance: a corpus whose CLAUDE.md is not the corpus's own bytes is one the harness cannot identify, rather than a partial corpus to show."
+
+Change B reverses that stated intent. AC#3 and AC#4 on this card override it, and I verified the placement is as doc-58 describes (the hash at lines 81-86 sits above the try at line 92), so the change is still right. But the builder is changing a documented decision rather than fixing an oversight, and the comment must be rewritten to say why a named refusal now beats an unidentifiable corpus. Leaving that comment standing beside the opposite behavior is the defect this note exists to prevent.
 <!-- SECTION:NOTES:END -->
