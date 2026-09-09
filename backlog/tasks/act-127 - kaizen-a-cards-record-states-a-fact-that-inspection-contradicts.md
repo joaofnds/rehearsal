@@ -4,7 +4,7 @@ title: 'kaizen: a card''s record states a fact that inspection contradicts'
 status: To Do
 assignee: []
 created_date: '2026-09-08 21:49'
-updated_date: '2026-09-08 23:17'
+updated_date: '2026-09-09 16:21'
 labels: []
 dependencies: []
 references:
@@ -45,4 +45,18 @@ ACT-126's description states: 'ACT-50 is not the right home: it is Done and its 
 What makes it the same pattern rather than ordinary staleness: the claim was checkable when written (the card asserts another card's status without reading it), and the assertion is load-bearing, since it is the whole reason the card exists as a separate card instead of a criterion on ACT-50. This one differs from the earlier six in one way worth the kaizen's attention: the fact was true when written and was falsified two hours later by a direction. A guard that only checks at write time would have passed it. That argues for the check living where a card is next read, not only where it is written.
 
 Also recorded as a consequence on decision-7.
+
+Cross-board wait: implementation belongs to /Users/joaofnds/code/dotfiles. Reconsider when an owning-session result is available or that repository is explicitly in scope. This triage makes no reciprocal board edits.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: shaping. Priority: medium. Repeated false card facts distort planning; prose now asks for checks but no observed guard meets AC2.
+
+Evidence: Seven accepted instances are recorded; current triage SKILL requires source checks, while no automated/observed precommit guard was found.
+
+Unresolved claims/resources: None for the next action. Work belongs to the linked dotfiles/corpus repository; this directive audits only Rehearsal.
+
+Next action: Run kaizen on the recorded instances and define an observable guard at claim write/read time.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

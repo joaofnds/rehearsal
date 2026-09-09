@@ -1,13 +1,11 @@
 ---
 id: ACT-137
-title: >-
-  GET /api/corpus reports a confident digest over a symlinked CLAUDE.md when the
-  source is the live corpus
+title: report unhashable root instructions as named corpus refusals
 status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 16:07'
+updated_date: '2026-09-09 16:23'
 labels: []
 dependencies: []
 documentation:
@@ -183,4 +181,6 @@ ACCEPTED AND NOT ACTED ON, with the reason:
 STRUCTURAL FINDING, on the record for ACT-150: 'how a corpus entry fails to be hashable' is now knowledge in two places. The walk classifies two states, this file classifies five for the instruction file, and the walk's two are a subset. A third copy should not be added; either the walk grows the missing states or both read one classifier.
 
 FINAL OBSERVATION, over real HTTP through createApiApp, after the last commit: device 200, fifo 200, escaping 200, unreadable 200, each with a refusal naming CLAUDE.md and no digest; healthy 200 with digest a711ea. Live corpus 122 files, digest c7000b, zero refusals. Suite 1353 + 105 pass, 0 fail; lint, typecheck, fmt:check clean.
+
+Triage title correction, 2026-09-09 (doc-61): previous title described live containment, which remains on ACT-141. The new title names the delivered refusal/report behavior; filename is unchanged. Original title: GET /api/corpus reports a confident digest over a symlinked CLAUDE.md when the source is the live corpus. Source: doc-60 reflection and fresh route probes.
 <!-- SECTION:NOTES:END -->

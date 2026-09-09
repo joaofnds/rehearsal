@@ -4,7 +4,7 @@ title: stop sessions overwriting a card's notes with backlog task edit --notes
 status: To Do
 assignee: []
 created_date: '2026-09-05 22:48'
-updated_date: '2026-09-09 13:00'
+updated_date: '2026-09-09 16:20'
 labels: []
 dependencies:
   - ACT-115
@@ -13,9 +13,15 @@ type: chore
 ordinal: 82008
 ---
 
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Verify the approved prose mitigation causes a real shape/build handoff to use --append-notes while preserving existing notes.
+<!-- SECTION:DESCRIPTION:END -->
+
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A session that writes a handoff onto a card cannot silently destroy notes already there
+- [ ] #1 A later observed shape/build handoff appends its new note with the approved append-notes mechanism and preserves the complete previous note text (ACT-86 recorded rejection of a hook and its approved prose mitigation; original preservation outcome)
 - [x] #2 The mechanism chosen is stronger than prose, or the reason prose is the only available mechanism is recorded
 <!-- AC:END -->
 
@@ -58,11 +64,23 @@ Net effect is the same as every prior note and unchanged from doc-36: no rendere
 
 2026-09-08: follow-on card ACT-115 filed to re-land the --append-notes line on main. This card stays open until that lands and a later session's card write is observed using it.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build, after ACT-115. Priority set Medium this run.
-
 doc-54 recommended exactly this and did not apply it, on the reasoning that adding a dependency without a priority leaves a card half-filed. Both are applied together here, which was the condition doc-54 named.
 
 The wait is real and was recorded only in triage prose until now: ACT-115 re-lands the --append-notes line in the shape and build skills, which is the mechanism AC#1 depends on. AC#2 is already checked, satisfied by the recorded decision that no hook is wanted.
 
 Confirmed by reading the ready list back: this card left it, so the picker cannot take it before ACT-115 lands.
+
+Criteria updated by triage from the current evidence and retained sources. Replaced wording is preserved in the recovery documents linked from doc-61. The original scope still applies except the explicitly corrected premise.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: investigation. Priority: medium. Repeated note loss is material, but the approved prose mitigation is not installed and must later be observed.
+
+Evidence: Rendered shape/build skills lack append-notes; João's no-hook decision settles AC2.
+
+Unresolved claims/resources: ACT-115; later real shape/build card write Work belongs to the linked dotfiles/corpus repository; this directive audits only Rehearsal.
+
+Next action: After ACT-115, observe a session use append-notes and verify prior notes remain.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

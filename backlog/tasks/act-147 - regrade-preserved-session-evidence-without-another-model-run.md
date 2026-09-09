@@ -4,7 +4,9 @@ title: regrade preserved session evidence without another model run
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies:
   - ACT-145
 references:
@@ -34,3 +36,19 @@ This task consumes saved state from the state-grading card and can land before s
 - [ ] #4 An older attempt missing required state evidence is reported as unavailable for those checks instead of receiving a fabricated grade (João’s approved session benchmark scope, doc-59)
 - [ ] #5 A resumed session is regraded against the original behavior-under-test boundary rather than counting its transcript prefix (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. Correcting graders on saved evidence avoids repeated provider cost in the approved experiment.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). No regrade command in src/cli/commands.ts or rehearsal.ts; session-record.ts keeps reply/transcript but no preserved state/check-definition identity. ACT-145 provides the missing state.
+
+Unresolved claims/resources: Implementation waits on ACT-145 preserved state; shaping can inspect current schema now.
+
+Next action: After ACT-145, shape evidence-bound reassessment preserving originals and resumed-session boundaries; implement before expensive experiments.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

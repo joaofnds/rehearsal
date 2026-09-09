@@ -4,22 +4,18 @@ title: make runBenchmark reachable from a test with fake dependencies
 status: To Do
 assignee: []
 created_date: '2026-09-03 03:17'
-updated_date: '2026-09-08 17:15'
+updated_date: '2026-09-09 16:23'
 labels: []
 dependencies:
   - ACT-26.7
-priority: medium
+priority: low
 ordinal: 33008
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-runBenchmark is a 292-line procedure in src/benchmark/run.ts that constructs every collaborator it uses: assertControlReady, assertSourceReady, captureWorkflowBackup, claimTarget, createProductOwner, runWorkflowStage, runStageJudge, runJudge, createRunAbort, teardownTarget. Nothing can call it without a real target repository and a provider, so it has no test.
-
-ACT-26.3 met three of its acceptance criteria by extracting the decisions it needed to observe (finishGradedRun, pausesOnFailure, and the calibrateStageFailure hook) rather than by testing the run. That worked, but it means the wiring between those decisions is still unobserved: nothing checks that finishGradedRun is called with the artifact's own resultSha, or that the teardown really follows the retention ref.
-
-runGradedStages next door takes a StageDependencies record and is fully faked in run.test.ts. The target structure is the same shape one level up: a RunDependencies record runBenchmark takes, with rehearsal.ts supplying the real ones, so a test can run the whole benchmark over fakes and observe the order of claim, grade, retain, restore.
+Make the current runBenchmark orchestration testable with fake collaborators and pin retention before teardown.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -41,4 +37,16 @@ One exception worth watching: ACT-26.7 becomes real the moment anything consumes
 Triage 2026-09-08 (d): same stale premise as ACT-27, see that card's note of the same date. A real recorded run now exists (rehearsal.ts list runs, verified 2026-09-08), so the 'nothing an operator can observe yet' reasoning both cards were deprioritized on no longer holds as stated. Priority is João's call, flagged in this run's triage doc rather than changed here.
 
 Priority 2026-09-08: Low to Medium, directed by João, same basis as ACT-27's note of this date. The 'nothing an operator can observe yet' premise is verified false: a real replayable run exists (rehearsal.ts list runs, this session). src/benchmark/run.ts has grown to 1156 lines since the card was written.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: implementation. Priority: low. runBenchmark production wiring remains untested, but no active behavior failure is recorded.
+
+Evidence: runBenchmark is a 1,166-line production-wired export and has no direct call in run.test.ts.
+
+Unresolved claims/resources: ACT-26.7
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Inject RunDependencies and drive one full no-pause run with fakes.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

@@ -6,12 +6,18 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 23:49'
-updated_date: '2026-09-09 10:31'
+updated_date: '2026-09-09 16:22'
 labels: []
 dependencies: []
 priority: low
 ordinal: 129008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Decide whether and how to constrain multiply linked corpus files if corpus data later crosses an untrusted boundary.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -51,4 +57,16 @@ Its own notes ask the right first question, whether this is worth closing at all
 What would raise it: a corpus arriving from outside the operator's control, or a recorded result whose corpus digest is disputed. Neither exists today. Reconsider when a case corpus is accepted from a third party.
 
 Ranked below ACT-134, which is the same class of hole but closable by the guard the project already has.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: investigation. Priority: low. Realpath cannot identify an outside-original hardlink, and link-count refusal would reject legitimate corpora for a threat model that is absent today.
+
+Evidence: Current path containment hashes hardlink bytes; a hardlink is another in-root directory entry for the same inode. No third-party corpus intake is in scope.
+
+Unresolved claims/resources: No accepted untrusted-corpus threat model or non-destructive policy exists.
+
+Next action: Reconsider when third-party corpora are accepted or lineage is disputed; investigate filesystem-policy options then.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

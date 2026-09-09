@@ -4,22 +4,18 @@ title: split each CLI command module's harness wiring from its command policy
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:16'
-updated_date: '2026-09-08 17:15'
+updated_date: '2026-09-09 16:23'
 labels: []
 dependencies:
   - ACT-26.7
-priority: medium
+priority: low
 ordinal: 28008
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-src/cli/run-command.ts and src/cli/replay-command.ts each hold two things that change for different reasons: the command policy (parse flags, gate on a terminal, report the record) and the harness wiring (executeRun/confirmRun and executeReplay/currentControlSha, which assemble the dependency lists the harness needs and reach the provider). The policy half is unit tested with injected fakes; the wiring half cannot be tested without paid work, and it changes whenever a harness dependency list changes.
-
-Splitting it was attempted during ACT-26.1 build and reverted: the extracted run-wiring.ts and replay-wiring.ts each export one function, which oxlint's import/prefer-default-export rejects, and pairing an arbitrary second export to satisfy it would be worse than the duplication. The guard's refusal indicts that shape of the change, so the split needs a design that produces cohesive modules: either both wirings in one src/cli/harness-wiring.ts, or the dependency lists themselves extracted as named values the wiring composes.
-
-Cost of leaving it: run-command.ts is 236 lines and replay-command.ts 282, most of it dependency assembly that a reader must scroll past to find the command's behavior, and a harness dependency change edits a file whose tests are about CLI contracts.
+Split command policy from production harness wiring; the old lint blocker and old line counts no longer apply.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -43,4 +39,16 @@ Triage 2026-09-07 (second pass, 16:20): the card's stated blocker is stale. .oxl
 Triage 2026-09-08 (d): the card's basis for staying Low is now stale. Verified 2026-09-08 via rehearsal.ts list runs: a real recorded run exists (run:2026-09-06T21-58-29.508Z, audit-log, STOPPED:build, replayable), and .benchmark-runs/ holds comparisons, replays, sessions, and run-events.sqlite. The 'rehearsal list runs empty at 540ba9a' premise this card and ACT-31 were deprioritized on no longer holds. Line counts drifted further too: run-command.ts is 438 lines, replay-command.ts 406 (cited 424/403 on 2026-09-07). Priority is João's call, flagged in this run's triage doc rather than changed here.
 
 Priority 2026-09-08: Low to Medium, directed by João. The premise both this card and ACT-31 were held Low on ('the tool has never run its own pipeline') is verified false this session: rehearsal.ts list runs shows run:2026-09-06T21-58-29.508Z (audit-log, STOPPED:build, replayable). The lint rule that reverted the first split attempt is also off (.oxlintrc.json:98, import/prefer-default-export), so the shape of the original attempt is legal again. Line counts have drifted further: run-command.ts 438, replay-command.ts 406. Still queued behind ACT-26.7 per doc-28's bundle ordering.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: implementation. Priority: low. The mixed policy/wiring modules are real maintenance debt without current operator harm.
+
+Evidence: run-command.ts is 438 lines, replay-command.ts 410, and prefer-default-export is disabled.
+
+Unresolved claims/resources: ACT-26.7
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Extract cohesive production wiring after the output seam settles.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

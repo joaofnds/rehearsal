@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-09 10:41'
+updated_date: '2026-09-09 16:23'
 labels: []
 milestone: m-7
 dependencies:
@@ -14,6 +14,7 @@ dependencies:
   - ACT-49
   - ACT-52
   - ACT-53
+  - ACT-114
 documentation:
   - doc-37
 priority: medium
@@ -23,17 +24,7 @@ ordinal: 52008
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The first shippable slice of the UI: every screen whose data the harness already records. Run history, run detail, comparisons, corpus, cases, and calibration all read durable records under .benchmark-runs and declarations under cases/.
-
-This deliberately excludes the live monitor, which needs a run in flight and has no data source today. See the live-monitor card.
-
-Build against the committed design, not against a description of it, so this waits on the export card. It also waits on the vocabulary decision, because every label and route depends on it.
-
-Reuse the read paths the CLI already has rather than reimplementing record reading: `listRecords(kind, runsDirectory)` in src/cli/list-command.ts returns entries plus the records it could not read, and show-command.ts maps a parsed record id to its file. Going through those means the id-traversal refusal that guards `show` guards the UI too, and a record the CLI cannot read is reported rather than crashing a listing.
-
-Two behaviors the design gets right and the current CLI gets wrong, so the UI must not copy the CLI: a stopped run is a normal outcome and must render as one rather than an error (ACT-44 covers the CLI half), and an unreadable record is reported in place with its reason rather than as a raw ENOENT (ACT-40).
-
-Stack: TypeScript on Bun, no framework unless the design demands one, consistent with the project's stated constraints.
+Finish the comparison screen by replacing the obsolete What moved placeholder with served quality readings and verify it against a real record.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -340,6 +331,18 @@ CLI fact learned this run, for whoever edits criteria next: --ac APPENDS and --a
 Bet, 2026-09-09: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
 
 Bet retracted by the overseeing iterate session, 2026-09-09. The bet above was written on this card by mistake: iterate's pick() regex is /^\s*\[?\w*\]?\s*([A-Z]+-[0-9]+...)/m, whose single \w* matches only one bracketed tag, so a two-tag queue line like '[HIGH] [bug] ACT-135 - ...' does not match and the picker falls through to the first single-tag line, this card. Reproduced this session against the literal queue lines: ACT-135's line yields null, ACT-50's yields ACT-50. ACT-135 is the ready queue's actual first card and is the one this iteration runs. This card keeps its column and its place; nothing here was worked.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: implementation. Priority: medium. Only the What moved rendering and real-record browser check remain; they directly deliver m-7.
+
+Evidence: comparisons.ts serves qualityReadings, comparison-page.tsx still renders PlannedFeatureBlock, and .benchmark-runs/comparisons is empty; focused tests pass.
+
+Unresolved claims/resources: ACT-114
+
+Next action: Wait for ACT-114. Then Render qualityReadings, update the client test, then verify against ACT-114's recorded comparison.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

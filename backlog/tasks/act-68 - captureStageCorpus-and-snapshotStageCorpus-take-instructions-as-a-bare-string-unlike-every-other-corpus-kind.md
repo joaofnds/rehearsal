@@ -6,9 +6,8 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 22:48'
-updated_date: '2026-09-09 15:19'
+updated_date: '2026-09-09 16:23'
 labels: []
-milestone: m-1
 dependencies:
   - ACT-65
 priority: low
@@ -44,8 +43,6 @@ Read this run, doc-7 'The order': m-1 is 'Prove the loop once', its stated subst
 
 Recorded here rather than in a doc because triage owns the triage docs. Whoever runs triage next should carry this into the next one, or overturn it with the reason.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority set Medium this run, from unprioritized.
-
 Medium because it is one of the two cards left in m-1, the goal's first increment, which stands at 13 of 15. doc-54 recorded raising this card and ACT-93 as an unsettled product question and did not act. This run acts on it, per the standing direction to take the recommendation and record it as unsettled rather than end the turn on a question.
 
 Its criterion is satisfiable either way, by making instructions resolve like the other roots or by documenting the asymmetry as deliberate, so it cannot block on a design argument.
@@ -57,4 +54,16 @@ Overseeing note, 2026-09-09: this card's priority depends on what 'prove the loo
 The milestone's own sentence, 'run a stage, edit an instruction, replay, and read a comparison', is demonstrably satisfied: ACT-39 carries all four of its criteria checked, including the replay against a corpus with exactly one instruction file changed and the answer to whether that edit improved the stage. Under the reading that the milestone is the loop demonstrably running, this card does not gate it and should return to Low.
 
 Under the reading that every m-1 card must be Done, it gates the milestone at its current Medium. Triage raised it to Medium on that reading; that raise is the thing to reverse if the first reading is meant.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: shaping. Priority: low. The instruction-byte asymmetry remains but ACT-65 fixed the observed delivery defect and m-1's observable loop is already proved.
+
+Evidence: captureStageCorpus and snapshotStageCorpus still take bare instruction bytes; focused checkpoint/staleness tests pass.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Decide whether the asymmetry is intentional and document it, or resolve instructions from the same roots.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

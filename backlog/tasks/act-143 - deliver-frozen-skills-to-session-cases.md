@@ -1,11 +1,12 @@
 ---
 id: ACT-143
 title: deliver frozen skills to session cases
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
-updated_date: '2026-09-09 15:52'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies: []
 references:
   - src/benchmark/session-corpus.ts
@@ -36,3 +37,19 @@ An initial live snapshot is allowed; repeated reads from changing installed file
 - [ ] #5 Running the case leaves the user’s installed corpus unchanged (João’s approved session benchmark scope, doc-59)
 - [ ] #6 A control arm whose frozen corpus omits the treatment skill cannot invoke a same-name skill from the live install (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. The approved skill experiment needs actual variant delivery with fixed surrounding inputs. Delay postpones the new experiment while comparison prerequisites are resolved.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: explicit skill refused; mutation after a live snapshot changes its bytes to after. installSessionCorpusSnapshot skips live snapshots and overlays no skills.
+
+Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+
+Next action: Shape isolated delivery of frozen skills, support files and declared settings, including omission control and same-name installed skill tests.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

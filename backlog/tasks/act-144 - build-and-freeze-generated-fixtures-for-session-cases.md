@@ -1,10 +1,12 @@
 ---
 id: ACT-144
 title: build and freeze generated fixtures for session cases
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies: []
 references:
   - src/benchmark/checks.ts
@@ -32,3 +34,19 @@ Choose the declaration format and error contract during shaping. Reuse runSetup 
 - [ ] #3 The run records the setup definition and realized starting-state identity so changed fixture inputs cannot be silently compared as identical (João’s approved session benchmark scope, doc-59)
 - [ ] #4 A setup failure is recorded and reported before any model session starts (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. The approved triage fixture needs CLI-built board and git history; static file copying cannot run its setup.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). caseDeclarationSchema rejects setup as an unrecognized key in session-probes.ts; runSessionAttempt only calls seedFixture. sessionUpstreamDigest hashes a static fixture tree.
+
+Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+
+Next action: Shape the generated-input declaration and realized tree/history freeze with a deterministic fake builder.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

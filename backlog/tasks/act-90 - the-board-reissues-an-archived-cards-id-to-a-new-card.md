@@ -4,7 +4,7 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-09 15:50'
+updated_date: '2026-09-09 16:20'
 labels: []
 dependencies: []
 references:
@@ -13,6 +13,12 @@ priority: low
 type: bug
 ordinal: 86008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Prevent new cards from reusing archived IDs and verify the failure across the CLI versions implicated by the records.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -67,8 +73,6 @@ Backlog CLI version this run: 1.50.1. The board rules record the facts as checke
 
 Priority left Low, as the writer set it. With the block gone the cost is back to what the card originally recorded, ambiguous references that grow with the archive, which is a real but not urgent cost. The raise doc-50 recommended is withdrawn on this evidence.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, deferred in effect. Priority Low, unchanged.
-
 doc-54 left open why the dependency-edit refusal doc-50 recorded had disappeared, and recorded the CLI reading 1.50.1 against board rules citing 1.51.0. Measured this run: 'backlog --version' returns 1.51.0. So the version moved between doc-54 and now, on this machine, which makes a version change the more likely explanation for doc-50's refusal rather than the less likely one doc-54 judged it. Recording the observation, not a cause; nothing on the board records which version doc-50 ran, which is still what would settle it.
 
 Dependency edits work: I added a dependency to ACT-134 this run and read it back.
@@ -78,4 +82,16 @@ The duplicates themselves are unchanged. act-52, act-53 and act-89 each name bot
 Benchmark impact supplied by João on 2026-09-09, documented in doc-59: the my.files triage-skill report attributes six to eight repair tool calls in each of two sessions to CLI ID collisions, probed there on backlog 1.51.0, and identifies DOT-71 as the related dotfiles issue. These are that report's measurements, not a reproduction in this repository. Its saved benchmark transcripts would be needed to repeat the counts.
 
 This adds a benchmark-cost reason to resolve archived-ID reuse. Keep this card as the owner rather than filing a duplicate. During card creation here, `backlog --version` returned 1.50.1 on 2026-09-09; the earlier notes already describe differing behavior by version. Verify creation/archive and affected dependency edits on the versions at issue in a scratch board before changing the root-cause or priority claims. Priority remains unchanged in this scope-capture session.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: investigation. Priority: low. Archived ID reuse is confirmed, while its current CLI-version-specific operational effect is unsettled.
+
+Evidence: Cross-directory duplicate search returns act-52, act-53 and act-89; installed backlog is 1.50.1.
+
+Unresolved claims/resources: scratch-board comparison on 1.50.1 and 1.51.0; owning DOT-71 coordination
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Reproduce create/archive/create and dependency traversal on both versions in scratch boards.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

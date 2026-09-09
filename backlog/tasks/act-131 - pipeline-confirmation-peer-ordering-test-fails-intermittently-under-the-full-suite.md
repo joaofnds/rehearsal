@@ -3,15 +3,22 @@ id: ACT-131
 title: >-
   pipeline-confirmation peer-ordering test fails intermittently under the full
   suite
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-08 22:43'
-updated_date: '2026-09-08 23:16'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-7
 dependencies: []
 priority: medium
 ordinal: 127008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Determine and remove the pipeline-confirmation peer-ordering test's dependence on concurrent scheduling; do not close on isolated passes.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -37,4 +44,16 @@ everyone to re-run instead of read.
 Triage 2026-09-09: independent corroboration. doc-49 (reflection on ACT-113, filed after this card) records a full-suite run at 1293 pass / 0 fail in which 'ACT-131's flaky peer-ordering test did not fire this run'. That is consistent with the card's account of an intermittent failure rather than a persistent one, and it is a second data point on the same suite size the card cites.
 
 Reproducing command, per decision-1: mise exec -- bun run test, repeated; the card's criterion #1 asks for twenty consecutive full-suite passes.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: investigation. Priority: medium. Accepted history shows an intermittent guard failure, but current frequency and exact race remain unproven.
+
+Evidence: Focused pipeline-confirmation test passes; the peer test observes a shared completion array; records contain one full-suite failure and several passes.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Stress the focused test with a bound, then replace wall-clock/interleaving observation with explicit synchronization if reproducible.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

@@ -4,12 +4,15 @@ title: compare session experiments including a single case
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies:
   - ACT-140
   - ACT-143
   - ACT-144
   - ACT-145
+  - ACT-151
 references:
   - src/benchmark/comparison-estimator.ts
   - src/benchmark/comparison-quality.ts
@@ -41,3 +44,21 @@ Choose and justify the single-case estimator during shaping. A case's correlated
 - [ ] #5 Existing valid multi-case comparisons retain their paired per-case interpretation (João’s approved session benchmark scope, doc-59)
 - [ ] #6 A generated board case runs through setup, frozen skill variants, state scoring, repetitions and a three-arm comparison using declared case data (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Split accounting: ACT-151 owns multi-case compatibility for existing session cases and preserves existing comparison interpretation. Original AC1-6 remain on this card; ACT-151 is a prerequisite contribution to AC1/5, not a retirement or duplicate delivery of single-case statistics, partial scores or the generated-board integration. This releases the earlier ACT-69 experiment without waiting for all four new input/grading capabilities.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. A repeated single-case experiment needs session-aware quality and valid uncertainty. Existing two-case support can deliver independently before the estimator decision.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: valid session reps cause Pipeline comparison rep has no final outcome even with two cases; one-case buildPairedEstimate throws at least two cases.
+
+Unresolved claims/resources: Full experiment waits on ACT-140, ACT-143, ACT-144, ACT-145 and the split multi-case compatibility slice. Single-case estimator remains design work.
+
+Next action: Wait for ACT-140, ACT-143, ACT-144, ACT-145, ACT-151. Then Split existing multi-case session compatibility into a prerequisite, then shape one-case uncertainty, named partial results and generated-board integration. Keep original acceptance 1-6 here.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

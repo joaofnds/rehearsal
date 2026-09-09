@@ -1,10 +1,12 @@
 ---
 id: ACT-145
 title: grade and preserve post-session files and git state
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies: []
 references:
   - src/benchmark/session-attempt.ts
@@ -36,3 +38,19 @@ The saved evidence must include the dirty, untracked and relevant ignored state 
 - [ ] #5 A grader that cannot execute or returns invalid results is identified as a grading error rather than a failed skill outcome (João’s approved session benchmark scope, doc-59)
 - [ ] #6 A session edit to a scorer file cannot silently change the grading definition used for its result (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. The experiment grades board and git state; without preserved state a grader correction requires another paid session.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: NO_REPLY, checks=[], attempt directory absent after a fake runner wrote state. session-check.ts supports only reply/tool evidence; sessionAttemptRecordSchema forbids NO_REPLY check results.
+
+Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+
+Next action: Shape state preservation and command scoring together, including immutable grading inputs, dirty/ignored state, no-reply outcomes, grader errors and scorer identity.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

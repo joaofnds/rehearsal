@@ -1,10 +1,12 @@
 ---
 id: ACT-148
 title: explain session tool errors and repeated commands from saved transcripts
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies: []
 references:
   - src/benchmark/transcript.ts
@@ -31,3 +33,19 @@ Derive tool-call counts, observed tool-result errors, and repeated commands with
 - [ ] #3 The diagnostic output distinguishes missing or insufficient transcript evidence from an observed absence of errors or repeats (João’s approved session benchmark scope, doc-59)
 - [ ] #4 Repeated commands are reported as observations without automatically classifying them as wasted work (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. Observed errors and repeated commands explain the experiment cost using already saved session transcripts.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: tool_result is_error input parses to an empty toolUses record; TranscriptLine exposes only toolUses/outputStyle and no diagnostic result.
+
+Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+
+Next action: Shape a read-only transcript diagnostic with source locations, prefix exclusion and unavailable-vs-zero semantics.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

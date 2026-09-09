@@ -4,7 +4,9 @@ title: carry session elapsed time into comparison reports
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:49'
+updated_date: '2026-09-09 16:22'
 labels: []
+milestone: m-3
 dependencies:
   - ACT-146
 references:
@@ -33,3 +35,19 @@ ACT-105 covers provider-duration totals for steps/runs. Reuse its vocabulary whe
 - [ ] #3 The report distinguishes total attempt elapsed time, provider duration and parallel group makespan rather than summing concurrent attempts into wall-clock time (João’s approved session benchmark scope, doc-59)
 - [ ] #4 Missing elapsed evidence remains visible as unavailable or incomplete rather than becoming zero (João’s approved session benchmark scope, doc-59)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: shaping. Priority: medium. Elapsed time distinguishes equally priced variants in the approved experiment; delay is affordable until session comparisons exist.
+
+Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). sessionAttemptRecordSchema and runSessionDebugAttempt record elapsedMs; comparison-resources.ts ResourceMetricSummary and ResourceMetricEstimates omit it; confirmation-report.ts retains rep durations.
+
+Unresolved claims/resources: Implementation waits on ACT-146 session comparison contract.
+
+Next action: After ACT-146, shape per-attempt elapsed summaries and contrasts, separating provider duration from parallel makespan.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+<!-- SECTION:NOTES:END -->

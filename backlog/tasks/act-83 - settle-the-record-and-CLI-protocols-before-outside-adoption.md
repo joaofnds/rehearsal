@@ -4,7 +4,7 @@ title: settle the record and CLI protocols before outside adoption
 status: To Do
 assignee: []
 created_date: '2026-09-05 20:46'
-updated_date: '2026-09-05 20:49'
+updated_date: '2026-09-09 16:23'
 labels:
   - deferred-until-beta
 dependencies: []
@@ -12,6 +12,12 @@ priority: low
 type: chore
 ordinal: 79008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+At beta, settle which records and CLI protocols are public and define their compatibility/versioning rule.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -52,4 +58,16 @@ What this card is NOT: it is not blocked on discovery, and no work on it is wait
 The trigger to reopen: a beta, meaning a version the harness's records are worth promising to an outside user. At that point this card shapes as originally written, deciding what is promised and writing the versioning rule, then a card per surface.
 
 What holds in the meantime, and costs nothing: records may change shape freely, and a reader that meets a shape it does not understand should say so rather than misread it. That is a failure-mode property, not a compatibility promise, so it does not conflict with this decision.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: shaping. Priority: low. João explicitly deferred compatibility promises until beta.
+
+Evidence: Comparison records are versioned while run/case surfaces are not; no evidence says beta has begun.
+
+Unresolved claims/resources: beta trigger
+
+Next action: Revisit at beta and inventory promised surfaces before adding versions.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

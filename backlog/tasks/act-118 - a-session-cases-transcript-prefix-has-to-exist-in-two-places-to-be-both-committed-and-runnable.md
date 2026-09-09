@@ -6,8 +6,9 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 11:55'
-updated_date: '2026-09-08 20:41'
+updated_date: '2026-09-09 16:21'
 labels: []
+milestone: m-2
 dependencies: []
 priority: medium
 ordinal: 114008
@@ -35,4 +36,16 @@ The two consumers disagree about where a prefix lives. Deciding which location i
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-08 (e): citation error. context-manifest.test.ts:149 is an unrelated test; the actual casesRoot() read the card means is at line 227-228. .gitignore line 2 and the session-attempt.ts:173 error message are correctly cited.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: implementation. Priority: medium. Committed prefixed cases are not runnable from a fresh clone without an ignored duplicate.
+
+Evidence: Runtime resolves .benchmark-runs/cases while fixture tests read cases/; focused case/attempt tests confirm missing run-state refusal.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Make runtime and tests use one declared source, then verify from a clean temporary tree.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

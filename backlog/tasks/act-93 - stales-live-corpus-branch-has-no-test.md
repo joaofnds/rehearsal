@@ -4,14 +4,19 @@ title: stale's live-corpus branch has no test
 status: To Do
 assignee: []
 created_date: '2026-09-07 01:22'
-updated_date: '2026-09-09 15:19'
+updated_date: '2026-09-09 16:21'
 labels: []
-milestone: m-1
 dependencies: []
 priority: low
 type: bug
 ordinal: 89008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Add a direct test that stale's live-corpus branch resolves against the operator-selected install; do not treat it as an m-1 gate.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -45,8 +50,6 @@ Read this run, doc-7 'The order': m-1 is 'Prove the loop once', its stated subst
 
 Recorded here rather than in a doc because triage owns the triage docs. Whoever runs triage next should carry this into the next one, or overturn it with the reason.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority raised Low to Medium this run.
-
 Raised for the same reason as ACT-68: these two are all that remain of m-1, the goal's first increment, at 13 of 15. Left at Low the milestone the goal names first stays open indefinitely behind work the goal orders after it.
 
 Its subject is a missing test on stale's live-corpus branch, and that branch is exactly the surface ACT-137 and ACT-134 are about to change, so the coverage is worth having before those builds rather than after.
@@ -56,4 +59,16 @@ Overseeing note, 2026-09-09: this card's priority depends on what 'prove the loo
 The milestone's own sentence, 'run a stage, edit an instruction, replay, and read a comparison', is demonstrably satisfied: ACT-39 carries all four of its criteria checked, including the replay against a corpus with exactly one instruction file changed and the answer to whether that edit improved the stage. Under the reading that the milestone is the loop demonstrably running, this card does not gate it and should return to Low.
 
 Under the reading that every m-1 card must be Done, it gates the milestone at its current Medium. Triage raised it to Medium on that reading; that raise is the thing to reverse if the first reading is meant.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: implementation. Priority: low. A twice-decided live-root branch lacks a direct injected test, but current behavior works and the milestone outcome is met.
+
+Evidence: currentStageCorpus uses source.root; focused staleness tests pass; ACT-39 is Done.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Inject the live-root resolver and mutation-test that branch.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

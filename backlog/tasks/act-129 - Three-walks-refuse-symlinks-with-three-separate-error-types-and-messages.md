@@ -4,14 +4,20 @@ title: Three walks refuse symlinks with three separate error types and messages
 status: To Do
 assignee: []
 created_date: '2026-09-08 22:34'
-updated_date: '2026-09-08 23:15'
+updated_date: '2026-09-09 16:21'
 labels: []
 dependencies:
   - ACT-128
   - ACT-132
-priority: medium
+priority: low
 ordinal: 125008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Unify symlink refusal type/path semantics after correcting the false copy rationale; retain completed ACT-132 as the historical landed prerequisite.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -48,4 +54,16 @@ precedent. Settle ACT-128 before or with this.
 Triage 2026-09-09: dependencies set to ACT-128 and ACT-132, per doc-49's proposed order (ACT-132 first, then ACT-130, then ACT-129, then ACT-128). Reason doc-49 gives for putting ACT-129 after the fixes: unifying three error types before the last caller lands means redoing it, and ACT-132 would add a fourth refusal site. ACT-128 is a dependency because this card's own notes say 'Settle ACT-128 before or with this' (session-corpus's stated reason is the precedent one of these three messages rests on).
 
 Premise verified 2026-09-09: all three error types and all three message strings are as this card records them, read at session-attempt.ts seedFixture, session-corpus.ts refuseSymlinks, and checkpoint.ts hashDirectory. session-run-command.ts's two catch blocks confirmed.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: shaping. Priority: low. Three error encodings remain, but current behavior safely refuses links and only diagnostics/caller complexity suffer.
+
+Evidence: SessionInputError, SessionCorpusError and SymlinkedEntryError remain at the three walks; focused symlink tests pass; ACT-132 is Done.
+
+Unresolved claims/resources: ACT-128; ACT-132 (Done prerequisite retained for handoff)
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Design one shared relative-path error and migrate callers/tests; keep completed ACT-132 as a dependency so the next session sees the landed prerequisite.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

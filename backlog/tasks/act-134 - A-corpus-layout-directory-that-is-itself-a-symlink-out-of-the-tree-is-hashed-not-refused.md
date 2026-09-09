@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 01:07'
-updated_date: '2026-09-09 15:40'
+updated_date: '2026-09-09 16:26'
 labels: []
 dependencies:
   - ACT-141
@@ -14,12 +14,18 @@ priority: high
 ordinal: 130008
 ---
 
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Apply the externally declared live-corpus extent to layout directories so roots resolving beyond it are refused in stage capture and corpus reporting.
+<!-- SECTION:DESCRIPTION:END -->
+
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 with agents/ in a corpus root replaced by a symlink to a directory outside that root, captureStageCorpus refuses rather than returning the outside directory's files as agents/<name> (probed 2026-09-09 during ACT-130 review: it returned agents/leak.md hashing SECRETBYTES from a separate temp dir, no throw)
-- [ ] #2 the containment rule c9ffe4d states, that an entry is judged by where it resolves, holds for a layout directory as it does for an entry inside one (commit c9ffe4d: 'Containment is the rule that survives')
+- [ ] #1 Stage corpus capture refuses a layout directory resolving beyond the configured trusted extent, while a declared live backing tree remains usable (ACT-134 original captureStageCorpus reproduction; ACT-137 recorded declared-extent decision; ACT-141 prerequisite)
+- [ ] #2 Containment is evaluated against the declared source extent for both a layout directory and entries within it, rather than treating an escaping layout root as its own trust anchor (commit c9ffe4d containment rule; ACT-137 recorded extent decision)
 - [ ] #3 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [ ] #4 against a corpus root whose agents/ is itself a symlink to a directory outside the root, GET /api/corpus returns 200 carrying a refusal that names agents, no digest, and no file from the outside directory among the files (reproduced 2026-09-09 by triage: the live source returned files=[CLAUDE.md, skills/build/SKILL.md, agents/stolen.md] with digest 0f939c and zero refusals, serving a file from outside the corpus as corpus data)
+- [ ] #4 For a live source whose agents directory resolves outside the install root and configured backing extent, GET /api/corpus returns 200 with an agents refusal, no digest and no foreign file entry (ACT-134 original screen reproduction; ACT-137 recorded extent decision; doc-61 fresh probe)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -78,8 +84,6 @@ So a file that lives entirely outside the corpus is served to the browser as ord
 
 Found by the ACT-135 reflection and independently reproduced here. Same defect class as ACT-137: both put foreign bytes behind a confident digest on the same screen, and both turn on the live source's exemption, which exists because ~/.claude's own layout directories are symlinks into ~/.agents. The reflection's recommendation is to shape the two as one question about what the live source may hash rather than ranking them against each other.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build, after ACT-137. Priority High, unchanged from the raise the previous run made.
-
 Route reproduced by triage this run, independently of the card and of doc-55. Root whose agents/ is a symlink to an outside directory holding stolen.md: live source RESOLVED files=[CLAUDE.md, skills/build/SKILL.md, agents/stolen.md] digest=0f939c refusals=[]. So a file from entirely outside the corpus is served as ordinary corpus data under a confident digest. The directory source, by contrast, RESOLVED with digest undefined and a refusal naming agents, which is the degradation ACT-135 shipped.
 
 AC#4 added this run. The screen route was recorded only in these notes and had no criterion, so the screen half of this card had no home in its acceptance. Source is the reproduction above. Found by the advisor's scope-accounting check, confirmed against the card.
@@ -87,4 +91,24 @@ AC#4 added this run. The screen route was recorded only in these notes and had n
 Dependency on ACT-137 added this run. Reason: both routes turn on the same live-source exemption, and the predicate ACT-137's shaping settles is the one this build inherits. Without the dependency the picker would take this card first, since its lower ID sorts above ACT-137 at equal priority, and the second build would re-decide the containment rule. Verified by reading the ready list back: this card left it, so the picker cannot take it until ACT-137 is Done.
 
 Not merged into ACT-137, deciding against doc-55's proposal to shape them as one piece of work. The probe that settled it: refuseUncontained is called only from corpus-file.ts lines 156 and 198, never from checkpoint.ts, which uses resolvesOutside directly at line 214. This card's AC#1 names captureStageCorpus, a path that never reaches refuseUncontained, so the two cards are separately acceptable and the merge test fails. doc-55's intent is served by the dependency and the shared predicate recorded on ACT-137.
+
+Criteria updated by triage from the current evidence and retained sources. Replaced wording is preserved in the recovery documents linked from doc-61. The original scope still applies except the explicitly corrected premise.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: implementation. Priority: high. Live layout-root symlinks can still place foreign bytes behind a confident digest; the declared extent from ACT-141 supplies the missing trust predicate.
+
+Evidence: captureStageCorpus and live corpus-report walking pass rootMayBeALink true. Directory-source reporting already refuses this shape in focused tests. Fresh corpus-probes.ts returned agents/secret.md from an outside tree in both captureStageCorpus and the live corpus report.
+
+Unresolved claims/resources: ACT-141
+
+Next action: After ACT-141, apply the declared extent to layout-root resolution in both stage capture and GET /api/corpus; rewrite AC1 to name the live-source case.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+
+OPERATOR CONFIRMATION, 2026-09-09, recorded here because this card inherits the predicate.
+
+The declared extent a live corpus source is held to was confirmed by the operator, typed into the iterate session that ran ACT-137. A live install may not resolve anywhere. It is held to the install root plus the real path of the tree its layout entries point into, declared as configuration from outside the corpus root, [~/.claude, ~/.agents] on this machine.
+
+This card depends on ACT-141, which lands that predicate. Do not re-decide it here; read it off ACT-141 and build on it.
 <!-- SECTION:NOTES:END -->

@@ -4,13 +4,19 @@ title: 'a card shaped but left in its old column is re-shaped every step, at ful
 status: To Do
 assignee: []
 created_date: '2026-09-08 13:34'
-updated_date: '2026-09-09 13:01'
+updated_date: '2026-09-09 16:21'
 labels: []
 dependencies: []
-priority: medium
+priority: low
 type: bug
 ordinal: 116008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Before dispatch, refuse a stage whose finished record already proves it ran; the shaped-card auto-advance and post-stage checks have already fixed the repeated-loop portion.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
@@ -53,11 +59,25 @@ requires the move in the same turn as the work. The gap is that nothing
 enforces it, which is why acceptance criterion 1 asks for the observation
 rather than the rule.
 
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority set Medium this run, from unprioritized.
-
 Medium because it wastes real money on every iteration rather than producing a wrong result: a card shaped but left in its old column is re-shaped at full cost on the next step. ACT-139's own evidence names shape and review sessions at 58 and 130 turns, so the waste per recurrence is a substantial session.
 
 It belongs with ACT-136 and ACT-139 as a third loop defect and shares their blocker: AC#2 names iterate's step behavior, and that script is chezmoi-managed outside this repository. AC#1 is about a shaping session's own bookkeeping and could be addressed in the skills. No dependency recorded, since neither half waits on the other two cards.
 
 Not High: it costs money and turns, and it does not produce a wrong answer or serve wrong bytes, which is what the three cards above it do.
+
+Current correction: iterate now detects unchanged status after a stage and advanceShapedCard moves a Shape card with criteria into Build. This does not prove AC1’s end-to-end observation and does not satisfy AC2’s pre-dispatch refusal. Both original requirements remain; the remaining occurrence is one redundant stage before detection, not an unlimited loop. Reconsider in the owning dotfiles board.
+
+Cross-board wait: implementation belongs to /Users/joaofnds/code/dotfiles. Reconsider when an owning-session result is available or that repository is explicitly in scope. This triage makes no reciprocal board edits.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: implementation. Priority: low. iterate now prevents unbounded repeats after a stage, but still spends one redundant stage before detecting stale status/records.
+
+Evidence: dotfiles iterate main.ts implements advanceShapedCard and post-stage unchanged-status checks, with no pre-dispatch finished-record guard.
+
+Unresolved claims/resources: external dotfiles ownership Work belongs to the linked dotfiles/corpus repository; this directive audits only Rehearsal.
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Add pre-dispatch record/status detection or explicitly retire that stronger requirement.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

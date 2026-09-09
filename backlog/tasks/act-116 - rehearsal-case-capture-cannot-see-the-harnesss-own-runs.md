@@ -4,8 +4,9 @@ title: rehearsal case capture cannot see the harness's own runs
 status: To Do
 assignee: []
 created_date: '2026-09-08 11:23'
-updated_date: '2026-09-08 20:41'
+updated_date: '2026-09-09 16:21'
 labels: []
+milestone: m-3
 dependencies: []
 priority: medium
 ordinal: 112008
@@ -14,11 +15,7 @@ ordinal: 112008
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-`rehearsal case capture <case> --session <id>` resolves the session id only against ~/.claude/projects (defaultProjectsDirectory, src/benchmark/session-capture.ts:14, used by resolveSessionFile at :76). A harness run invokes the provider with --no-session-persistence (src/benchmark/claude.ts:58), so it writes nothing to that directory. The transcript it produces lands under .benchmark-runs/sessions/<case>/<session-id>/transcript.jsonl instead.
-
-The consequence: the capture verb cannot capture a session the harness itself just ran. Observed 2026-09-08 while building the manifest-probe fixture for ACT-59: `case capture manifest-probe --session a0491c04 --cut 24` returned 'Session prefix a0491c04 matches no session file' for a session that had completed seconds earlier and whose transcript was on disk. The fixture was placed and its sha256 declared by hand.
-
-Capturing an interactive session from ~/.claude/projects still works and is presumably the original intent, so this is a gap in what the verb reaches, not a break in what it does.
+Let case capture find completed harness session transcripts as well as interactive Claude project sessions; session attempts do persist transcripts, so remove the overbroad no-session-persistence rationale.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -31,4 +28,16 @@ Capturing an interactive session from ~/.claude/projects still works and is pres
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-08 (e): citation error. The function is named claudeProjectsDirectory (session-capture.ts:13), not defaultProjectsDirectory as the card states. resolveSessionFile at :76 is correctly cited. Substance unchanged: case capture only resolves against ~/.claude/projects.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: implementation. Priority: medium. Capture cannot reuse harness-owned evidence, which adds manual work to session-case construction.
+
+Evidence: case capture searches only claudeProjectsDirectory; harness transcripts live under .benchmark-runs/sessions; focused capture tests cover only the former.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Resolve IDs over both stores with explicit ambiguity behavior and retain interactive-session coverage.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

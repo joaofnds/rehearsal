@@ -4,7 +4,7 @@ title: the design-system gallery page double-renders the table caption
 status: To Do
 assignee: []
 created_date: '2026-09-07 21:43'
-updated_date: '2026-09-09 13:01'
+updated_date: '2026-09-09 16:22'
 labels:
   - bug
 dependencies: []
@@ -26,5 +26,15 @@ system-page.tsx's TableShell demo shows SectionLabel>TABLE SHELL immediately abo
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority Low, unchanged. Cosmetic defect on an internal gallery page, no user-facing consequence and no cost of delay.
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: defer; next action: implementation. Priority: low. The internal gallery visibly duplicates the table label; the fix is independent and tiny.
+
+Evidence: system-page.tsx renders SectionLabel TABLE SHELL immediately above TableShell, which renders its own caption.
+
+Unresolved claims/resources: None for the next action.
+
+Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Remove the redundant visible label and keep one accessible table caption.
+
+Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

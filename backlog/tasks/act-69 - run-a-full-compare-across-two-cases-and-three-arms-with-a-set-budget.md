@@ -4,10 +4,13 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-09 15:20'
+updated_date: '2026-09-09 16:23'
 labels: []
+milestone: m-7
 dependencies:
   - ACT-140
+  - ACT-151
+priority: medium
 type: feature
 ordinal: 65008
 ---
@@ -15,11 +18,7 @@ ordinal: 65008
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Split off ACT-39 on 2026-09-05. ACT-39 pictured `compare` producing a report over two replay attempts. The report schema cannot express that: src/benchmark/comparison-record.ts requires cases min 2 (line 311), reps min 2 (line 310), and caseDeltas min 2 (line 170), and comparison-loader.ts (lines 314-326) loads three arms per case with control mandatory.
-
-So the full comparison path needs a second benchmark case and real confirmation groups, 2 cases x 3 arms x at least 2 reps of provider spend. That is money this card exists to weigh separately, and the budget is set before the run, not after.
-
-For scale: two single failed shape attempts on the audit-log case cost 0.4304 and 0.5278 USD.
+Run the authorized two-case, three-arm, two-rep session comparison after both evidence production and session-mode report loading work.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -38,8 +37,6 @@ Created by the iterate session that shaped ACT-39, at João's direction to split
 Blocked on a second benchmark case, noted 2026-09-05. cases/ holds one pipeline case (audit-log); the rest are session cases. The report schema requires cases min 2, so a second pipeline case has to exist before a comparison can be assembled.
 
 Budget is unset and this is the board's largest provider spend: 2 cases x 3 arms x at least 2 reps. For scale, one single failed shape attempt on audit-log cost 0.43 to 0.53 USD. Do not start this card without a number from João.
-
-Triage verdict, 2026-09-09 (doc-56). Disposition: deferred, blocked outside this session. Left unprioritized deliberately.
 
 AC#4 requires the provider spend recorded against a budget set before the run starts, and no spending authority for a full compare is recorded anywhere on this board. That number is Joao's to give and no session can invent it. It is the one card here excluded from the queue for a reason a session cannot route around, rather than for timing.
 
@@ -72,4 +69,16 @@ So the earlier pricing note was right that the report schema accepts session mod
 Pipeline and replay confirmation groups are built (runPipelineConfirmation, runReplayConfirmation). 'rehearsal list groups' and 'list comparisons' are both empty, so no confirmation evidence exists yet in any mode, and 'compare' runs no session of its own: it reports over evidence that a prior --confirm run produced.
 
 The 25 USD authorization stands unspent and is recorded above. Two routes, neither taken without a typed direction: build the session confirmation path first, then spend the 25 in the authorized mode; or spend it in pipeline mode, which the earlier note priced at about 41 USD expected and about 104 USD at the p90 tail for 2 cases x 3 arms x 2 reps, so 25 does not cover a full pipeline compare and the shape would have to shrink.
+
+## Triage verdict, 2026-09-09 (doc-61)
+
+Disposition: keep; next action: implementation. Priority: medium. The $25 session-mode comparison is authorized, but neither session confirmation production nor compatible comparison loading is ready.
+
+Evidence: executeSessionRun deliberately refuses confirmation; group/comparison lists are empty; parent audit observed session reps lack pipeline finalOutcome; claude is absent from PATH.
+
+Unresolved claims/resources: ACT-140 and ACT-151 must finish; claude must be available on PATH. USD 25 session-mode authorization is already recorded.
+
+Next action: Wait for ACT-140 and ACT-151, restore the existing Claude executable to PATH, verify a provider-free comparison fixture, then run two cases × three arms × two reps within the already authorized USD 25 ceiling.
+
+Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->
