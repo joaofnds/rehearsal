@@ -301,6 +301,20 @@ describe(corpusReport.name, () => {
 		expect(report.digest).toBeUndefined();
 	});
 
+	it("refuses a CLAUDE.md the harness cannot read, naming it rather than failing the screen", async () => {
+		const root = await corpusDirectory();
+		await writeFile(join(root, "CLAUDE.md"), "instructions\n");
+		await chmod(join(root, "CLAUDE.md"), 0o000);
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md cannot be read, so its bytes cannot be hashed",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
 	it("refuses a CLAUDE.md that points at itself, rather than failing the screen with the loop error", async () => {
 		const root = await corpusDirectory();
 		await symlink(join(root, "CLAUDE.md"), join(root, "CLAUDE.md"));

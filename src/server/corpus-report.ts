@@ -66,16 +66,26 @@ async function readCountsByPath(
 	);
 }
 
-async function resolvedStat(path: string): Promise<Stats | undefined> {
-	try {
-		return await statIfExists(path);
-	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ELOOP") {
-			return undefined;
-		}
+const UNHASHABLE_INSTRUCTION_CODES = new Map([
+	[
+		"ELOOP",
+		"is a link whose target is missing, so the bytes it names cannot be read",
+	],
+	["EACCES", "cannot be read, so its bytes cannot be hashed"],
+	["EPERM", "cannot be read, so its bytes cannot be hashed"],
+]);
 
-		throw error;
-	}
+function refusalForCode(code: string): string | undefined {
+	const reason = UNHASHABLE_INSTRUCTION_CODES.get(code);
+
+	return reason === undefined
+		? undefined
+		: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} ${reason}`;
+}
+
+interface InstructionsEntry {
+	readonly present: boolean;
+	readonly refusal: string | undefined;
 }
 
 /**
@@ -84,28 +94,48 @@ async function resolvedStat(path: string): Promise<Stats | undefined> {
  * either as absence would report the corpus as one that has no instruction
  * file, under a digest that says so confidently.
  *
- * A link that does not resolve is refused whether its target is missing or
- * its chain loops, since neither names bytes to hash and both otherwise
- * reach the screen as a failure that names no file.
+ * A link that does not resolve is refused whether its target is missing, its
+ * chain loops, or its bytes cannot be read, since none of them names bytes to
+ * hash and each otherwise reaches the screen as a failure that names no file:
+ * `redactAbsolutePaths` replaces the only identifying token in an EACCES
+ * message with `<path>`.
  */
-async function refuseUnhashableInstructions(
-	root: string,
-): Promise<string | undefined> {
+async function readInstructionsEntry(root: string): Promise<InstructionsEntry> {
 	const path = join(root, CORPUS_INSTRUCTIONS_PATH);
-	if (!(await lstatIfPresent(path))) {
-		return undefined;
+	let target: Stats | undefined;
+	try {
+		if (!(await lstatIfPresent(path))) {
+			return { present: false, refusal: undefined };
+		}
+
+		target = await statIfExists(path);
+	} catch (error) {
+		const refusal =
+			error instanceof Error && "code" in error
+				? refusalForCode(String(error.code))
+				: undefined;
+		if (refusal === undefined) {
+			throw error;
+		}
+
+		return { present: true, refusal };
 	}
 
-	const target = await resolvedStat(path);
 	if (target === undefined) {
-		return `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a link whose target is missing, so the bytes it names cannot be read`;
+		return {
+			present: true,
+			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a link whose target is missing, so the bytes it names cannot be read`,
+		};
 	}
 
 	if (target.isDirectory()) {
-		return `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a directory, so it holds no instruction bytes to hash`;
+		return {
+			present: true,
+			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a directory, so it holds no instruction bytes to hash`,
+		};
 	}
 
-	return undefined;
+	return { present: true, refusal: undefined };
 }
 
 /**
@@ -129,20 +159,25 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const files: HashedFile[] = [];
 	const refusals: string[] = [];
 
-	const instructionsRefusal = await refuseUnhashableInstructions(root);
-	if (instructionsRefusal !== undefined) {
-		refusals.push(instructionsRefusal);
-	} else if (await lstatIfPresent(join(root, CORPUS_INSTRUCTIONS_PATH))) {
+	const instructions = await readInstructionsEntry(root);
+	if (instructions.refusal !== undefined) {
+		refusals.push(instructions.refusal);
+	} else if (instructions.present) {
 		try {
-			const instructions = await hashCorpusFiles(source, [
-				CORPUS_INSTRUCTIONS_PATH,
-			]);
-			files.push(...instructions.map(({ path, sha256 }) => ({ path, sha256 })));
+			const hashed = await hashCorpusFiles(source, [CORPUS_INSTRUCTIONS_PATH]);
+			files.push(...hashed.map(({ path, sha256 }) => ({ path, sha256 })));
 		} catch (error) {
-			if (!(error instanceof SymlinkedEntryError)) {
+			const unreadable =
+				error instanceof Error && "code" in error
+					? refusalForCode(String(error.code))
+					: undefined;
+			if (unreadable !== undefined) {
+				refusals.push(unreadable);
+			} else if (error instanceof SymlinkedEntryError) {
+				refusals.push(redactAbsolutePaths(error.message));
+			} else {
 				throw error;
 			}
-			refusals.push(redactAbsolutePaths(error.message));
 		}
 	}
 
