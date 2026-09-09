@@ -5,11 +5,6 @@ import type { SessionSettings } from "./claude";
 import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { Immutable } from "./contracts";
-import {
-	corpusEntries,
-	projectEntries,
-	reconcileManifest,
-} from "./context-manifest";
 import type { ResolvedCorpusFile } from "./corpus-file";
 import { CORPUS_INSTRUCTIONS_PATH, hashCorpusFiles } from "./corpus-file";
 import { resolveCorpusSource } from "./corpus-source";
@@ -32,8 +27,7 @@ import { SessionInvocationError } from "./session-invocation-error";
 import type { SessionCorpusSnapshot } from "./session-corpus";
 import { freezeSessionCorpus } from "./session-corpus";
 import { sessionLineage } from "./session-lineage";
-import type { SessionAttemptRecord } from "./session-record";
-import { sessionAttemptRecordSchema } from "./session-record";
+import { buildSessionAttemptRecord } from "./session-record";
 
 export { SessionInvocationError } from "./session-invocation-error";
 
@@ -171,62 +165,6 @@ async function freezeInputs(
 	};
 }
 
-interface MutableAttemptRecord extends SessionAttemptRecord {
-	effort?: SessionAttemptRecord["effort"];
-	reply?: SessionAttemptRecord["reply"];
-	error?: SessionAttemptRecord["error"];
-	metrics?: SessionAttemptRecord["metrics"];
-	contextManifest?: SessionAttemptRecord["contextManifest"];
-	divergences?: SessionAttemptRecord["divergences"];
-}
-
-function attemptRecord(
-	inputs: FrozenSessionInputs,
-	attempt: SessionAttempt,
-	error: string | undefined,
-	elapsedMs: number,
-): SessionAttemptRecord {
-	const record: MutableAttemptRecord = {
-		schemaVersion: 1,
-		caseId: inputs.sessionCase.declaration.id,
-		lineage: inputs.lineage,
-		model: inputs.settings.model,
-		sessionBudgetUsd: inputs.settings.budgetUsd,
-		corpusFiles: inputs.corpusFiles.map((file) => ({ ...file })),
-		corpusOrigin: inputs.corpusSnapshot.origin,
-		prompt: inputs.sessionCase.prompt,
-		transcriptFile: attempt.transcriptFile,
-		outcome: attempt.outcome,
-		checks: attempt.checks.map((check) => ({ ...check })),
-		elapsedMs,
-	};
-	if (inputs.settings.effort !== undefined) {
-		record.effort = inputs.settings.effort;
-	}
-	if (attempt.reply !== undefined) {
-		record.reply = attempt.reply;
-	}
-	if (error !== undefined) {
-		record.error = error;
-	}
-	if (attempt.metrics !== undefined) {
-		record.metrics = { ...attempt.metrics };
-	}
-	if (attempt.contextManifest !== undefined) {
-		record.contextManifest = {
-			paths: attempt.contextManifest.paths.map((entry) => ({ ...entry })),
-		};
-		record.divergences = [
-			...reconcileManifest(attempt.contextManifest, [
-				...corpusEntries(inputs.sessionCase.corpusFiles),
-				...projectEntries(inputs.sessionCase.projectFiles),
-			]),
-		];
-	}
-
-	return sessionAttemptRecordSchema.parse(record);
-}
-
 function repRecord(
 	request: SessionConfirmationRequest,
 	inputs: FrozenSessionInputs,
@@ -273,14 +211,23 @@ function repRecord(
 		};
 	} else {
 		const passed = attempt.outcome === "SUCCESSFUL";
-		stage = {
-			stage: "checks",
-			status: "JUDGED",
-			grade: passed ? "A" : "F",
-			verdict: passed ? "CONTINUE" : "STOP",
-			elapsedMs,
-			evidence,
-		};
+		stage = passed
+			? {
+					stage: "checks",
+					status: "JUDGED",
+					grade: "A",
+					verdict: "CONTINUE",
+					elapsedMs,
+					evidence,
+				}
+			: {
+					stage: "checks",
+					status: "JUDGED",
+					grade: "F",
+					verdict: "STOP",
+					elapsedMs,
+					evidence,
+				};
 	}
 
 	return sessionConfirmationRepRecordSchema.parse({
@@ -290,7 +237,6 @@ function repRecord(
 		repId: plan.repId,
 		ordinal: plan.ordinal,
 		mode: "session",
-		worktreePath: attempt.attemptDirectory,
 		lineage: { kind: "SESSION", lineage: inputs.lineage },
 		outcome:
 			attempt.outcome === "SUCCESSFUL" && attempt.metrics !== undefined
@@ -374,12 +320,16 @@ export async function runSessionConfirmation(
 		await Bun.write(
 			attemptFile,
 			`${JSON.stringify(
-				attemptRecord(
-					inputs,
-					executed.attempt,
-					executed.error,
-					executed.elapsedMs,
-				),
+				buildSessionAttemptRecord({
+					sessionCase: inputs.sessionCase,
+					settings: inputs.settings,
+					lineage: inputs.lineage,
+					corpusFiles: inputs.corpusFiles,
+					corpusOrigin: inputs.corpusSnapshot.origin,
+					attempt: executed.attempt,
+					error: executed.error,
+					elapsedMs: executed.elapsedMs,
+				}),
 				null,
 				2,
 			)}\n`,

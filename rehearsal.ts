@@ -34,6 +34,7 @@ import {
 import { EXIT_CODES, exitCodeFor } from "./src/benchmark/exit-codes";
 import {
 	assertPipelinePreflight,
+	defaultAssertModelAvailable,
 	defaultProbeModel,
 } from "./src/benchmark/preflight";
 import { runList } from "./src/cli/list-command";
@@ -131,7 +132,7 @@ async function dispatch(
 				{
 					buildJudges: judgesFor,
 					output: processOutput,
-					probeModel: defaultProbeModel,
+					probeModel: defaultAssertModelAvailable,
 				},
 			);
 
@@ -159,7 +160,7 @@ async function dispatch(
 				{
 					output: processOutput,
 					resolveRunDirectory,
-					probeModel: defaultProbeModel,
+					probeModel: defaultAssertModelAvailable,
 					execute: executeReplay,
 				},
 			);

@@ -156,6 +156,13 @@ export function defaultProbeModel(
 	return probeModelAvailable(model, defaultModelProbe(model, run));
 }
 
+export async function defaultAssertModelAvailable(
+	model: string,
+	run?: CommandRunner,
+): Promise<void> {
+	await defaultProbeModel(model, run);
+}
+
 export interface PipelinePreflightInputs {
 	readonly sourceDir: string;
 	readonly settingsFilePath: string;
@@ -166,16 +173,14 @@ export interface PipelinePreflightDependencies {
 	readonly assertControlReady: () => Promise<string>;
 	readonly assertSourceReady: (sourceDir: string) => Promise<SourceBaseline>;
 	readonly loadStageSettings: (path: string) => Promise<LoadedStageSettings>;
-	readonly probeModel: (
-		model: string,
-	) => Promise<ModelPreflightEvidence | undefined>;
+	readonly probeModel: (model: string) => Promise<void>;
 }
 
 const defaultPipelinePreflightDependencies: PipelinePreflightDependencies = {
 	assertControlReady,
 	assertSourceReady,
 	loadStageSettings,
-	probeModel: defaultProbeModel,
+	probeModel: defaultAssertModelAvailable,
 };
 
 /**

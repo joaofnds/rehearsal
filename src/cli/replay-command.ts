@@ -79,7 +79,6 @@ import {
 	requireSpendAuthorization,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import type { ModelPreflightEvidence } from "#benchmark/preflight";
 import { writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
@@ -102,9 +101,7 @@ export interface ReplayCommandRequest {
 export interface ReplayCommandDependencies {
 	readonly output: CommandOutput;
 	readonly resolveRunDirectory: (runName: string) => Promise<string>;
-	readonly probeModel: (
-		model: string,
-	) => Promise<ModelPreflightEvidence | undefined>;
+	readonly probeModel: (model: string) => Promise<void>;
 	readonly execute: (
 		config: ReplayCliConfig,
 		paths: BenchmarkRunPaths,

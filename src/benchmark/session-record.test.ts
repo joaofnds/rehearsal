@@ -1,11 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import type { Immutable } from "#benchmark/contracts";
-import type { SessionAttemptRecord } from "#benchmark/session-record";
+import type {
+	LegacySessionAttemptRecord,
+	SessionAttemptRecord,
+} from "#benchmark/session-record";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
 
 function record(
-	overrides: Immutable<Partial<SessionAttemptRecord>> = {},
-): Immutable<SessionAttemptRecord> {
+	overrides: Immutable<Partial<LegacySessionAttemptRecord>> = {},
+): Immutable<LegacySessionAttemptRecord> {
 	return {
 		schemaVersion: 1,
 		caseId: "smoke",
@@ -29,14 +32,33 @@ function record(
  * for a missing reply must actually delete the key.
  */
 function withoutReply(
-	overrides: Immutable<Partial<SessionAttemptRecord>> = {},
-): Omit<Immutable<SessionAttemptRecord>, "reply"> {
+	overrides: Immutable<Partial<LegacySessionAttemptRecord>> = {},
+): Omit<Immutable<LegacySessionAttemptRecord>, "reply"> {
 	const { reply: _dropped, ...rest } = record(overrides);
 
 	return rest;
 }
 
 describe("sessionAttemptRecordSchema", () => {
+	function failedRecord(): Immutable<
+		Extract<SessionAttemptRecord, { schemaVersion: 2 }>
+	> {
+		const {
+			reply: _reply,
+			contextManifest: _contextManifest,
+			divergences: _divergences,
+			...base
+		} = record();
+
+		return {
+			...base,
+			schemaVersion: 2 as const,
+			error: "provider rejected the call",
+			outcome: "EXECUTION_FAILED" as const,
+			checks: [],
+		};
+	}
+
 	it("accepts a checked attempt whose outcome matches its results", () => {
 		expect(sessionAttemptRecordSchema.parse(record())).toMatchObject({
 			outcome: "SUCCESSFUL",
@@ -239,5 +261,33 @@ describe("sessionAttemptRecordSchema", () => {
 		expect(parsed.error?.issues[0]?.message).toBe(
 			"A session attempt is successful when and only when every check passes",
 		);
+	});
+
+	it("accepts a v2 execution failure with a non-empty error", () => {
+		expect(sessionAttemptRecordSchema.parse(failedRecord())).toMatchObject({
+			schemaVersion: 2,
+			outcome: "EXECUTION_FAILED",
+			error: "provider rejected the call",
+		});
+	});
+
+	it.each([
+		{ error: undefined },
+		{ reply: "partial reply" },
+		{ checks: [{ kind: "word-band", status: "FAIL", detail: "failed" }] },
+	])("refuses contradictory v2 execution-failure evidence", (override) => {
+		expect(
+			sessionAttemptRecordSchema.safeParse({ ...failedRecord(), ...override })
+				.success,
+		).toBe(false);
+	});
+
+	it("keeps the v1 success schema closed to failure-only fields", () => {
+		expect(
+			sessionAttemptRecordSchema.safeParse({
+				...record(),
+				error: "cannot accompany success",
+			}).success,
+		).toBe(false);
 	});
 });

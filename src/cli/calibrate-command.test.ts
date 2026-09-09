@@ -26,7 +26,7 @@ import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 
-const passingProbe = (): Promise<undefined> => Promise.resolve(undefined);
+const passingProbe = (): Promise<void> => Promise.resolve();
 
 const directories: string[] = [];
 

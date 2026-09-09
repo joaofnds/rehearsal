@@ -23,7 +23,11 @@ import {
 } from "#benchmark/checks";
 import type { BenchmarkCase, LoadedCase, SessionCase } from "#benchmark/case";
 import { withPipeline } from "#benchmark/case";
-import type { BenchmarkConfig, SessionRunConfig } from "#benchmark/config";
+import type {
+	BenchmarkConfig,
+	ConfirmationConfig,
+	SessionRunConfig,
+} from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import {
 	CONTROL_DIR,
@@ -32,7 +36,12 @@ import {
 	parseCaseId,
 	parseSessionArgs,
 } from "#benchmark/config";
-import { liveCorpusInstructions } from "#benchmark/corpus-file";
+import {
+	CorpusFileError,
+	liveCorpusInstructions,
+} from "#benchmark/corpus-file";
+import { CorpusSourceError } from "#benchmark/corpus-source";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type {
 	ModelPreflightEvidence,
@@ -41,7 +50,10 @@ import type {
 import { asRefusedPrecondition } from "#benchmark/preflight";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
-import type { SessionConfirmationRequest } from "#benchmark/session-confirmation";
+import type {
+	SessionConfirmationDependencies,
+	SessionConfirmationRequest,
+} from "#benchmark/session-confirmation";
 import {
 	assertSessionConfirmationInputsSupported,
 	runSessionConfirmation,
@@ -53,6 +65,7 @@ import {
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { runStageJudge } from "#benchmark/stage-grading";
+import { SessionCorpusError } from "#benchmark/session-corpus";
 import type { LoadedStageSettings } from "#benchmark/stage-settings";
 import { loadStageSettings } from "#benchmark/stage-settings";
 import {
@@ -67,8 +80,9 @@ import {
 } from "#benchmark/target";
 import type { SourceBaseline } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
-import { asUsageError } from "#cli/commands";
+import { asUsageError, UsageError } from "#cli/commands";
 import {
+	RefusedPreconditionError,
 	refuseStageCorpus,
 	requireInteractiveStdin,
 	requireSpendAuthorization,
@@ -103,9 +117,7 @@ export interface RunCommandDependencies {
 	readonly output: CommandOutput;
 	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
 	readonly assertPreflight: (inputs: PipelinePreflightInputs) => Promise<void>;
-	readonly probeModel: (
-		model: string,
-	) => Promise<ModelPreflightEvidence | undefined>;
+	readonly probeModel: (model: string) => Promise<ModelPreflightEvidence>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
@@ -187,7 +199,14 @@ function refuseWithoutTerminal(
 	if (config.pause) {
 		requireInteractiveStdin(stdinIsTerminal, REVIEW_PAUSE_REASON);
 	}
-	if (config.confirmation !== undefined && !config.confirmation.approved) {
+	requireConfirmationTerminal(config.confirmation, stdinIsTerminal);
+}
+
+function requireConfirmationTerminal(
+	confirmation: Readonly<ConfirmationConfig> | undefined,
+	stdinIsTerminal: boolean,
+): void {
+	if (confirmation !== undefined && !confirmation.approved) {
 		requireInteractiveStdin(stdinIsTerminal, COST_APPROVAL_REASON);
 	}
 }
@@ -211,9 +230,7 @@ async function runSessionCase(
 	);
 
 	requireSpendAuthorization(request.args, Bun.env, request.stdinIsTerminal);
-	if (config.confirmation !== undefined && !config.confirmation.approved) {
-		requireInteractiveStdin(request.stdinIsTerminal, COST_APPROVAL_REASON);
-	}
+	requireConfirmationTerminal(config.confirmation, request.stdinIsTerminal);
 
 	const outcome = await dependencies.executeSession(
 		config,
@@ -408,20 +425,8 @@ async function confirmRun(
 
 export interface SessionRunExecutionDependencies extends SessionExecutionBoundary {
 	readonly runDebug?: typeof runSessionDebugAttempt;
-	readonly runConfirmed?: (
-		request: SessionConfirmationRequest,
-	) => Promise<Awaited<ReturnType<typeof runSessionConfirmation>>>;
-}
-
-function preflightEvidence(
-	evidence: ModelPreflightEvidence | undefined,
-): ModelPreflightEvidence {
-	return (
-		evidence ?? {
-			status: "MISSING",
-			missing: "preflight call metrics",
-		}
-	);
+	readonly executeAttempt?: SessionConfirmationDependencies["executeAttempt"];
+	readonly runsDirectory?: string;
 }
 
 export function executeSessionRun(
@@ -430,19 +435,16 @@ export function executeSessionRun(
 	sessionCase: SessionCase,
 	dependencies: SessionRunExecutionDependencies,
 ): Promise<RunOutcome> {
-	const questioner = terminalQuestioner();
-	const runDebug = dependencies.runDebug ?? runSessionDebugAttempt;
-	const runConfirmed =
-		dependencies.runConfirmed ??
-		((request: SessionConfirmationRequest) =>
-			runSessionConfirmation(
-				{ executeAttempt: runPreparedSessionAttempt },
-				request,
-			));
-
 	if (config.confirmation !== undefined) {
 		assertSessionConfirmationInputsSupported(sessionCase);
 	}
+
+	const questioner = terminalQuestioner();
+	const runDebug = dependencies.runDebug ?? runSessionDebugAttempt;
+	const executeAttempt =
+		dependencies.executeAttempt ?? runPreparedSessionAttempt;
+	const runsDirectory =
+		dependencies.runsDirectory ?? benchmarkRunsDirectory(CONTROL_DIR);
 
 	return runRequestedExecution<RunOutcome>({
 		confirmation: config.confirmation,
@@ -472,9 +474,7 @@ export function executeSessionRun(
 			return { kind: "debug", recordFile: outcome.recordFile };
 		},
 		runConfirmed: async (projectedCost) => {
-			const preflight = preflightEvidence(
-				await dependencies.probeModel(config.model),
-			);
+			const preflight = await dependencies.probeModel(config.model);
 			if (config.confirmation === undefined) {
 				throw new Error(
 					"Confirmed session execution requires confirmation config",
@@ -484,8 +484,8 @@ export function executeSessionRun(
 				throw new Error("Session projection requires a preflight maximum");
 			}
 
-			const outcome = await runConfirmed({
-				runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
+			const request: SessionConfirmationRequest = {
+				runsDirectory,
 				groupId: randomUUID(),
 				reps: config.confirmation.reps,
 				projectedCost: {
@@ -499,7 +499,24 @@ export function executeSessionRun(
 				effort: config.effort,
 				sessionBudgetUsd: config.sessionBudgetUsd,
 				preflight,
-			});
+			};
+			let outcome;
+			try {
+				outcome = await runSessionConfirmation({ executeAttempt }, request);
+			} catch (error) {
+				if (error instanceof CorpusSourceError) {
+					throw new UsageError(error.message);
+				}
+				if (
+					error instanceof CorpusFileError ||
+					error instanceof SessionCorpusError ||
+					error instanceof SymlinkedEntryError
+				) {
+					throw new RefusedPreconditionError(error.message);
+				}
+
+				throw error;
+			}
 			output.stderr(`Confirmation group: ${outcome.groupRecordFile}\n`);
 			for (const recordFile of outcome.repRecordFiles) {
 				output.stderr(`Confirmation rep: ${recordFile}\n`);

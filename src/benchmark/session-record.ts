@@ -1,7 +1,16 @@
 import { z } from "zod";
+import type { SessionCase } from "./case";
+import type { SessionSettings } from "./claude";
 import { effortSchema } from "./config";
+import {
+	corpusEntries,
+	projectEntries,
+	reconcileManifest,
+} from "./context-manifest";
 import { claudeCallMetricsSchema } from "./contracts";
+import type { ResolvedCorpusFile } from "./corpus-file";
 import { checkResultSchema } from "./session-check";
+import type { SessionAttempt } from "./session-attempt";
 
 /**
  * Where the attempt's corpus bytes were read from, recorded beside the digests
@@ -55,14 +64,9 @@ const manifestDivergenceSchema = z
 	.strict();
 
 interface RecordedOutcome {
-	readonly outcome:
-		| "SUCCESSFUL"
-		| "UNSUCCESSFUL"
-		| "NO_REPLY"
-		| "EXECUTION_FAILED";
+	readonly outcome: "SUCCESSFUL" | "UNSUCCESSFUL" | "NO_REPLY";
 	readonly reply?: string | undefined;
 	readonly checks: readonly { readonly status: "PASS" | "FAIL" }[];
-	readonly error?: string | undefined;
 }
 
 interface RecordProblem {
@@ -78,40 +82,11 @@ interface RecordProblem {
  * only when every one of them passes.
  */
 function problemsWith(record: RecordedOutcome): readonly RecordProblem[] {
-	if (record.outcome === "EXECUTION_FAILED") {
-		return executionFailureProblems(record);
-	}
 	if (record.outcome === "NO_REPLY") {
 		return noReplyProblems(record);
 	}
 
 	return checkedProblems(record);
-}
-
-function executionFailureProblems(
-	record: RecordedOutcome,
-): readonly RecordProblem[] {
-	const problems: RecordProblem[] = [];
-	if (record.error === undefined || record.error === "") {
-		problems.push({
-			message: "A failed session invocation records its error",
-			path: "error",
-		});
-	}
-	if (record.reply !== undefined) {
-		problems.push({
-			message: "A failed session invocation records no reply",
-			path: "reply",
-		});
-	}
-	if (record.checks.length > 0) {
-		problems.push({
-			message: "A failed session invocation evaluates no check",
-			path: "checks",
-		});
-	}
-
-	return problems;
 }
 
 function noReplyProblems(record: RecordedOutcome): readonly RecordProblem[] {
@@ -163,7 +138,7 @@ function checkedProblems(record: RecordedOutcome): readonly RecordProblem[] {
 	return problems;
 }
 
-export const sessionAttemptRecordSchema = z
+const legacySessionAttemptRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
 		caseId: z.string().min(1),
@@ -177,15 +152,9 @@ export const sessionAttemptRecordSchema = z
 		divergences: z.array(manifestDivergenceSchema).optional(),
 		prompt: z.string().min(1),
 		reply: z.string().optional(),
-		error: z.string().min(1).optional(),
 		transcriptFile: z.string().min(1),
 		metrics: claudeCallMetricsSchema.optional(),
-		outcome: z.enum([
-			"SUCCESSFUL",
-			"UNSUCCESSFUL",
-			"NO_REPLY",
-			"EXECUTION_FAILED",
-		]),
+		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
 		checks: z.array(checkResultSchema),
 		elapsedMs: z.number().nonnegative(),
 	})
@@ -200,8 +169,114 @@ export const sessionAttemptRecordSchema = z
 		}
 	});
 
+const executionFailedSessionAttemptRecordSchema = z
+	.object({
+		schemaVersion: z.literal(2),
+		caseId: z.string().min(1),
+		lineage: z.string().min(1),
+		model: z.string().min(1),
+		effort: effortSchema.optional(),
+		sessionBudgetUsd: z.number().positive(),
+		corpusFiles: z.array(corpusFileSchema),
+		corpusOrigin: corpusSnapshotOriginSchema.optional(),
+		contextManifest: z.undefined().optional(),
+		divergences: z.undefined().optional(),
+		prompt: z.string().min(1),
+		reply: z.undefined().optional(),
+		error: z.string().min(1),
+		transcriptFile: z.string().min(1),
+		metrics: claudeCallMetricsSchema.optional(),
+		outcome: z.literal("EXECUTION_FAILED"),
+		checks: z.array(checkResultSchema).length(0),
+		elapsedMs: z.number().nonnegative(),
+	})
+	.strict();
+
+export const sessionAttemptRecordSchema = z.union([
+	legacySessionAttemptRecordSchema,
+	executionFailedSessionAttemptRecordSchema,
+]);
+
+export type LegacySessionAttemptRecord = z.infer<
+	typeof legacySessionAttemptRecordSchema
+>;
 export type SessionAttemptRecord = z.infer<typeof sessionAttemptRecordSchema>;
 
 export function parseSessionAttemptRecord(text: string): SessionAttemptRecord {
 	return sessionAttemptRecordSchema.parse(JSON.parse(text));
+}
+
+export interface SessionAttemptRecordInputs {
+	readonly sessionCase: SessionCase;
+	readonly settings: SessionSettings;
+	readonly lineage: string;
+	readonly corpusFiles: readonly ResolvedCorpusFile[];
+	readonly corpusOrigin: CorpusSnapshotOrigin;
+	readonly attempt: SessionAttempt;
+	readonly elapsedMs: number;
+	readonly error?: string | undefined;
+}
+
+interface MutableSessionAttemptRecord {
+	schemaVersion: 1 | 2;
+	caseId: string;
+	lineage: string;
+	model: string;
+	effort?: SessionSettings["effort"];
+	sessionBudgetUsd: number;
+	corpusFiles: ResolvedCorpusFile[];
+	corpusOrigin: CorpusSnapshotOrigin;
+	contextManifest?: SessionAttempt["contextManifest"];
+	divergences?: ReturnType<typeof reconcileManifest>;
+	prompt: string;
+	reply?: string;
+	error?: string;
+	transcriptFile: string;
+	metrics?: SessionAttempt["metrics"];
+	outcome: SessionAttempt["outcome"];
+	checks: SessionAttempt["checks"];
+	elapsedMs: number;
+}
+
+export function buildSessionAttemptRecord(
+	inputs: Readonly<SessionAttemptRecordInputs>,
+): SessionAttemptRecord {
+	const { attempt, sessionCase, settings } = inputs;
+	const record: MutableSessionAttemptRecord = {
+		schemaVersion: attempt.outcome === "EXECUTION_FAILED" ? 2 : 1,
+		caseId: sessionCase.declaration.id,
+		lineage: inputs.lineage,
+		model: settings.model,
+		sessionBudgetUsd: settings.budgetUsd,
+		corpusFiles: inputs.corpusFiles.map((file) => ({ ...file })),
+		corpusOrigin: inputs.corpusOrigin,
+		prompt: sessionCase.prompt,
+		transcriptFile: attempt.transcriptFile,
+		outcome: attempt.outcome,
+		checks: attempt.checks.map((check) => ({ ...check })),
+		elapsedMs: inputs.elapsedMs,
+	};
+	if (settings.effort !== undefined) {
+		record.effort = settings.effort;
+	}
+	if (attempt.reply !== undefined) {
+		record.reply = attempt.reply;
+	}
+	if (inputs.error !== undefined) {
+		record.error = inputs.error;
+	}
+	if (attempt.metrics !== undefined) {
+		record.metrics = { ...attempt.metrics };
+	}
+	if (attempt.contextManifest !== undefined) {
+		record.contextManifest = {
+			paths: attempt.contextManifest.paths.map((entry) => ({ ...entry })),
+		};
+		record.divergences = reconcileManifest(attempt.contextManifest, [
+			...corpusEntries(sessionCase.corpusFiles),
+			...projectEntries(sessionCase.projectFiles),
+		]);
+	}
+
+	return sessionAttemptRecordSchema.parse(record);
 }

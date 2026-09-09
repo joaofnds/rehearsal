@@ -13,6 +13,7 @@ import { join, relative } from "node:path";
 import type { SessionCase, TranscriptPrefix } from "./case";
 import { readClaudeCallMetrics } from "./claude";
 import type { SessionSettings } from "./claude";
+import { CommandError } from "./command";
 import type { ClaudeCallMetrics } from "./contracts";
 import { claudeEnvelopeSchema } from "./contracts";
 import { terminatedFileLines } from "./file-lines";
@@ -347,7 +348,32 @@ async function failedInvocation(
 		writtenTranscript,
 	);
 
+	if (error instanceof CommandError && error.stdout !== "") {
+		let document: unknown;
+		try {
+			document = JSON.parse(error.stdout);
+		} catch {
+			document = undefined;
+		}
+		const parsed = claudeEnvelopeSchema.safeParse(document);
+		if (parsed.success) {
+			return invocationError(
+				providerFailureMessage(parsed.data.result, error.message),
+				attemptDirectory,
+				transcriptFile,
+				readClaudeCallMetrics(parsed.data),
+			);
+		}
+	}
+
 	return invocationError(error.message, attemptDirectory, transcriptFile);
+}
+
+function providerFailureMessage(
+	result: string | undefined,
+	fallback: string,
+): string {
+	return result === undefined || result.length === 0 ? fallback : result;
 }
 
 function invocationError(
@@ -381,7 +407,7 @@ async function recordAttempt(
 	const metrics = readClaudeCallMetrics(envelope);
 	if (envelope.is_error === true) {
 		throw invocationError(
-			envelope.result ?? "Claude session failed",
+			providerFailureMessage(envelope.result, "Claude session failed"),
 			attemptDirectory,
 			transcriptFile,
 			metrics,

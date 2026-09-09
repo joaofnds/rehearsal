@@ -33,6 +33,31 @@ function requiredPath(path: string | undefined): string {
 	return path;
 }
 
+function simpleSessionCase(id = "outcomes"): SessionCase {
+	return {
+		kind: "session",
+		declaration: {
+			id,
+			kind: "session",
+			title: "Outcomes",
+			prompt: "Reply.",
+			tools: [],
+			corpusFiles: [],
+			projectFiles: [],
+			checks: [{ kind: "word-band", max: 1 }],
+		},
+		fixturePath: undefined,
+		transcriptPath: undefined,
+		prompt: "Reply.",
+		tools: [],
+		settings: undefined,
+		agents: undefined,
+		corpusFiles: [],
+		projectFiles: [],
+		checks: [{ kind: "word-band", max: 1 }],
+	};
+}
+
 describe(runSessionConfirmation.name, () => {
 	const temporaryDirectories: string[] = [];
 
@@ -208,6 +233,8 @@ describe(runSessionConfirmation.name, () => {
 			"SUCCESSFUL",
 		]);
 		expect(reps[1]?.stages[0]?.status).toBe("EXECUTION_FAILED");
+		expect(reps[0]).not.toHaveProperty("attemptDirectory");
+		expect(reps[0]).not.toHaveProperty("worktreePath");
 		expect(failedAttempt).toMatchObject({
 			outcome: "EXECUTION_FAILED",
 			error: "provider rejected rep 2",
@@ -251,6 +278,25 @@ describe(runSessionConfirmation.name, () => {
 		);
 		expect(shown.join("")).toContain("Case smoke, session mode, 3 reps.");
 		expect(shown.join("")).toContain("Cost $0.08 for the confirmed command.");
+
+		const shownJson: string[] = [];
+		await runShow(
+			{
+				id: "group:session-group",
+				json: true,
+				runsDirectory: join(root, "runs"),
+			},
+			{
+				stdout: (text) => {
+					shownJson.push(text);
+				},
+				stderr: () => undefined,
+			},
+		);
+		expect(JSON.parse(shownJson.join(""))).toMatchObject({
+			schemaVersion: 2,
+			mode: "session",
+		});
 	});
 
 	it("maps pass, failed checks, no reply, and provider failure without dropping named evidence", async () => {
@@ -258,28 +304,7 @@ describe(runSessionConfirmation.name, () => {
 		temporaryDirectories.push(root);
 		const corpusRoot = join(root, "corpus");
 		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
-		const sessionCase = {
-			kind: "session",
-			declaration: {
-				id: "outcomes",
-				kind: "session",
-				title: "Outcomes",
-				prompt: "Reply.",
-				tools: [],
-				corpusFiles: [],
-				projectFiles: [],
-				checks: [{ kind: "word-band", max: 1 }],
-			},
-			fixturePath: undefined,
-			transcriptPath: undefined,
-			prompt: "Reply.",
-			tools: [],
-			settings: undefined,
-			agents: undefined,
-			corpusFiles: [],
-			projectFiles: [],
-			checks: [{ kind: "word-band", max: 1 }],
-		} satisfies SessionCase;
+		const sessionCase = simpleSessionCase();
 		const outcome = await runSessionConfirmation(
 			{
 				executeAttempt: async (plan) => {
@@ -288,7 +313,7 @@ describe(runSessionConfirmation.name, () => {
 					const common = {
 						attemptDirectory: join(plan.recordDirectory, "execution"),
 						transcriptFile,
-						metrics,
+						metrics: plan.ordinal === 4 ? undefined : metrics,
 						contextManifest: undefined,
 					};
 					if (plan.ordinal === 1) {
@@ -319,6 +344,20 @@ describe(runSessionConfirmation.name, () => {
 							checks: [],
 						};
 					}
+					if (plan.ordinal === 4) {
+						return {
+							...common,
+							reply: "too many words",
+							outcome: "UNSUCCESSFUL",
+							checks: [
+								{
+									kind: "word-band",
+									status: "FAIL",
+									detail: "missing metrics",
+								},
+							],
+						};
+					}
 
 					throw new SessionInvocationError("provider failure", {
 						...common,
@@ -331,19 +370,19 @@ describe(runSessionConfirmation.name, () => {
 			{
 				runsDirectory: join(root, "runs"),
 				groupId: "outcomes-group",
-				reps: 4,
+				reps: 5,
 				projectedCost: {
-					reps: 4,
+					reps: 5,
 					perRepMaximumUsd: 0.2,
 					preflightMaximumUsd: 0.1,
-					totalMaximumUsd: 0.9,
+					totalMaximumUsd: 1.1,
 				},
 				approvalMethod: "yes",
 				sessionCase,
 				corpus: corpusRoot,
 				model: "sonnet",
 				sessionBudgetUsd: 0.2,
-				preflight: { status: "COMPLETE", call: { metrics } },
+				preflight: { status: "MISSING", missing: "preflight call metrics" },
 			},
 		);
 
@@ -356,6 +395,7 @@ describe(runSessionConfirmation.name, () => {
 			"JUDGED",
 			"JUDGED",
 			"NOT_REACHED",
+			"METRICS_MISSING",
 			"EXECUTION_FAILED",
 		]);
 		expect(reps.slice(0, 2).map((rep) => rep.stages[0])).toMatchObject([
@@ -371,5 +411,107 @@ describe(runSessionConfirmation.name, () => {
 		);
 		expect(attempts[0]?.checks[0]?.detail).toBe("named pass");
 		expect(attempts[1]?.checks[0]?.detail).toBe("named failure");
+		const report = parseGroupReportSummaryRecord(
+			await Bun.file(outcome.reportFile).text(),
+		);
+		expect(report.resources.commandTotal).toEqual({
+			status: "MISSING",
+			missing: ["preflight call metrics", "1 rep call metrics"],
+		});
+	});
+
+	it("waits for peers but aborts group persistence after an untyped rep failure", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-abort-"));
+		temporaryDirectories.push(root);
+		const corpusRoot = join(root, "corpus");
+		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
+		const started: number[] = [];
+
+		const failure = runSessionConfirmation(
+			{
+				executeAttempt: (plan) => {
+					started.push(plan.ordinal);
+					return Promise.reject(new Error(`unexpected rep ${plan.ordinal}`));
+				},
+			},
+			{
+				runsDirectory: join(root, "runs"),
+				groupId: "aborted-group",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 0.2,
+					preflightMaximumUsd: 0.1,
+					totalMaximumUsd: 0.5,
+				},
+				approvalMethod: "yes",
+				sessionCase: simpleSessionCase("abort"),
+				corpus: corpusRoot,
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+				preflight: { status: "MISSING", missing: "metrics" },
+			},
+		);
+
+		expect(failure).rejects.toThrow("unexpected rep 1");
+		expect(started.toSorted((left, right) => left - right)).toEqual([1, 2]);
+		expect(
+			await Bun.file(
+				join(root, "runs", "confirmations", "aborted-group", "group.json"),
+			).exists(),
+		).toBe(false);
+	});
+
+	it("does not finalize a group when a rep record cannot be persisted", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-persist-"));
+		temporaryDirectories.push(root);
+		const corpusRoot = join(root, "corpus");
+		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
+
+		const failure = runSessionConfirmation(
+			{
+				executeAttempt: async (plan) => {
+					if (plan.ordinal === 1) {
+						await Bun.write(plan.recordDirectory, "directory collision\n");
+					}
+
+					return {
+						attemptDirectory: join(plan.recordDirectory, "execution"),
+						reply: "OK",
+						transcriptFile: join(plan.recordDirectory, "transcript.jsonl"),
+						metrics,
+						outcome: "SUCCESSFUL",
+						checks: [
+							{ kind: "word-band", status: "PASS", detail: "named pass" },
+						],
+						contextManifest: undefined,
+					};
+				},
+			},
+			{
+				runsDirectory: join(root, "runs"),
+				groupId: "persistence-group",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 0.2,
+					preflightMaximumUsd: 0.1,
+					totalMaximumUsd: 0.5,
+				},
+				approvalMethod: "yes",
+				sessionCase: simpleSessionCase("persist"),
+				corpus: corpusRoot,
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+				preflight: { status: "MISSING", missing: "metrics" },
+			},
+		);
+
+		expect(failure).rejects.toBeInstanceOf(Error);
+		expect(
+			await Bun.file(
+				join(root, "runs", "confirmations", "persistence-group", "group.json"),
+			).exists(),
+		).toBe(false);
 	});
 });

@@ -209,17 +209,31 @@ const sessionResultEvidenceSchema = z
 	})
 	.strict();
 
-const sessionStageOutcomeSchema = z.union([
+const judgedSessionStageOutcomeSchema = z.union([
 	z
 		.object({
 			stage: z.literal("checks"),
 			status: z.literal("JUDGED"),
-			grade: z.enum(["A", "F"]),
-			verdict: z.enum(["CONTINUE", "STOP"]),
+			grade: z.literal("A"),
+			verdict: z.literal("CONTINUE"),
 			elapsedMs: elapsedSchema,
 			evidence: sessionResultEvidenceSchema,
 		})
 		.strict(),
+	z
+		.object({
+			stage: z.literal("checks"),
+			status: z.literal("JUDGED"),
+			grade: z.literal("F"),
+			verdict: z.literal("STOP"),
+			elapsedMs: elapsedSchema,
+			evidence: sessionResultEvidenceSchema,
+		})
+		.strict(),
+]);
+
+const sessionStageOutcomeSchema = z.union([
+	judgedSessionStageOutcomeSchema,
 	z
 		.object({
 			stage: z.literal("checks"),
@@ -256,7 +270,8 @@ export const sessionConfirmationRepRecordSchema = z
 		repId: identitySchema,
 		ordinal: z.number().int().positive(),
 		mode: z.literal("session"),
-		worktreePath: z.string().min(1),
+		attemptDirectory: z.never().optional(),
+		worktreePath: z.never().optional(),
 		lineage: z
 			.object({ kind: z.literal("SESSION"), lineage: z.string().min(1) })
 			.strict(),
@@ -298,6 +313,20 @@ export const sessionConfirmationRepRecordSchema = z
 			context.addIssue({
 				code: "custom",
 				message: "Successful session reps require passing checks and metrics",
+				path: ["outcome"],
+			});
+		}
+		if (
+			record.outcome === "UNSUCCESSFUL" &&
+			record.metrics.status === "COMPLETE" &&
+			checks?.status === "JUDGED" &&
+			checks.verdict === "CONTINUE" &&
+			checks.grade === "A"
+		) {
+			context.addIssue({
+				code: "custom",
+				message:
+					"Passing checks with complete metrics require a successful rep",
 				path: ["outcome"],
 			});
 		}
@@ -497,6 +526,20 @@ export const sessionConfirmationGroupRecordSchema = z
 				code: "custom",
 				message: "Projected cost rep count must match the group",
 				path: ["projectedCost", "reps"],
+			});
+		}
+		const expectedTotal = Number(
+			(
+				record.projectedCost.preflightMaximumUsd +
+				record.reps * record.projectedCost.perRepMaximumUsd
+			).toPrecision(15),
+		);
+		if (record.projectedCost.totalMaximumUsd !== expectedTotal) {
+			context.addIssue({
+				code: "custom",
+				message:
+					"Session projected total must equal preflight plus every rep maximum",
+				path: ["projectedCost", "totalMaximumUsd"],
 			});
 		}
 	});

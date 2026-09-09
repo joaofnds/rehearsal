@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BenchmarkCase, SessionCase } from "#benchmark/case";
@@ -7,6 +7,8 @@ import { corpusLayoutRoots } from "#benchmark/checkpoint";
 import type { BenchmarkConfig } from "#benchmark/config";
 import { parseArgs } from "#benchmark/config";
 import type { PipelineDefinition } from "#benchmark/pipeline";
+import { parseConfirmationGroupRecord } from "#benchmark/confirmation-record";
+import { TestResources } from "#benchmark/test-support";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import type { RunCommandDependencies } from "#cli/run-command";
@@ -34,8 +36,13 @@ const neverASession: RunCommandDependencies["executeSession"] = () =>
 const passingPreflight: RunCommandDependencies["assertPreflight"] = () =>
 	Promise.resolve();
 
+const missingPreflight = {
+	status: "MISSING",
+	missing: "preflight call metrics",
+} as const;
+
 const passingProbe: RunCommandDependencies["probeModel"] = () =>
-	Promise.resolve(undefined);
+	Promise.resolve(missingPreflight);
 
 const smokeCase: SessionCase = {
 	kind: "session",
@@ -59,6 +66,17 @@ const smokeCase: SessionCase = {
 	projectFiles: [],
 	checks: [{ kind: "word-band", max: 1 }],
 };
+
+const sessionMetrics = {
+	costUsd: 0.02,
+	inputTokens: 10,
+	outputTokens: 2,
+	cacheReadTokens: 3,
+	cacheWriteTokens: 4,
+	turns: 1,
+};
+
+const testResources = TestResources.forEachTest();
 
 const pipeline: PipelineDefinition = {
 	statuses: ["To Do", "Build", "Done"],
@@ -273,7 +291,7 @@ describe(runRunCommand.name, () => {
 				assertPreflight: (inputs) => {
 					preflighted.push(inputs);
 
-					return Promise.resolve(undefined);
+					return Promise.resolve();
 				},
 				probeModel: passingProbe,
 				executeSession: neverASession,
@@ -677,6 +695,7 @@ describe("runRunCommand for a session case", () => {
 
 	it("approves the whole confirmed command before the model probe and reps", async () => {
 		const { output } = recordOutput();
+		const runsDirectory = await testResources.createControlDirectory();
 		const events: string[] = [];
 		const orderedOutput = {
 			stdout: output.stdout,
@@ -707,41 +726,65 @@ describe("runRunCommand for a session case", () => {
 				probeModel: () => {
 					events.push("probe");
 
-					return Promise.resolve(undefined);
+					return Promise.resolve({
+						status: "COMPLETE" as const,
+						call: { metrics: sessionMetrics },
+					});
 				},
 				execute: () => Promise.reject(new Error("no pipeline here")),
 				executeSession: (config, commandOutput, loaded, boundary) =>
 					executeSessionRun(config, commandOutput, loaded, {
 						...boundary,
+						runsDirectory,
 						runDebug: () =>
 							Promise.reject(new Error("debug attempt must not start")),
-						runConfirmed: (request) => {
-							events.push("reps");
-							expect(request.projectedCost).toEqual({
-								reps: 2,
-								perRepMaximumUsd: 0.2,
-								preflightMaximumUsd: 0.1,
-								totalMaximumUsd: 0.5,
-							});
+						executeAttempt: async (plan) => {
+							events.push(`rep:${String(plan.ordinal)}`);
+							const transcriptFile = join(
+								plan.recordDirectory,
+								"transcript.jsonl",
+							);
+							await Bun.write(transcriptFile, "transcript\n");
 
-							return Promise.resolve({
-								groupRecordFile: "/runs/group.json",
-								reportFile: "/runs/report.json",
-								repRecordFiles: ["/runs/rep-1.json", "/runs/rep-2.json"],
-							});
+							return {
+								attemptDirectory: join(plan.recordDirectory, "execution"),
+								reply: "OK",
+								transcriptFile,
+								metrics: sessionMetrics,
+								outcome: "SUCCESSFUL",
+								checks: [
+									{ kind: "word-band", status: "PASS", detail: "1 word" },
+								],
+								contextManifest: undefined,
+							};
 						},
 					}),
 			},
 		);
 
-		expect(events).toEqual([
+		expect(events.slice(0, 4)).toEqual([
 			"output:Projected maximum cost: $0.50 ($0.10 preflight + 2 reps x $0.20)",
 			"probe",
-			"reps",
-			"output:Confirmation group: /runs/group.json",
-			"output:Confirmation rep: /runs/rep-1.json",
-			"output:Confirmation rep: /runs/rep-2.json",
+			"rep:1",
+			"rep:2",
 		]);
+		const [groupId] = await readdir(join(runsDirectory, "confirmations"));
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(
+				join(
+					runsDirectory,
+					"confirmations",
+					groupId ?? "missing",
+					"group.json",
+				),
+			).text(),
+		);
+		expect(group.projectedCost).toEqual({
+			reps: 2,
+			perRepMaximumUsd: 0.2,
+			preflightMaximumUsd: 0.1,
+			totalMaximumUsd: 0.5,
+		});
 	});
 
 	it("halts before the session attempt when the declared model is not available", async () => {
@@ -794,7 +837,7 @@ describe("runRunCommand for a session case", () => {
 					probeModel: (model) => {
 						probes.push(model);
 
-						return Promise.resolve(undefined);
+						return Promise.resolve(missingPreflight);
 					},
 					execute: () => Promise.reject(new Error("no pipeline here")),
 					executeSession: neverASession,
@@ -806,17 +849,69 @@ describe("runRunCommand for a session case", () => {
 		expect(probes).toEqual([]);
 	});
 
-	it("refuses mutable global corpus input before the model probe, naming ACT-143", async () => {
+	it.each(["CLAUDE.md", "skills/build/SKILL.md"])(
+		"refuses mutable global corpus input %s before the model probe, naming ACT-143",
+		async (corpusFile) => {
+			const { output } = recordOutput();
+			const calls: string[] = [];
+			const unsupportedCase: SessionCase = {
+				...smokeCase,
+				declaration: {
+					...smokeCase.declaration,
+					corpusFiles: [corpusFile],
+				},
+				corpusFiles: [corpusFile],
+			};
+
+			const failure = await failureOf(
+				runRunCommand(
+					{
+						args: [
+							"--case",
+							"smoke",
+							...sessionArgs,
+							"--confirm",
+							"--reps",
+							"2",
+							"--yes",
+						],
+						json: false,
+						stdinIsTerminal: false,
+					},
+					{
+						output,
+						requireCase: () => Promise.resolve(unsupportedCase),
+						assertPreflight: passingPreflight,
+						probeModel: () => {
+							calls.push("probe");
+
+							return Promise.resolve(missingPreflight);
+						},
+						execute: () => Promise.reject(new Error("no pipeline here")),
+						executeSession: (config, commandOutput, loaded, boundary) =>
+							executeSessionRun(config, commandOutput, loaded, {
+								...boundary,
+								executeAttempt: () => {
+									calls.push("rep");
+
+									return Promise.reject(new Error("must not run"));
+								},
+							}),
+					},
+				),
+			);
+
+			expect(failure).toBeInstanceOf(RefusedPreconditionError);
+			expect(failure.message).toContain("ACT-143");
+			expect(calls).toEqual([]);
+		},
+	);
+
+	it("classifies an invalid confirmed session corpus as a usage error", async () => {
 		const { output } = recordOutput();
+		const runsDirectory = await testResources.createControlDirectory();
 		const calls: string[] = [];
-		const unsupportedCase: SessionCase = {
-			...smokeCase,
-			declaration: {
-				...smokeCase.declaration,
-				corpusFiles: ["CLAUDE.md"],
-			},
-			corpusFiles: ["CLAUDE.md"],
-		};
+		const missingCorpus = join(runsDirectory, "missing-corpus");
 
 		const failure = await failureOf(
 			runRunCommand(
@@ -825,6 +920,8 @@ describe("runRunCommand for a session case", () => {
 						"--case",
 						"smoke",
 						...sessionArgs,
+						"--corpus",
+						missingCorpus,
 						"--confirm",
 						"--reps",
 						"2",
@@ -835,18 +932,19 @@ describe("runRunCommand for a session case", () => {
 				},
 				{
 					output,
-					requireCase: () => Promise.resolve(unsupportedCase),
+					requireCase: loadsSmoke(),
 					assertPreflight: passingPreflight,
 					probeModel: () => {
 						calls.push("probe");
 
-						return Promise.resolve(undefined);
+						return Promise.resolve(missingPreflight);
 					},
 					execute: () => Promise.reject(new Error("no pipeline here")),
 					executeSession: (config, commandOutput, loaded, boundary) =>
 						executeSessionRun(config, commandOutput, loaded, {
 							...boundary,
-							runConfirmed: () => {
+							runsDirectory,
+							executeAttempt: () => {
 								calls.push("rep");
 
 								return Promise.reject(new Error("must not run"));
@@ -856,9 +954,8 @@ describe("runRunCommand for a session case", () => {
 			),
 		);
 
-		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).toContain("ACT-143");
-		expect(calls).toEqual([]);
+		expect(failure).toBeInstanceOf(UsageError);
+		expect(calls).toEqual(["probe"]);
 	});
 
 	it.each(["--target", "--pipeline"])(

@@ -131,14 +131,11 @@ export async function settleDiagnosticConfirmationRep(
 	};
 }
 
-interface ConfirmationGroupFinalization {
-	readonly mode: "stage" | "pipeline" | "session";
+interface ConfirmationGroupFinalizationBase {
 	readonly caseId: string;
 	readonly groupId: string;
 	readonly reps: number;
 	readonly declaredStages: readonly string[];
-	readonly inputs: ConfirmationGroupInputs | SessionConfirmationGroupInputs;
-	readonly projectedCost: ConfirmationCostProjection;
 	readonly approvalMethod: "interactive" | "yes";
 	readonly repResults: readonly ConfirmationRepResult[];
 	readonly worktreesDirectory: string;
@@ -147,7 +144,6 @@ interface ConfirmationGroupFinalization {
 	readonly groupFile: string;
 	readonly reportFile: string;
 	readonly makespanMs: number;
-	readonly preflight?: SessionConfirmationGroupRecord["preflight"] | undefined;
 }
 
 type ConfirmationGroupLineage =
@@ -176,6 +172,24 @@ interface SessionConfirmationGroupInputs {
 	readonly effort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 }
+
+type ConfirmationGroupFinalization = ConfirmationGroupFinalizationBase &
+	(
+		| {
+				readonly mode: "stage" | "pipeline";
+				readonly inputs: ConfirmationGroupInputs;
+				readonly projectedCost: ConfirmationCostProjection;
+				readonly preflight?: never;
+		  }
+		| {
+				readonly mode: "session";
+				readonly inputs: SessionConfirmationGroupInputs;
+				readonly projectedCost: ConfirmationCostProjection & {
+					readonly preflightMaximumUsd: number;
+				};
+				readonly preflight: SessionConfirmationGroupRecord["preflight"];
+		  }
+	);
 
 export interface ConfirmationGroupOutcome {
 	readonly groupRecordFile: string;
@@ -229,15 +243,14 @@ export async function finalizeConfirmationGroup(
 					...resources,
 					commandTotal: buildSessionCommandTotal(
 						resources,
-						finalization.preflight?.status === "COMPLETE"
+						finalization.preflight.status === "COMPLETE"
 							? {
 									status: "COMPLETE",
 									metrics: finalization.preflight.call.metrics,
 								}
 							: {
 									status: "MISSING",
-									missing:
-										finalization.preflight?.missing ?? "preflight call metrics",
+									missing: finalization.preflight.missing,
 								},
 					),
 				}
@@ -256,17 +269,9 @@ export async function finalizeConfirmationGroup(
 					...commonReport,
 					judgeAgreement: filterJudgeAgreementReport(
 						await loadJudgeAgreementReport(finalization.runsDirectory),
-						[
-							"judgeModel" in finalization.inputs
-								? finalization.inputs.judgeModel
-								: "",
-						],
+						[finalization.inputs.judgeModel],
 					),
 				};
-	await Bun.write(
-		finalization.reportFile,
-		`${JSON.stringify(report, null, 2)}\n`,
-	);
 	const sharedGroup = {
 		caseId: finalization.caseId,
 		groupId: finalization.groupId,
@@ -296,6 +301,10 @@ export async function finalizeConfirmationGroup(
 					mode: finalization.mode,
 					...sharedGroup,
 				});
+	await Bun.write(
+		finalization.reportFile,
+		`${JSON.stringify(report, null, 2)}\n`,
+	);
 	await Bun.write(
 		finalization.groupFile,
 		`${JSON.stringify(group, null, 2)}\n`,

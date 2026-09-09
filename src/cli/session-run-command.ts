@@ -7,11 +7,6 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
-import {
-	corpusEntries,
-	projectEntries,
-	reconcileManifest,
-} from "#benchmark/context-manifest";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
@@ -32,11 +27,8 @@ import { claudeProjectsDirectory } from "#benchmark/session-capture";
 import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type { SessionConfirmationRepPlan } from "#benchmark/session-confirmation";
-import type {
-	CorpusSnapshotOrigin,
-	SessionAttemptRecord,
-} from "#benchmark/session-record";
-import { sessionAttemptRecordSchema } from "#benchmark/session-record";
+import type { SessionAttemptRecord } from "#benchmark/session-record";
+import { buildSessionAttemptRecord } from "#benchmark/session-record";
 import { asUsageErrorAsync } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
@@ -146,78 +138,6 @@ async function attempted(
 	}
 }
 
-interface AttemptRecordInputs {
-	readonly sessionCase: SessionCase;
-	readonly settings: SessionSettings;
-	readonly lineage: string;
-	readonly corpusFiles: readonly ResolvedCorpusFile[];
-	readonly corpusOrigin: CorpusSnapshotOrigin;
-	readonly attempt: SessionAttempt;
-	readonly elapsedMs: number;
-}
-
-/**
- * The record is assembled rather than declared in one literal because its three
- * optional keys must be omitted, not set to undefined: exact optional property
- * types make those different shapes and the schema is strict about which it
- * takes.
- */
-interface MutableAttemptRecord extends SessionAttemptRecord {
-	effort?: SessionAttemptRecord["effort"];
-	reply?: SessionAttemptRecord["reply"];
-	metrics?: SessionAttemptRecord["metrics"];
-	contextManifest?: SessionAttemptRecord["contextManifest"];
-	divergences?: SessionAttemptRecord["divergences"];
-}
-
-/**
- * An absent `reply` is the session that produced none: the schema pairs it with
- * the `NO_REPLY` outcome and an empty check list, so a reply that never arrived
- * cannot be recorded as one that passed its checks.
- */
-function buildAttemptRecord(
-	inputs: Immutable<AttemptRecordInputs>,
-): SessionAttemptRecord {
-	const { attempt, settings, sessionCase } = inputs;
-	const record: MutableAttemptRecord = {
-		schemaVersion: 1,
-		caseId: sessionCase.declaration.id,
-		lineage: inputs.lineage,
-		model: settings.model,
-		sessionBudgetUsd: settings.budgetUsd,
-		corpusFiles: inputs.corpusFiles.map((file) => ({ ...file })),
-		corpusOrigin: inputs.corpusOrigin,
-		prompt: sessionCase.prompt,
-		transcriptFile: attempt.transcriptFile,
-		outcome: attempt.outcome,
-		checks: attempt.checks.map((check) => ({ ...check })),
-		elapsedMs: inputs.elapsedMs,
-	};
-
-	if (settings.effort !== undefined) {
-		record.effort = settings.effort;
-	}
-	if (attempt.reply !== undefined) {
-		record.reply = attempt.reply;
-	}
-	if (attempt.metrics !== undefined) {
-		record.metrics = { ...attempt.metrics };
-	}
-	if (attempt.contextManifest !== undefined) {
-		record.contextManifest = {
-			paths: attempt.contextManifest.paths.map((entry) => ({ ...entry })),
-		};
-		record.divergences = [
-			...reconcileManifest(attempt.contextManifest, [
-				...corpusEntries(sessionCase.corpusFiles),
-				...projectEntries(sessionCase.projectFiles),
-			]),
-		];
-	}
-
-	return record;
-}
-
 export interface SessionRunOutcome {
 	readonly recordFile: string;
 	readonly record: SessionAttemptRecord;
@@ -251,17 +171,15 @@ export async function runSessionDebugAttempt(
 		corpusSnapshot: corpus.snapshot,
 	});
 
-	const record = sessionAttemptRecordSchema.parse(
-		buildAttemptRecord({
-			sessionCase,
-			settings,
-			lineage,
-			corpusFiles,
-			corpusOrigin: corpus.snapshot.origin,
-			attempt,
-			elapsedMs: Date.now() - startedAt,
-		}),
-	);
+	const record = buildSessionAttemptRecord({
+		sessionCase,
+		settings,
+		lineage,
+		corpusFiles,
+		corpusOrigin: corpus.snapshot.origin,
+		attempt,
+		elapsedMs: Date.now() - startedAt,
+	});
 	const { recordFile } = attemptPaths;
 	await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
 

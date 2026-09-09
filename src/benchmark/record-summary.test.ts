@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { buildComparisonReport } from "./comparison-report";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
-import { confirmationGroupRecordSchema } from "./confirmation-record";
+import {
+	confirmationGroupRecordSchema,
+	parseConfirmationGroupRecord,
+} from "./confirmation-record";
 import type {
 	GroupReportSummaryRecord,
 	RunSummaryRecord,
@@ -90,6 +93,40 @@ const GROUP_REPORT: GroupReportSummaryRecord = parseGroupReportSummaryRecord(
 	}),
 );
 
+const SESSION_GROUP_RECORD = parseConfirmationGroupRecord(
+	JSON.stringify({
+		schemaVersion: 2,
+		caseId: "smoke",
+		groupId: "session-group",
+		mode: "session",
+		reps: 2,
+		declaredStages: ["checks"],
+		inputs: {
+			lineage: { kind: "SESSION", lineage: "lineage-1" },
+			files: [
+				{ kind: "case", path: "inputs/case.json", sha256: "a".repeat(64) },
+			],
+			model: "sonnet",
+			sessionBudgetUsd: 0.2,
+		},
+		projectedCost: {
+			reps: 2,
+			perRepMaximumUsd: 0.2,
+			preflightMaximumUsd: 0.1,
+			totalMaximumUsd: 0.5,
+		},
+		preflight: { status: "MISSING", missing: "preflight call metrics" },
+		approval: { method: "yes", approved: true },
+		repRecords: [1, 2].map((ordinal) => ({
+			repId: `session-group-rep-${ordinal}`,
+			ordinal,
+			path: `reps/session-group-rep-${ordinal}/rep.json`,
+		})),
+		reportFile: "report.json",
+		makespanMs: 100,
+	}),
+);
+
 describe(runSummary.name, () => {
 	it("renders the stages, their grades, the verdict, and the total cost", () => {
 		expect(runSummary("2026-09-03T00-00-00.000Z", RUN_RECORD)).toBe(
@@ -143,6 +180,12 @@ Cost $4.00 over 2 reps.
 			"Cost unavailable: preflight call metrics.",
 		);
 		expect(groupSummary(GROUP_RECORD, report)).not.toContain("Cost $4.00");
+	});
+
+	it("does not fall back to rep-only cost when a v2 session report omits its command total", () => {
+		expect(groupSummary(SESSION_GROUP_RECORD, GROUP_REPORT)).toContain(
+			"Cost unavailable: command total evidence is missing.",
+		);
 	});
 });
 

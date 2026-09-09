@@ -2,9 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { z } from "zod";
+import type { ConfirmationRepRecord } from "./confirmation-record";
 import {
+	confirmationRepRecordSchema,
 	parseConfirmationGroupRecord,
-	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import { runCommand } from "./command";
 import { parseArgs } from "./config";
@@ -26,6 +27,10 @@ import { AUDIT_LOG_PIPELINE_PATH, TestResources } from "./test-support";
 import { WorkflowExecutionError } from "./workflow";
 
 const testResources = TestResources.forEachTest();
+
+function parseConfirmationRepRecord(text: string): ConfirmationRepRecord {
+	return confirmationRepRecordSchema.parse(JSON.parse(text));
+}
 
 describe(runPipelineConfirmation.name, () => {
 	it("records the resolved Judge model in pipeline confirmation evidence", async () => {

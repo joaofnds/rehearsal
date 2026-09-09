@@ -111,6 +111,55 @@ describe(loadComparisonEvidence.name, () => {
 		);
 	});
 
+	it("refuses v2 session groups until ACT-151 defines their comparison semantics", async () => {
+		await Bun.write(
+			fixture.groupFile("case-1", "control"),
+			`${JSON.stringify(
+				{
+					schemaVersion: 2,
+					caseId: "case-1",
+					groupId: "session-group",
+					mode: "session",
+					reps: 2,
+					declaredStages: ["checks"],
+					inputs: {
+						lineage: { kind: "SESSION", lineage: "lineage-1" },
+						files: [
+							{
+								kind: "case",
+								path: "inputs/case.json",
+								sha256: "a".repeat(64),
+							},
+						],
+						model: "sonnet",
+						sessionBudgetUsd: 0.2,
+					},
+					projectedCost: {
+						reps: 2,
+						perRepMaximumUsd: 0.2,
+						preflightMaximumUsd: 0.1,
+						totalMaximumUsd: 0.5,
+					},
+					preflight: { status: "MISSING", missing: "metrics" },
+					approval: { method: "yes", approved: true },
+					repRecords: [1, 2].map((ordinal) => ({
+						repId: `session-group-rep-${ordinal}`,
+						ordinal,
+						path: `reps/session-group-rep-${ordinal}/rep.json`,
+					})),
+					reportFile: "report.json",
+					makespanMs: 1,
+				},
+				null,
+				2,
+			)}\n`,
+		);
+
+		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
+			"ACT-151",
+		);
+	});
+
 	it("names a missing referenced rep record", async () => {
 		await rm(fixture.repFile("case-2", "control", 1));
 

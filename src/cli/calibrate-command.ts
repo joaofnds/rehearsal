@@ -31,7 +31,6 @@ import { humanReviewSchema } from "#benchmark/contracts";
 import type { JudgeAgreementCalibration } from "#benchmark/judge-agreement";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
 import { runJudge } from "#benchmark/judge";
-import type { ModelPreflightEvidence } from "#benchmark/preflight";
 import { runStageJudge } from "#benchmark/stage-grading";
 import { completeRunArtifact } from "#benchmark/run";
 import { benchmarkRunPaths } from "#benchmark/run-layout";
@@ -420,9 +419,7 @@ function judgeKnobsOf(record: Readonly<CalibratableRecord>): JudgeKnobs {
 export interface CalibrateDependencies {
 	readonly output: CommandOutput;
 	readonly buildJudges: (knobs: Readonly<JudgeKnobs>) => CalibrateJudges;
-	readonly probeModel: (
-		model: string,
-	) => Promise<ModelPreflightEvidence | undefined>;
+	readonly probeModel: (model: string) => Promise<void>;
 }
 
 export async function runCalibrate(

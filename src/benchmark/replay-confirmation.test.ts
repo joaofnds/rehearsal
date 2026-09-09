@@ -3,9 +3,10 @@ import { mkdir, mkdtemp, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import type { ConfirmationRepRecord } from "./confirmation-record";
 import {
+	confirmationRepRecordSchema,
 	parseConfirmationGroupRecord,
-	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import {
 	captureStageCorpus,
@@ -41,6 +42,10 @@ import {
 } from "./replay-confirmation-test-support";
 
 const testResources = TestResources.forEachTest();
+
+function parseConfirmationRepRecord(text: string): ConfirmationRepRecord {
+	return confirmationRepRecordSchema.parse(JSON.parse(text));
+}
 
 describe(runReplayConfirmation.name, () => {
 	it("reports agreement for the resolved Judge model", async () => {

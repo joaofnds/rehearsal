@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { SessionCase } from "#benchmark/case";
+import { CommandError } from "#benchmark/command";
 import type { Immutable } from "#benchmark/contracts";
 import { projectSlug } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
@@ -929,9 +930,33 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(failure).toBeInstanceOf(Error);
+		expect(failure).not.toBeInstanceOf(SessionInvocationError);
 		expect(
 			await readdir(join(projects, projectSlug(attemptCwd))).catch(() => []),
 		).toEqual([]);
+	});
+
+	it("keeps a schema-invalid provider envelope outside typed invocation failures", async () => {
+		const projects = await projectsRoot();
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.resolve(
+							JSON.stringify({
+								session_id: "session-1",
+								is_error: "yes",
+								result: "not valid",
+							}),
+						),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(Error);
+		expect(failure).not.toBeInstanceOf(SessionInvocationError);
 	});
 
 	/**
@@ -1099,6 +1124,53 @@ describe(runSessionAttempt.name, () => {
 		);
 	});
 
+	it("retains metrics from a rejected command's valid provider envelope", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "partial reply");
+		const records = await recordDirectory();
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: records,
+					runClaude: async (command, cwd) => {
+						await claude.run(command, cwd);
+						throw new CommandError(
+							command,
+							1,
+							JSON.stringify({
+								session_id: namedSession(command),
+								is_error: true,
+								result: "session exhausted its budget",
+								total_cost_usd: 0.0012,
+								num_turns: 2,
+								duration_ms: 900,
+								duration_api_ms: 800,
+								usage: {
+									input_tokens: 12,
+									output_tokens: 3,
+									cache_read_input_tokens: 0,
+									cache_creation_input_tokens: 0,
+								},
+							}),
+							"",
+						);
+					},
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInvocationError);
+		expect(failure).toMatchObject({
+			message: "session exhausted its budget",
+			attempt: {
+				outcome: "EXECUTION_FAILED",
+				metrics: { costUsd: 0.0012, turns: 2 },
+			},
+		});
+	});
+
 	it("preserves a valid provider error envelope as a typed failed invocation", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "partial reply");
@@ -1143,6 +1215,29 @@ describe(runSessionAttempt.name, () => {
 		expect(await Bun.file(join(records, "transcript.jsonl")).text()).toContain(
 			"partial reply",
 		);
+	});
+
+	it("gives a blank provider error result a recordable diagnostic", async () => {
+		const projects = await projectsRoot();
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.resolve(
+							JSON.stringify({
+								session_id: "session-1",
+								is_error: true,
+								result: "",
+							}),
+						),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInvocationError);
+		expect(failure.message).toBe("Claude session failed");
 	});
 
 	it("removes the slug directory itself once the attempt's files are gone", async () => {

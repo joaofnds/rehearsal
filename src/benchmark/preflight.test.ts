@@ -164,7 +164,7 @@ describe(assertPipelinePreflight.name, () => {
 		json: "{}",
 		hashed: { path: "/settings.json", sha256: "b".repeat(64) },
 	};
-	const passingProbe = (): Promise<undefined> => Promise.resolve(undefined);
+	const passingProbe = (): Promise<void> => Promise.resolve();
 
 	function dependencies(
 		overrides: Partial<Parameters<typeof assertPipelinePreflight>[1]> = {},

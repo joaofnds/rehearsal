@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
+	SessionConfirmationGroupRecord,
+	SessionConfirmationRepRecord,
 } from "./confirmation-record";
 import {
 	parseConfirmationGroupRecord,
@@ -62,6 +64,45 @@ describe(parseConfirmationRepRecord.name, () => {
 			},
 			workerTrajectorySteps: 3,
 			elapsedMs: 500,
+		};
+	}
+
+	function sessionRepRecord(): SessionConfirmationRepRecord {
+		const workerMetrics = {
+			costUsd: 0.5,
+			inputTokens: 100,
+			outputTokens: 20,
+			cacheReadTokens: 30,
+			cacheWriteTokens: 40,
+			turns: 3,
+		};
+
+		return {
+			schemaVersion: 2 as const,
+			caseId: "smoke",
+			groupId: "session-group",
+			repId: "session-group-rep-1",
+			ordinal: 1,
+			mode: "session" as const,
+			lineage: { kind: "SESSION" as const, lineage: "lineage-1" },
+			outcome: "SUCCESSFUL" as const,
+			stages: [
+				{
+					stage: "checks" as const,
+					status: "JUDGED" as const,
+					grade: "A" as const,
+					verdict: "CONTINUE" as const,
+					elapsedMs: 10,
+					evidence: { recordFile: "attempt.json" },
+				},
+			],
+			finalOutcome: { status: "NOT_APPLICABLE" as const },
+			metrics: {
+				status: "COMPLETE" as const,
+				calls: [{ role: "worker" as const, metrics: workerMetrics }],
+			},
+			workerTrajectorySteps: 3,
+			elapsedMs: 10,
 		};
 	}
 
@@ -193,6 +234,49 @@ describe(parseConfirmationRepRecord.name, () => {
 			"Worker trajectory steps must equal provider-reported worker turns",
 		);
 	});
+
+	it("omits ephemeral v2 session paths and refuses worktree claims", () => {
+		const record = sessionRepRecord();
+
+		expect(parseConfirmationRepRecord(JSON.stringify(record))).toEqual(record);
+		expect(() =>
+			parseConfirmationRepRecord(
+				JSON.stringify({ ...record, worktreePath: "/tmp/worktree" }),
+			),
+		).toThrow();
+		expect(() =>
+			parseConfirmationRepRecord(
+				JSON.stringify({ ...record, attemptDirectory: "/tmp/attempt" }),
+			),
+		).toThrow();
+	});
+
+	it.each([
+		{ grade: "A", verdict: "STOP" },
+		{ grade: "F", verdict: "CONTINUE" },
+	])("refuses the impossible judged pair $grade/$verdict", (judgment) => {
+		const record = sessionRepRecord();
+
+		expect(() =>
+			parseConfirmationRepRecord(
+				JSON.stringify({
+					...record,
+					outcome: "UNSUCCESSFUL",
+					stages: [{ ...record.stages[0], ...judgment }],
+				}),
+			),
+		).toThrow();
+	});
+
+	it("refuses an unsuccessful v2 session rep with passing complete evidence", () => {
+		const record = sessionRepRecord();
+
+		expect(() =>
+			parseConfirmationRepRecord(
+				JSON.stringify({ ...record, outcome: "UNSUCCESSFUL" }),
+			),
+		).toThrow("Passing checks with complete metrics require a successful rep");
+	});
 });
 
 describe(parseConfirmationGroupRecord.name, () => {
@@ -252,6 +336,47 @@ describe(parseConfirmationGroupRecord.name, () => {
 		};
 	}
 
+	function sessionGroupRecord(): SessionConfirmationGroupRecord {
+		return {
+			schemaVersion: 2 as const,
+			caseId: "smoke",
+			groupId: "session-group",
+			mode: "session" as const,
+			reps: 2,
+			declaredStages: ["checks"] as const,
+			inputs: {
+				lineage: { kind: "SESSION" as const, lineage: "lineage-1" },
+				files: [
+					{
+						kind: "case" as const,
+						path: "inputs/case.json",
+						sha256: "a".repeat(64),
+					},
+				],
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+			},
+			projectedCost: {
+				reps: 2,
+				perRepMaximumUsd: 0.2,
+				preflightMaximumUsd: 0.1,
+				totalMaximumUsd: 0.5,
+			},
+			preflight: {
+				status: "MISSING" as const,
+				missing: "preflight call metrics",
+			},
+			approval: { method: "yes" as const, approved: true as const },
+			repRecords: [1, 2].map((ordinal) => ({
+				repId: `session-group-rep-${ordinal}`,
+				ordinal,
+				path: `reps/session-group-rep-${ordinal}/rep.json`,
+			})),
+			reportFile: "report.json",
+			makespanMs: 100,
+		};
+	}
+
 	it("accepts one frozen group envelope with every rep reference", () => {
 		const record = groupRecord();
 
@@ -302,6 +427,21 @@ describe(parseConfirmationGroupRecord.name, () => {
 
 		expect(() => parseConfirmationGroupRecord(JSON.stringify(record))).toThrow(
 			"Group must reference every requested rep exactly once",
+		);
+	});
+
+	it("rejects a v2 session projection whose total omits part of the command", () => {
+		const record = sessionGroupRecord();
+
+		expect(() =>
+			parseConfirmationGroupRecord(
+				JSON.stringify({
+					...record,
+					projectedCost: { ...record.projectedCost, totalMaximumUsd: 0.4 },
+				}),
+			),
+		).toThrow(
+			"Session projected total must equal preflight plus every rep maximum",
 		);
 	});
 });

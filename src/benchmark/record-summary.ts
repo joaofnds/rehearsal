@@ -162,7 +162,13 @@ export function groupSummary(
 	const total = costs.reduce((sum, cost) => sum + cost, 0);
 	const { commandTotal } = report.resources;
 	let costLine = `Cost ${usd(total)} over ${String(costs.length)} reps.`;
-	if (commandTotal?.status === "MISSING") {
+	if (
+		record.schemaVersion === 2 &&
+		record.mode === "session" &&
+		commandTotal === undefined
+	) {
+		costLine = "Cost unavailable: command total evidence is missing.";
+	} else if (commandTotal?.status === "MISSING") {
 		costLine = `Cost unavailable: ${commandTotal.missing.join(", ")}.`;
 	} else if (commandTotal?.status === "COMPLETE") {
 		costLine = `Cost ${usd(commandTotal.metrics.costUsd)} for the confirmed command.`;
