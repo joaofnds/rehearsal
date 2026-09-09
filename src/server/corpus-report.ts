@@ -91,15 +91,18 @@ interface InstructionsEntry {
  * either as absence would report the corpus as one that has no instruction
  * file, under a digest that says so confidently.
  *
- * Only a regular file holds instruction bytes, so anything else present under
- * that name is refused: a missing link target, a link chain that never
- * resolves, a directory, a path leaving the corpus root, bytes that cannot be
- * read, and a device or pipe. Each otherwise reaches the screen as a failure
- * that names no file, and two do worse than that. A device is reported by
- * `hashCorpusFiles` as a file that does not exist, which is false and sends
- * the reader looking for a file that is there. A pipe with no writer blocks
- * the read forever, so the request never returns and the screen waits rather
- * than failing.
+ * What this decides is what the entry *is*: absent, or present as something
+ * that cannot hold instruction bytes. Only a regular file can, so a missing
+ * link target, a link chain that never resolves, a directory, a device, and a
+ * pipe are each refused here by name. Whether the bytes can actually be read,
+ * and whether the path stays inside the corpus, are answered by the hash
+ * itself, so those two refusals are made at the call site below.
+ *
+ * The device and the pipe are why this runs before the hash rather than
+ * leaving every failure to the catch there. `hashCorpusFiles` reports a device
+ * as a file that does not exist, which is false and sends the reader looking
+ * for a file that is there. A pipe with no writer blocks its read forever, so
+ * the request never returns at all and the screen waits instead of failing.
  */
 async function readInstructionsEntry(root: string): Promise<InstructionsEntry> {
 	const path = join(root, CORPUS_INSTRUCTIONS_PATH);
