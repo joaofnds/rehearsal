@@ -54,8 +54,8 @@ export function CorpusPage(): React.JSX.Element {
 			{query.isSuccess && query.data.refusals.length > 0 ? (
 				<div className="rh-corpus__refusals" role="alert">
 					<p>
-						These entries could not be hashed and are missing from the table, a
-						refused layout directory whole:
+						These entries could not be hashed, so they are missing from the
+						table, and a refused layout directory is missing from it whole:
 					</p>
 					<ul>
 						{query.data.refusals.map((refusal) => (

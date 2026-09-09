@@ -107,7 +107,7 @@ describe(CorpusPage.name, () => {
 			await waitFor(() => {
 				expect(
 					screen.getByText(
-						"These entries could not be hashed and are missing from the table, a refused layout directory whole:",
+						"These entries could not be hashed, so they are missing from the table, and a refused layout directory is missing from it whole:",
 					),
 				).toBeInTheDocument();
 			});
