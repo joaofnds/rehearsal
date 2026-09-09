@@ -4,7 +4,7 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-09 13:01'
+updated_date: '2026-09-09 15:11'
 labels: []
 dependencies: []
 type: feature
@@ -43,4 +43,16 @@ Triage verdict, 2026-09-09 (doc-56). Disposition: deferred, blocked outside this
 AC#4 requires the provider spend recorded against a budget set before the run starts, and no spending authority for a full compare is recorded anywhere on this board. That number is Joao's to give and no session can invent it. It is the one card here excluded from the queue for a reason a session cannot route around, rather than for timing.
 
 What would unblock it: a typed budget figure for a two-case, three-arm, two-rep compare. Everything else the card names is buildable today.
+
+Overseeing finding, 2026-09-09: the 'blocked on a second benchmark case' premise is wrong, and it changes this card's price by roughly 4x.
+
+The report schema constrains counts, not case kinds: comparison-record.ts requires cases min 2, reps min 2, and three arms per case, and nothing there or in comparison-loader.ts requires a pipeline case. The report's mode field imports confirmationModeSchema from confirmation-record.ts, whose enum is ['stage','pipeline','session'], so 'session' is a valid comparison mode, with a session case's checks as its one stage (covered by confirmation-record.test.ts, 'accepts a session group at schema version 1, with checks as its one stage').
+
+cases/ already holds ten session cases (four brief-reply, four doctrine, manifest-probe, smoke) beside the one pipeline case. So a two-case comparison is assemblable today from session cases, and the second pipeline case this card called a blocker is only needed for a pipeline-mode comparison.
+
+Pricing from 72 recorded costUsd values across .benchmark-runs, totalling 83.02 USD: median 0.739, p90 1.704, max 8.686. Session-case runs median 0.818. The audit-log pipeline stages are the expensive tail: one build stage cost 8.686.
+
+At 2 cases x 3 arms x 2 reps = 12 runs: session-mode expects about 9.82 and runs about 20.45 if every run lands at p90. Pipeline-mode expects about 41.40 and about 104.23 at the p90 tail.
+
+The old scale figure on this card, 0.43 to 0.53 USD, came from two failed shape attempts, which are the cheapest runs on record and understate a completed run.
 <!-- SECTION:NOTES:END -->

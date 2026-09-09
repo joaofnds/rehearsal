@@ -4,7 +4,7 @@ title: stale's live-corpus branch has no test
 status: To Do
 assignee: []
 created_date: '2026-09-07 01:22'
-updated_date: '2026-09-09 13:01'
+updated_date: '2026-09-09 15:12'
 labels: []
 milestone: m-1
 dependencies: []
@@ -50,4 +50,10 @@ Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Prior
 Raised for the same reason as ACT-68: these two are all that remain of m-1, the goal's first increment, at 13 of 15. Left at Low the milestone the goal names first stays open indefinitely behind work the goal orders after it.
 
 Its subject is a missing test on stale's live-corpus branch, and that branch is exactly the surface ACT-137 and ACT-134 are about to change, so the coverage is worth having before those builds rather than after.
+
+Overseeing note, 2026-09-09: this card's priority depends on what 'prove the loop once' means, which is open for João.
+
+The milestone's own sentence, 'run a stage, edit an instruction, replay, and read a comparison', is demonstrably satisfied: ACT-39 carries all four of its criteria checked, including the replay against a corpus with exactly one instruction file changed and the answer to whether that edit improved the stage. Under the reading that the milestone is the loop demonstrably running, this card does not gate it and should return to Low.
+
+Under the reading that every m-1 card must be Done, it gates the milestone at its current Medium. Triage raised it to Medium on that reading; that raise is the thing to reverse if the first reading is meant.
 <!-- SECTION:NOTES:END -->

@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-04 22:48'
-updated_date: '2026-09-09 13:01'
+updated_date: '2026-09-09 15:12'
 labels: []
 milestone: m-1
 dependencies:
@@ -51,4 +51,10 @@ Medium because it is one of the two cards left in m-1, the goal's first incremen
 Its criterion is satisfiable either way, by making instructions resolve like the other roots or by documenting the asymmetry as deliberate, so it cannot block on a design argument.
 
 Recorded as unsettled, and it is the same question doc-54 raised: whether 'prove the loop once' means every m-1 card is Done or the loop demonstrably running. Medium reflects the first reading without outranking the containment defects, which the second reading would not change.
+
+Overseeing note, 2026-09-09: this card's priority depends on what 'prove the loop once' means, which is open for João.
+
+The milestone's own sentence, 'run a stage, edit an instruction, replay, and read a comparison', is demonstrably satisfied: ACT-39 carries all four of its criteria checked, including the replay against a corpus with exactly one instruction file changed and the answer to whether that edit improved the stage. Under the reading that the milestone is the loop demonstrably running, this card does not gate it and should return to Low.
+
+Under the reading that every m-1 card must be Done, it gates the milestone at its current Medium. Triage raised it to Medium on that reading; that raise is the thing to reverse if the first reading is meant.
 <!-- SECTION:NOTES:END -->

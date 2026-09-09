@@ -4,7 +4,7 @@ title: 'run the audit-log pipeline once, end to end, and record what it cost'
 status: Done
 assignee: []
 created_date: '2026-09-04 01:50'
-updated_date: '2026-09-04 02:15'
+updated_date: '2026-09-09 15:12'
 labels: []
 milestone: m-1
 dependencies: []
@@ -127,4 +127,12 @@ What I did not verify: whether ACT-41 alone would have lifted the grade above B.
 Left running: postgres in the target's compose project (`docker compose` at /Users/joaofnds/code/nest/template). ACT-39 needs it. Redis never started, port 6379 was already taken, and the run did not need it.
 
 Review: not due. No source changed.
+
+Overseeing finding, 2026-09-09: this card sits Done with AC#1 and AC#2 unchecked and no partial or abandoned label, which the board guard forbids. Both are now checkable, and one of them is misworded.
+
+AC#2 is satisfiable today. It failed during the original run, which is what ACT-44 was filed for and fixed. Verified this session: 'rehearsal list runs' returns run:2026-09-06T21-58-29.508Z (audit-log, STOPPED:build, replayable) and 'rehearsal show run:2026-09-06T21-58-29.508Z' prints the artifact, with the stage judge's C grade and the full stage input.
+
+AC#1 names '.benchmark-runs/runs', a directory that does not exist and that the harness never wrote to; the run artifacts sit directly under .benchmark-runs. So the criterion names a storage layout rather than an observable behavior, which is the shape the board rules say fails a card the day another approach is chosen. The behavior it meant, a run's outcome recorded as a retrievable artifact, is what AC#2's verification above shows.
+
+Not rewritten here, because a criterion on a card already in Done is not this session's to restate without the direction that set it. Whoever picks this up should either check both with the evidence above and reword AC#1 as the behavior, or label the card partial with the reason.
 <!-- SECTION:NOTES:END -->
