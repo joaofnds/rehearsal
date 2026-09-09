@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-04 14:47'
+updated_date: '2026-09-09 10:29'
 labels: []
 milestone: m-6
 dependencies: []
@@ -39,4 +39,16 @@ Why: an agent that pipes `--json` into a parser gets a stream with harness prose
 
 <!-- SECTION:NOTES:BEGIN -->
 Triage 2026-09-04, assigned to m-4 and no longer merely a refactor. Decision-3 puts run events into SQLite behind an SSE stream, and this card is what gets harness progress off stdout so it has somewhere better to go. ACT-51 lands on top of it. The earlier note ranking this last was written when nothing consumed the harness's output programmatically; the UI does.
+
+Triage 2026-09-09: two facts in the description are now stale, measured this run.
+
+Count: the card says '17 console.log sites in src/benchmark/'. There are 11, by 'grep -rn console.log src/benchmark/ | wc -l'. By file: run.ts 8, calibration.ts 1, checks.ts 1, target.ts 1.
+
+Named sites: the card says 'workflow.ts prints every agent turn on both the run and replay paths'. src/benchmark/workflow.ts exists and contains no console.log at all. Whatever moved those turns off fd 1 is already done, uncredited to this card. The three run.ts lines the card names (Target:, Original commit:, Workflow backup:) were not individually re-verified this run; only the counts and the workflow.ts absence were.
+
+Two of the eleven are 'log: console.log' passed as an injected writer (calibration.ts:519, run.ts:1144), which is the shape AC#5 asks the other nine to take, so the work left is smaller than eleven raw prints suggests. AC#5 as written ('grep returns no match') would still fail on those two injection sites, so whoever builds this should decide whether AC#5 means no direct prints or literally no occurrences, and say which.
+
+Also stale, in the notes: 'ACT-51 lands on top of it.' ACT-51 is Done as of this run, shipped without this card. So the dependency that note asserts did not hold, and this card is not blocking anything that has already shipped.
+
+Priority left Low as the writer set it. It is m-6's only open card, so m-6 stands at 1 of 2 and this is what closes it.
 <!-- SECTION:NOTES:END -->

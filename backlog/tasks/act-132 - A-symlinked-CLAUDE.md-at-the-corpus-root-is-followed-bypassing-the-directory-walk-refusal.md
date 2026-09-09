@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-08 22:44'
-updated_date: '2026-09-08 23:55'
+updated_date: '2026-09-09 10:30'
 labels: []
 dependencies: []
 documentation:
@@ -435,4 +435,14 @@ Commit 8617b76's tree carries three lines a review process injected into the
 working tree, which I staged by mistake. c3ca1bd removes them. The tip is
 correct and every check passes at HEAD; only that one commit's tree is wrong. I
 did not rewrite published history.
+
+Triage 2026-09-09: record correction to criteria #7 and #19, which both say the live corpus returns 123 files.
+
+Measured 122 this run by corpusReport(liveCorpusSource(), tmpdir()), CLAUDE.md present. doc-51 proposed this correction from its own measurement of 122; this is an independent second measurement, not a relay. Criterion #19 already says the number is a baseline for this machine's ~/.agents tree and not a constant, so 122 replaces 123 as that baseline without reopening the card. The card stays Done.
+
+Found while taking that measurement, and it is the more important half: the first attempt THREW rather than returning a count. SymlinkedEntryError, 'agents/escape.md resolves outside the tree it is named under'. ~/.claude/agents/escape.md was a symlink to /tmp/stale-out-8nUK/secret.md, dated Sep 9 02:43, left in the live corpus by a probe during the ACT-130 session and never cleaned up. It was not chezmoi-managed and not tracked in the dotfiles git.
+
+So the live corpus was unreadable for roughly eight hours: the corpus screen, every live-corpus hash, and any stale --corpus against the live install would have failed. Removed it this run under Ownership, after confirming it was a probe artifact and not configuration, and the count then measured 122.
+
+This is filed as ACT-135, because the defect is that a probe can plant a file in the live corpus and nothing notices.
 <!-- SECTION:NOTES:END -->

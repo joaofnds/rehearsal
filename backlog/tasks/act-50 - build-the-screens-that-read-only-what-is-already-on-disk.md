@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-08 23:17'
+updated_date: '2026-09-09 10:28'
 labels: []
 milestone: m-7
 dependencies:
@@ -50,7 +50,8 @@ Stack: TypeScript on Bun, no framework unless the design demands one, consistent
 - [x] #10 Both new screens render the design's empty state, observed on a checkout with no records at all (source: card description, 'every screen has the empty state the design specifies')
 - [x] #11 Introduces no raw visual value and no component the design system does not already own; anything new is added to the system (source: decision-2)
 - [x] #12 Building the comparison screen touches only a new Router route file, its page component, and any new files under client/src/system/components/ -- a prediction from ACT-53 AC #9, confirmed or corrected here (source: direction 2026-09-07, João: 'I agree' to moving ACT-53 AC #9 onto ACT-50; router.tsx has exactly two routes today, /  and /system, checked 2026-09-08)
-- [ ] #13 The comparison page's What moved tab renders the per-measure interval and verdict the served report carries, replacing the PlannedFeatureBlock
+- [ ] #13 The comparison page's What moved tab renders the per-measure interval and verdict the served report carries, replacing the PlannedFeatureBlock, and the placeholder copy claiming a paired estimate cannot supply the interval is removed with it (source: direction 2026-09-08, commit f835f75, 'ACT-50 reopens to render the What moved tab, rather than a new card'; the copy is a child of the block at comparison-page.tsx:172-178)
+- [ ] #14 The What moved tab is opened in a browser against a comparison recorded on disk, not a fixture, and the rendered interval and verdict are confirmed to match the served qualityReadings field (source: ACT-126 AC#2, absorbed on merge 2026-09-09; no comparison record exists on this checkout, which ACT-114 AC#2 tracks)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -323,6 +324,18 @@ Triage 2026-09-09: this card was reopened to To Do by commit f835f75 (2026-09-08
 Overlap with ACT-126, which was filed at 21:47 the same day from doc-47 and covers the same tab. ACT-126's three criteria are finer than AC#13 and add one thing AC#13 does not state: the tab is opened in a browser against a comparison recorded on disk and the rendered values confirmed against the served field. Merge is on the triage doc for a call, survivor recommended as this card because the direction named it. Whichever survives should carry that browser-confirmation criterion, since it is the only one that observes the screen rather than the code.
 
 Assignee still reads @claude on a card in To Do. Left as the writer set it.
+
+Triage 2026-09-09: merge settled, this card is the survivor. ACT-126 is archived into it.
+
+The call rests on the direction in commit f835f75, read this run: 'ACT-50 reopens to render the What moved tab, rather than a new card.' ACT-126 was a new card for that tab, so the direction rules it out as the home whether or not it was written with ACT-126 in view. doc-50 left this open as a writer's call; the direction had already made it.
+
+AC#13 rewritten to carry its source and to state the placeholder-copy removal that ACT-126 AC#3 held. AC#14 added from ACT-126 AC#2, the browser confirmation against a comparison recorded on disk. The first twelve criteria are byte-identical to their committed text and stay checked, verified by diffing against HEAD after the edit.
+
+Note for whoever picks this up: no comparison record exists under .benchmark-runs/comparisons on this checkout, verified 2026-09-09. AC#14 cannot be observed until one does. ACT-114 AC#2 is the card that settles why none exists, and it is the reason ACT-114 should run first or alongside.
+
+Premise re-verified 2026-09-09: comparison-page.tsx:172-178 still renders PlannedFeatureBlock for the What moved tab with the copy 'Needs a per-measure interval and a reading verdict a paired estimate cannot supply yet', and qualityReadings appears nowhere under client/src/, so the tab is genuinely unbuilt.
+
+CLI fact learned this run, for whoever edits criteria next: --ac APPENDS and --acceptance-criteria REPLACES but clears every check mark, and the two cannot be combined with --check-ac in one command. Restoring checks takes a second command. ACT-50's own earlier notes record a session losing criteria to this same mixup.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

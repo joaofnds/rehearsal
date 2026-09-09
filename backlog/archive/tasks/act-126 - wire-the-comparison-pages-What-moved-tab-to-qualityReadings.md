@@ -4,7 +4,7 @@ title: wire the comparison page's 'What moved' tab to qualityReadings
 status: To Do
 assignee: []
 created_date: '2026-09-08 21:47'
-updated_date: '2026-09-08 23:15'
+updated_date: '2026-09-09 10:28'
 labels: []
 milestone: m-7
 dependencies:
@@ -34,4 +34,14 @@ Triage 2026-09-09: this card and ACT-50 AC#13 are the same work. Commit f835f75 
 This card's own body states 'ACT-50 is not the right home: it is Done'. That is now false: ACT-50 reads To Do, verified 2026-09-09. A seventh instance of the pattern ACT-127 holds.
 
 Merge proposed on the triage doc, survivor ACT-50, since the direction named it. Not archived this run: the choice of survivor is the writer's, and the direction is two hours newer than the card.
+
+Triage 2026-09-09: archived as a duplicate of ACT-50. Survivor is ACT-50, settled by the direction in commit f835f75 (2026-09-08 23:49): 'ACT-50 reopens to render the What moved tab, rather than a new card.' That direction rules on this exact question, and it postdates this card by two hours.
+
+Where each criterion went:
+- AC#1 (render interval and verdict from qualityReadings instead of PlannedFeatureBlock) is ACT-50 AC#13 restated. Dropped as duplicate.
+- AC#3 (remove the placeholder copy) folded into ACT-50 AC#13, which now states it: the copy is a child of the PlannedFeatureBlock at comparison-page.tsx:172-178, so replacing the block removes it.
+- AC#2 (open the tab in a browser against a comparison recorded on disk and confirm rendered values match the served field) carried to ACT-50 as AC#14. It was the only criterion here observing the screen rather than the code.
+- Dependency on ACT-104: ACT-104 is Done, so nothing to carry.
+
+This card's premise 'ACT-50 is not the right home: it is Done' was false at archive time: ACT-50 read To Do, verified 2026-09-09. Recorded on ACT-127 as an instance.
 <!-- SECTION:NOTES:END -->

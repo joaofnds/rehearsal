@@ -4,7 +4,7 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-08 23:16'
+updated_date: '2026-09-09 10:29'
 labels: []
 dependencies: []
 priority: low
@@ -54,4 +54,14 @@ The refusal is not board-wide. 'backlog task edit ACT-129 --dep ACT-128 --dep AC
 Duplicates live across backlog/tasks and backlog/archive/tasks. doctor's own help says it reads 'active and completed task files' and does not name the archive, which is consistent with it not seeing these.
 
 This makes the card's 'not urgent' assessment stale. It is now a live block on recording board structure, and its stated repair route does not work.
+
+Triage 2026-09-09 (second run today): the escalation recorded above is STALE. Dependency edits work again.
+
+Re-ran the exact command the note reports as refused: 'backlog task edit ACT-126 --dep ACT-104 --dep ACT-50'. It succeeded, printing 'Updated task ACT-126'. Reverted immediately, and ACT-126 has since been archived under decision-8. So the block on recording board structure is gone, and the note above that calls this 'a live block' no longer describes the board.
+
+What did not change: the three reissued ids are still there. Measured this run by the reproducing command, act-52, act-53 and act-89 each name a live card and an archived card. 'backlog doctor' still reports no duplicates, so its blindness to backlog/archive/tasks is unchanged and its advice still routes nowhere.
+
+Backlog CLI version this run: 1.50.1. The board rules record the facts as checked against 1.51.0, so the earlier refusal may have come from a different CLI version rather than from board state. Not settled: I did not re-run the refusal under 1.51.0, and I did not find what changed between the two runs.
+
+Priority left Low, as the writer set it. With the block gone the cost is back to what the card originally recorded, ambiguous references that grow with the archive, which is a real but not urgent cost. The raise doc-50 recommended is withdrawn on this evidence.
 <!-- SECTION:NOTES:END -->

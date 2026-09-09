@@ -6,9 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 23:49'
-updated_date: '2026-09-08 23:49'
+updated_date: '2026-09-09 10:31'
 labels: []
 dependencies: []
+priority: low
 ordinal: 129008
 ---
 
@@ -42,4 +43,12 @@ a corpus that legitimately hardlinks within itself, and a case corpus arrives as
 data an author controls, so the threat is a case author rather than a remote
 attacker. Whether this is worth closing at all is the first question the card
 should answer.
+
+Triage 2026-09-09: priority Low, and it stays a card rather than being archived.
+
+Its own notes ask the right first question, whether this is worth closing at all. Triage's answer is that it is worth keeping open and not worth scheduling, for three reasons taken together: no path-based guard can see a hardlink, so closing it means a different mechanism (st_dev/st_ino comparison or refusing link counts above one); refusing every multiply-linked file would refuse a legitimate corpus that hardlinks within itself; and the threat is a case author against their own measurement rather than an attacker.
+
+What would raise it: a corpus arriving from outside the operator's control, or a recorded result whose corpus digest is disputed. Neither exists today. Reconsider when a case corpus is accepted from a third party.
+
+Ranked below ACT-134, which is the same class of hole but closable by the guard the project already has.
 <!-- SECTION:NOTES:END -->

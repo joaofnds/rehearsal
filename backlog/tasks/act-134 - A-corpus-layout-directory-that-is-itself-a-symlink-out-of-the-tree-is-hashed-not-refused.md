@@ -6,9 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 01:07'
-updated_date: '2026-09-09 01:07'
+updated_date: '2026-09-09 10:39'
 labels: []
 dependencies: []
+priority: medium
 ordinal: 130008
 ---
 
@@ -50,4 +51,18 @@ Note the live corpus case is why rootMayBeALink: true exists at all: the operato
 own ~/.claude layout directories are themselves symlinks (recorded in ACT-130's
 shaping under Reproduction). A fix that simply flips the flag would refuse every live
 corpus. Check that before choosing the approach.
+
+Triage 2026-09-09: priority Medium.
+
+Not High, and the reason is the threat model rather than the mechanism. This is a real containment hole and it is on a shipped surface, but a corpus arrives as data a case author declares, so reaching it means the author symlinked a layout directory out of their own tree. That is a foot-gun, not an attacker path. ACT-132 and ACT-130 were High because one was an open leak on every read surface and the other was a live outage; this is neither.
+
+Not Low: it defeats the containment rule c9ffe4d established, on the same surface that rule was written for, so leaving it means the guard's stated invariant is false and the next reader believes it.
+
+Relation to ACT-133, both filed off the same review: ACT-133 (hardlink) cannot be closed by any path-based guard and its own card says the first question is whether to close it at all. ACT-134 CAN be closed by a path-based guard, since a layout directory's own containment against the corpus root is checkable. So ACT-134 is the actionable one of the pair and ranks above ACT-133.
+
+Warning the card already carries and triage confirms is load-bearing: rootMayBeALink: true exists because the operator's own ~/.claude layout directories ARE symlinks. Verified this run, independently of the card: 'find ~/.claude/agents ~/.claude/skills -type l' returns both ~/.claude/agents and ~/.claude/skills themselves. So flipping the flag refuses the live corpus outright. Whoever builds this must keep the live source working; that is not a hypothetical.
+
+Precision on the live-corpus warning, triage 2026-09-09 after review. The note above says 'its layout directories are themselves symlinks'. Measured exactly, by 'ls -la ~/.claude/': agents, skills and rulebook are symlinks into ~/.agents, and CLAUDE.md is a symlink to ~/.agents/AGENTS.md. output-styles is an ordinary directory.
+
+So it is three of four layout directories plus the instruction file, not all of them. The conclusion is unchanged and if anything firmer: flipping rootMayBeALink to false would refuse the live corpus on any of four entries, not just one.
 <!-- SECTION:NOTES:END -->
