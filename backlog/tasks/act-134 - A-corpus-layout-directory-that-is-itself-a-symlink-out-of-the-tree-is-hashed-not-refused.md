@@ -6,10 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 01:07'
-updated_date: '2026-09-09 10:39'
+updated_date: '2026-09-09 11:48'
 labels: []
 dependencies: []
-priority: medium
+priority: high
 ordinal: 130008
 ---
 
@@ -65,4 +65,14 @@ Warning the card already carries and triage confirms is load-bearing: rootMayBeA
 Precision on the live-corpus warning, triage 2026-09-09 after review. The note above says 'its layout directories are themselves symlinks'. Measured exactly, by 'ls -la ~/.claude/': agents, skills and rulebook are symlinks into ~/.agents, and CLAUDE.md is a symlink to ~/.agents/AGENTS.md. output-styles is an ordinary directory.
 
 So it is three of four layout directories plus the instruction file, not all of them. The conclusion is unchanged and if anything firmer: flipping rootMayBeALink to false would refuse the live corpus on any of four entries, not just one.
+
+Raised Medium -> High by the overseeing iterate session, 2026-09-09, on evidence that did not exist when the priority was set.
+
+This card's criteria name captureStageCorpus. The same mechanism also reaches the corpus screen, which the card does not mention. Reproduced this session against the code as it stands after ACT-135 shipped: a root holding CLAUDE.md plus an agents/ that is a symlink to an unrelated directory outside the root returned
+
+  files=CLAUDE.md,agents/stolen.md   digest='19ddbe'   refusals=[]
+
+So a file that lives entirely outside the corpus is served to the browser as ordinary corpus data, under a confident digest, with no refusal naming it. ACT-135 shipped the refusal for entries inside a layout directory; a layout directory that is itself the link is not covered, and the report presents foreign bytes as corpus rather than failing honestly.
+
+Found by the ACT-135 reflection and independently reproduced here. Same defect class as ACT-137: both put foreign bytes behind a confident digest on the same screen, and both turn on the live source's exemption, which exists because ~/.claude's own layout directories are symlinks into ~/.agents. The reflection's recommendation is to shape the two as one question about what the live source may hash rather than ranking them against each other.
 <!-- SECTION:NOTES:END -->

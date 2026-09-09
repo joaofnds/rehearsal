@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 11:37'
+updated_date: '2026-09-09 11:49'
 labels: []
 dependencies: []
 priority: high
@@ -68,4 +68,6 @@ So 'refuse' in AC#1 means a named refusal in a 200 report, the shape ACT-135
 shipped for layout directories, and not a throw. AC#3 and AC#4 say that as
 observable behavior so the criteria cannot be met by regressing ACT-135 AC#7
 and AC#8.
+
+Related, 2026-09-09: ACT-134 is the same defect class on the same screen, raised to High this session on a reproduction showing a symlinked layout directory serving a file from outside the corpus under digest '19ddbe' with no refusal. Both cards turn on the live source's exemption. The ACT-135 reflection (doc-55) recommends shaping the two as one question about what the live source may hash, rather than ranking them against each other. Whoever picks either up should read the other first.
 <!-- SECTION:NOTES:END -->
