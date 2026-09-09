@@ -4,11 +4,11 @@ title: stale's live-corpus branch has no test
 status: To Do
 assignee: []
 created_date: '2026-09-07 01:22'
-updated_date: '2026-09-09 10:43'
+updated_date: '2026-09-09 13:01'
 labels: []
 milestone: m-1
 dependencies: []
-priority: low
+priority: medium
 type: bug
 ordinal: 89008
 ---
@@ -44,4 +44,10 @@ Decision by the overseeing iterate session, 2026-09-09, settling the question do
 Read this run, doc-7 'The order': m-1 is 'Prove the loop once', its stated substance is that 'the tool has never answered its own question', and its named gate is ACT-41 -> ACT-39. Both are Done, as are the other 11 of 13. What remains under the milestone label is this card and ACT-93, neither of which is the loop: one is an interface inconsistency, the other a missing test on a branch that already works. So 'prove the loop once' is already met in the sense doc-7 wrote it, and holding the UI behind these two would be reading the milestone's counter rather than its goal.
 
 Recorded here rather than in a doc because triage owns the triage docs. Whoever runs triage next should carry this into the next one, or overturn it with the reason.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority raised Low to Medium this run.
+
+Raised for the same reason as ACT-68: these two are all that remain of m-1, the goal's first increment, at 13 of 15. Left at Low the milestone the goal names first stays open indefinitely behind work the goal orders after it.
+
+Its subject is a missing test on stale's live-corpus branch, and that branch is exactly the surface ACT-137 and ACT-134 are about to change, so the coverage is worth having before those builds rather than after.
 <!-- SECTION:NOTES:END -->

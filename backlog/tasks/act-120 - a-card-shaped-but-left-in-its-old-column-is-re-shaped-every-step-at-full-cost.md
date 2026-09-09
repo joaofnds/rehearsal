@@ -4,9 +4,10 @@ title: 'a card shaped but left in its old column is re-shaped every step, at ful
 status: To Do
 assignee: []
 created_date: '2026-09-08 13:34'
-updated_date: '2026-09-08 15:19'
+updated_date: '2026-09-09 13:01'
 labels: []
 dependencies: []
+priority: medium
 type: bug
 ordinal: 116008
 ---
@@ -52,4 +53,11 @@ requires the move in the same turn as the work. The gap is that nothing
 enforces it, which is why acceptance criterion 1 asks for the observation
 rather than the rule.
 
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority set Medium this run, from unprioritized.
+
+Medium because it wastes real money on every iteration rather than producing a wrong result: a card shaped but left in its old column is re-shaped at full cost on the next step. ACT-139's own evidence names shape and review sessions at 58 and 130 turns, so the waste per recurrence is a substantial session.
+
+It belongs with ACT-136 and ACT-139 as a third loop defect and shares their blocker: AC#2 names iterate's step behavior, and that script is chezmoi-managed outside this repository. AC#1 is about a shaping session's own bookkeeping and could be addressed in the skills. No dependency recorded, since neither half waits on the other two cards.
+
+Not High: it costs money and turns, and it does not produce a wrong answer or serve wrong bytes, which is what the three cards above it do.
 <!-- SECTION:NOTES:END -->

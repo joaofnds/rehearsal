@@ -4,7 +4,7 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-04 23:37'
+updated_date: '2026-09-09 13:01'
 labels: []
 dependencies: []
 type: feature
@@ -37,4 +37,10 @@ Created by the iterate session that shaped ACT-39, at João's direction to split
 Blocked on a second benchmark case, noted 2026-09-05. cases/ holds one pipeline case (audit-log); the rest are session cases. The report schema requires cases min 2, so a second pipeline case has to exist before a comparison can be assembled.
 
 Budget is unset and this is the board's largest provider spend: 2 cases x 3 arms x at least 2 reps. For scale, one single failed shape attempt on audit-log cost 0.43 to 0.53 USD. Do not start this card without a number from João.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: deferred, blocked outside this session. Left unprioritized deliberately.
+
+AC#4 requires the provider spend recorded against a budget set before the run starts, and no spending authority for a full compare is recorded anywhere on this board. That number is Joao's to give and no session can invent it. It is the one card here excluded from the queue for a reason a session cannot route around, rather than for timing.
+
+What would unblock it: a typed budget figure for a two-case, three-arm, two-rep compare. Everything else the card names is buildable today.
 <!-- SECTION:NOTES:END -->

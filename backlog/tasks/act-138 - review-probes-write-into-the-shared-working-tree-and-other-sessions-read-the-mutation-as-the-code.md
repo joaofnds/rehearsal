@@ -6,9 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 11:38'
-updated_date: '2026-09-09 11:38'
+updated_date: '2026-09-09 13:01'
 labels: []
 dependencies: []
+priority: medium
 type: bug
 ordinal: 134008
 ---
@@ -70,4 +71,16 @@ prevention ask should cover both or say why not.
 QUEUED FOR A TYPED INSTRUCTION, not actionable here: whether reviewers get
 worktrees, and whether a hook should bound where a review sub-agent may write.
 Both edit surfaces the hard lines reserve.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action shaping. Priority set Medium this run, from unprioritized.
+
+Medium because the damage is silent and lands on a session other than the one causing it: a reviewer's mutation is read by a concurrent session as the code, and the resulting measurement is wrong with nothing to signal it. The card records four such instances in one review round, including two void measurements and a lost mutation.
+
+Not High: the mutations are transient and the working tree is recoverable, and the project's own checks do report an untracked probe file the moment they run. Nothing is served wrong to a reader, which is what separates it from ACT-122 and ACT-137.
+
+Next action is shaping rather than build, because the mechanism is undecided. The card names no approach, and the options differ sharply in cost: a worktree per reviewer, a refusal on writes to tracked files during review, or a check that names a dirty tree before a measurement is trusted.
+
+Evidence added this run, from this session's own conduct. I ran three mutation probes for this triage and kept every one under /tmp with absolute imports back into the repository, and 'git status --short' was empty at the start of this run and again after all three. So the discipline is achievable without any tooling, which is an argument that the fix can be a guard rather than a sandbox. It is also an argument the guard is needed, since the discipline held here only because I chose it.
+
+Related and already live: a PreToolUse hook now refuses a Bash command that appears to write under the live agent corpus. It fired on this session while I was writing a triage note whose text merely quoted such a path, so it currently catches text as well as writes. That hook covers the corpus tree only and not this repository's working tree, which is this card's subject.
 <!-- SECTION:NOTES:END -->

@@ -6,9 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 11:49'
+updated_date: '2026-09-09 13:11'
 labels: []
 dependencies: []
+documentation:
+  - backlog/docs/doc-56 - triage-2026-09-09-c.md
 priority: high
 type: bug
 ordinal: 133008
@@ -70,4 +72,22 @@ observable behavior so the criteria cannot be met by regressing ACT-135 AC#7
 and AC#8.
 
 Related, 2026-09-09: ACT-134 is the same defect class on the same screen, raised to High this session on a reproduction showing a symlinked layout directory serving a file from outside the corpus under digest '19ddbe' with no refusal. Both cards turn on the live source's exemption. The ACT-135 reflection (doc-55) recommends shaping the two as one question about what the live source may hash, rather than ranking them against each other. Whoever picks either up should read the other first.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action shaping then build. Priority High, unchanged.
+
+Route reproduced by triage this run, independently of the card. Root whose CLAUDE.md is a symlink outside it: live source RESOLVED files=[CLAUDE.md, skills/build/SKILL.md] digest=91ec2f refusals=[]; directory source THREW SymlinkedEntryError naming CLAUDE.md. The card's account is exact.
+
+Healthy live corpus re-measured this run: 122 files, digest c7000b, zero refusals. AC#2 still describes reachable behavior.
+
+DECIDED THIS RUN, against doc-55's proposal: this card and ACT-134 stay two cards, not one. doc-55 recommended shaping them as one piece of work; the triage skill's consolidate section allows exactly that as linked cards without a merge, and the merge test fails.
+
+The fact the decision turned on, probed rather than reasoned: refuseUncontained is called only from corpus-file.ts lines 156 and 198. checkpoint.ts never calls it, using resolvesOutside directly at line 214. So ACT-134's captureStageCorpus criterion sits on a different code path from this card's, and the two are separately acceptable. My own first answer was to merge; the probe reversed it. An advisor briefed without my position reached keep-two independently.
+
+ACT-134 now carries a dependency on this card, so this one builds first and ACT-134 reads the predicate it lands. Confirmed by reading the ready list back: ACT-134 left it.
+
+The shared design decision both builds need, recorded once here. Neither card can close under a rule of 'refuse whatever resolves outside the root'. Measured this run: in the operator's live install, the agents, skills and rulebook layout directories are themselves symlinks into a sibling tree, and the root instruction file is a symlink too. That rule would empty every live report and contradicts this card's own AC#2. Whoever shapes this picks a different predicate for what a live source may hash, and records it on the shaping doc, because ACT-134's build inherits it.
+
+Correction, 2026-09-09 (doc-56), to the shared-predicate note above. That note says three layout directories are symlinks. Measured exactly by review and re-checked: the layout kinds are agents, output-styles and rulebook (LAYOUT_DIRECTORY_KINDS, checkpoint.ts line 319). Of those, agents and rulebook are symlinks into a sibling tree and output-styles is an ordinary directory. The root instruction file is a symlink. The skills directory is a symlink too but is NOT a layout kind; it is resolved on its own path by resolveSkillDirectory.
+
+So the inventory the shaping session inherits is two of three layout directories plus the instruction file, not three. The conclusion is unchanged: a blanket 'refuse whatever resolves outside the root' still empties every live report and still contradicts this card's AC#2. Correcting it because a shaping session reasons from this inventory to choose the predicate, and a wrong set is a wrong starting point.
 <!-- SECTION:NOTES:END -->

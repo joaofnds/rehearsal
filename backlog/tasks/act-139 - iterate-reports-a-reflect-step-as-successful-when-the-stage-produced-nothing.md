@@ -4,7 +4,7 @@ title: iterate reports a reflect step as successful when the stage produced noth
 status: To Do
 assignee: []
 created_date: '2026-09-09 11:41'
-updated_date: '2026-09-09 11:41'
+updated_date: '2026-09-09 13:11'
 labels:
   - bug
 dependencies: []
@@ -31,3 +31,19 @@ The script lives at ~/.scripts/iterate, chezmoi-managed out of ~/code/dotfiles, 
 - [ ] #1 a reflect session that produces no document, no commit and no card note makes iterate step exit non-zero rather than printing '<card> is Done' and exiting 0 (observed 2026-09-09 on ACT-135: a 1-turn reflect session emitting only its rule-file announcement was reported as success)
 - [ ] #2 a reflect session that does produce its reflection still exits 0, so the guard does not block the normal path (the reflect stages recorded in backlog/docs as reflection-ACT-*.md are the shape it must accept)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority High, unchanged.
+
+Defect verified at the source this run, not relayed. step() in ~/.scripts/iterate, the Done branch at lines 99-104, runs session('reflect', id) then calls refuseWorkLeftBehind() alone and prints '<card> is Done'. Every other branch compares the card's status before and after; this one compares nothing. Read the code directly this run and the card's account matches it line for line.
+
+Blocked on a typed instruction, same route as ACT-136 and for the same reason: the script is chezmoi-managed at dot_scripts/executable_iterate, outside this repository, and a change takes effect on the running loop.
+
+Queued command for whoever authorizes it: in the Done branch, assert the reflect session produced an observable artifact, a new doc, a commit, or a card note, and exit non-zero when it produced none. AC#2 requires the normal path still exit 0, so the check must accept what the existing reflection-ACT-*.md stages produce.
+
+Note for whoever builds ACT-136 and this one together: they are the same file and the same function's neighborhood, so one sitting is cheaper than two. They are separate outcomes and neither depends on the other, so no dependency is recorded.
+
+Triage correction, 2026-09-09 (doc-56), after review: this card is excluded from the selectable queue as externally blocked, for the same reason as ACT-136. Both are queued for authorization rather than for work, and the recommendation is to authorize the pair in one sitting since they are the same file.
+<!-- SECTION:NOTES:END -->

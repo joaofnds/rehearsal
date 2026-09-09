@@ -4,10 +4,12 @@ title: iterate's ready-queue picker skips any card whose line carries two tags
 status: To Do
 assignee: []
 created_date: '2026-09-09 10:42'
-updated_date: '2026-09-09 11:41'
+updated_date: '2026-09-09 13:11'
 labels:
   - bug
 dependencies: []
+documentation:
+  - backlog/docs/doc-56 - triage-2026-09-09-c.md
 priority: high
 ordinal: 132008
 ---
@@ -34,4 +36,26 @@ The script lives at ~/.scripts/iterate, which is chezmoi-managed out of ~/code/d
 
 <!-- SECTION:NOTES:BEGIN -->
 Checked 2026-09-09 by the overseeing iterate session: this card is currently both the ready queue's first line and what the defective picker returns, because it carries one tag while ACT-137 above it in creation order carries two. So the next 'iterate start' will pick this card correctly, by luck rather than by the regex working. Do not read that as evidence the defect is gone; the reproduction in the description still holds.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority High, unchanged. This is the queue's first card this run.
+
+Defect verified at the source this run, not relayed. queuePattern at ~/.scripts/iterate line 32 is /^\s*\[?\w*\]?\s*([A-Z]+-[0-9]+(?:\.[0-9]+)?) - /m. The single \w* matches at most one bracketed tag, so a two-tag line cannot match, and /m without anchoring to the list start makes it fall through to the first line with zero or one tag.
+
+The card's note from the previous run said this card would be picked correctly by luck. That is still true and the luck now has a different cause: ACT-134 gained a dependency this run and left the ready list, so this card is the first line outright, carrying one tag. I ran the actual regex against the live listing and it returns ACT-136, matching the true first line. So the stage and the script agree today, and the defect is unchanged underneath.
+
+Blocked on a typed instruction, and this is why it is not built this run. The script is chezmoi-managed at dot_scripts/executable_iterate in the dotfiles repository, outside this directive's repository, and changing it alters the loop while the loop is running. Note that ~/code/dotfiles carries uncommitted work from another session, so any edit must not disturb it.
+
+Queued command for whoever authorizes it: widen the tag portion of queuePattern to match repeated bracketed tags, and add the check AC#2 asks for against a two-tag first line.
+
+Triage note, 2026-09-09 (doc-56), superseding the pick reasoning in this run's earlier verdict above. This card is no longer the ready queue's first line: ACT-122 was raised to High this run and sorts above it by card ID.
+
+The picker still returns this card, because ACT-122's line carries two tags and this one carries one. Verified by running the picker regex against the live listing after the change: true first line ACT-122, picker returns ACT-136.
+
+So the script picks this card, and that is the right outcome rather than a lucky one. This is the defect producing the divergence, and no pick after it can be trusted until it lands. It is also the third consecutive run in which the picker's answer and the board's first line have had to be reconciled by hand.
+
+Triage correction, 2026-09-09 (doc-56), after review. This card was named the run's next card in an earlier draft and is not. It is excluded from the selectable queue as externally blocked, because its subject is a script outside this repository whose edit a hard line reserves for a typed instruction. Naming a blocked card as the next action would stall an unattended loop on a card no session here can build.
+
+The consequence is worse than a misordering and is worth stating plainly. The picker will still choose this card, so an unattended 'iterate start' picks it, cannot act on it, and gets no work done. The picker defect now blocks the board rather than merely reordering it.
+
+The run's next card is ACT-122, the highest card a session here can actually build.
 <!-- SECTION:NOTES:END -->

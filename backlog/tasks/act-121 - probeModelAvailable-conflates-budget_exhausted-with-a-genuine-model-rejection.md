@@ -4,8 +4,10 @@ title: probeModelAvailable conflates budget_exhausted with a genuine model rejec
 status: To Do
 assignee: []
 created_date: '2026-09-08 15:09'
+updated_date: '2026-09-09 13:00'
 labels: []
 dependencies: []
+priority: medium
 ordinal: 117008
 ---
 
@@ -24,3 +26,15 @@ Found by the Spec-axis reviewer during review-code on commit a98bcc7 (rehearsal,
 - [ ] #1 probeModelAvailable distinguishes a budget_exhausted terminal_reason from a genuine model-rejection envelope, with a distinct error message for each
 - [ ] #2 a test exercises the budget_exhausted path and asserts it does not read as 'model not available'
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority set Medium this run, from unprioritized.
+
+Checked against the code this run, and the card is half stale. MODEL_PROBE_BUDGET_USD in src/benchmark/preflight.ts is already 0.1, raised from the 0.02 ceiling that produced the observed misreport, and the comment above it records that history. So the specific incident the card was filed from cannot recur at the same threshold.
+
+The defect the criteria name is still real. probeModelAvailable relabels any bare Error from readClaudeEnvelope as 'Model <m> is not available', with no branch distinguishing a budget_exhausted terminal_reason from a genuine model rejection. A budget exhausted at any ceiling still reads as an unavailable model, so AC#1 and AC#2 remain unmet.
+
+Medium, not High: the raised ceiling removed the routine trigger, so the wrong message now needs an unusual spend to appear, and it misleads rather than corrupting anything. Not Low, because the message sends the reader to re-declare a model when the real cause is money, which is a diagnosis this harness exists to get right.
+<!-- SECTION:NOTES:END -->

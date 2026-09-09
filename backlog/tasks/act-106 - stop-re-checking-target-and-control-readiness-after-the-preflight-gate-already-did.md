@@ -6,9 +6,10 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-07 17:58'
-updated_date: '2026-09-08 20:41'
+updated_date: '2026-09-09 13:01'
 labels: []
 dependencies: []
+priority: low
 ordinal: 102008
 ---
 
@@ -45,4 +46,8 @@ both outside what ACT-88 touched, which is why it was deferred rather than
 folded in.
 
 Triage 2026-09-08 (e): citation drift only. assertControlReady/assertSourceReady calls in runBenchmark are at run.ts:857-858 now, not wherever the card implied. Substance confirmed live: assertPipelinePreflight runs at run-command.ts:148, runBenchmark re-checks again at run.ts:857-858, and confirmRun re-checks a third time at run-command.ts:328-329.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build. Priority set Low this run, from unprioritized.
+
+Low because the defect is duplicated work with no wrong outcome: readiness is asserted twice and both assertions agree. Its criteria are cheap and observable, counting the calls on a plain run and a --confirm run, so it is a good companion for any sitting already inside the preflight path, which is where ACT-121 also lands.
 <!-- SECTION:NOTES:END -->

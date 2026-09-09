@@ -4,7 +4,7 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-09 10:29'
+updated_date: '2026-09-09 13:00'
 labels: []
 dependencies: []
 priority: low
@@ -64,4 +64,12 @@ What did not change: the three reissued ids are still there. Measured this run b
 Backlog CLI version this run: 1.50.1. The board rules record the facts as checked against 1.51.0, so the earlier refusal may have come from a different CLI version rather than from board state. Not settled: I did not re-run the refusal under 1.51.0, and I did not find what changed between the two runs.
 
 Priority left Low, as the writer set it. With the block gone the cost is back to what the card originally recorded, ambiguous references that grow with the archive, which is a real but not urgent cost. The raise doc-50 recommended is withdrawn on this evidence.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, deferred in effect. Priority Low, unchanged.
+
+doc-54 left open why the dependency-edit refusal doc-50 recorded had disappeared, and recorded the CLI reading 1.50.1 against board rules citing 1.51.0. Measured this run: 'backlog --version' returns 1.51.0. So the version moved between doc-54 and now, on this machine, which makes a version change the more likely explanation for doc-50's refusal rather than the less likely one doc-54 judged it. Recording the observation, not a cause; nothing on the board records which version doc-50 ran, which is still what would settle it.
+
+Dependency edits work: I added a dependency to ACT-134 this run and read it back.
+
+The duplicates themselves are unchanged. act-52, act-53 and act-89 each name both a live card and an archived one, confirmed this run by listing backlog/archive/tasks.
 <!-- SECTION:NOTES:END -->

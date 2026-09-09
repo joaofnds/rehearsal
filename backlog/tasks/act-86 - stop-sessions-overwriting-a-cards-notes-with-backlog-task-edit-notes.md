@@ -4,9 +4,11 @@ title: stop sessions overwriting a card's notes with backlog task edit --notes
 status: To Do
 assignee: []
 created_date: '2026-09-05 22:48'
-updated_date: '2026-09-08 10:38'
+updated_date: '2026-09-09 13:00'
 labels: []
-dependencies: []
+dependencies:
+  - ACT-115
+priority: medium
 type: chore
 ordinal: 82008
 ---
@@ -55,4 +57,12 @@ Triage 2026-09-08, corrected by the overseeing session the same day: the 2026-09
 Net effect is the same as every prior note and unchanged from doc-36: no rendered skill under ~/.agents/skills names --append-notes, so the prose fix is not in force and criterion #1 stays unverifiable. What changes is the cause, and it matters for the fix: this was never a revert to guard against, it was a commit that never reached main. Re-landing it is a normal edit on main, not an isolated commit defended from future sweeps.
 
 2026-09-08: follow-on card ACT-115 filed to re-land the --append-notes line on main. This card stays open until that lands and a later session's card write is observed using it.
+
+Triage verdict, 2026-09-09 (doc-56). Disposition: keep, next action build, after ACT-115. Priority set Medium this run.
+
+doc-54 recommended exactly this and did not apply it, on the reasoning that adding a dependency without a priority leaves a card half-filed. Both are applied together here, which was the condition doc-54 named.
+
+The wait is real and was recorded only in triage prose until now: ACT-115 re-lands the --append-notes line in the shape and build skills, which is the mechanism AC#1 depends on. AC#2 is already checked, satisfied by the recorded decision that no hook is wanted.
+
+Confirmed by reading the ready list back: this card left it, so the picker cannot take it before ACT-115 lands.
 <!-- SECTION:NOTES:END -->
