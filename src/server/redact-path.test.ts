@@ -39,4 +39,12 @@ describe(redactAbsolutePaths.name, () => {
 			redactAbsolutePaths("Corpus file skills/build/SKILL.md not found"),
 		).toBe("Corpus file skills/build/SKILL.md not found");
 	});
+
+	test("redacts a path Node quoted in an fs error", () => {
+		expect(
+			redactAbsolutePaths(
+				"ENOENT: no such file or directory, open '/Users/joaofnds/secret.md'",
+			),
+		).toBe("ENOENT: no such file or directory, open '<path>'");
+	});
 });
