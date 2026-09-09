@@ -101,16 +101,31 @@ describe(CorpusPage.name, () => {
 			);
 		}
 
-		it("says the directory was left out whole, since a refused directory loses the entries that resolve fine", async () => {
+		it("says what was left out without calling every refusal a layout directory, since CLAUDE.md is not one", async () => {
 			renderRefusing(corpusResponseBody().files);
 
 			await waitFor(() => {
 				expect(
 					screen.getByText(
-						"These entries could not be hashed, so their layout directory is missing from the table whole:",
+						"These entries could not be hashed and are missing from the table, a refused layout directory whole:",
 					),
 				).toBeInTheDocument();
 			});
+		});
+
+		it("renders a refusal naming the instruction file, so a symlinked CLAUDE.md is named rather than hidden", async () => {
+			renderRefusing(corpusResponseBody().files, [
+				"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
+			]);
+
+			const alert = await screen.findByRole("alert");
+
+			expect(
+				within(alert).getByText(
+					/Corpus file CLAUDE\.md resolves outside the corpus source/u,
+				),
+			).toBeInTheDocument();
+			expect(screen.queryByText("Could not load the corpus.")).toBeNull();
 		});
 
 		it("renders the files it could hash alongside the refusal, rather than one failure line", async () => {
