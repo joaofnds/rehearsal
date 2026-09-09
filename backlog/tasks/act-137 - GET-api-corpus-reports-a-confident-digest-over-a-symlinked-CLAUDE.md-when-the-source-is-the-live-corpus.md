@@ -6,12 +6,27 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 11:16'
+updated_date: '2026-09-09 11:17'
 labels: []
 dependencies: []
+priority: high
 type: bug
 ordinal: 133008
 ---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+A corpus root whose CLAUDE.md is itself a symlink resolving outside the root is hashed and reported, rather than refused, when the source is the live corpus. The report carries a corpus root digest computed over bytes the corpus does not hold, and carries no refusal naming the file.
+
+Reproduced by the overseeing iterate session, 2026-09-09, on a root holding only skills/build/SKILL.md and a CLAUDE.md symlinked to a file outside the root:
+  live source:      RESOLVED files=CLAUDE.md,skills/build/SKILL.md digest='ff2e6a' refusals=[]
+  directory source: THREW SymlinkedEntryError
+
+So the refusal exists and works, and the source the server actually wires is the one that skips it. This is the same defect class ACT-135's shape review rejected in that card's first design: a confident digest over a partial or foreign file set is worse than an honest failure, because nothing downstream can tell it is wrong. ACT-135 shipped the refusal for layout directories; this route is the hole left in it.
+
+Why the live source is lenient, and why the fix is not just 'refuse here too': ~/.claude's own layout directories are symlinks into ~/.agents, so the live walk must tolerate a linked root. AC#2 exists to keep that working.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
