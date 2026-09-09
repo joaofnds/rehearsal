@@ -55,13 +55,13 @@ async function runHistoryResponseFrom(
 }
 
 /**
- * A response body carries no absolute filesystem path: the real leak this
- * guards is a path outside `CONTROL_DIR` (a corpus root, a target repository),
- * which `.not.toContain(CONTROL_DIR)` cannot see since the fixtures below live
- * under a temp directory, not under `CONTROL_DIR`.
+ * A response body does not carry the concrete path the test planted. Naming
+ * that value rather than re-deriving the redactor's pattern is what keeps the
+ * check honest: a detector built from the redactor's own logic agrees with the
+ * redactor even where the redactor is wrong.
  */
-function assertNoAbsolutePath(body: string): void {
-	expect(body).not.toMatch(/(?<=^|[\s(])\/[^\s,)]*/u);
+function assertDoesNotLeak(body: string, secret: string): void {
+	expect(body).not.toContain(secret);
 }
 
 describe(createApiApp.name, () => {
@@ -205,7 +205,7 @@ describe(createApiApp.name, () => {
 			const body = corpusResponseSchema.parse(JSON.parse(text));
 
 			expect(response.status).toBe(200);
-			assertNoAbsolutePath(JSON.stringify(body.refusals));
+			assertDoesNotLeak(JSON.stringify(body.refusals), outside);
 			expect(body.files.map(({ path }) => path)).toEqual([
 				"CLAUDE.md",
 				"skills/build/SKILL.md",
@@ -266,7 +266,7 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBeGreaterThanOrEqual(400);
 			expect(response.status).toBeLessThan(500);
-			assertNoAbsolutePath(body);
+			assertDoesNotLeak(body, fixture.runsDirectory);
 		});
 
 		it("names no absolute filesystem path when the checkpoint stage in the id was never recorded", async () => {
@@ -284,7 +284,7 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBeGreaterThanOrEqual(400);
 			expect(response.status).toBeLessThan(500);
-			assertNoAbsolutePath(body);
+			assertDoesNotLeak(body, fixture.runsDirectory);
 		});
 	});
 
@@ -367,7 +367,7 @@ describe(createApiApp.name, () => {
 			const body = await response.text();
 
 			expect(response.status).toBe(500);
-			assertNoAbsolutePath(body);
+			assertDoesNotLeak(body, CONTROL_DIR);
 		});
 
 		it("names no absolute path when staleCheckpoints itself throws from a corpus root outside CONTROL_DIR", async () => {
@@ -383,7 +383,7 @@ describe(createApiApp.name, () => {
 			const response = await app.request("/api/runs");
 			const body = await response.text();
 
-			assertNoAbsolutePath(body);
+			assertDoesNotLeak(body, corpus);
 		});
 	});
 });
