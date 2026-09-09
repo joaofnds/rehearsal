@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-09 16:23'
+updated_date: '2026-09-09 16:26'
 labels: []
 milestone: m-7
 dependencies:
@@ -16,7 +16,7 @@ dependencies:
   - ACT-53
   - ACT-114
 documentation:
-  - doc-37
+  - backlog/docs/doc-37 - reflection-ACT-50.md
 priority: medium
 ordinal: 52008
 ---

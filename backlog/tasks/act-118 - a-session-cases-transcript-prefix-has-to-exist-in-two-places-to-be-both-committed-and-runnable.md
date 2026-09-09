@@ -3,10 +3,10 @@ id: ACT-118
 title: >-
   a session case's transcript prefix has to exist in two places to be both
   committed and runnable
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-08 11:55'
-updated_date: '2026-09-09 16:21'
+updated_date: '2026-09-09 16:26'
 labels: []
 milestone: m-2
 dependencies: []
@@ -39,7 +39,7 @@ Triage 2026-09-08 (e): citation error. context-manifest.test.ts:149 is an unrela
 
 ## Triage verdict, 2026-09-09 (doc-61)
 
-Disposition: keep; next action: implementation. Priority: medium. Committed prefixed cases are not runnable from a fresh clone without an ignored duplicate.
+Disposition: keep; next action: shaping. Priority: medium. Committed prefixed cases are not runnable from a fresh clone without an ignored duplicate.
 
 Evidence: Runtime resolves .benchmark-runs/cases while fixture tests read cases/; focused case/attempt tests confirm missing run-state refusal.
 

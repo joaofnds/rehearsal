@@ -4,7 +4,7 @@ title: build the session confirmation group path
 status: Shape
 assignee: []
 created_date: '2026-09-09 15:20'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:27'
 labels: []
 milestone: m-7
 dependencies: []
@@ -81,4 +81,8 @@ Unresolved claims/resources: No prerequisite for shaping; provider-level behavio
 Next action: Shape the session-specific frozen-input record and map isolated attempts into runConfirmation. Bound this to one shaping session without provider spend. Build can use injected runners; real smoke evidence waits for the executable.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
+
+Correction, 2026-09-09, by the overseeing session. The triage verdict above says 'The normal smoke command stops earlier because claude is missing from PATH' and that 'provider-level behavior remains unverified until the Claude executable is available'. That is wrong: 'command -v claude' returns /opt/homebrew/bin/claude on this machine. Provider-level verification is not blocked, so a build session can run the case for real rather than only with injected runners. Whatever stopped the smoke command earlier, a missing executable was not it.
+
+The pipelinePath question stays open, and the triage sharpened it usefully: do not record a fabricated pipeline as if one ran. That framing is the constraint to design against, not a placeholder to fill.
 <!-- SECTION:NOTES:END -->

@@ -1,10 +1,10 @@
 ---
 id: ACT-116
 title: rehearsal case capture cannot see the harness's own runs
-status: To Do
+status: Shape
 assignee: []
 created_date: '2026-09-08 11:23'
-updated_date: '2026-09-09 16:21'
+updated_date: '2026-09-09 16:26'
 labels: []
 milestone: m-3
 dependencies: []
@@ -31,7 +31,7 @@ Triage 2026-09-08 (e): citation error. The function is named claudeProjectsDirec
 
 ## Triage verdict, 2026-09-09 (doc-61)
 
-Disposition: keep; next action: implementation. Priority: medium. Capture cannot reuse harness-owned evidence, which adds manual work to session-case construction.
+Disposition: keep; next action: shaping. Priority: medium. Capture cannot reuse harness-owned evidence, which adds manual work to session-case construction.
 
 Evidence: case capture searches only claudeProjectsDirectory; harness transcripts live under .benchmark-runs/sessions; focused capture tests cover only the former.
 
