@@ -3,11 +3,11 @@ id: ACT-130
 title: >-
   One symlink in the corpus blanks the whole run-history screen instead of
   degrading
-status: Build
+status: Review
 assignee:
   - '@claude'
 created_date: '2026-09-08 22:41'
-updated_date: '2026-09-09 00:52'
+updated_date: '2026-09-09 01:03'
 labels: []
 milestone: m-5
 dependencies: []
@@ -17,16 +17,16 @@ ordinal: 126008
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 with a symlink planted in a corpus layout directory, GET /api/runs renders its rows and reports the corpus problem alongside them, rather than returning 500 with no rows (reproduced 2026-09-09: corpusReport on a directory corpus with agents/escape -> outside threw SymlinkedEntryError, and staleCheckpoints reaches the same walk)
-- [ ] #2 the same corpus problem leaves rehearsal stale reporting what it could read rather than exiting on the first unreadable tree (src/cli/stale-command.ts:81 calls staleCheckpoints on the same path)
-- [ ] #3 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
-- [ ] #4 with a symlink planted at agents/escape.md in a corpus layout directory, runHistoryReport resolves rather than rejecting, and its rows include every run it could read (reproduced 2026-09-09: runHistoryReport rejected with SymlinkedEntryError on that corpus)
-- [ ] #5 on that same corpus every checkpoint row whose stage could not be hashed carries stale true and a cause naming the offending entry relative to its layout directory, never stale false (deriveStaleness checkpoint.ts:567 leaves a stage absent from current unjudged, and run-history.ts:188-196 states a silently wrong stale badge is worse than the cost of hashing)
-- [ ] #6 a symlink planted under skills/build leaves a stage whose skill is discuss hashed and judged normally, marking only the stages that read the broken tree (probed 2026-09-09 via captureStageCorpus: build threw, discuss hashed; a link under agents/ threw for both)
-- [ ] #7 mise exec -- ./rehearsal.ts stale --corpus <corpus with the planted symlink> exits 0 and prints the stale records it could derive on stdout, where it printed zero lines and exited 3 before (reproduced 2026-09-09: same corpus without the link printed 6 records)
-- [ ] #8 no cause or reason reaching the browser or stdout contains an absolute filesystem path or the linked target's bytes (ACT-113 closed this leak deliberately; staleCauses is not passed through redactAbsolutePaths at run-history.ts:171)
-- [ ] #9 the existing refusal for a corpus whose CLAUDE.md is itself a symlink still throws RefusedPreconditionError and prints nothing on stdout (src/cli/stale-command.test.ts:309, which must stay green)
-- [ ] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #1 with a symlink planted in a corpus layout directory, GET /api/runs renders its rows and reports the corpus problem alongside them, rather than returning 500 with no rows (reproduced 2026-09-09: corpusReport on a directory corpus with agents/escape -> outside threw SymlinkedEntryError, and staleCheckpoints reaches the same walk)
+- [x] #2 the same corpus problem leaves rehearsal stale reporting what it could read rather than exiting on the first unreadable tree (src/cli/stale-command.ts:81 calls staleCheckpoints on the same path)
+- [x] #3 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [x] #4 with a symlink planted at agents/escape.md in a corpus layout directory, runHistoryReport resolves rather than rejecting, and its rows include every run it could read (reproduced 2026-09-09: runHistoryReport rejected with SymlinkedEntryError on that corpus)
+- [x] #5 on that same corpus every checkpoint row whose stage could not be hashed carries stale true and a cause naming the offending entry relative to its layout directory, never stale false (deriveStaleness checkpoint.ts:567 leaves a stage absent from current unjudged, and run-history.ts:188-196 states a silently wrong stale badge is worse than the cost of hashing)
+- [x] #6 a symlink planted under skills/build leaves a stage whose skill is discuss hashed and judged normally, marking only the stages that read the broken tree (probed 2026-09-09 via captureStageCorpus: build threw, discuss hashed; a link under agents/ threw for both)
+- [x] #7 mise exec -- ./rehearsal.ts stale --corpus <corpus with the planted symlink> exits 0 and prints the stale records it could derive on stdout, where it printed zero lines and exited 3 before (reproduced 2026-09-09: same corpus without the link printed 6 records)
+- [x] #8 no cause or reason reaching the browser or stdout contains an absolute filesystem path or the linked target's bytes (ACT-113 closed this leak deliberately; staleCauses is not passed through redactAbsolutePaths at run-history.ts:171)
+- [x] #9 the existing refusal for a corpus whose CLAUDE.md is itself a symlink still throws RefusedPreconditionError and prints nothing on stdout (src/cli/stale-command.test.ts:309, which must stay green)
+- [x] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -183,4 +183,17 @@ or is a 500 correct there because the corpus source itself is unusable?
 ### Decided autonomously
 
 Scope the degradation to the tree walk inside readable layout directories, leaving /api/runs returning 500 when CLAUDE.md or a required skill directory is missing or symlinked. Reason: when CLAUDE.md or the skill directory cannot be resolved, the corpus source itself is unusable as a precondition. The degradation shaped here addresses stages that cannot be hashed during the walk, keeping /api/runs and stale functional for readable stages alongside the refusal causes.
+
+## Built 2026-09-09
+
+Commits:
+- 2fa7bee fix: stale the stage whose corpus cannot be hashed instead of throwing
+- 4075044 test: cover the run-history screen against an unhashable corpus
+- 215c006 test: cover stale against a corpus layout directory it cannot hash
+- ab2988f fix: keep the corpus root out of a session case's stale cause
+
+Observed directly:
+- Planted symlink in corpus layout directory: rehearsal stale exited 0, reporting stale checkpoints and relative causes.
+- Test suite: 1321 tests pass, typecheck, lint, and formatting check clean.
+- Moved to Review.
 <!-- SECTION:NOTES:END -->
