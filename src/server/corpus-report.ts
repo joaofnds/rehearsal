@@ -1,9 +1,15 @@
+import type { Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
 import { parseCheckpointRecord, walkDirectory } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
-import { pathExists, SymlinkedEntryError } from "#benchmark/file-presence";
+import {
+	lstatIfPresent,
+	pathExists,
+	statIfExists,
+	SymlinkedEntryError,
+} from "#benchmark/file-presence";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
@@ -60,6 +66,48 @@ async function readCountsByPath(
 	);
 }
 
+async function resolvedStat(path: string): Promise<Stats | undefined> {
+	try {
+		return await statIfExists(path);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ELOOP") {
+			return undefined;
+		}
+
+		throw error;
+	}
+}
+
+/**
+ * A corpus root with no CLAUDE.md is valid, so absence is not a refusal. A
+ * CLAUDE.md that is present but cannot yield instruction bytes is: reading
+ * either as absence would report the corpus as one that has no instruction
+ * file, under a digest that says so confidently.
+ *
+ * A link that does not resolve is refused whether its target is missing or
+ * its chain loops, since neither names bytes to hash and both otherwise
+ * reach the screen as a failure that names no file.
+ */
+async function refuseUnhashableInstructions(
+	root: string,
+): Promise<string | undefined> {
+	const path = join(root, CORPUS_INSTRUCTIONS_PATH);
+	if (!(await lstatIfPresent(path))) {
+		return undefined;
+	}
+
+	const target = await resolvedStat(path);
+	if (target === undefined) {
+		return `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a link whose target is missing, so the bytes it names cannot be read`;
+	}
+
+	if (target.isDirectory()) {
+		return `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a directory, so it holds no instruction bytes to hash`;
+	}
+
+	return undefined;
+}
+
 /**
  * The corpus is the instruction file and `CORPUS_LAYOUT_DIRECTORIES` beside
  * it. Hashing the root whole instead sweeps in whatever else lives under it,
@@ -81,7 +129,10 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const files: HashedFile[] = [];
 	const refusals: string[] = [];
 
-	if (await Bun.file(join(root, CORPUS_INSTRUCTIONS_PATH)).exists()) {
+	const instructionsRefusal = await refuseUnhashableInstructions(root);
+	if (instructionsRefusal !== undefined) {
+		refusals.push(instructionsRefusal);
+	} else if (await lstatIfPresent(join(root, CORPUS_INSTRUCTIONS_PATH))) {
 		try {
 			const instructions = await hashCorpusFiles(source, [
 				CORPUS_INSTRUCTIONS_PATH,

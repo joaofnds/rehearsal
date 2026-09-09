@@ -288,6 +288,63 @@ describe(corpusReport.name, () => {
 		expect(JSON.stringify(report)).not.toContain("SECRET BYTES");
 	});
 
+	it("refuses a CLAUDE.md whose link target is gone, rather than reporting the corpus as one that has none", async () => {
+		const root = await corpusDirectory();
+		await symlink(join(root, "does-not-exist.md"), join(root, "CLAUDE.md"));
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md is a link whose target is missing, so the bytes it names cannot be read",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
+	it("refuses a CLAUDE.md that points at itself, rather than failing the screen with the loop error", async () => {
+		const root = await corpusDirectory();
+		await symlink(join(root, "CLAUDE.md"), join(root, "CLAUDE.md"));
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md is a link whose target is missing, so the bytes it names cannot be read",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
+	it("refuses a CLAUDE.md that is a symlink to a directory, since a directory holds no instruction bytes", async () => {
+		const root = await corpusDirectory();
+		const outside = await corpusDirectory();
+		await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
+		await symlink(outside, join(root, "CLAUDE.md"));
+		const runs = await runsDirectory();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md is a directory, so it holds no instruction bytes to hash",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
+	it("reports no refusal for a corpus root that simply has no CLAUDE.md", async () => {
+		const root = await corpusDirectory();
+		await mkdir(join(root, "skills", "build"), { recursive: true });
+		await writeFile(join(root, "skills", "build", "SKILL.md"), "a skill\n");
+
+		const report = await corpusReport(
+			directorySource(root),
+			await runsDirectory(),
+		);
+
+		expect(report.refusals).toEqual([]);
+		expect(report.files.map(({ path }) => path)).toEqual([
+			"skills/build/SKILL.md",
+		]);
+	});
+
 	it("reports a root reached through a symlinked parent directory, since the link does not leave the corpus", async () => {
 		const parent = await corpusDirectory();
 		const root = join(parent, "corpus");
