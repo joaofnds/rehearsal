@@ -1,13 +1,28 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rename } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { redactAbsolutePaths } from "./redact-path";
+import { redactAbsolutePaths, redactorFor } from "./redact-path";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+	await Promise.all(
+		roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+	);
+});
+
+async function temporaryDirectory(prefix: string): Promise<string> {
+	const root = await mkdtemp(join(tmpdir(), prefix));
+	roots.push(root);
+
+	return root;
+}
 
 async function messageFromReadingMissingFile(
 	directoryName: string,
 ): Promise<{ message: string; root: string }> {
-	const root = await mkdtemp(join(tmpdir(), directoryName));
+	const root = await temporaryDirectory(directoryName);
 
 	try {
 		await readFile(join(root, "secret.md"), "utf8");
@@ -21,7 +36,7 @@ async function messageFromReadingMissingFile(
 }
 
 async function messageFromRenamingMissingFile(): Promise<string> {
-	const root = await mkdtemp(join(tmpdir(), "rehearsal-redact-rename-"));
+	const root = await temporaryDirectory("rehearsal-redact-rename-");
 
 	try {
 		await rename(join(root, "from.md"), join(root, "to.md"));
@@ -82,29 +97,37 @@ describe(redactAbsolutePaths.name, () => {
 	});
 
 	test("redacts a real fs error naming a missing file under a temp directory", async () => {
-		const { message, root } =
+		const { message } =
 			await messageFromReadingMissingFile("rehearsal-redact-");
 
-		expect(redactAbsolutePaths(message)).not.toContain(root);
+		expect(redactAbsolutePaths(message)).toBe(
+			"ENOENT: no such file or directory, open '<path>'",
+		);
 	});
 
 	test("redacts a real fs error under a temp directory whose name contains a space", async () => {
-		const { message, root } = await messageFromReadingMissingFile(
+		const { message } = await messageFromReadingMissingFile(
 			"rehearsal redact space ",
 		);
 
-		expect(redactAbsolutePaths(message)).not.toContain(root);
-	});
-
-	test("redacts a real fs error under a temp directory whose name contains an apostrophe", async () => {
-		const { message, root } = await messageFromReadingMissingFile(
-			"rehearsal-Bob's-redact-",
+		expect(redactAbsolutePaths(message)).toBe(
+			"ENOENT: no such file or directory, open '<path>'",
 		);
-
-		expect(redactAbsolutePaths(message)).not.toContain(root);
 	});
 
-	test("redacts a quoted path under a root this process does not know", () => {
+	test("redacts a bare known root that follows no word boundary", () => {
+		expect(redactAbsolutePaths(`path=${homedir()}/a/secret.md`)).toBe(
+			"path=<path>",
+		);
+	});
+
+	test("redacts a path under an unknown root that Node quoted", () => {
+		expect(redactAbsolutePaths("open '/srv/target-repo/x.md'")).toBe(
+			"open '<path>'",
+		);
+	});
+
+	test("redacts a path under an unknown root that follows a word boundary", () => {
 		expect(redactAbsolutePaths("failed at /srv/target-repo/x.md")).toBe(
 			"failed at <path>",
 		);
@@ -130,5 +153,42 @@ describe(redactAbsolutePaths.name, () => {
 				"agents/escape.md resolves outside the tree it is named under",
 			),
 		).toBe("agents/escape.md resolves outside the tree it is named under");
+	});
+
+	describe("when a directory in the path is named with an apostrophe", () => {
+		test("removes the root and leaves the fragment after the apostrophe", async () => {
+			const { message, root } = await messageFromReadingMissingFile(
+				"rehearsal-Bob's-redact-",
+			);
+			const tail = root.slice(root.indexOf("'"));
+
+			expect(redactAbsolutePaths(message)).toBe(
+				`ENOENT: no such file or directory, open '<path>${tail}/secret.md'`,
+			);
+		});
+	});
+
+	describe("under a degenerate root the process reports", () => {
+		test("leaves a relative corpus path alone when a root is the filesystem root", () => {
+			const redact = redactorFor(["/", "/var/folders/x2/T"]);
+
+			expect(redact("Corpus file skills/build/SKILL.md not found")).toBe(
+				"Corpus file skills/build/SKILL.md not found",
+			);
+		});
+
+		test("leaves a relative corpus path alone when a root is empty", () => {
+			const redact = redactorFor(["", "/var/folders/x2/T"]);
+
+			expect(redact("Corpus file skills/build/SKILL.md not found")).toBe(
+				"Corpus file skills/build/SKILL.md not found",
+			);
+		});
+
+		test("still redacts an absolute path when every root is degenerate", () => {
+			const redact = redactorFor(["/", ""]);
+
+			expect(redact("open '/srv/target-repo/secret.md'")).toBe("open '<path>'");
+		});
 	});
 });
