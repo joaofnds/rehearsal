@@ -110,6 +110,27 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
 }
 
 /**
+ * `walkDirectory` for a caller that refuses the whole tree on any refusal, so
+ * the first one is the only one that changes its outcome.
+ */
+export async function hashDirectory(
+	root: string,
+	prefix: string,
+	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
+): Promise<HashedFile[]> {
+	const { files, refusals } = await walkDirectory(root, prefix, {
+		rootMayBeALink,
+	});
+
+	const [first] = refusals;
+	if (first !== undefined) {
+		throw first;
+	}
+
+	return [...files];
+}
+
+/**
  * An entry whose resolved path leaves the walked tree is refused, because
  * `readdir` follows a link: it lists the link's descendants as ordinary entries
  * under the link's own relative path, so hashing them reads bytes from outside
@@ -138,36 +159,18 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
  * what counts as a file, and a lineage key that differs by walk is a stale
  * checkpoint nobody can explain.
  *
+ * Every refused entry is reported rather than the first, because a caller that
+ * displays them needs all of them: one benign entry sorting before a hostile
+ * one would otherwise hide it, and whoever plants the hostile one chooses both
+ * names. A refused entry's descendants are skipped, since naming each of them
+ * would put the outside tree's filenames in a message whose purpose is not to
+ * report what the link points at.
+ *
  * An entry `readdir` lists but that no longer exists by the time this walk
  * reaches it is skipped rather than thrown: a frozen snapshot this function's
  * other callers hash never loses a file mid-walk, so this tolerance is a no-op
  * for them, but the live corpus root the corpus screen hashes is a directory
  * another process can still be writing to.
- */
-export async function hashDirectory(
-	root: string,
-	prefix: string,
-	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
-): Promise<HashedFile[]> {
-	const { files, refusals } = await walkDirectory(root, prefix, {
-		rootMayBeALink,
-	});
-
-	const [first] = refusals;
-	if (first !== undefined) {
-		throw first;
-	}
-
-	return [...files];
-}
-
-/**
- * The same walk `hashDirectory` performs, reporting every entry it refused
- * rather than the first. A caller that displays refusals needs all of them:
- * one benign entry sorting before a hostile one would otherwise hide it, and
- * the entry that plants the hostile one chooses both names. Callers that
- * refuse the whole tree on any refusal take `hashDirectory`, since for them
- * the first is the only one that changes the outcome.
  */
 export async function walkDirectory(
 	root: string,
