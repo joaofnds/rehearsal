@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-09 10:30'
-updated_date: '2026-09-09 11:42'
+updated_date: '2026-09-09 12:47'
 labels: []
 dependencies: []
 documentation:
@@ -576,4 +576,12 @@ It is now ACT-137, High, whose criteria also forbid closing it by making the liv
 What this card delivered, verified over HTTP and by direct call this session: /api/corpus returns 200 on a root with a planted symlink, names every entry it could not hash with a layout-relative path, leaks no absolute path, withholds the corpus root digest, and still lists the files it could hash. Probed independently by the overseeing session with two planted links (a dangling 'aardvark.md' sorting before an escaping 'escape.md') and both were named, which is the hiding attack the review round found. Probed again with an unreadable file sorting after the symlink: the named refusal survives, which is the second hiding route the review round closed. All four project checks pass, run this session: 104 tests, 0 fail.
 
 Correction, same session: I first recorded ACT-137 as a dependency of this card. That is backwards and I removed it. A dependency means this card cannot proceed until ACT-137 is Done, and the board guard refuses a later column while one is open, which would have pinned this card in Review for exactly the reason the dependency was meant to release it. ACT-135 shipped without ACT-137; the relationship is follow-up, not prerequisite, and the note above already carries it by id.
+
+Prevention half delivered 2026-09-09, on a typed instruction, after the card closed on its detection half. A PreToolUse hook denies Write, Edit and Bash writes into the two protected roots; it is committed in the dotfiles repo as c37be627 with 31 tests beside it. Reads stay allowed, including compound chains, since the corpus is read constantly.
+
+Verified from a live session under bypassPermissions on Claude Code 2.1.266: the original attack (planting a symlink in the agent directory), a redirect write, a read-command carrying a redirect, a cd-then-relative-write, and the Write tool are each denied, and reads still succeed. Nothing landed and the corpus is unchanged.
+
+Three drafts failed before this one, each caught by a test rather than by reasoning: keying on a command's leading word let a read command carrying a redirect through; treating every compound command as a write denied ordinary reads; matching raw command text denied a commit message that merely mentioned a protected path. That last one fired in this session against a real commit.
+
+Known cost, accepted: the guard denies chezmoi apply, so installing an update to the hook itself now requires the operator to run it. That is the guard working as intended and is why the card said prevention needs a typed instruction.
 <!-- SECTION:NOTES:END -->
