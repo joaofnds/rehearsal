@@ -23,6 +23,7 @@ import {
 	sessionCaseArgs,
 	SessionInputError,
 } from "#benchmark/session-attempt";
+import { SessionInvocationError } from "#benchmark/session-invocation-error";
 
 const resources = TestResources.forEachTest();
 
@@ -1065,21 +1066,18 @@ describe(runSessionAttempt.name, () => {
 		);
 	});
 
-	it("leaves nothing behind when the provider writes its transcript and then throws", async () => {
+	it("preserves a rejected provider command as a typed failed invocation", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "OK");
-		let writtenTranscript = "";
+		const records = await recordDirectory();
 
 		const failure = await failureOf(
 			runSessionAttempt(
 				request({
 					projectsDirectory: projects,
-					recordDirectory: await recordDirectory(),
+					recordDirectory: records,
 					runClaude: async (command, cwd) => {
 						await claude.run(command, cwd);
-						const slug = join(projects, projectSlug(await realpath(cwd)));
-						writtenTranscript = join(slug, `${namedSession(command)}.jsonl`);
-						expect(await Bun.file(writtenTranscript).exists()).toBe(true);
 
 						throw new Error("claude exited 1");
 					},
@@ -1087,8 +1085,64 @@ describe(runSessionAttempt.name, () => {
 			),
 		);
 
-		expect(failure.message).toBe("claude exited 1");
-		expect(await Bun.file(writtenTranscript).exists()).toBe(false);
+		expect(failure).toBeInstanceOf(SessionInvocationError);
+		expect(failure).toMatchObject({
+			message: "claude exited 1",
+			attempt: {
+				outcome: "EXECUTION_FAILED",
+				reply: undefined,
+				checks: [],
+			},
+		});
+		expect(await Bun.file(join(records, "transcript.jsonl")).text()).toContain(
+			"OK",
+		);
+	});
+
+	it("preserves a valid provider error envelope as a typed failed invocation", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "partial reply");
+		const records = await recordDirectory();
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: records,
+					runClaude: async (command, cwd) => {
+						await claude.run(command, cwd);
+
+						return JSON.stringify({
+							session_id: namedSession(command),
+							is_error: true,
+							result: "session exhausted its budget",
+							total_cost_usd: 0.0012,
+							num_turns: 2,
+							duration_ms: 900,
+							duration_api_ms: 800,
+							usage: {
+								input_tokens: 12,
+								output_tokens: 3,
+								cache_read_input_tokens: 0,
+								cache_creation_input_tokens: 0,
+							},
+						});
+					},
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInvocationError);
+		expect(failure).toMatchObject({
+			message: "session exhausted its budget",
+			attempt: {
+				outcome: "EXECUTION_FAILED",
+				metrics: { costUsd: 0.0012, turns: 2 },
+			},
+		});
+		expect(await Bun.file(join(records, "transcript.jsonl")).text()).toContain(
+			"partial reply",
+		);
 	});
 
 	it("removes the slug directory itself once the attempt's files are gone", async () => {

@@ -11,9 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { SessionCase, TranscriptPrefix } from "./case";
-import { readClaudeCallMetrics, readClaudeEnvelope } from "./claude";
+import { readClaudeCallMetrics } from "./claude";
 import type { SessionSettings } from "./claude";
 import type { ClaudeCallMetrics } from "./contracts";
+import { claudeEnvelopeSchema } from "./contracts";
 import { terminatedFileLines } from "./file-lines";
 import { projectSlug } from "./session-capture";
 import type { CheckResult } from "./session-check";
@@ -26,6 +27,7 @@ import { evaluateChecks } from "./session-check";
 import type { ContextManifest } from "./context-manifest";
 import { observedManifest } from "./context-manifest";
 import { outputStyles, parseTranscriptFile, toolUses } from "./transcript";
+import { SessionInvocationError } from "./session-invocation-error";
 
 export type ClaudeRunner = (
 	command: readonly string[],
@@ -287,10 +289,22 @@ export async function runSessionAttempt(
 		const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
 
 		try {
-			const output = await request.runClaude(
-				sessionCaseArgs(sessionCase, settings, session, overlay.styleName),
-				attemptDirectory,
-			);
+			let output: string;
+			try {
+				output = await request.runClaude(
+					sessionCaseArgs(sessionCase, settings, session, overlay.styleName),
+					attemptDirectory,
+				);
+			} catch (error) {
+				const failure =
+					error instanceof Error ? error : new Error(String(error));
+				throw await failedInvocation(
+					request,
+					attemptDirectory,
+					transcriptPath,
+					failure,
+				);
+			}
 
 			return await recordAttempt(request, attemptDirectory, {
 				output,
@@ -310,19 +324,69 @@ interface AttemptOutput {
 	readonly writtenTranscript: string;
 }
 
+async function preservedTranscript(
+	recordDirectory: string,
+	writtenTranscript: string,
+): Promise<string> {
+	const written = Bun.file(writtenTranscript);
+	const transcriptFile = join(recordDirectory, "transcript.jsonl");
+	await mkdir(recordDirectory, { recursive: true });
+	await Bun.write(transcriptFile, (await written.exists()) ? written : "");
+
+	return transcriptFile;
+}
+
+async function failedInvocation(
+	request: SessionAttemptRequest,
+	attemptDirectory: string,
+	writtenTranscript: string,
+	error: Readonly<Error>,
+): Promise<SessionInvocationError> {
+	const transcriptFile = await preservedTranscript(
+		request.recordDirectory,
+		writtenTranscript,
+	);
+
+	return invocationError(error.message, attemptDirectory, transcriptFile);
+}
+
+function invocationError(
+	message: string,
+	attemptDirectory: string,
+	transcriptFile: string,
+	metrics?: ClaudeCallMetrics,
+): SessionInvocationError {
+	return new SessionInvocationError(message, {
+		attemptDirectory,
+		reply: undefined,
+		transcriptFile,
+		metrics,
+		outcome: "EXECUTION_FAILED",
+		checks: [],
+		contextManifest: undefined,
+	});
+}
+
 async function recordAttempt(
 	request: SessionAttemptRequest,
 	attemptDirectory: string,
 	attempt: AttemptOutput,
 ): Promise<SessionAttempt> {
-	const written = Bun.file(attempt.writtenTranscript);
-	const transcriptFile = join(request.recordDirectory, "transcript.jsonl");
+	const transcriptFile = await preservedTranscript(
+		request.recordDirectory,
+		attempt.writtenTranscript,
+	);
 
-	await mkdir(request.recordDirectory, { recursive: true });
-	await Bun.write(transcriptFile, (await written.exists()) ? written : "");
-
-	const envelope = readClaudeEnvelope(attempt.output);
+	const envelope = claudeEnvelopeSchema.parse(JSON.parse(attempt.output));
 	const metrics = readClaudeCallMetrics(envelope);
+	if (envelope.is_error === true) {
+		throw invocationError(
+			envelope.result ?? "Claude session failed",
+			attemptDirectory,
+			transcriptFile,
+			metrics,
+		);
+	}
 	const reply = envelope.result;
 	if (reply === undefined) {
 		return {
