@@ -58,7 +58,12 @@ describe(createAppRouter.name, () => {
 	it("renders the corpus screen at /corpus", async () => {
 		renderAtWithStub(
 			"/corpus",
-			new Map([["/api/corpus", { root: "/corpus", digest: "a", files: [] }]]),
+			new Map([
+				[
+					"/api/corpus",
+					{ root: "/corpus", digest: "a", files: [], refusals: [] },
+				],
+			]),
 		);
 
 		await waitFor(() => {

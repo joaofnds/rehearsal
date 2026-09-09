@@ -26,6 +26,7 @@ function corpusResponseBody(): CorpusResponse {
 				readBy: 23,
 			},
 		],
+		refusals: [],
 	};
 }
 
@@ -81,7 +82,12 @@ describe(CorpusPage.name, () => {
 			new Map([
 				[
 					"/api/corpus",
-					{ root: "/home/user/.claude", digest: "e3b0c4", files: [] },
+					{
+						root: "/home/user/.claude",
+						digest: "e3b0c4",
+						files: [],
+						refusals: [],
+					},
 				],
 			]),
 		);

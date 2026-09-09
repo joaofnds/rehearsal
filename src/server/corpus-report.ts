@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
 import { hashDirectory, parseCheckpointRecord } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
-import { pathExists } from "#benchmark/file-presence";
+import { pathExists, SymlinkedEntryError } from "#benchmark/file-presence";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
@@ -22,8 +22,14 @@ export interface CorpusFileReport {
 
 export interface CorpusReport {
 	readonly root: string;
-	readonly digest: string;
+	readonly digest: string | undefined;
 	readonly files: readonly CorpusFileReport[];
+	readonly refusals: readonly string[];
+}
+
+interface HashedLayout {
+	readonly files: readonly HashedFile[];
+	readonly refusals: readonly string[];
 }
 
 async function readCountsByPath(
@@ -60,9 +66,10 @@ async function readCountsByPath(
  * credentials, none of which any stage reads and none of which belong in a
  * digest or on a screen.
  */
-async function hashCorpusLayout(source: CorpusRoot): Promise<HashedFile[]> {
+async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const { root } = source;
 	const files: HashedFile[] = [];
+	const refusals: string[] = [];
 
 	if (await Bun.file(join(root, CORPUS_INSTRUCTIONS_PATH)).exists()) {
 		const instructions = await hashCorpusFiles(source, [
@@ -76,25 +83,32 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedFile[]> {
 		if (!(await pathExists(absolute))) {
 			continue;
 		}
-		files.push(
-			...(await hashDirectory(absolute, directory, {
-				rootMayBeALink: source.kind === "live",
-			})),
-		);
+		try {
+			files.push(
+				...(await hashDirectory(absolute, directory, {
+					rootMayBeALink: source.kind === "live",
+				})),
+			);
+		} catch (error) {
+			if (!(error instanceof SymlinkedEntryError)) {
+				throw error;
+			}
+			refusals.push(error.message);
+		}
 	}
 
-	return files;
+	return { files, refusals };
 }
 
 export async function corpusReport(
 	source: CorpusRoot,
 	runsDirectory: string,
 ): Promise<CorpusReport> {
-	const hashedFiles = await hashCorpusLayout(source);
+	const layout = await hashCorpusLayout(source);
 	const readCounts = await readCountsByPath(runsDirectory);
 
 	const files: CorpusFileReport[] = [];
-	for (const file of hashedFiles) {
+	for (const file of layout.files) {
 		const fileStats = await stat(join(source.root, file.path));
 		files.push({
 			path: file.path,
@@ -106,7 +120,8 @@ export async function corpusReport(
 
 	return {
 		root: source.root,
-		digest: corpusDigest(hashedFiles),
+		digest: layout.refusals.length > 0 ? undefined : corpusDigest(layout.files),
 		files,
+		refusals: layout.refusals,
 	};
 }

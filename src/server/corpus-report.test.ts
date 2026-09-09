@@ -8,6 +8,7 @@ import {
 } from "#benchmark/run-records-test-support";
 import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { failureOf } from "#cli/cli-test-support";
+import type { CorpusReport } from "./corpus-report";
 import { corpusReport } from "./corpus-report";
 
 describe(corpusReport.name, () => {
@@ -57,7 +58,49 @@ describe(corpusReport.name, () => {
 		);
 	});
 
-	it("refuses a corpus root whose layout directory holds a symlink, rather than reporting what it points at", async () => {
+	describe("when a layout directory holds a symlink resolving outside the root", () => {
+		async function reportOverEscapingAgents(): Promise<CorpusReport> {
+			const root = await fullCorpusDirectory();
+			const outside = await corpusDirectory();
+			await writeFile(join(outside, "secret.md"), "secret bytes\n");
+			await mkdir(join(root, "agents"), { recursive: true });
+			await writeFile(join(root, "agents", "normal.md"), "an agent\n");
+			await symlink(
+				join(outside, "secret.md"),
+				join(root, "agents", "escape.md"),
+			);
+			const runs = await corpusDirectory();
+			await new RecordedRunsFixture(runs).write();
+
+			return corpusReport(directorySource(root), runs);
+		}
+
+		it("reports every file under the layout directories that hashed whole", async () => {
+			const report = await reportOverEscapingAgents();
+
+			expect(report.files.map(({ path }) => path)).toEqual([
+				"CLAUDE.md",
+				"skills/build/SKILL.md",
+				"skills/discuss/SKILL.md",
+			]);
+		});
+
+		it("names the refused entry without an absolute path", async () => {
+			const report = await reportOverEscapingAgents();
+
+			expect(report.refusals).toEqual([
+				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			]);
+		});
+
+		it("carries no corpus root digest, since a digest over a partial tree names a corpus nobody holds", async () => {
+			const report = await reportOverEscapingAgents();
+
+			expect(report.digest).toBeUndefined();
+		});
+	});
+
+	it("reports the refusal for a symlinked directory under a layout directory, rather than what it points at", async () => {
 		const root = await fullCorpusDirectory();
 		const outside = await corpusDirectory();
 		await writeFile(join(outside, "control.key"), "secret bytes\n");
@@ -65,11 +108,12 @@ describe(corpusReport.name, () => {
 		const runs = await corpusDirectory();
 		await new RecordedRunsFixture(runs).write();
 
-		const failure = await failureOf(corpusReport(directorySource(root), runs));
+		const report = await corpusReport(directorySource(root), runs);
 
-		expect(failure).toBeInstanceOf(SymlinkedEntryError);
-		expect(failure.message).toContain("escape");
-		expect(failure.message).not.toContain("secret bytes");
+		expect(report.files.map(({ path }) => path)).toEqual(["CLAUDE.md"]);
+		expect(report.refusals).toEqual([
+			"skills/escape resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+		]);
 	});
 
 	it("reports a rulebook file exactly once, not once per list that carries it", async () => {
