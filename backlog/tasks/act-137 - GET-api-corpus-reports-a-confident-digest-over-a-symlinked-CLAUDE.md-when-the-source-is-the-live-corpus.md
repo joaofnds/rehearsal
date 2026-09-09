@@ -7,12 +7,13 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 16:04'
+updated_date: '2026-09-09 16:07'
 labels: []
 dependencies: []
 documentation:
   - backlog/docs/doc-56 - triage-2026-09-09-c.md
   - backlog/docs/doc-58 - Shaping-ACT-137-live-corpus-containment.md
+  - backlog/docs/doc-60 - reflection-ACT-137.md
 priority: high
 type: bug
 ordinal: 133008
