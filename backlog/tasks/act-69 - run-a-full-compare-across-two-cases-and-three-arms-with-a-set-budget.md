@@ -4,7 +4,7 @@ title: 'run a full compare across two cases and three arms, with a set budget'
 status: To Do
 assignee: []
 created_date: '2026-09-04 23:30'
-updated_date: '2026-09-09 16:23'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-7
 dependencies:
@@ -74,11 +74,11 @@ The 25 USD authorization stands unspent and is recorded above. Two routes, neith
 
 Disposition: keep; next action: implementation. Priority: medium. The $25 session-mode comparison is authorized, but neither session confirmation production nor compatible comparison loading is ready.
 
-Evidence: executeSessionRun deliberately refuses confirmation; group/comparison lists are empty; parent audit observed session reps lack pipeline finalOutcome; claude is absent from PATH.
+Evidence: executeSessionRun deliberately refuses confirmation; group/comparison lists are empty; parent audit observed session reps lack pipeline finalOutcome; Claude 2.1.266 is installed at /opt/homebrew/bin/claude but its directory is absent from this tool PATH (doc-69).
 
-Unresolved claims/resources: ACT-140 and ACT-151 must finish; claude must be available on PATH. USD 25 session-mode authorization is already recorded.
+Unresolved claims/resources: ACT-140 and ACT-151 must finish; use a command-local PATH including /opt/homebrew/bin; authentication remains unverified. USD 25 session-mode authorization is already recorded.
 
-Next action: Wait for ACT-140 and ACT-151, restore the existing Claude executable to PATH, verify a provider-free comparison fixture, then run two cases × three arms × two reps within the already authorized USD 25 ceiling.
+Next action: After ACT-140 and ACT-151, verify a provider-free comparison fixture, then run two cases × three arms × two reps within the already authorized USD 25 ceiling. Invoke with PATH="/opt/homebrew/bin:$PATH" mise exec -- ./rehearsal.ts …; account for model preflight cost in that ceiling. Executable installation is not a blocker; authentication is not yet checked.
 
 Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

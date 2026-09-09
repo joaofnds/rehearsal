@@ -4,7 +4,7 @@ title: the comparison screen has never rendered a real recorded comparison
 status: To Do
 assignee: []
 created_date: '2026-09-08 01:46'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-7
 dependencies:
@@ -45,7 +45,7 @@ Evidence: .benchmark-runs/comparisons is empty and no comparison manifest exists
 
 Unresolved claims/resources: ACT-69 or equivalent real three-arm, multi-case comparison evidence.
 
-Next action: Wait for ACT-69. Then Add ACT-69 as dependency and replace AC2 with the settled history; once a report exists, run the browser acceptance.
+Next action: After ACT-69 records the authorized comparison, verify browser availability and exercise the real-record browser acceptance. AC2 already records the settled ACT-39 history.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

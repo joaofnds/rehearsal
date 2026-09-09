@@ -3,7 +3,7 @@ id: doc-69
 title: Triage rehearsal factual evidence
 type: other
 created_date: '2026-09-09 16:24'
-updated_date: '2026-09-09 16:26'
+updated_date: '2026-09-09 16:34'
 ---
 # Triage factual evidence, 2026-09-09
 
@@ -398,3 +398,59 @@ Ran 143 tests across 10 files. [306.00ms]
  1 snapshots, 288 expect() calls
 Ran 153 tests across 10 files. [6.95s]
 ```
+
+
+## Final resource and ordering evidence
+
+Product code remains at 1d02c8e. Claude is installed and executable at /opt/homebrew/bin/claude (2.1.266). This tool environment has no /opt/homebrew/bin in PATH: command -v claude and mise exec -- which claude fail. The overseeing session has a different PATH and resolves it. A future authorized invocation can use `PATH="/opt/homebrew/bin:$PATH" mise exec -- ./rehearsal.ts …`; installation is not blocked, authentication is unverified. Earlier missing-executable statements in these retained reports are historical and superseded by this observation.
+
+The following probe injects only the model preflight and runs the real outer runRunCommand and inner executeSessionRun. It records the preflight before projection and refusal. Therefore a real CLI confirmation invocation can call the model before its cost projection even though the inner hook refuses; the original no-provider-call interpretation is contradicted. ACT-140 already owns approval-before-provider behavior; its criterion now names the preflight explicitly. The real probeModelAvailable invokes the provider, so no fixed-PATH smoke was run.
+
+### preflight-order.ts
+
+```typescript
+import {runRunCommand, executeSessionRun} from '/Users/joaofnds/code/rehearsal/src/cli/run-command.ts';
+const events:string[]=[];
+const declaration={id:'smoke',kind:'session' as const,title:'Smoke',prompt:'OK',tools:[],corpusFiles:[],projectFiles:[],checks:[]};
+const sessionCase={kind:'session' as const,declaration,prompt:'OK',tools:[],corpusFiles:[],projectFiles:[],checks:[],fixturePath:undefined,transcriptPath:undefined,settings:undefined,agents:undefined};
+try {
+ await runRunCommand({args:['--case','smoke','--model','sonnet','--session-budget-usd','0.2','--confirm','--reps','2','--yes'],json:false,stdinIsTerminal:false},{output:{stdout:s=>events.push('stdout: '+s),stderr:s=>events.push('stderr: '+s)},requireCase:async()=>sessionCase,assertPreflight:async()=>{throw Error('unexpected pipeline preflight')},probeModel:async()=>{events.push('injected model probe (no provider call)')},execute:async()=>{throw Error('unexpected pipeline execution')},executeSession:executeSessionRun});
+} catch(e) {events.push(String(e))}
+console.log(JSON.stringify(events,null,2));
+if(!events[0]?.startsWith('injected model probe') || !events.some(x=>x.includes('not built yet'))) throw Error('unexpected ordering');
+```
+
+### preflight-order.log
+
+```text
+[
+  "injected model probe (no provider call)",
+  "stderr: Projected maximum cost: $0.40 (2 reps x $0.20)\n",
+  "RefusedPreconditionError: A session confirmation group is not built yet; run the case without --confirm"
+]
+```
+
+### archive-probe.py
+
+```text
+import tempfile,pathlib,subprocess,json,shutil,re
+with tempfile.TemporaryDirectory(prefix='triage-backlog-') as d:
+ root=pathlib.Path(d);subprocess.run(['git','init','-q'],cwd=root,check=True)
+ (root/'.gitignore').write_text('/backlog/\n');(root/'backlog/tasks').mkdir(parents=True);(root/'backlog/docs').mkdir();(root/'backlog/decisions').mkdir()
+ shutil.copyfile('/Users/joaofnds/code/rehearsal/backlog/config.yml',root/'backlog/config.yml')
+ assert subprocess.run(['git','check-ignore','-q','backlog/config.yml'],cwd=root).returncode==0
+ def run(*args):return subprocess.check_output(['backlog',*args],cwd=root,text=True)
+ a=run('task','create','first isolated probe','--plain');first=re.search(r'ACT-\d+',a,re.I).group().upper()
+ run('task','archive',first)
+ b=run('task','create','second isolated probe','--plain');second=re.search(r'ACT-\d+',b,re.I).group().upper()
+ result=json.loads(run('task','list','--json'));assert result['schemaVersion']==1
+ print(json.dumps({'version':run('--version').strip(),'first':first,'second':second,'reused':first==second,'archived_files':[x.name for x in (root/'backlog/archive/tasks').glob('*')],'current_files':[x.name for x in (root/'backlog/tasks').glob('*')]}))
+```
+
+### archive-probe.log
+
+```text
+{"version": "1.50.1", "first": "ACT-1", "second": "ACT-1", "reused": true, "archived_files": ["act-1 - first-isolated-probe.md"], "current_files": ["act-1 - second-isolated-probe.md"]}
+```
+
+The archive reproduction used an isolated ignored scratch board and removed its fixture. External `/Users/joaofnds/code/dotfiles/.boris/backlog/tasks/dot-71 - guard-against-the-CLI-reusing-an-archived-cards-number.md` is To Do, Medium, unassigned, with unchecked uniqueness/collision acceptance. It reports 1.51.0 reuse and costly repair; those historical measurements are attributed, not reproduced here. The local 1.50.1 reproduction issued ACT-1 twice. No linked-board edits were made.

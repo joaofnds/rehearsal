@@ -4,7 +4,7 @@ title: build and freeze generated fixtures for session cases
 status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-3
 dependencies: []
@@ -44,7 +44,7 @@ Disposition: keep; next action: shaping. Priority: medium. The approved triage f
 
 Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). caseDeclarationSchema rejects setup as an unrecognized key in session-probes.ts; runSessionAttempt only calls seedFixture. sessionUpstreamDigest hashes a static fixture tree.
 
-Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+Unresolved claims/resources: No prerequisite for shaping. Claude 2.1.266 runs at /opt/homebrew/bin/claude; this session PATH omits /opt/homebrew/bin. Use a command-local PATH prefix for a future authorized provider check. Authentication and real-provider behavior remain unverified; executable presence grants no spending authority.
 
 Next action: Shape the generated-input declaration and realized tree/history freeze with a deterministic fake builder.
 

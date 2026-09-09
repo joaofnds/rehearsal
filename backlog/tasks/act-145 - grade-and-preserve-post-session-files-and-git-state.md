@@ -4,7 +4,7 @@ title: grade and preserve post-session files and git state
 status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-3
 dependencies: []
@@ -48,7 +48,7 @@ Disposition: keep; next action: shaping. Priority: medium. The experiment grades
 
 Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: NO_REPLY, checks=[], attempt directory absent after a fake runner wrote state. session-check.ts supports only reply/tool evidence; sessionAttemptRecordSchema forbids NO_REPLY check results.
 
-Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+Unresolved claims/resources: No prerequisite for shaping. Claude 2.1.266 runs at /opt/homebrew/bin/claude; this session PATH omits /opt/homebrew/bin. Use a command-local PATH prefix for a future authorized provider check. Authentication and real-provider behavior remain unverified; executable presence grants no spending authority.
 
 Next action: Shape state preservation and command scoring together, including immutable grading inputs, dirty/ignored state, no-reply outcomes, grader errors and scorer identity.
 

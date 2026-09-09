@@ -4,7 +4,7 @@ title: build the session confirmation group path
 status: Shape
 assignee: []
 created_date: '2026-09-09 15:20'
-updated_date: '2026-09-09 16:27'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-7
 dependencies: []
@@ -20,14 +20,14 @@ ordinal: 136008
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Run existing session cases as isolated repetitions from one captured input set, preserving every successful and failed attempt in a readable confirmation group. Cost projection and approval precede provider calls. Resolve the session frozen-input representation during shaping; do not record an invented pipeline. The present runConfirmed hook deliberately refuses and the installed CLI environment cannot find claude. ACT-69 owns the existing USD 25 comparison budget; this implementation has no separately recorded provider-spend allowance.
+Run existing session cases as isolated repetitions from one captured input set, preserving every successful and failed attempt in a readable confirmation group. Cost projection and approval must precede every provider call, including the model preflight. Resolve the session frozen-input representation during shaping; do not record an invented pipeline. The current runSessionCase probes the model before executeSessionRun projects cost and refuses confirmation. Claude is installed at /opt/homebrew/bin/claude; this invocation PATH omits its directory. ACT-69 owns the existing USD 25 comparison budget; this implementation has no separately recorded provider-spend allowance.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 rehearsal run on a session case with --confirm --reps N executes N reps and writes a confirmation group record, instead of refusing with 'A session confirmation group is not built yet' (observed 2026-09-09: 'run --case smoke --model sonnet --confirm --reps 2 --yes' printed the projection then refused, exiting without a provider call)
+- [ ] #1 rehearsal run on a session case with --confirm --reps N executes N reps and writes a confirmation group record instead of refusing confirmation (ACT-140 original AC1; doc-69 provider-free runRunCommand/executeSessionRun probe confirms the current refusal; the prior no-provider-call CLI claim is contradicted by the model preflight ordering)
 - [ ] #2 rehearsal list groups returns the written group and rehearsal show on its id prints the record (observed 2026-09-09: list groups is empty and no command produces a session group)
-- [ ] #3 The projected cost is shown and approved before any provider call (executeSessionRun and runRequestedExecution ordering; ACT-140 original AC3)
+- [ ] #3 The projected cost is shown and approved before any provider call, including the CLI model preflight (ACT-140 original AC3; doc-69 injected outer-CLI probe shows runSessionCase currently probes the model before executeSessionRun projects cost)
 - [ ] #4 Each repetition runs in its own attempt directory from the group’s frozen shared inputs (João’s approved session benchmark scope, doc-59)
 - [ ] #5 If one repetition fails, peer repetitions complete and the group records the failed repetition rather than silently dropping it (João’s approved session benchmark scope, doc-59)
 - [ ] #6 Each repetition’s named check results remain available through its recorded attempt evidence (João’s approved session benchmark scope, doc-59)
@@ -74,11 +74,11 @@ Criteria updated by triage from the current evidence and retained sources. Repla
 
 Disposition: keep; next action: shaping. Priority: high. Confirmation execution blocks the authorized two-case comparison; without it no session group exists to compare.
 
-Evidence: executeSessionRun rejects runConfirmed. Confirmation records accept session checks but frozenInputsSchema requires pipelinePath; the representation must be resolved before implementation. 143 focused tests pass. The normal smoke command stops earlier because claude is missing from PATH.
+Evidence: executeSessionRun rejects runConfirmed; frozenInputsSchema requires pipelinePath. The doc-69 injected outer-CLI probe records model probe, then $0.40 projection, then refusal. Inner-hook ordering does not establish the outer CLI spending boundary. The installed executable runs by absolute path; PATH resolution fails in this tool environment.
 
-Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+Unresolved claims/resources: No prerequisite for shaping. Claude 2.1.266 runs at /opt/homebrew/bin/claude; this session PATH omits /opt/homebrew/bin. Use a command-local PATH prefix for a future authorized provider check. Authentication and real-provider behavior remain unverified; executable presence grants no spending authority.
 
-Next action: Shape the session-specific frozen-input record and map isolated attempts into runConfirmation. Bound this to one shaping session without provider spend. Build can use injected runners; real smoke evidence waits for the executable.
+Next action: Shape the session-specific frozen-input record, isolated attempt mapping into runConfirmation, and approval-before-model-preflight ordering. Bound this to one shaping session without provider spend. Build can use injected runners; any real smoke needs an applicable recorded spend authorization.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 

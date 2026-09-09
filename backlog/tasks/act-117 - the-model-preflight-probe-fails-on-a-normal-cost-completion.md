@@ -4,7 +4,7 @@ title: distinguish model-probe budget exhaustion from model rejection
 status: To Do
 assignee: []
 created_date: '2026-09-08 11:23'
-updated_date: '2026-09-09 16:21'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-3
 dependencies: []
@@ -44,7 +44,7 @@ Evidence: MODEL_PROBE_BUDGET_USD is 0.1; readClaudeEnvelope throws a bare Error 
 
 Unresolved claims/resources: None for the next action.
 
-Next action: Absorb ACT-121, type terminal_reason, branch budget exhaustion from rejection, and test both.
+Next action: Type terminal_reason, distinguish budget exhaustion from genuine model rejection, and test both with injected envelopes. ACT-121 is already absorbed and archived.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

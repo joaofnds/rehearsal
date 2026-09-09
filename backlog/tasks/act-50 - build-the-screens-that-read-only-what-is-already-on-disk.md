@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-04 13:01'
-updated_date: '2026-09-09 16:26'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-7
 dependencies:
@@ -31,7 +31,7 @@ Finish the comparison screen by replacing the obsolete What moved placeholder wi
 <!-- AC:BEGIN -->
 - [x] #1 Comparison screen, Attempt-pairs presentation: rows are cases (caseDeltas), not attempt pairs; each row shows the case id and the per-arm reading available today (source: sourceRepSchema carries no per-rep grade, comparison-record.ts:142-146, .strict())
 - [x] #2 Comparison screen, Attempt-pairs presentation: each arm band renders that arm's gradeDistribution as a count per letter grade, never a synthesized median or a plus/minus range (source: reliabilitySummarySchema has no median/range field, comparison-record.ts:148-163; STAGE_LETTER_GRADES has no plus/minus, config.ts:18; direction 2026-09-07 'I agree, no "range C+ - A-"')
-- [x] #3 Comparison screen: the segmented switcher offers Attempt pairs (built) and What moved; What moved renders under the PLANNED/dashed-border/disabled vocabulary SPEC.md section 6 defines for planned features, never as a working tab (source: SPEC.md section 5b needs a per-measure interval and reading verdict that PairedEstimate cannot supply; deferred whole to ACT-104)
+- [x] #3 The initial comparison delivery offered Attempt pairs and a What moved placeholder; that completed placeholder requirement is retired as an ongoing constraint. Current What moved behavior is governed by AC13 and AC14 (original ACT-50 AC3 preserved in doc-70; direction 2026-09-08 in commit f835f75 reopens this card to render What moved; ACT-104 now Done)
 - [x] #4 Comparison screen: an attribution claim between two named arms names differing files by deduplicating corpusDifferences(reps[arm].executedCorpus, reps[otherArm].executedCorpus) across every stage pair by file path first, so one file edited once counts once even though it is read at every stage that declares it; the claim renders only when that deduplicated set is empty, and a refusal lists the deduplicated differing paths otherwise, never a silent claim (source: corpusDifferences is called per-stage keyed on record.stage, checkpoint.ts:454-479; SPEC.md section 5b: 'Attribution is only legitimate when exactly one file hash differs... refuse the attribution claim'; subtlety pinned in this card's 2026-09-07 notes: 'one edited file appears once per stage')
 - [x] #5 Comparison screen: loading a comparison record through a crafted id whose segment escapes the runs directory is refused, reusing the existing route-level test (source: api.test.ts:134, 'refuses a record id whose segment escapes the runs directory, without a 500')
 - [x] #6 Corpus screen renders three columns from data already on disk: Path, Hash, Last edited (via stat), and Read by (a fold over checkpoint corpus-file records); no fourth Invalidated column (source: staleness-report.ts:217 stat() precedent; ACT-110 not yet landed)
@@ -48,20 +48,7 @@ Finish the comparison screen by replacing the obsolete What moved placeholder wi
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Goal: ship the comparison screen (attempt-pairs presentation) and the corpus screen, both reading only what the harness already persists on disk, per the four scope decisions and two path/digest answers already signed off in this card's implementation notes (2026-09-07).
-
-First test to write: a server route test asserting corpusDifferences called over two named arms' executedCorpus lists returns empty for a genuinely identical pair and lists the differing files otherwise (covers AC #4) -- write it before the attribution UI, since it fixes the contract the component renders against.
-
-Sequencing:
-1. Comparison screen, attempt-pairs table over caseDeltas + gradeDistribution bands (AC #1, #2).
-2. Attribution card wired to corpusDifferences (AC #4), with its refusal path tested first.
-3. What-moved switcher tab rendered PLANNED/disabled (AC #3).
-4. Record-id route refusal test reused against the comparison fetch path (AC #5).
-5. Corpus screen: three-column table from stat + checkpoint corpus-file fold (AC #6), unredacted root path in the success body (AC #7), corpus root@<hash> header plus the GLOSSARY.md entries for both digest terms (AC #8), planned-feature-block component (AC #9, already listed as needed in system-page.tsx).
-6. Empty states for both screens (AC #10).
-7. Confirm AC #12's file-touch prediction once both screens exist; correct it here if wrong.
-
-No comparison record exists on disk today (.benchmark-runs/comparisons is empty), so the comparison screen is built and tested against fixtures unless a real compare run is produced first.
+Remaining work after ACT-114 supplies a verified real report: replace the comparison page What moved placeholder with the served qualityReadings intervals and verdicts (AC13), then open the recorded comparison in a browser and match the rendered readings to that report (AC14). Preserve the completed Attempt-pairs, attribution, corpus, route-refusal, empty-state and design-system behavior in AC1-12. The original placeholder-only AC3 is historical and imposes no disabled-tab constraint. Original plan is preserved in doc-70.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes

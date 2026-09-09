@@ -4,7 +4,7 @@ title: the board reissues an archived card's id to a new card
 status: To Do
 assignee: []
 created_date: '2026-09-06 13:04'
-updated_date: '2026-09-09 16:20'
+updated_date: '2026-09-09 16:33'
 labels: []
 dependencies: []
 references:
@@ -87,11 +87,11 @@ This adds a benchmark-cost reason to resolve archived-ID reuse. Keep this card a
 
 Disposition: defer; next action: investigation. Priority: low. Archived ID reuse is confirmed, while its current CLI-version-specific operational effect is unsettled.
 
-Evidence: Cross-directory duplicate search returns act-52, act-53 and act-89; installed backlog is 1.50.1.
+Evidence: Cross-directory duplicate search returns act-52, act-53 and act-89. A fresh isolated ignored-board create/archive/create with installed Backlog 1.50.1 issued ACT-1 twice (doc-69 script and output). External DOT-71 is To Do, Medium, unassigned and records 1.51.0 reuse; that version claim is attributed, not locally reproduced.
 
-Unresolved claims/resources: scratch-board comparison on 1.50.1 and 1.51.0; owning DOT-71 coordination
+Unresolved claims/resources: 1.51.0 local reproduction and dependency traversal remain unverified; owning DOT-71 is open outside this directive
 
-Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Reproduce create/archive/create and dependency traversal on both versions in scratch boards.
+Next action: Reconsider after m-7 or when ID reuse blocks a selected card; coordinate with external DOT-71 and test 1.51.0 plus dependency traversal in isolated scratch boards. The 1.50.1 create/archive/create reproduction is already complete.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

@@ -6,7 +6,7 @@ title: >-
 status: Shape
 assignee: []
 created_date: '2026-09-02 21:36'
-updated_date: '2026-09-09 16:23'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-6
 dependencies: []
@@ -58,7 +58,7 @@ Evidence: At 1d02c8e, rg found direct console.log calls in run.ts, checks.ts and
 
 Unresolved claims/resources: None for the next action.
 
-Next action: Define the injected diagnostic writer boundary and rewrite AC5 to forbid direct writes rather than every console.log token.
+Next action: Shape the injected diagnostic writer boundary against current AC5, preserving data-only stdout behavior and allowing injected defaults.
 
 Record: [backlog/docs/doc-61 - Triage-rehearsal-backlog.md](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

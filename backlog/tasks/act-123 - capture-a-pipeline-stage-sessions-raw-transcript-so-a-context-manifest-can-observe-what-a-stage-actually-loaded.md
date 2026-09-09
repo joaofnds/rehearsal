@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 17:21'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 dependencies: []
 priority: low
@@ -31,13 +31,13 @@ Preserve a pipeline stage session’s raw transcript as run evidence so a later 
 <!-- SECTION:NOTES:BEGIN -->
 ## Triage verdict, 2026-09-09 (doc-61)
 
-Disposition: defer; next action: shaping. Priority: low. Raw pipeline transcripts enable observed context, but the card has no acceptance criteria, retention contract, or downstream pipeline-manifest owner.
+Disposition: defer; next action: shaping. Priority: low. Raw pipeline transcripts enable observed context, but two observable capture criteria now preserve the request, while the retention contract and downstream pipeline-manifest owner remain unset.
 
 Evidence: StageTranscript stores parsed exchanges/sessionId only; raw JSONL copying exists in session-attempt.ts and not in workflow.ts, run.ts, or checkpoint.ts.
 
 Unresolved claims/resources: Destination, immutability, retention, failure handling, and consuming outcome are unset.
 
-Next action: Reconsider after the m-7 comparison is read, or when this behavior blocks a selected card. Then Write observable capture/cleanup acceptance and identify or file the pipeline observed-manifest consumer before build.
+Next action: Reconsider after the m-7 comparison is read, or when transcript capture blocks a selected card. Then shape destination, immutability, retention and failure handling against the existing two capture criteria, and identify the downstream pipeline observed-manifest consumer.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->

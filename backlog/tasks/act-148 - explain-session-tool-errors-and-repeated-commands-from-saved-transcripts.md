@@ -4,7 +4,7 @@ title: explain session tool errors and repeated commands from saved transcripts
 status: Shape
 assignee: []
 created_date: '2026-09-09 15:49'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-3
 dependencies: []
@@ -43,7 +43,7 @@ Disposition: keep; next action: shaping. Priority: medium. Observed errors and r
 
 Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: tool_result is_error input parses to an empty toolUses record; TranscriptLine exposes only toolUses/outputStyle and no diagnostic result.
 
-Unresolved claims/resources: No prerequisite for shaping; provider-level behavior remains unverified until the Claude executable is available.
+Unresolved claims/resources: No prerequisite for shaping. Claude 2.1.266 runs at /opt/homebrew/bin/claude; this session PATH omits /opt/homebrew/bin. Use a command-local PATH prefix for a future authorized provider check. Authentication and real-provider behavior remain unverified; executable presence grants no spending authority.
 
 Next action: Shape a read-only transcript diagnostic with source locations, prefix exclusion and unavailable-vs-zero semantics.
 

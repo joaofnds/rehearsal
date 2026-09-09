@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 01:07'
-updated_date: '2026-09-09 16:26'
+updated_date: '2026-09-09 16:33'
 labels: []
 dependencies:
   - ACT-141
@@ -102,7 +102,7 @@ Evidence: captureStageCorpus and live corpus-report walking pass rootMayBeALink 
 
 Unresolved claims/resources: ACT-141
 
-Next action: After ACT-141, apply the declared extent to layout-root resolution in both stage capture and GET /api/corpus; rewrite AC1 to name the live-source case.
+Next action: After ACT-141, apply its declared extent to layout-root resolution in stage capture and GET /api/corpus; verify current AC1-4 against synthetic outside and trusted backing trees.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 

@@ -4,7 +4,7 @@ title: compare session experiments including a single case
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:49'
-updated_date: '2026-09-09 16:22'
+updated_date: '2026-09-09 16:33'
 labels: []
 milestone: m-3
 dependencies:
@@ -13,6 +13,7 @@ dependencies:
   - ACT-144
   - ACT-145
   - ACT-151
+  - ACT-147
 references:
   - src/benchmark/comparison-estimator.ts
   - src/benchmark/comparison-quality.ts
@@ -56,9 +57,9 @@ Disposition: keep; next action: shaping. Priority: medium. A repeated single-cas
 
 Evidence: HEAD 3438d1f (product code unchanged from 1d02c8e). session-probes.ts: valid session reps cause Pipeline comparison rep has no final outcome even with two cases; one-case buildPairedEstimate throws at least two cases.
 
-Unresolved claims/resources: Full experiment waits on ACT-140, ACT-143, ACT-144, ACT-145 and the split multi-case compatibility slice. Single-case estimator remains design work.
+Unresolved claims/resources: Full experiment waits on ACT-140, ACT-143, ACT-144, ACT-145, ACT-147 and ACT-151. Single-case estimator remains design work.
 
-Next action: Wait for ACT-140, ACT-143, ACT-144, ACT-145, ACT-151. Then Split existing multi-case session compatibility into a prerequisite, then shape one-case uncertainty, named partial results and generated-board integration. Keep original acceptance 1-6 here.
+Next action: After ACT-140, ACT-143, ACT-144, ACT-145, ACT-147 and ACT-151, shape one-case uncertainty, named partial results and generated-board integration. ACT-151 already owns the multi-case prerequisite. Regrading is required before the expensive integration experiment (doc-59); retain AC1-6.
 
 Record: [Triage record](<../docs/doc-61 - Triage-rehearsal-backlog.md>).
 <!-- SECTION:NOTES:END -->
