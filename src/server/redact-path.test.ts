@@ -1,5 +1,38 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rename } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { redactAbsolutePaths } from "./redact-path";
+
+async function messageFromReadingMissingFile(
+	directoryName: string,
+): Promise<{ message: string; root: string }> {
+	const root = await mkdtemp(join(tmpdir(), directoryName));
+
+	try {
+		await readFile(join(root, "secret.md"), "utf8");
+	} catch (error) {
+		if (error instanceof Error) {
+			return { message: error.message, root };
+		}
+	}
+
+	throw new Error("reading a missing file did not throw an Error");
+}
+
+async function messageFromRenamingMissingFile(): Promise<string> {
+	const root = await mkdtemp(join(tmpdir(), "rehearsal-redact-rename-"));
+
+	try {
+		await rename(join(root, "from.md"), join(root, "to.md"));
+	} catch (error) {
+		if (error instanceof Error) {
+			return error.message;
+		}
+	}
+
+	throw new Error("renaming a missing file did not throw an Error");
+}
 
 describe(redactAbsolutePaths.name, () => {
 	test("replaces a POSIX absolute path with a redaction marker", () => {
@@ -46,5 +79,56 @@ describe(redactAbsolutePaths.name, () => {
 				"ENOENT: no such file or directory, open '/Users/joaofnds/secret.md'",
 			),
 		).toBe("ENOENT: no such file or directory, open '<path>'");
+	});
+
+	test("redacts a real fs error naming a missing file under a temp directory", async () => {
+		const { message, root } =
+			await messageFromReadingMissingFile("rehearsal-redact-");
+
+		expect(redactAbsolutePaths(message)).not.toContain(root);
+	});
+
+	test("redacts a real fs error under a temp directory whose name contains a space", async () => {
+		const { message, root } = await messageFromReadingMissingFile(
+			"rehearsal redact space ",
+		);
+
+		expect(redactAbsolutePaths(message)).not.toContain(root);
+	});
+
+	test("redacts a real fs error under a temp directory whose name contains an apostrophe", async () => {
+		const { message, root } = await messageFromReadingMissingFile(
+			"rehearsal-Bob's-redact-",
+		);
+
+		expect(redactAbsolutePaths(message)).not.toContain(root);
+	});
+
+	test("redacts a quoted path under a root this process does not know", () => {
+		expect(redactAbsolutePaths("failed at /srv/target-repo/x.md")).toBe(
+			"failed at <path>",
+		);
+	});
+
+	test("redacts both paths of a real two-path fs error, closing quotes intact", async () => {
+		const message = await messageFromRenamingMissingFile();
+
+		expect(redactAbsolutePaths(message)).toBe(
+			"ENOENT: no such file or directory, rename '<path>' -> '<path>'",
+		);
+	});
+
+	test("leaves a relative case declaration path untouched", () => {
+		expect(redactAbsolutePaths("cases/act-1/case.json is malformed")).toBe(
+			"cases/act-1/case.json is malformed",
+		);
+	});
+
+	test("leaves a relative corpus path in a refusal untouched", () => {
+		expect(
+			redactAbsolutePaths(
+				"agents/escape.md resolves outside the tree it is named under",
+			),
+		).toBe("agents/escape.md resolves outside the tree it is named under");
 	});
 });
