@@ -3,14 +3,16 @@ id: ACT-137
 title: >-
   GET /api/corpus reports a confident digest over a symlinked CLAUDE.md when the
   source is the live corpus
-status: To Do
-assignee: []
+status: Build
+assignee:
+  - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 13:11'
+updated_date: '2026-09-09 15:33'
 labels: []
 dependencies: []
 documentation:
   - backlog/docs/doc-56 - triage-2026-09-09-c.md
+  - backlog/docs/doc-58 - Shaping-ACT-137-live-corpus-containment.md
 priority: high
 type: bug
 ordinal: 133008
@@ -37,6 +39,11 @@ Why the live source is lenient, and why the fix is not just 'refuse here too': ~
 - [ ] #3 against that same root, GET /api/corpus returns 200 carrying a refusal that names CLAUDE.md, not a 500 (adversarial review of ACT-135's record, 2026-09-09: api.ts:76-83 wraps the route in no try/catch, so satisfying AC#1 by throwing would return the 500 that ACT-135 AC#7 exists to eliminate)
 - [ ] #4 the corpus screen against that root renders the refusal naming CLAUDE.md rather than 'Could not load the corpus.' (same review: ACT-135 AC#8 pins that text for the layout-directory case, and this route must not regress it)
 - [ ] #5 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
+- [ ] #6 corpusReport on a directory source whose CLAUDE.md is a symlink to a file outside the root returns a report whose refusals names CLAUDE.md and whose digest is undefined, rather than throwing (reproduced 2026-09-09, tmp-probe/probe5.ts: THREW SymlinkedEntryError before any report was returned)
+- [ ] #7 GET /api/corpus with that source injected through ApiDependencies returns 200 and a body whose refusals names CLAUDE.md (ACT-135 AC#7 exists to eliminate the 500; src/server/api.ts:76-83 wraps the route in no try/catch, read 2026-09-09)
+- [ ] #8 the corpus screen given that report renders text naming CLAUDE.md and does not render 'Could not load the corpus.' (client/src/corpus/corpus-page.tsx:40 pins that text to query.isError, read 2026-09-09)
+- [ ] #9 the live corpus report is unchanged at 122 files, digest c7000b, zero refusals (measured 2026-09-09, tmp-probe/probe1.ts, as a regression guard)
+- [ ] #10 bun run test, bun run lint, bun run typecheck, bun run fmt:check all pass (the project's own check, CLAUDE.md)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -90,4 +97,37 @@ The shared design decision both builds need, recorded once here. Neither card ca
 Correction, 2026-09-09 (doc-56), to the shared-predicate note above. That note says three layout directories are symlinks. Measured exactly by review and re-checked: the layout kinds are agents, output-styles and rulebook (LAYOUT_DIRECTORY_KINDS, checkpoint.ts line 319). Of those, agents and rulebook are symlinks into a sibling tree and output-styles is an ordinary directory. The root instruction file is a symlink. The skills directory is a symlink too but is NOT a layout kind; it is resolved on its own path by resolveSkillDirectory.
 
 So the inventory the shaping session inherits is two of three layout directories plus the instruction file, not three. The conclusion is unchanged: a blanket 'refuse whatever resolves outside the root' still empties every live report and still contradicts this card's AC#2. Correcting it because a shaping session reasons from this inventory to choose the predicate, and a wrong set is a wrong starting point.
+
+SHAPED 2026-09-09 (doc-58). Two independent review rounds, both 'stop'. The card's original criteria are replaced; the old ones are quoted below so whoever wrote them can correct the rewrite.
+
+REPLACED AC#1: 'with a corpus root whose CLAUDE.md is a symlink resolving outside it, corpusReport under a live source refuses rather than returning a report with a digest'. Replaced because the shaping could not produce a rule that satisfies it. See the blocking question below.
+
+WHAT THE PROBES ESTABLISHED, each re-run by the shaping session:
+
+1. The corpus screen is served by a live source and nothing else. corpusReport has one non-test caller (api.ts:77); the server sets corpusSource once (serve.ts:53) as liveCorpusSource(). --corpus is a flag on run/replay/stale, none of which call corpusReport. So a directory-source-only fix fixes nothing a user sees.
+
+2. Every predicate derived from the corpus root's own contents can be laundered. An anchor at the layout entry is vacuous at the top level (probe2: 'hostile CLAUDE.md contained? true'). Capturing trusted trees by resolving the install's top-level entries resolves THROUGH the hostile link and admits the attacker's target (probe7: 'agents contained? true'). Convergence on a common parent fails the same way. Nothing intrinsic separates a benign top-level link from a hostile one (probe6).
+
+   The rule: trust must come from outside the corpus root. A declared extent is the only form that survives (probe8, extent = [~/.claude, ~/.agents]: every live entry contained, hostile agents/ refused).
+
+3. The symlinked-agents/ half never reaches refuseUncontained. The screen's layout loop calls walkDirectory with rootMayBeALink: source.kind === 'live' (corpus-report.ts:94-96). A fix aimed only at refuseUncontained cannot change it. This matches this card's own triage note.
+
+BLOCKING QUESTION FOR THE OPERATOR, not answerable from any source this session read:
+
+  May the live install's wiring resolve anywhere, or must it stay inside a declared extent, and what is that extent?
+
+Decision-4 says a live corpus is 'the install on the running machine, enumerated and hashed as it is today' and names no extent, which reads as 'anywhere'. On that reading this card and ACT-134 are both working-as-designed. ACT-137/134/135 assert the opposite. The criteria asserting the extent were authored by prior agent sessions, not typed by the operator, so they are the board's claim rather than a direction.
+
+  RECOMMENDATION: the extent is the live install root plus the real path of the tree its layout entries point into, declared as configuration read from outside the corpus root, defaulting on this machine to [~/.claude, ~/.agents]. Declared, not discovered, because a discovered value is one the root can rewrite.
+
+  QUEUED COMMAND once answered, which this session may not run unprompted:
+    backlog decision create 'The extent a live corpus install may resolve into'
+
+WHAT IS UNBLOCKED AND SHAPED NOW: the instruction file's hashCorpusFiles call sits outside any try (corpus-report.ts:81-86) while the layout loop below wraps every directory, so a SymlinkedEntryError on CLAUDE.md becomes a 500. That is the outage ACT-135 AC#7 exists to prevent, it reproduces today (probe5), and it is a prerequisite for any answer to the extent question: the moment live containment refuses anything, without this the operator's own corpus screen becomes an error page. The five acceptance criteria now on this card are that work.
+
+Two things the builder must handle, both from review: the refusal message names no absolute path so redactAbsolutePaths is a no-op on it; and the client's refusal block (corpus-page.tsx:54-66) prints fixed prose about a 'layout directory', which is false for the instruction file.
+
+CONSUMER COUNT for the extent-dependent build, when unblocked, counted across two review rounds because the first count was incomplete: corpus-report.ts:125,135; staleness-report.ts:112,286,306; corpus-source.ts:103,107,127; session-corpus.ts:70,87,164 reaching session-run-command.ts:90 which passes a SessionCorpusSnapshot where a CorpusRoot is expected; calibration.ts:459 which calls resolveCorpusFile(liveCorpusSource(), ...) synchronously so an async liveCorpusSource breaks it; checkpoint.ts:262 stageCorpusRoots which gives live a PAIR of roots so the extent must say which it is captured against. Recorded checkpoint hashes come from captureStageCorpus over LAYOUT_DIRECTORY_KINDS, a different set from the screen's, so the screen digest holding at c7000b says nothing about lineage.
+
+ACT-134 inherits no predicate, because there is not one. It inherits the finding that no derived predicate works and the same operator question. Both cards are blocked on one decision, which argues for answering it once rather than per card.
 <!-- SECTION:NOTES:END -->
