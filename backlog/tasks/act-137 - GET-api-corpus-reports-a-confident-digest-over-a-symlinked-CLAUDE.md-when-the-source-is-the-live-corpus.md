@@ -3,11 +3,11 @@ id: ACT-137
 title: >-
   GET /api/corpus reports a confident digest over a symlinked CLAUDE.md when the
   source is the live corpus
-status: Build
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-09 11:16'
-updated_date: '2026-09-09 15:40'
+updated_date: '2026-09-09 16:04'
 labels: []
 dependencies: []
 documentation:
@@ -160,4 +160,26 @@ WHAT I OBSERVED, all this session. Ran the real HTTP server with a directory sou
 WHAT I DID NOT OBSERVE. The screen in a real browser. No Chrome, Chromium, Playwright or Puppeteer is installed on this machine, so the closest evidence is the component rendered in happy-dom against the running server's own response body rather than a hand-written stub. The bundle served by client/dist was rebuilt and served, but never painted by a browser engine.
 
 TDD NOTE, honestly. The corpusReport test was red first, by throwing, as predicted. The API test was written after the fix and passed immediately; I reverted the fix and re-ran to confirm it fails without it, so it guards the route rather than passing vacuously. The client copy test was red first. The second client test (a refusal naming the instruction file) passed on writing, because the component renders any refusal string.
+
+REVIEWED TWICE, 2026-09-09, both rounds by an unprimed reviewer. Ten findings then nine. Disposition below; every one closed.
+
+FIXED HERE, each reproduced by this session before fixing rather than taken on the reviewer's word:
+
+- A dangling, self-referential, or directory-targeted CLAUDE.md read as 'this corpus has no CLAUDE.md' and served digest 4f53cd, the digest of zero files, with no refusal. The exists() guard follows the link, so a broken link and an absent file were indistinguishable. Now lstat sees the link and stat sees the target, and the two disagreeing is the signal (commit 1aa317b).
+- An unreadable CLAUDE.md (chmod 000) threw EACCES, so the route 500'd with a message naming the file only as <path>, because redactAbsolutePaths had replaced its one identifying token (commit 265eb20).
+- A CLAUDE.md symlinked to /dev/null 500'd with 'Corpus file CLAUDE.md does not exist', which is false: hashCorpusFiles reports a device as absent. A CLAUDE.md that is a FIFO was worse, the read blocks on a pipe with no writer and the request NEVER RETURNS, so the screen waits on 'Loading…' forever and the server holds the task. A test for it times out rather than failing. Only a regular file holds instruction bytes now (commit 90c61f2).
+- ELOOP was reported with checkpoint.ts's wording for a dangling link, 'is a link whose target is missing'. False for a loop: the target exists and following it is what does not end. It has its own sentence now (commit 76b8349).
+- The API test asserted the body did not contain the outside file's bytes, which no code path could have put there, since hashCorpusFiles emits a sha256 and never content. It asserts the file list is empty instead. A client test asserting 'Could not load the corpus.' is absent was removed: its fixture stubs a 200, so the error branch cannot render under any component that shows a success branch at all (commit 9df1103).
+
+FILED, because each fix lands in a file this card never touched:
+- ACT-142: GET /api/runs still 500s on the same corpus state, through staleness-report.ts:181 which calls readCorpusInstructions outside any try. I confirmed the throw at the source; the reviewer reproduced the HTTP 500.
+- ACT-150: an unreadable or self-referential file INSIDE a layout directory still 500s the corpus screen, through the walk in checkpoint.ts. Reproduced by this session: EACCES and ELOOP both thrown before any report was returned.
+
+ACCEPTED AND NOT ACTED ON, with the reason:
+- Nothing pins redactAbsolutePaths on the CLAUDE.md refusal path: the reviewer removed the call and the suite stayed green. I wrote a test for it, then confirmed by mutation that MY TEST DID NOT KILL THE MUTANT EITHER, because the SymlinkedEntryError message genuinely carries no path, so the redaction is a no-op there and nothing observable changes. I removed the test rather than leave one that asserts something true by construction. The finding stands unclosed: if that message ever grows a path, no test will notice. The layout walk's path-carrying refusal IS pinned by an existing test.
+- The report's root field is an absolute path served unredacted to the browser. Pre-existing and deliberate, pinned by api.test.ts as 'the operator declared it and the server is theirs'.
+
+STRUCTURAL FINDING, on the record for ACT-150: 'how a corpus entry fails to be hashable' is now knowledge in two places. The walk classifies two states, this file classifies five for the instruction file, and the walk's two are a subset. A third copy should not be added; either the walk grows the missing states or both read one classifier.
+
+FINAL OBSERVATION, over real HTTP through createApiApp, after the last commit: device 200, fifo 200, escaping 200, unreadable 200, each with a refusal naming CLAUDE.md and no digest; healthy 200 with digest a711ea. Live corpus 122 files, digest c7000b, zero refusals. Suite 1353 + 105 pass, 0 fail; lint, typecheck, fmt:check clean.
 <!-- SECTION:NOTES:END -->
