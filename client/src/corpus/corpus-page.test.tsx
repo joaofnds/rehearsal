@@ -78,14 +78,17 @@ describe(CorpusPage.name, () => {
 	});
 
 	describe("when the report carries a refusal", () => {
-		function renderRefusing(files: CorpusResponse["files"]): void {
+		function renderRefusing(
+			files: CorpusResponse["files"],
+			refusals: CorpusResponse["refusals"] = [
+				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			],
+		): void {
 			const body: CorpusResponse = {
 				root: "/home/user/.claude",
 				digest: undefined,
 				files,
-				refusals: [
-					"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
-				],
+				refusals,
 			};
 			stubFetchByPath(new Map([["/api/corpus", body]]));
 			const client = new QueryClient({
@@ -131,6 +134,22 @@ describe(CorpusPage.name, () => {
 				expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
 			});
 			expect(screen.queryByText(/corpus root@/u)).toBeNull();
+		});
+
+		it("renders every refusal, so a benign entry sorting first cannot hide a hostile one", async () => {
+			renderRefusing(corpusResponseBody().files, [
+				"agents/aardvark.md is a link whose target is missing, so the bytes it names cannot be read",
+				"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			]);
+
+			const alert = await screen.findByRole("alert");
+
+			expect(within(alert).getAllByRole("listitem")).toHaveLength(2);
+			expect(
+				within(alert).getByText(
+					/agents\/escape\.md resolves outside the tree/u,
+				),
+			).toBeInTheDocument();
 		});
 
 		it("renders the refusal rather than the empty state when no layout directory hashed", async () => {
