@@ -4,7 +4,7 @@ title: iterate's ready-queue picker skips any card whose line carries two tags
 status: To Do
 assignee: []
 created_date: '2026-09-09 10:42'
-updated_date: '2026-09-09 13:11'
+updated_date: '2026-09-09 13:13'
 labels:
   - bug
 dependencies: []
@@ -58,4 +58,10 @@ Triage correction, 2026-09-09 (doc-56), after review. This card was named the ru
 The consequence is worse than a misordering and is worth stating plainly. The picker will still choose this card, so an unattended 'iterate start' picks it, cannot act on it, and gets no work done. The picker defect now blocks the board rather than merely reordering it.
 
 The run's next card is ACT-122, the highest card a session here can actually build.
+
+Bet, 2026-09-09: picked first from the ready queue by iterate. The newest triage doc's queue entry for it is the bet.
+
+Overseeing note, 2026-09-09, iterate run. The picker defect was reproduced live at the start of this run, not relayed: 'backlog task list --ready --sort priority --plain' led with '[HIGH] [bug] ACT-122 - ...' and 'iterate start' printed ACT-136. So this is the second consecutive run where the picker's answer and the board's first line diverge, and this run it is a two-tag line being skipped rather than a lucky agreement.
+
+This card stays blocked behind the hard line on editing a script outside this repository. The overseeing session stepped ACT-122 instead, the queue's true first line. The queued command in the notes above is unchanged and still the action whoever authorizes it should run.
 <!-- SECTION:NOTES:END -->
