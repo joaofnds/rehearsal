@@ -3,6 +3,7 @@ import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
 	freezeSessionCorpus,
@@ -74,6 +75,55 @@ describe(snapshotSessionCorpus.name, () => {
 
 		expect(after[0]?.sha256).toBe(before[0]?.sha256 ?? "");
 		expect(after[0]?.sha256).toBe(sha256Of("variant brief\n"));
+	});
+
+	it("retains a live source's backing-tree permission when its files are hashed", async () => {
+		const backingRoot = await directoryCorpus({
+			"output-styles/brief.md": "backing style\n",
+		});
+		const root = await resources.createControlDirectory();
+		await symlink(
+			join(backingRoot, "output-styles"),
+			join(root, "output-styles"),
+		);
+		const snapshot = await snapshotSessionCorpus(
+			{ kind: "live", root, backingRoot },
+			join(await resources.createControlDirectory(), "unused"),
+			["output-styles/brief.md"],
+		);
+
+		const [hashed] = await hashCorpusFiles(snapshot, [
+			"output-styles/brief.md",
+		]);
+
+		expect(snapshot).toMatchObject({ kind: "live", root, backingRoot });
+		expect(hashed?.resolvedPath).toBe(join(root, "output-styles/brief.md"));
+		expect(hashed?.sha256).toBe(sha256Of("backing style\n"));
+	});
+
+	it("retains a live source's extent when a later hash reaches a hostile link", async () => {
+		const outside = await directoryCorpus({
+			"output-styles/foreign.md": "FOREIGN STYLE\n",
+		});
+		const root = await resources.createControlDirectory();
+		const backingRoot = await resources.createControlDirectory();
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await symlink(
+			join(outside, "output-styles", "foreign.md"),
+			join(root, "output-styles", "foreign.md"),
+		);
+		const snapshot = await snapshotSessionCorpus(
+			{ kind: "live", root, backingRoot },
+			join(await resources.createControlDirectory(), "unused"),
+			["output-styles/foreign.md"],
+		);
+
+		const failure = await failureOf(
+			hashCorpusFiles(snapshot, ["output-styles/foreign.md"]),
+		);
+
+		expect(snapshot).toMatchObject({ kind: "live", root, backingRoot });
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
 	});
 
 	it("refuses a declared skill the harness cannot deliver, naming the skill and ACT-28", async () => {
@@ -219,6 +269,10 @@ describe(freezeSessionCorpus.name, () => {
 		expect(
 			await Bun.file(join(snapshot.root, "agents", "reviewer.md")).text(),
 		).toBe("original live agent\n");
+		expect(snapshot).toMatchObject({
+			kind: "directory",
+			origin: { kind: "live" },
+		});
 	});
 
 	it("refuses a live declared file outside the install and backing tree before copying it", async () => {
