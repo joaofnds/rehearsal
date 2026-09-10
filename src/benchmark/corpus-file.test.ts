@@ -5,8 +5,10 @@ import { join, relative } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
 import { SymlinkedEntryError } from "#benchmark/file-presence";
 import {
+  CorpusConfigurationError,
 	CorpusFileError,
 	hashCorpusFiles,
+  LIVE_CORPUS_BACKING_ROOT_ENV,
 	liveCorpusInstructions,
 	liveCorpusRoot,
 	liveCorpusSource,
@@ -19,6 +21,50 @@ import { failureOf } from "#cli/cli-test-support";
 
 const live = await resolveCorpusSource(undefined);
 const resources = TestResources.forEachTest();
+
+describe(liveCorpusSource.name, () => {
+  it("defaults the live extent to the install and home .agents trees", () => {
+    expect(liveCorpusSource({ env: {} })).toEqual({
+      kind: "live",
+      root: join(homedir(), ".claude"),
+      backingRoot: join(homedir(), ".agents"),
+    });
+  });
+
+  it("uses the externally configured backing root", () => {
+    const backingRoot = join(tmpdir(), "configured-agents");
+
+    expect(
+      liveCorpusSource({
+        env: { [LIVE_CORPUS_BACKING_ROOT_ENV]: backingRoot },
+      }).backingRoot,
+    ).toBe(backingRoot);
+  });
+
+  it.each(["", "relative/agents", "/tmp/agents\0escape"])(
+    "rejects invalid configured backing root %p",
+    (backingRoot) => {
+      expect(() =>
+        liveCorpusSource({
+          env: { [LIVE_CORPUS_BACKING_ROOT_ENV]: backingRoot },
+        }),
+      ).toThrow(CorpusConfigurationError);
+    },
+  );
+
+  it("keeps the backing root captured when the environment changes", () => {
+    const original = join(tmpdir(), "original-agents");
+    const changed = join(tmpdir(), "changed-agents");
+    const env: Record<string, string | undefined> = {
+      [LIVE_CORPUS_BACKING_ROOT_ENV]: original,
+    };
+    const source = liveCorpusSource({ env });
+
+    env[LIVE_CORPUS_BACKING_ROOT_ENV] = changed;
+
+    expect(source.backingRoot).toBe(original);
+  });
+});
 
 describe(resolveCorpusFile.name, () => {
 	it.each([
@@ -332,4 +378,111 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
 			}),
 		).toBe("the live corpus instructions\n");
 	});
+
+  it("preserves a backing-tree file's lexical install identity when hashing it", async () => {
+    const root = await resources.createControlDirectory();
+    const backingRoot = await resources.createControlDirectory();
+    await Bun.write(join(backingRoot, "instructions.md"), "backing bytes\n");
+    await symlink(
+      join(backingRoot, "instructions.md"),
+      join(root, "CLAUDE.md"),
+    );
+
+    const [hashed] = await hashCorpusFiles(
+      { kind: "live", root, backingRoot },
+      ["CLAUDE.md"],
+    );
+
+    expect(hashed?.resolvedPath).toBe(join(root, "CLAUDE.md"));
+    expect(hashed?.sha256).toBe(
+      new Bun.CryptoHasher("sha256").update("backing bytes\n").digest("hex"),
+    );
+  });
+
+  it("reads an install file without consulting an absent backing tree", async () => {
+    const root = await resources.createControlDirectory();
+    const backingRoot = join(root, "absent-backing");
+    await Bun.write(join(root, "CLAUDE.md"), "install bytes\n");
+
+    expect(
+      await readCorpusInstructions({ kind: "live", root, backingRoot }),
+    ).toBe("install bytes\n");
+  });
+
+  it("refuses an escaping file when the configured backing tree is absent", async () => {
+    const root = await resources.createControlDirectory();
+    const backingRoot = join(root, "absent-backing");
+    const secret = await outsideFile("SECRET BYTES\n");
+    await symlink(secret, join(root, "CLAUDE.md"));
+
+    const failure = await failureOf(
+      readCorpusInstructions({ kind: "live", root, backingRoot }),
+    );
+
+    expect(failure).toBeInstanceOf(SymlinkedEntryError);
+  });
+
+  it("rejects a file configured as the backing tree before reading outside bytes", async () => {
+    const root = await resources.createControlDirectory();
+    const backingRoot = await outsideFile("not a tree\n");
+    const secret = await outsideFile("SECRET BYTES\n");
+    await symlink(secret, join(root, "CLAUDE.md"));
+
+    const failure = await failureOf(
+      readCorpusInstructions({ kind: "live", root, backingRoot }),
+    );
+
+    expect(failure).toBeInstanceOf(CorpusConfigurationError);
+  });
+
+  it("surfaces a backing-tree resolution error before reading outside bytes", async () => {
+    const root = await resources.createControlDirectory();
+    const parent = await resources.createControlDirectory();
+    const backingRoot = join(parent, "loop");
+    const secret = await outsideFile("SECRET BYTES\n");
+    await symlink(backingRoot, backingRoot);
+    await symlink(secret, join(root, "CLAUDE.md"));
+
+    const failure = await failureOf(
+      readCorpusInstructions({ kind: "live", root, backingRoot }),
+    );
+
+    expect(failure).not.toBeInstanceOf(SymlinkedEntryError);
+    expect("code" in failure ? failure.code : undefined).toBe("ELOOP");
+  });
+
+  it("refuses a file reached through an intermediate directory outside the live extent", async () => {
+    const root = await resources.createControlDirectory();
+    const backingRoot = await resources.createControlDirectory();
+    const outside = await resources.createControlDirectory();
+    await Bun.write(join(outside, "build/SKILL.md"), "OUTSIDE SKILL\n");
+    await Bun.write(join(root, "skills/inside/SKILL.md"), "inside skill\n");
+    await symlink(join(outside, "build"), join(root, "skills/build"));
+
+    const failure = await failureOf(
+      hashCorpusFiles({ kind: "live", root, backingRoot }, [
+        "skills/build/SKILL.md",
+      ]),
+    );
+
+    expect(failure).toBeInstanceOf(SymlinkedEntryError);
+    expect(failure.message).toContain("skills/build/SKILL.md");
+  });
+
+  it("refuses a live link into a prefix sibling of the backing tree", async () => {
+    const parent = await resources.createControlDirectory();
+    const root = join(parent, "install");
+    const backingRoot = join(parent, "agents");
+    const sibling = join(parent, "agents-other");
+    await mkdir(root, { recursive: true });
+    await Bun.write(join(backingRoot, "allowed.md"), "allowed\n");
+    await Bun.write(join(sibling, "secret.md"), "SECRET BYTES\n");
+    await symlink(join(sibling, "secret.md"), join(root, "CLAUDE.md"));
+
+    const failure = await failureOf(
+      readCorpusInstructions({ kind: "live", root, backingRoot }),
+    );
+
+    expect(failure).toBeInstanceOf(SymlinkedEntryError);
+  });
 });

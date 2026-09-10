@@ -32,8 +32,11 @@ describe(resolveCorpusSource.name, () => {
 	it("resolves an absent source to the live install", async () => {
 		const source = await resolveCorpusSource(undefined);
 
-		expect(source.kind).toBe("live");
-		expect(source.root).toBe(join(homedir(), ".claude"));
+    expect(source).toEqual({
+      kind: "live",
+      root: join(homedir(), ".claude"),
+      backingRoot: join(homedir(), ".agents"),
+    });
 	});
 });
 
