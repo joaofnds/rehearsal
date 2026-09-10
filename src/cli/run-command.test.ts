@@ -18,6 +18,7 @@ import {
 	runRunCommand,
 } from "#cli/run-command";
 import { UsageError } from "#cli/commands";
+import { CorpusConfigurationError } from "#benchmark/corpus-file";
 
 const args = [
 	"--target",
@@ -955,6 +956,59 @@ describe("runRunCommand for a session case", () => {
 		);
 
 		expect(failure).toBeInstanceOf(UsageError);
+		expect(calls).toEqual(["probe"]);
+	});
+
+	it("classifies invalid live corpus configuration consistently for confirmation", async () => {
+		const { output } = recordOutput();
+		const runsDirectory = await testResources.createControlDirectory();
+		const calls: string[] = [];
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [
+						"--case",
+						"smoke",
+						...sessionArgs,
+						"--confirm",
+						"--reps",
+						"2",
+						"--yes",
+					],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: loadsSmoke(),
+					assertPreflight: passingPreflight,
+					probeModel: () => {
+						calls.push("probe");
+
+						return Promise.resolve(missingPreflight);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							runsDirectory,
+							resolveCorpus: () =>
+								Promise.reject(
+									new CorpusConfigurationError("invalid backing root"),
+								),
+							executeAttempt: () => {
+								calls.push("rep");
+
+								return Promise.reject(new Error("must not run"));
+							},
+						}),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("invalid backing root");
 		expect(calls).toEqual(["probe"]);
 	});
 

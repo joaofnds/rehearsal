@@ -36,13 +36,8 @@ import {
 	parseCaseId,
 	parseSessionArgs,
 } from "#benchmark/config";
-import {
-	CorpusConfigurationError,
-	CorpusFileError,
-	liveCorpusInstructions,
-} from "#benchmark/corpus-file";
+import { liveCorpusInstructions } from "#benchmark/corpus-file";
 import { CorpusSourceError } from "#benchmark/corpus-source";
-import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type {
 	ModelPreflightEvidence,
@@ -66,7 +61,6 @@ import {
 import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { runStageJudge } from "#benchmark/stage-grading";
-import { SessionCorpusError } from "#benchmark/session-corpus";
 import type { LoadedStageSettings } from "#benchmark/stage-settings";
 import { loadStageSettings } from "#benchmark/stage-settings";
 import {
@@ -82,8 +76,8 @@ import {
 import type { SourceBaseline } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError, UsageError } from "#cli/commands";
+import { corpusRefusal } from "#cli/corpus-failures";
 import {
-	RefusedPreconditionError,
 	refuseStageCorpus,
 	requireInteractiveStdin,
 	requireSpendAuthorization,
@@ -427,6 +421,7 @@ async function confirmRun(
 export interface SessionRunExecutionDependencies extends SessionExecutionBoundary {
 	readonly runDebug?: typeof runSessionDebugAttempt;
 	readonly executeAttempt?: SessionConfirmationDependencies["executeAttempt"];
+	readonly resolveCorpus?: SessionConfirmationDependencies["resolveCorpus"];
 	readonly runsDirectory?: string;
 }
 
@@ -463,13 +458,14 @@ export function executeSessionRun(
 		},
 		runDebug: async () => {
 			await dependencies.probeModel(config.model);
-			const outcome = await runDebug(
-				defaultSessionRunRequest(
+			const outcome = await runDebug({
+				...defaultSessionRunRequest(
 					sessionCase,
 					config,
 					benchmarkRunsDirectory(CONTROL_DIR),
 				),
-			);
+				resolveCorpus: dependencies.resolveCorpus,
+			});
 			reportSessionChecks(outcome.record, output);
 
 			return { kind: "debug", recordFile: outcome.recordFile };
@@ -503,18 +499,19 @@ export function executeSessionRun(
 			};
 			let outcome;
 			try {
-				outcome = await runSessionConfirmation({ executeAttempt }, request);
+				outcome = await runSessionConfirmation(
+					{ executeAttempt, resolveCorpus: dependencies.resolveCorpus },
+					request,
+				);
 			} catch (error) {
 				if (error instanceof CorpusSourceError) {
 					throw new UsageError(error.message);
 				}
-				if (
-					error instanceof CorpusConfigurationError ||
-					error instanceof CorpusFileError ||
-					error instanceof SessionCorpusError ||
-					error instanceof SymlinkedEntryError
-				) {
-					throw new RefusedPreconditionError(error.message);
+				if (error instanceof Error) {
+					const refusal = corpusRefusal(error);
+					if (refusal !== undefined) {
+						throw refusal;
+					}
 				}
 
 				throw error;

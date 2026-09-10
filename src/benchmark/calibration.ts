@@ -1,10 +1,11 @@
 import { CommandError } from "./command";
 import type { Effort, WorkflowStage } from "./config";
-import {
-	liveCorpusInstructions,
-	liveCorpusSource,
-	resolveCorpusFile,
-} from "./corpus-file";
+import { readCorpusInstructions, resolveCorpusFile } from "./corpus-file";
+import type {
+	CorpusSourceResolver,
+	ResolvedCorpusSource,
+} from "./corpus-source";
+import { resolveCorpusSource } from "./corpus-source";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -46,6 +47,7 @@ interface CalibrationContext {
 	readonly judgeEffort?: Effort | undefined;
 	readonly sessionBudgetUsd: number;
 	readonly stageJudge?: typeof runStageJudge | undefined;
+	readonly resolveCorpus?: CorpusSourceResolver | undefined;
 }
 
 export class CalibrationIncompleteError extends Error {
@@ -456,7 +458,10 @@ export async function collectCalibration(
 	context: CalibrationContext,
 ): Promise<CalibrationResult> {
 	await writeHumanReviewTemplate(context.reviewFile);
-	const instructionsPath = resolveCorpusFile(liveCorpusSource(), "CLAUDE.md");
+	const source = await (context.resolveCorpus ?? resolveCorpusSource)(
+		undefined,
+	);
+	const instructionsPath = resolveCorpusFile(source, "CLAUDE.md");
 	const editTargets = context.finalCandidate
 		? `${instructionsPath}, ${context.finalRubricPath}, and/or the relevant file under ${context.rubricsDirectory}`
 		: `${instructionsPath} and/or the relevant file under ${context.rubricsDirectory}`;
@@ -477,7 +482,7 @@ export async function collectCalibration(
 			const humanReview = parseHumanReview(
 				await asCalibrationInput(() => Bun.file(context.reviewFile).text()),
 			);
-			const current = await readCurrentSources(context);
+			const current = await readCurrentSources(context, source);
 
 			return await calibrate(frozen, current, humanReview, judges, () =>
 				askRejudgeConfirmation(context.rl),
@@ -522,10 +527,11 @@ function calibrationJudges(
 
 async function readCurrentSources(
 	context: Readonly<CalibrationContext>,
+	source: ResolvedCorpusSource,
 ): Promise<CurrentCalibrationSources> {
 	const [instructions, finalRubric] = await asCalibrationInput(() =>
 		Promise.all([
-			liveCorpusInstructions(),
+			readCorpusInstructions(source),
 			Bun.file(context.finalRubricPath).text(),
 		]),
 	);

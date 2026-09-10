@@ -1,10 +1,8 @@
-import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type { StaleCliConfig } from "#benchmark/config";
-import {
-	CorpusConfigurationError,
-	CorpusFileError,
-} from "#benchmark/corpus-file";
-import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
+import type {
+	CorpusSourceResolver,
+	ResolvedCorpusSource,
+} from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
 	resolveCorpusSource,
@@ -12,6 +10,7 @@ import {
 import type { StaleRecord } from "#benchmark/staleness-report";
 import { staleCases, staleCheckpoints } from "#benchmark/staleness-report";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
+import { corpusRefusal } from "#cli/corpus-failures";
 import type { CommandOutput } from "#cli/output";
 import { writeUnreadable } from "#cli/output";
 
@@ -27,6 +26,7 @@ export interface StaleRequest extends StaleCliConfig {
 
 export interface StaleDependencies {
 	readonly output: CommandOutput;
+	readonly resolveCorpus?: CorpusSourceResolver | undefined;
 }
 
 /**
@@ -42,13 +42,15 @@ async function refusingCorpusFailures<Answer>(
 	try {
 		return await work();
 	} catch (error) {
-		if (
-			error instanceof CorpusSourceError ||
-			error instanceof CorpusConfigurationError ||
-			error instanceof CorpusFileError ||
-			error instanceof SymlinkedEntryError
-		) {
+		if (error instanceof CorpusSourceError) {
 			throw new RefusedPreconditionError(error.message);
+		}
+
+		if (error instanceof Error) {
+			const refusal = corpusRefusal(error);
+			if (refusal !== undefined) {
+				throw refusal;
+			}
 		}
 
 		throw error;
@@ -70,7 +72,7 @@ export async function runStale(
 	dependencies: StaleDependencies,
 ): Promise<void> {
 	const source = await refusingCorpusFailures(() =>
-		resolveCorpusSource(request.corpus),
+		(dependencies.resolveCorpus ?? resolveCorpusSource)(request.corpus),
 	);
 
 	await report(request, source, dependencies.output);

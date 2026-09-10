@@ -9,6 +9,7 @@ import {
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runStale } from "#cli/stale-command";
+import { CorpusConfigurationError } from "#benchmark/corpus-file";
 
 const HALF_WRITTEN_UUID = "0f6b6f2a-0000-4000-8000-00000000000f";
 
@@ -63,6 +64,24 @@ describe(runStale.name, () => {
 
 		return fixture;
 	}
+
+	it("classifies invalid live corpus configuration as a refused precondition", async () => {
+		const failure = await failureOf(
+			runStale(
+				{ corpus: undefined, runsDirectory: "/unused" },
+				{
+					output: recordOutput().output,
+					resolveCorpus: () =>
+						Promise.reject(
+							new CorpusConfigurationError("invalid backing root"),
+						),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("invalid backing root");
+	});
 
 	it("names each stale checkpoint with its causes, and no fresh one", async () => {
 		const fixture = await fixtureRecordedAgainst(

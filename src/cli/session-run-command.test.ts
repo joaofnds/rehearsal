@@ -13,6 +13,7 @@ import { failureOf } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runSessionDebugAttempt } from "#cli/session-run-command";
+import { CorpusConfigurationError } from "#benchmark/corpus-file";
 
 const testResources = TestResources.forEachTest();
 
@@ -311,6 +312,24 @@ describe(runSessionDebugAttempt.name, () => {
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toContain("not a directory");
 		expect(providerCalls).toBe(0);
+	});
+
+	it("reports invalid live corpus configuration as a refused precondition", async () => {
+		const failure = await failureOf(
+			runSessionDebugAttempt({
+				sessionCase: sessionCase(),
+				config,
+				runsDirectory: await temporary("rehearsal-runs-"),
+				resolveCorpus: () =>
+					Promise.reject(new CorpusConfigurationError("invalid backing root")),
+				runClaude: () =>
+					Promise.reject(new Error("a provider call must not happen")),
+				projectsDirectory: await temporary("rehearsal-projects-"),
+			}),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("invalid backing root");
 	});
 });
 

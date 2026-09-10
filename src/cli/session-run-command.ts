@@ -8,11 +8,11 @@ import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import {
 	CorpusConfigurationError,
-	CorpusFileError,
 	hashCorpusFiles,
 } from "#benchmark/corpus-file";
 import type { CorpusSourceResolver } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type {
 	ClaudeRunner,
 	SessionAttempt,
@@ -23,18 +23,15 @@ import {
 	SessionInputError,
 } from "#benchmark/session-attempt";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
-import {
-	SessionCorpusError,
-	snapshotSessionCorpus,
-} from "#benchmark/session-corpus";
+import { snapshotSessionCorpus } from "#benchmark/session-corpus";
 import { sessionAttemptPaths } from "#benchmark/run-layout";
 import { claudeProjectsDirectory } from "#benchmark/session-capture";
-import { SymlinkedEntryError } from "#benchmark/file-presence";
 import { sessionLineage } from "#benchmark/session-lineage";
 import type { SessionConfirmationRepPlan } from "#benchmark/session-confirmation";
 import type { SessionAttemptRecord } from "#benchmark/session-record";
 import { buildSessionAttemptRecord } from "#benchmark/session-record";
-import { asUsageErrorAsync } from "#cli/commands";
+import { UsageError } from "#cli/commands";
+import { corpusRefusal } from "#cli/corpus-failures";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
 
@@ -76,7 +73,21 @@ async function requireCorpus(
 	snapshotDirectory: string,
 	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
 ): Promise<AttemptCorpus> {
-	const source = await asUsageErrorAsync(() => resolveCorpus(corpus));
+	let source;
+	try {
+		source = await resolveCorpus(corpus);
+	} catch (error) {
+		if (error instanceof CorpusConfigurationError) {
+			const refusal = corpusRefusal(error);
+			if (refusal !== undefined) {
+				throw refusal;
+			}
+		}
+
+		throw new UsageError(
+			error instanceof Error ? error.message : String(error),
+		);
+	}
 
 	try {
 		const snapshot = await snapshotSessionCorpus(
@@ -90,13 +101,11 @@ async function requireCorpus(
 			files: await hashCorpusFiles(snapshot, sessionCase.corpusFiles),
 		};
 	} catch (error) {
-		if (
-			error instanceof CorpusConfigurationError ||
-			error instanceof CorpusFileError ||
-			error instanceof SessionCorpusError ||
-			error instanceof SymlinkedEntryError
-		) {
-			throw new RefusedPreconditionError(error.message);
+		if (error instanceof Error) {
+			const refusal = corpusRefusal(error);
+			if (refusal !== undefined) {
+				throw refusal;
+			}
 		}
 
 		throw error;

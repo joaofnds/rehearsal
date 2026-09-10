@@ -16,7 +16,6 @@ import {
 	corpusLayoutRoots,
 	installStageCorpusSnapshot,
 } from "#benchmark/checkpoint";
-import { SymlinkedEntryError } from "#benchmark/file-presence";
 import {
 	captureBaselineContext,
 	captureCheckIntegrity,
@@ -38,12 +37,8 @@ import {
 	parseRunName,
 } from "#benchmark/config";
 import { loadRunManifest } from "#benchmark/manifest";
-import {
-	CorpusConfigurationError,
-	CorpusFileError,
-	liveCorpusInstructions,
-	readCorpusInstructions,
-} from "#benchmark/corpus-file";
+import { readCorpusInstructions } from "#benchmark/corpus-file";
+import type { CorpusSourceResolver } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import { runReplay } from "#benchmark/replay";
 import type { ReplayDependencies, ReplayRequest } from "#benchmark/replay";
@@ -74,6 +69,7 @@ import {
 } from "#benchmark/target";
 import { createProductOwner, runWorkflowStage } from "#benchmark/workflow";
 import { asUsageError } from "#cli/commands";
+import { corpusRefusal } from "#cli/corpus-failures";
 import {
 	RefusedPreconditionError,
 	requireInteractiveStdin,
@@ -362,21 +358,24 @@ export async function executeReplay(
  * prefer the project level. The live install needs neither, because a session
  * reads it by default.
  */
-async function replayCorpus(corpus: string | undefined): Promise<{
+export async function replayCorpus(
+	corpus: string | undefined,
+	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
+): Promise<{
 	readonly instructions: string;
 	readonly settingSources: "project" | undefined;
 	readonly directory: string | undefined;
 }> {
 	try {
+		const source = await resolveCorpus(corpus);
+
 		if (corpus === undefined) {
 			return {
-				instructions: await liveCorpusInstructions(),
+				instructions: await readCorpusInstructions(source),
 				settingSources: undefined,
 				directory: undefined,
 			};
 		}
-
-		const source = await resolveCorpusSource(corpus);
 
 		return {
 			instructions: await readCorpusInstructions(source),
@@ -384,12 +383,11 @@ async function replayCorpus(corpus: string | undefined): Promise<{
 			directory: source.root,
 		};
 	} catch (error) {
-		if (
-			error instanceof CorpusConfigurationError ||
-			error instanceof CorpusFileError ||
-			error instanceof SymlinkedEntryError
-		) {
-			throw new RefusedPreconditionError(error.message);
+		if (error instanceof Error) {
+			const refusal = corpusRefusal(error);
+			if (refusal !== undefined) {
+				throw refusal;
+			}
 		}
 
 		throw error;

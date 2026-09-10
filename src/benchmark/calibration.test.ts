@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -314,6 +314,67 @@ describe(calibrate.name, () => {
 });
 
 describe(collectCalibration.name, () => {
+	it("keeps one live corpus permission while waiting for review", async () => {
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		testResources.track(reviewDirectory);
+		const installRoot = await mkdtemp(join(tmpdir(), "rehearsal-install-"));
+		testResources.track(installRoot);
+		const firstBackingRoot = await mkdtemp(
+			join(tmpdir(), "rehearsal-backing-first-"),
+		);
+		testResources.track(firstBackingRoot);
+		const secondBackingRoot = await mkdtemp(
+			join(tmpdir(), "rehearsal-backing-second-"),
+		);
+		testResources.track(secondBackingRoot);
+		await Bun.write(
+			join(firstBackingRoot, "CLAUDE.md"),
+			"captured instructions\n",
+		);
+		await symlink(
+			join(firstBackingRoot, "CLAUDE.md"),
+			join(installRoot, "CLAUDE.md"),
+		);
+		const reviewFile = join(reviewDirectory, "review.json");
+		let resolutions = 0;
+
+		const result = await collectCalibration({
+			rl: {
+				async question() {
+					await Bun.write(
+						reviewFile,
+						`${JSON.stringify({ verdict: "REJECT", summary: "Reviewed.", findings: [] })}\n`,
+					);
+
+					return "";
+				},
+			},
+			reviewFile,
+			targetDir: reviewDirectory,
+			originalInstructions: "captured instructions\n",
+			originalRubric: await Bun.file(
+				join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			).text(),
+			finalRubricPath: join(PROJECT_ROOT, AUDIT_LOG_CASE_DIR, "rubric.md"),
+			rubricsDirectory: join(PROJECT_ROOT, AUDIT_LOG_RUBRICS_PATH),
+			stageScorecards: [],
+			judgeModel: "sonnet",
+			sessionBudgetUsd: 5,
+			resolveCorpus: () => {
+				resolutions += 1;
+
+				return Promise.resolve({
+					kind: "live",
+					root: installRoot,
+					backingRoot: resolutions === 1 ? firstBackingRoot : secondBackingRoot,
+				});
+			},
+		});
+
+		expect(resolutions).toBe(1);
+		expect(result.instructionsChanged).toBe(false);
+	});
+
 	it("re-prompts after invalid review JSON and accepts the corrected review", async () => {
 		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
 		testResources.track(reviewDirectory);

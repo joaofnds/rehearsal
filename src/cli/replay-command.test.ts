@@ -20,10 +20,12 @@ import { failureOf, recordOutput } from "#cli/cli-test-support";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {
 	executeReplay,
+	replayCorpus,
 	replayCorpusRoots,
 	replaySettingsFile,
 	runReplayCommand,
 } from "#cli/replay-command";
+import { CorpusConfigurationError } from "#benchmark/corpus-file";
 import { DEFAULT_STAGE_SETTINGS_FILE } from "#benchmark/stage-settings";
 
 const sessionArgs = [
@@ -273,6 +275,19 @@ describe(runReplayCommand.name, () => {
 
 		expect(stdout.join("")).toBe(recordText);
 		expect(stdout.join("")).toBe(await Bun.file(recordPath).text());
+	});
+});
+
+describe(replayCorpus.name, () => {
+	it("classifies invalid live corpus configuration as a refused precondition", async () => {
+		const failure = await failureOf(
+			replayCorpus(undefined, () =>
+				Promise.reject(new CorpusConfigurationError("invalid backing root")),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("invalid backing root");
 	});
 });
 
