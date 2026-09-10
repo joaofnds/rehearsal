@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { confirmationModeSchema } from "./confirmation-record";
 import type { Immutable } from "./contracts";
 import { judgeAgreementReportSchema } from "./judge-agreement";
 
 export const COMPARISON_ARMS = ["baseline", "candidate", "control"] as const;
 export type ComparisonArm = (typeof COMPARISON_ARMS)[number];
 const comparisonArmSchema = z.enum(COMPARISON_ARMS);
+const comparisonModeSchema = z.enum(["stage", "pipeline"]);
 
 const identitySchema = z
 	.string()
@@ -143,6 +143,14 @@ const sourceRepSchema = digestedPathSchema
 	.extend({
 		repId: identitySchema,
 		ordinal: z.number().int().positive(),
+		attempt: digestedPathSchema.optional(),
+	})
+	.strict();
+const sessionSourceRepSchema = digestedPathSchema
+	.extend({
+		repId: identitySchema,
+		ordinal: z.number().int().positive(),
+		attempt: digestedPathSchema,
 	})
 	.strict();
 const reliabilitySummarySchema = z
@@ -236,6 +244,20 @@ const reportArmSchema = z
 		resources: armResourcesSchema,
 	})
 	.strict();
+const sessionReportArmSchema = z
+	.object({
+		role: comparisonArmSchema,
+		source: z
+			.object({
+				group: digestedPathSchema,
+				reps: z.array(sessionSourceRepSchema).min(1),
+			})
+			.strict(),
+		executedCorpus: z.array(digestedPathSchema),
+		quality: z.array(reliabilitySummarySchema).min(1),
+		resources: armResourcesSchema,
+	})
+	.strict();
 const reportCaseSchema = z
 	.object({
 		caseId: identitySchema,
@@ -244,6 +266,18 @@ const reportCaseSchema = z
 				baseline: reportArmSchema,
 				candidate: reportArmSchema,
 				control: reportArmSchema,
+			})
+			.strict(),
+	})
+	.strict();
+const sessionReportCaseSchema = z
+	.object({
+		caseId: identitySchema,
+		arms: z
+			.object({
+				baseline: sessionReportArmSchema,
+				candidate: sessionReportArmSchema,
+				control: sessionReportArmSchema,
 			})
 			.strict(),
 	})
@@ -305,7 +339,7 @@ const reportContrastSchema = z
 
 const comparisonReportFields = {
 	manifest: z.object({ sha256: sha256Schema }).strict(),
-	mode: confirmationModeSchema,
+	mode: comparisonModeSchema,
 	declaredStages: z.array(z.string().min(1)).min(1),
 	reps: z.number().int().min(2),
 	cases: z.array(reportCaseSchema).min(2),
@@ -328,8 +362,27 @@ export const comparisonReportSchema = z
 	})
 	.strict();
 
+/**
+ * Session comparisons carry the attempt artifact beside each rep and have no
+ * judge calibration. Keeping that distinction in the report version prevents
+ * consumers from mistaking a worker check for a pipeline judge outcome.
+ */
+export const sessionComparisonReportSchema = z
+	.object({
+		schemaVersion: z.literal(3),
+		judgeAgreement: judgeAgreementReportSchema.extend({
+			baselines: z.array(z.never()).length(0),
+		}),
+		...comparisonReportFields,
+		mode: z.literal("session"),
+		declaredStages: z.tuple([z.literal("checks")]),
+		cases: z.array(sessionReportCaseSchema).min(2),
+	})
+	.strict();
+
 export type ComparisonReport = Immutable<
-	z.infer<typeof comparisonReportSchema>
+	| z.infer<typeof comparisonReportSchema>
+	| z.infer<typeof sessionComparisonReportSchema>
 >;
 export type LegacyComparisonReport = Immutable<
 	z.infer<typeof legacyComparisonReportSchema>
@@ -342,6 +395,7 @@ export function parseComparisonReport(
 		.discriminatedUnion("schemaVersion", [
 			legacyComparisonReportSchema,
 			comparisonReportSchema,
+			sessionComparisonReportSchema,
 		])
 		.parse(JSON.parse(text));
 }
@@ -349,5 +403,10 @@ export function parseComparisonReport(
 export function serializeComparisonReport(
 	report: Immutable<ComparisonReport>,
 ): string {
-	return `${JSON.stringify(comparisonReportSchema.parse(report), null, 2)}\n`;
+	const parsed =
+		report.schemaVersion === 3
+			? sessionComparisonReportSchema.parse(report)
+			: comparisonReportSchema.parse(report);
+
+	return `${JSON.stringify(parsed, null, 2)}\n`;
 }

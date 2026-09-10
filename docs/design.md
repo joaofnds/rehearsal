@@ -31,7 +31,7 @@ CLI → case + flags + preconditions
         └─ replay → checkpoint worktree → one stage + Judge → attempt
 
 --confirm → freeze shared inputs → isolated repetitions → group + report
-compare   → existing stage/pipeline groups → validated comparison report
+compare   → existing stage/pipeline/session groups → validated comparison report
 
 JSON records → Hono read API → React views
 Run events  → SQLite store → SSE endpoint

@@ -1,4 +1,4 @@
-import type { ConfirmationRepRecord } from "./confirmation-record";
+import type { ParsedConfirmationRepRecord } from "./confirmation-record";
 import type { MetricDistributions } from "./confirmation-report";
 import { buildResourceReport } from "./confirmation-report";
 import type { ComparisonProjectionInput } from "./comparison-evidence";
@@ -131,7 +131,7 @@ function resourceMetricSummary(
 
 function armResources(
 	contract: Immutable<ComparisonProjectionInput["contract"]>,
-	reps: readonly Immutable<ConfirmationRepRecord>[],
+	reps: readonly Immutable<ParsedConfirmationRepRecord>[],
 ): ArmResources {
 	const missingEvidence = reps.flatMap((rep) =>
 		rep.metrics.status === "MISSING"

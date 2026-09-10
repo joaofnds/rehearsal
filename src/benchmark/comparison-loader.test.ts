@@ -111,7 +111,7 @@ describe(loadComparisonEvidence.name, () => {
 		);
 	});
 
-	it("refuses v2 session groups until ACT-151 defines their comparison semantics", async () => {
+	it("names a session group with a missing frozen case", async () => {
 		await Bun.write(
 			fixture.groupFile("case-1", "control"),
 			`${JSON.stringify(
@@ -156,7 +156,7 @@ describe(loadComparisonEvidence.name, () => {
 		);
 
 		expect(loadComparisonEvidence(fixture.manifestFile)).rejects.toThrow(
-			"ACT-151",
+			"inputs.files[case:inputs/case.json].path",
 		);
 	});
 

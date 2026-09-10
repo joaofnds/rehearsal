@@ -1,20 +1,30 @@
 import { createHash } from "node:crypto";
 import { realpath } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 import { buildComparableComparison } from "./comparison-comparability";
 import type {
-	ConfirmationGroupRecord,
-	ConfirmationRepRecord,
 	DeclaredConfirmationGroup,
+	ParsedConfirmationGroupRecord,
+	ParsedConfirmationRepRecord,
 } from "./confirmation-record";
 import {
 	parseConfirmationRepRecord,
 	parseDeclaredConfirmationGroup,
 } from "./confirmation-record";
+import { parseCaseDeclaration } from "./case";
+import type { SessionCaseDeclaration } from "./case";
 import type { Immutable } from "./contracts";
+import { unhandled } from "./contracts";
 import type {
 	ComparisonEvidence,
-	DigestedRecord,
+	DigestedComparisonRep,
 	FrozenFile,
 	LoadedComparisonArmEvidence,
 	LoadedComparisonCaseEvidence,
@@ -23,6 +33,8 @@ import type {
 import { ComparisonEvidenceError } from "./comparison-evidence";
 import type { ComparisonArm, ComparisonManifest } from "./comparison-record";
 import { COMPARISON_ARMS, parseComparisonManifest } from "./comparison-record";
+import { parseSessionAttemptRecord } from "./session-record";
+import type { SessionAttemptRecord } from "./session-record";
 
 export const REQUIRED_FROZEN_INPUT_KINDS = [
 	"checkpoint",
@@ -67,6 +79,29 @@ function sameValue<Value>(left: Value, right: Value): boolean {
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function descendantPath(
+	request: Readonly<LoadArmRequest>,
+	root: string,
+	path: string,
+	field: string,
+): string {
+	const absolute = resolve(root, path);
+	const descendant = relative(root, absolute);
+	if (
+		descendant === "" ||
+		descendant === ".." ||
+		descendant.startsWith(`..${sep}`) ||
+		isAbsolute(descendant)
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field },
+			"evidence path must remain inside its source directory",
+		);
+	}
+
+	return absolute;
+}
+
 async function readEvidenceFile(
 	request: Readonly<ReadEvidenceFileRequest>,
 ): Promise<EvidenceFile> {
@@ -93,9 +128,9 @@ interface LoadArmRequest {
 
 function assertRepMatchesGroup(
 	location: Readonly<EvidenceLocation>,
-	reference: ConfirmationGroupRecord["repRecords"][number],
-	record: Immutable<ConfirmationRepRecord>,
-	group: Immutable<ConfirmationGroupRecord>,
+	reference: ParsedConfirmationGroupRecord["repRecords"][number],
+	record: Immutable<ParsedConfirmationRepRecord>,
+	group: Immutable<ParsedConfirmationGroupRecord>,
 ): void {
 	if (record.groupId !== group.groupId) {
 		throw evidenceError(
@@ -136,12 +171,12 @@ function assertRepMatchesGroup(
 		);
 	}
 	if (
-		group.mode === "stage" &&
+		(group.mode === "stage" || group.mode === "session") &&
 		record.finalOutcome.status !== "NOT_APPLICABLE"
 	) {
 		throw evidenceError(
 			{ ...location, field: `${location.field}.finalOutcome` },
-			"stage rep final outcome must be not applicable",
+			`${group.mode} rep final outcome must be not applicable`,
 		);
 	}
 	if (
@@ -160,10 +195,17 @@ interface VerifiedFrozenFiles {
 	readonly sourcePaths: readonly string[];
 }
 
+interface SessionFrozenInputs {
+	readonly sessionCase: Immutable<SessionCaseDeclaration>;
+	readonly files: readonly LoadedFrozenFile[];
+	readonly corpusFiles: readonly FrozenFile[];
+	readonly sourcePaths: readonly string[];
+}
+
 async function assertFrozenFiles(
 	request: Readonly<LoadArmRequest>,
 	groupPath: string,
-	group: Immutable<ConfirmationGroupRecord>,
+	group: Immutable<ParsedConfirmationGroupRecord>,
 ): Promise<VerifiedFrozenFiles> {
 	const identities = new Set<string>();
 	const kinds = new Set<FrozenFile["kind"]>();
@@ -181,11 +223,20 @@ async function assertFrozenFiles(
 
 		identities.add(identity);
 		kinds.add(frozen.kind);
+		const path =
+			group.mode === "session"
+				? descendantPath(
+						request,
+						dirname(groupPath),
+						frozen.path,
+						`${field}.path`,
+					)
+				: resolve(dirname(groupPath), frozen.path);
 		const source = await readEvidenceFile({
 			caseId: request.caseId,
 			arm: request.role,
 			field: `${field}.path`,
-			path: resolve(dirname(groupPath), frozen.path),
+			path,
 		});
 		if (source.sha256 !== frozen.sha256) {
 			throw evidenceError(
@@ -198,52 +249,679 @@ async function assertFrozenFiles(
 		sourcePaths.push(source.canonicalPath);
 	}
 
-	for (const kind of REQUIRED_FROZEN_INPUT_KINDS) {
-		if (!kinds.has(kind)) {
-			throw evidenceError(
-				{
-					caseId: request.caseId,
-					arm: request.role,
-					field: `inputs.files.${kind}`,
-				},
-				`source group records no ${kind} input`,
-			);
+	if (group.mode !== "session") {
+		for (const kind of REQUIRED_FROZEN_INPUT_KINDS) {
+			if (!kinds.has(kind)) {
+				throw evidenceError(
+					{
+						caseId: request.caseId,
+						arm: request.role,
+						field: `inputs.files.${kind}`,
+					},
+					`source group records no ${kind} input`,
+				);
+			}
 		}
 	}
 
 	return { files, sourcePaths };
 }
 
+function sessionFrozenPath(
+	request: Readonly<LoadArmRequest>,
+	file: FrozenFile,
+	prefix: string,
+): string {
+	const normalized = file.path.replaceAll("\\", "/");
+	if (!normalized.startsWith(prefix)) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `inputs.files[${file.kind}:${file.path}]`,
+			},
+			`session ${file.kind} input must be under ${prefix}`,
+		);
+	}
+
+	const relativePath = normalized.slice(prefix.length);
+	if (
+		relativePath.length === 0 ||
+		relativePath
+			.split("/")
+			.some((segment) => segment === "" || segment === "." || segment === "..")
+	) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `inputs.files[${file.kind}:${file.path}]`,
+			},
+			`session ${file.kind} input must name a file under ${prefix}`,
+		);
+	}
+
+	return relativePath;
+}
+
+function sessionCaseFile(
+	request: Readonly<LoadArmRequest>,
+	files: readonly LoadedFrozenFile[],
+): LoadedFrozenFile {
+	const caseFiles = files.filter(({ record }) => record.kind === "case");
+	if (caseFiles.length !== 1) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: "inputs.files.case" },
+			`source group records ${caseFiles.length} case files; expected exactly one`,
+		);
+	}
+
+	const [caseFile] = caseFiles;
+	if (caseFile === undefined) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: "inputs.files.case" },
+			"source group records no case file",
+		);
+	}
+	sessionFrozenPath(request, caseFile.record, "inputs/");
+
+	return caseFile;
+}
+
+function assertSessionFrozenFiles(
+	request: Readonly<LoadArmRequest>,
+	group: Immutable<ParsedConfirmationGroupRecord>,
+	frozen: Readonly<VerifiedFrozenFiles>,
+): SessionFrozenInputs {
+	const caseFile = sessionCaseFile(request, frozen.files);
+	let sessionCase: SessionCaseDeclaration;
+	try {
+		const parsed = parseCaseDeclaration(request.caseId, caseFile.text);
+		if (parsed.kind !== "session") {
+			throw new Error("frozen case is not a session declaration");
+		}
+		sessionCase = parsed;
+	} catch {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.files[case].record",
+			},
+			"invalid session case declaration",
+		);
+	}
+
+	const fixtureFiles = frozen.files.filter(
+		({ record }) => record.kind === "fixture",
+	);
+	if (sessionCase.fixture === undefined && fixtureFiles.length > 0) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.files.fixture",
+			},
+			"session case declares no fixture but source group records fixture files",
+		);
+	}
+	for (const { record } of fixtureFiles) {
+		sessionFrozenPath(request, record, "inputs/fixture/");
+	}
+	const transcriptFiles = frozen.files.filter(
+		({ record }) => record.kind === "transcript",
+	);
+	if (
+		(sessionCase.transcript === undefined && transcriptFiles.length > 0) ||
+		(sessionCase.transcript !== undefined && transcriptFiles.length !== 1)
+	) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.files.transcript",
+			},
+			`source group records ${transcriptFiles.length} transcript files for the declared session input`,
+		);
+	}
+	if (sessionCase.transcript === undefined) {
+		for (const { record } of transcriptFiles) {
+			sessionFrozenPath(request, record, "inputs/transcript/");
+		}
+	} else {
+		const [transcriptFile] = transcriptFiles;
+		if (transcriptFile === undefined) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: "inputs.files.transcript",
+				},
+				"source group records no transcript file",
+			);
+		}
+		const transcriptPath = sessionFrozenPath(
+			request,
+			transcriptFile.record,
+			"inputs/transcript/",
+		);
+		if (transcriptPath !== basename(sessionCase.transcript.file)) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: "inputs.files.transcript.path",
+				},
+				"frozen transcript path disagrees with the session case declaration",
+			);
+		}
+		if (transcriptFile.record.sha256 !== sessionCase.transcript.sha256) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: "inputs.files.transcript.sha256",
+				},
+				"frozen transcript digest disagrees with the session case declaration",
+			);
+		}
+	}
+
+	const corpusFiles = frozen.files.filter(
+		({ record }) => record.kind === "corpus",
+	);
+	const declaredCorpus = sessionCase.corpusFiles.toSorted();
+	const frozenCorpus = corpusFiles
+		.map(({ record }) => sessionFrozenPath(request, record, "inputs/corpus/"))
+		.toSorted();
+	if (!sameValue(declaredCorpus, frozenCorpus)) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.files.corpus",
+			},
+			"frozen corpus paths disagree with the session case declaration",
+		);
+	}
+
+	if (
+		sessionCase.model !== undefined &&
+		group.inputs.model !== sessionCase.model
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: "inputs.model" },
+			`recorded ${group.inputs.model} but the session case declares ${sessionCase.model}`,
+		);
+	}
+	if (
+		sessionCase.sessionBudgetUsd !== undefined &&
+		group.inputs.sessionBudgetUsd !== sessionCase.sessionBudgetUsd
+	) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: "inputs.sessionBudgetUsd",
+			},
+			"group budget disagrees with the session case declaration",
+		);
+	}
+
+	return {
+		sessionCase,
+		files: frozen.files,
+		corpusFiles: corpusFiles.map(({ record }) => record),
+		sourcePaths: frozen.sourcePaths,
+	};
+}
+
+type SessionGroupRecord = Extract<
+	ParsedConfirmationGroupRecord,
+	{ schemaVersion: 2; mode: "session" }
+>;
+type SessionRepRecord = Extract<
+	ParsedConfirmationRepRecord,
+	{ schemaVersion: 2; mode: "session" }
+>;
+
+function assertSessionAttemptInputs(
+	request: Readonly<LoadArmRequest>,
+	group: Immutable<SessionGroupRecord>,
+	rep: Immutable<SessionRepRecord>,
+	attempt: Immutable<SessionAttemptRecord>,
+	sessionCase: Immutable<SessionCaseDeclaration>,
+	frozenCorpus: readonly FrozenFile[],
+	field: string,
+): void {
+	if (rep.caseId !== sessionCase.id) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.caseId` },
+			"rep case ID disagrees with the frozen session case",
+		);
+	}
+	if (attempt.caseId !== sessionCase.id) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.caseId` },
+			"attempt case ID disagrees with the frozen session case",
+		);
+	}
+	if (
+		attempt.lineage !== rep.lineage.lineage ||
+		attempt.lineage !== group.inputs.lineage.lineage
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.lineage` },
+			"attempt lineage disagrees with its rep and source group",
+		);
+	}
+	if (attempt.model !== group.inputs.model) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.model` },
+			"attempt model disagrees with the frozen session inputs",
+		);
+	}
+	if (sessionCase.model !== undefined && attempt.model !== sessionCase.model) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.model` },
+			"attempt model disagrees with the frozen session case",
+		);
+	}
+	if (attempt.effort !== group.inputs.effort) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.effort` },
+			"attempt effort disagrees with the frozen session inputs",
+		);
+	}
+	if (attempt.sessionBudgetUsd !== group.inputs.sessionBudgetUsd) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.sessionBudgetUsd`,
+			},
+			"attempt budget disagrees with the frozen session inputs",
+		);
+	}
+	if (attempt.prompt !== sessionCase.prompt) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.prompt` },
+			"attempt prompt disagrees with the frozen session case",
+		);
+	}
+
+	const expectedCorpus = frozenCorpus
+		.map((file) => ({
+			path: sessionFrozenPath(request, file, "inputs/corpus/"),
+			sha256: file.sha256,
+		}))
+		.toSorted((left, right) => left.path.localeCompare(right.path));
+	const actualCorpus = attempt.corpusFiles
+		.map(({ path: corpusPath, sha256: fileSha256 }) => ({
+			path: corpusPath,
+			sha256: fileSha256,
+		}))
+		.toSorted((left, right) => left.path.localeCompare(right.path));
+	if (!sameValue(expectedCorpus, actualCorpus)) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.corpusFiles`,
+			},
+			"attempt corpus files disagree with the frozen session inputs",
+		);
+	}
+}
+
+function assertSessionAttemptChecks(
+	request: Readonly<LoadArmRequest>,
+	attempt: Immutable<SessionAttemptRecord>,
+	rep: Immutable<SessionRepRecord>,
+	sessionCase: Immutable<SessionCaseDeclaration>,
+	field: string,
+): void {
+	assertSessionAttemptTiming(request, attempt, rep, field);
+	const [checks] = rep.stages;
+	const failedChecksStatus = sessionFailedChecksStatus(attempt.outcome);
+	if (failedChecksStatus !== undefined) {
+		if (attempt.checks.length > 0) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: `${field}.checks`,
+				},
+				"an attempt without a checked reply must record no checks",
+			);
+		}
+		return;
+	}
+	if (attempt.checks.length !== sessionCase.checks.length) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.checks` },
+			"attempt check count disagrees with the frozen session case",
+		);
+	}
+	for (const [index, check] of attempt.checks.entries()) {
+		if (check.kind !== sessionCase.checks[index]?.kind) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: `${field}.checks[${index}].kind`,
+				},
+				"attempt check kind disagrees with the frozen session case",
+			);
+		}
+	}
+	if (attempt.metrics === undefined && checks?.status !== "METRICS_MISSING") {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.outcome` },
+			"a checked attempt without metrics must map to a metrics-missing checks outcome",
+		);
+	}
+	if (
+		attempt.metrics !== undefined &&
+		(checks?.status !== "JUDGED" ||
+			checks.verdict !==
+				(attempt.outcome === "SUCCESSFUL" ? "CONTINUE" : "STOP") ||
+			checks.grade !== (attempt.outcome === "SUCCESSFUL" ? "A" : "F"))
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.outcome` },
+			"checked attempt outcome disagrees with its recorded checks result",
+		);
+	}
+}
+
+function sessionFailedChecksStatus(
+	outcome: SessionAttemptRecord["outcome"],
+): "NOT_REACHED" | "EXECUTION_FAILED" | undefined {
+	switch (outcome) {
+		case "NO_REPLY": {
+			return "NOT_REACHED";
+		}
+		case "EXECUTION_FAILED": {
+			return "EXECUTION_FAILED";
+		}
+		case "SUCCESSFUL": {
+			return undefined;
+		}
+		case "UNSUCCESSFUL": {
+			return undefined;
+		}
+		default: {
+			return unhandled(outcome, "session attempt outcome");
+		}
+	}
+}
+
+function assertSessionAttemptTiming(
+	request: Readonly<LoadArmRequest>,
+	attempt: Immutable<SessionAttemptRecord>,
+	rep: Immutable<SessionRepRecord>,
+	field: string,
+): void {
+	if (rep.elapsedMs !== attempt.elapsedMs) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.elapsedMs`,
+			},
+			"rep elapsed time disagrees with its recorded attempt",
+		);
+	}
+	const [checks] = rep.stages;
+	if (
+		checks !== undefined &&
+		"elapsedMs" in checks &&
+		checks.elapsedMs !== undefined &&
+		checks.elapsedMs !== attempt.elapsedMs
+	) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.elapsedMs`,
+			},
+			"checks elapsed time disagrees with its recorded attempt",
+		);
+	}
+}
+
+function assertSessionAttemptMetrics(
+	request: Readonly<LoadArmRequest>,
+	attempt: Immutable<SessionAttemptRecord>,
+	rep: Immutable<SessionRepRecord>,
+	field: string,
+): void {
+	if (attempt.metrics === undefined) {
+		if (rep.metrics.status !== "MISSING") {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: `${field}.metrics`,
+				},
+				"rep records complete metrics for an attempt with missing metrics",
+			);
+		}
+		if (rep.metrics.calls.length > 0 || rep.workerTrajectorySteps !== 0) {
+			throw evidenceError(
+				{
+					caseId: request.caseId,
+					arm: request.role,
+					field: `${field}.metrics`,
+				},
+				"rep metrics disagree with its attempt's missing metrics",
+			);
+		}
+
+		return;
+	}
+	if (rep.metrics.status !== "COMPLETE") {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.metrics` },
+			"rep records missing metrics for an attempt with metrics",
+		);
+	}
+	const [workerCall] = rep.metrics.calls;
+	if (
+		rep.metrics.calls.length !== 1 ||
+		workerCall?.role !== "worker" ||
+		!sameValue(workerCall.metrics, attempt.metrics) ||
+		rep.workerTrajectorySteps !== attempt.metrics.turns
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.metrics` },
+			"rep metrics disagree with its recorded attempt",
+		);
+	}
+}
+
+function assertSessionAttemptAggregate(
+	request: Readonly<LoadArmRequest>,
+	attempt: Immutable<SessionAttemptRecord>,
+	rep: Immutable<SessionRepRecord>,
+	field: string,
+): void {
+	const [checks] = rep.stages;
+	const expectedOutcome =
+		attempt.outcome === "SUCCESSFUL" && attempt.metrics !== undefined
+			? "SUCCESSFUL"
+			: "UNSUCCESSFUL";
+	if (rep.outcome !== expectedOutcome) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.outcome` },
+			"rep outcome disagrees with its recorded attempt",
+		);
+	}
+	assertSessionAttemptMetrics(request, attempt, rep, field);
+	const failedChecksStatus = sessionFailedChecksStatus(attempt.outcome);
+	if (
+		failedChecksStatus !== undefined &&
+		checks?.status !== failedChecksStatus
+	) {
+		throw evidenceError(
+			{ caseId: request.caseId, arm: request.role, field: `${field}.outcome` },
+			failedChecksStatus === "NOT_REACHED"
+				? "no-reply attempt must map to a not-reached checks outcome"
+				: "failed invocation must map to an execution-failed checks outcome",
+		);
+	}
+}
+
+function assertSessionAttempt(
+	request: Readonly<LoadArmRequest>,
+	group: Immutable<SessionGroupRecord>,
+	rep: Immutable<SessionRepRecord>,
+	attempt: Immutable<SessionAttemptRecord>,
+	sessionCase: Immutable<SessionCaseDeclaration>,
+	frozenCorpus: readonly FrozenFile[],
+	field: string,
+): void {
+	assertSessionAttemptInputs(
+		request,
+		group,
+		rep,
+		attempt,
+		sessionCase,
+		frozenCorpus,
+		field,
+	);
+	assertSessionAttemptChecks(request, attempt, rep, sessionCase, field);
+	assertSessionAttemptAggregate(request, attempt, rep, field);
+}
+
 async function loadRepRecords(
 	request: Readonly<LoadArmRequest>,
 	groupPath: string,
-	group: Immutable<ConfirmationGroupRecord>,
-): Promise<readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[]> {
-	const reps: DigestedRecord<Immutable<ConfirmationRepRecord>>[] = [];
+	group: Immutable<ParsedConfirmationGroupRecord>,
+	sessionCase: Immutable<SessionCaseDeclaration> | undefined,
+	frozenCorpus: readonly FrozenFile[],
+): Promise<readonly DigestedComparisonRep[]> {
+	const reps: DigestedComparisonRep[] = [];
 	for (const [index, reference] of group.repRecords.entries()) {
 		const field = `repRecords[${index}]`;
-		const path = resolve(dirname(groupPath), reference.path);
+		const path =
+			group.mode === "session"
+				? descendantPath(
+						request,
+						dirname(groupPath),
+						reference.path,
+						`${field}.path`,
+					)
+				: resolve(dirname(groupPath), reference.path);
 		const source = await readEvidenceFile({
 			caseId: request.caseId,
 			arm: request.role,
 			field: `${field}.path`,
 			path,
 		});
-		let record: ConfirmationRepRecord;
+		let record: ParsedConfirmationRepRecord;
 		try {
-			const parsed = parseConfirmationRepRecord(source.text);
-			if (parsed.schemaVersion !== 1) {
-				throw evidenceError(
-					{ caseId: request.caseId, arm: request.role, field: `${field}.mode` },
-					"session comparison is not supported yet; ACT-151 owns the multi-case session path",
-				);
-			}
-			record = parsed;
+			record = parseConfirmationRepRecord(source.text);
 		} catch {
 			throw evidenceError(
 				{ caseId: request.caseId, arm: request.role, field: `${field}.record` },
 				"invalid confirmation rep record",
 			);
+		}
+		if (group.mode === "session") {
+			if (group.schemaVersion !== 2) {
+				throw evidenceError(
+					{ caseId: request.caseId, arm: request.role, field: `${field}.mode` },
+					"legacy session confirmation groups are not comparable; rerun with session evidence",
+				);
+			}
+			if (record.schemaVersion !== 2 || record.mode !== "session") {
+				throw evidenceError(
+					{ caseId: request.caseId, arm: request.role, field: `${field}.mode` },
+					"session comparison requires a version-2 session rep",
+				);
+			}
+			assertRepMatchesGroup(
+				{ caseId: request.caseId, arm: request.role, field },
+				reference,
+				record,
+				group,
+			);
+			const evidence = record.stages[0]?.evidence;
+			if (evidence === undefined) {
+				throw evidenceError(
+					{
+						caseId: request.caseId,
+						arm: request.role,
+						field: `${field}.evidence`,
+					},
+					"session rep has no attempt evidence",
+				);
+			}
+			if (evidence.recordFile !== "attempt.json") {
+				throw evidenceError(
+					{
+						caseId: request.caseId,
+						arm: request.role,
+						field: `${field}.attempt.path`,
+					},
+					"session attempt evidence must be the producer's attempt.json file",
+				);
+			}
+			if (sessionCase === undefined) {
+				throw evidenceError(
+					{ caseId: request.caseId, arm: request.role, field: `${field}.case` },
+					"session rep has no frozen session case declaration",
+				);
+			}
+			const attemptPath = descendantPath(
+				request,
+				dirname(path),
+				evidence.recordFile,
+				`${field}.attempt.path`,
+			);
+			const attemptSource = await readEvidenceFile({
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.attempt.path`,
+				path: attemptPath,
+			});
+			let attempt: SessionAttemptRecord;
+			try {
+				attempt = parseSessionAttemptRecord(attemptSource.text);
+			} catch {
+				throw evidenceError(
+					{
+						caseId: request.caseId,
+						arm: request.role,
+						field: `${field}.attempt.record`,
+					},
+					"invalid session attempt record",
+				);
+			}
+			assertSessionAttempt(
+				request,
+				group,
+				record,
+				attempt,
+				sessionCase,
+				frozenCorpus,
+				field,
+			);
+			reps.push({
+				path: relative(request.manifestDirectory, path),
+				sha256: source.sha256,
+				record,
+				canonicalPath: source.canonicalPath,
+				attempt: {
+					path: relative(request.manifestDirectory, attemptPath),
+					sha256: attemptSource.sha256,
+					record: attempt,
+					canonicalPath: attemptSource.canonicalPath,
+				},
+			});
+			continue;
 		}
 
 		assertRepMatchesGroup(
@@ -284,17 +962,26 @@ async function loadArm(
 	}
 
 	const group = declared.record;
-	if (group.mode === "session") {
+	if (group.mode === "session" && group.schemaVersion !== 2) {
 		throw evidenceError(
 			{ caseId: request.caseId, arm: request.role, field: "group.mode" },
-			"session comparison is not supported yet; ACT-151 owns the multi-case session path",
+			"legacy session confirmation groups are not comparable; rerun with session evidence",
 		);
 	}
-
 	const frozen = await assertFrozenFiles(request, groupPath, group);
-	const reps = await loadRepRecords(request, groupPath, group);
+	let session: SessionFrozenInputs | undefined;
+	if (group.mode === "session") {
+		session = assertSessionFrozenFiles(request, group, frozen);
+	}
+	const reps = await loadRepRecords(
+		request,
+		groupPath,
+		group,
+		session?.sessionCase,
+		session?.corpusFiles ?? [],
+	);
 
-	return {
+	const loaded = {
 		role: request.role,
 		declaredCaseId: declared.declaredCaseId,
 		group: {
@@ -307,13 +994,24 @@ async function loadArm(
 		frozenFiles: frozen.files,
 		sourcePaths: [
 			source.canonicalPath,
-			...reps.map(
-				({ canonicalPath, path }) =>
+			...reps.flatMap(({ attempt, canonicalPath, path }) => {
+				const paths = [
 					canonicalPath ?? resolve(request.manifestDirectory, path),
-			),
+				];
+				if (attempt?.canonicalPath !== undefined) {
+					paths.push(attempt.canonicalPath);
+				}
+
+				return paths;
+			}),
 			...frozen.sourcePaths,
 		],
 	};
+	if (session === undefined) {
+		return loaded;
+	}
+
+	return { ...loaded, sessionCase: session.sessionCase };
 }
 
 async function loadCase(

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { parseCheckpointRecord } from "./checkpoint";
-import type { ConfirmationGroupRecord } from "./confirmation-record";
+import type { SessionCaseDeclaration } from "./case";
+import type { ParsedConfirmationGroupRecord } from "./confirmation-record";
 import type { Immutable } from "./contracts";
 import type {
 	ComparisonArmEvidence,
@@ -19,10 +20,10 @@ function sha256(bytes: Readonly<Uint8Array>): string {
 }
 
 function executedCorpusFiles(
-	group: Immutable<ConfirmationGroupRecord>,
+	group: Immutable<ParsedConfirmationGroupRecord>,
 ): readonly FrozenFile[] {
 	const corpus = group.inputs.files.filter(({ kind }) => kind === "corpus");
-	if (group.mode === "pipeline") {
+	if (group.mode === "pipeline" || group.mode === "session") {
 		return corpus;
 	}
 
@@ -76,17 +77,28 @@ function projectArm(
 				);
 			}
 		}
+		if (arm.group.record.mode === "session" && record.kind === "case") {
+			if (arm.sessionCase === undefined) {
+				throw new ComparisonEvidenceError(
+					`case ${caseId} arm ${arm.role} field inputs.files[case:${record.path}]: missing parsed session case declaration`,
+				);
+			}
+			const { corpusFiles: _corpusFiles, ...controlled } = arm.sessionCase;
+			normalizedDigest = sha256(
+				new TextEncoder().encode(JSON.stringify(controlled)),
+			);
+		}
 
 		return [{ ...record, sha256: normalizedDigest }];
 	});
 	const executedCorpus = executedCorpusFiles(arm.group.record);
-	if (executedCorpus.length === 0) {
+	if (executedCorpus.length === 0 && arm.group.record.mode !== "session") {
 		throw new ComparisonEvidenceError(
 			`case ${caseId} arm ${arm.role} field inputs.files.corpus: source group records no executed corpus`,
 		);
 	}
 
-	return {
+	const projected = {
 		role: arm.role,
 		declaredCaseId: arm.declaredCaseId,
 		group: arm.group,
@@ -95,6 +107,11 @@ function projectArm(
 		controlledFiles,
 		sourcePaths: arm.sourcePaths,
 	};
+	if (arm.sessionCase === undefined) {
+		return projected;
+	}
+
+	return { ...projected, sessionCase: arm.sessionCase };
 }
 
 function sameValue<Value>(left: Value, right: Value): boolean {
@@ -134,6 +151,38 @@ function controlledFileDifference(
 	return undefined;
 }
 
+function sessionCaseDifference(
+	left: Immutable<SessionCaseDeclaration> | undefined,
+	right: Immutable<SessionCaseDeclaration> | undefined,
+): string | undefined {
+	if (left === undefined || right === undefined) {
+		return "inputs.files.case";
+	}
+
+	const fields = [
+		["id", left.id, right.id],
+		["title", left.title, right.title],
+		["prompt", left.prompt, right.prompt],
+		["fixture", left.fixture, right.fixture],
+		["transcript", left.transcript, right.transcript],
+		["tools", left.tools, right.tools],
+		["settings", left.settings, right.settings],
+		["agents", left.agents, right.agents],
+		["projectFiles", left.projectFiles, right.projectFiles],
+		["checks", left.checks, right.checks],
+		["model", left.model, right.model],
+		["sessionBudgetUsd", left.sessionBudgetUsd, right.sessionBudgetUsd],
+	] as const;
+
+	for (const [field, leftValue, rightValue] of fields) {
+		if (!sameValue(leftValue, rightValue)) {
+			return `inputs.files.case.${field}`;
+		}
+	}
+
+	return undefined;
+}
+
 interface ControlledInputComparison {
 	readonly caseId: string;
 	readonly reference: ComparisonArmEvidence;
@@ -143,12 +192,43 @@ interface ControlledInputComparison {
 function controlledInputDifference(
 	comparison: Immutable<ControlledInputComparison>,
 ): string | undefined {
-	const reference = comparison.reference.group.record.inputs;
-	const other = comparison.other.group.record.inputs;
-	if (!sameValue(reference.lineage, other.lineage)) {
-		return "inputs.lineage";
-	}
+	const referenceGroup = comparison.reference.group.record;
+	const otherGroup = comparison.other.group.record;
+	if (referenceGroup.mode === "session" || otherGroup.mode === "session") {
+		if (referenceGroup.mode !== "session" || otherGroup.mode !== "session") {
+			return "mode";
+		}
+		const caseDifference = sessionCaseDifference(
+			comparison.reference.sessionCase,
+			comparison.other.sessionCase,
+		);
+		if (caseDifference !== undefined) {
+			return caseDifference;
+		}
+		const fileDifference = controlledFileDifference(
+			comparison.reference.controlledFiles.filter(
+				({ kind }) => kind !== "case",
+			),
+			comparison.other.controlledFiles.filter(({ kind }) => kind !== "case"),
+		);
+		if (fileDifference !== undefined) {
+			return fileDifference;
+		}
+		if (referenceGroup.inputs.model !== otherGroup.inputs.model) {
+			return "inputs.model";
+		}
+		if (referenceGroup.inputs.effort !== otherGroup.inputs.effort) {
+			return "inputs.effort";
+		}
+		if (
+			referenceGroup.inputs.sessionBudgetUsd !==
+			otherGroup.inputs.sessionBudgetUsd
+		) {
+			return "inputs.sessionBudgetUsd";
+		}
 
+		return undefined;
+	}
 	const fileDifference = controlledFileDifference(
 		comparison.reference.controlledFiles,
 		comparison.other.controlledFiles,
@@ -156,22 +236,29 @@ function controlledInputDifference(
 	if (fileDifference !== undefined) {
 		return fileDifference;
 	}
-	if (reference.model !== other.model) {
+
+	if (!sameValue(referenceGroup.inputs.lineage, otherGroup.inputs.lineage)) {
+		return "inputs.lineage";
+	}
+	if (referenceGroup.inputs.model !== otherGroup.inputs.model) {
 		return "inputs.model";
 	}
-	if (reference.effort !== other.effort) {
+	if (referenceGroup.inputs.effort !== otherGroup.inputs.effort) {
 		return "inputs.effort";
 	}
-	if (reference.judgeModel !== other.judgeModel) {
+	if (referenceGroup.inputs.judgeModel !== otherGroup.inputs.judgeModel) {
 		return "inputs.judgeModel";
 	}
-	if (reference.judgeEffort !== other.judgeEffort) {
+	if (referenceGroup.inputs.judgeEffort !== otherGroup.inputs.judgeEffort) {
 		return "inputs.judgeEffort";
 	}
-	if (reference.sessionBudgetUsd !== other.sessionBudgetUsd) {
+	if (
+		referenceGroup.inputs.sessionBudgetUsd !==
+		otherGroup.inputs.sessionBudgetUsd
+	) {
 		return "inputs.sessionBudgetUsd";
 	}
-	if (reference.pipelinePath !== other.pipelinePath) {
+	if (referenceGroup.inputs.pipelinePath !== otherGroup.inputs.pipelinePath) {
 		return "inputs.pipelinePath";
 	}
 

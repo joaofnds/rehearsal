@@ -11,6 +11,7 @@ import {
 	COMPARISON_ARMS,
 	serializeComparisonReport,
 } from "./comparison-record";
+import { RefusedPreconditionError } from "./exit-codes";
 import { comparisonReportPaths } from "./run-layout";
 
 export interface WriteComparisonReportRequest {
@@ -38,7 +39,7 @@ async function assertReportDoesNotReplaceEvidence(
 		sourcePaths.includes(absoluteReportFile) ||
 		(existingTarget !== undefined && sourcePaths.includes(existingTarget))
 	) {
-		throw new Error(
+		throw new RefusedPreconditionError(
 			`Comparison report destination overlaps source evidence: ${absoluteReportFile}`,
 		);
 	}
@@ -61,15 +62,23 @@ export async function writeComparisonReport(
 	request: Readonly<WriteComparisonReportRequest>,
 ): Promise<string> {
 	const evidence = await loadComparisonEvidence(request.manifestPath);
-	const judgeModels = evidence.cases.flatMap((benchmarkCase) =>
-		COMPARISON_ARMS.map(
-			(arm) => benchmarkCase.arms[arm].group.record.inputs.judgeModel,
-		),
-	);
-	const judgeAgreement = filterJudgeAgreementReport(
-		await loadJudgeAgreementReport(request.runsDirectory),
-		judgeModels,
-	);
+	const judgeAgreement =
+		evidence.contract.mode === "session"
+			? { skippedCalibrations: 0, baselines: [] }
+			: filterJudgeAgreementReport(
+					await loadJudgeAgreementReport(request.runsDirectory),
+					evidence.cases.flatMap((benchmarkCase) =>
+						COMPARISON_ARMS.flatMap((arm) => {
+							const { group } = benchmarkCase.arms[arm];
+							const { inputs } = group.record;
+							if (!("judgeModel" in inputs)) {
+								return [];
+							}
+							const { judgeModel } = inputs;
+							return judgeModel === undefined ? [] : [judgeModel];
+						}),
+					),
+				);
 	const report = buildComparisonReport(evidence, judgeAgreement);
 	const paths = comparisonReportPaths(
 		request.runsDirectory,

@@ -1,6 +1,6 @@
 # Current state and priorities
 
-Reviewed against the code and project board on **2026-09-10**. This is the public
+Reviewed against the code and project board on **2026-09-11**. This is the public
 feature inventory, not a release guarantee. The [vision](vision.md) describes the
 longer-term goal; the [runbook](runbook.md) describes the supported first steps.
 
@@ -20,20 +20,20 @@ still requires environment-specific setup.
 | Pipeline execution          | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
 | Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                               | [Replay command](../src/cli/replay-command.ts)                                                                                     |
 | Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                         | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
-| Comparison reports          | At least two cases, baseline/candidate/control arms; stage/pipeline evidence only                              | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
+| Comparison reports          | At least two cases with baseline/candidate/control arms; stage, pipeline, and provider-free session evidence   | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
 | Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                | [CLI commands](../src/cli/commands.ts)                                                                                             |
 | Local read UI and event API | Partial browser views and server-side event streaming                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
-An implemented path can still have missing real-provider validation. The board's
-pending comparison work includes running a complete two-case, three-arm session
-comparison after session report loading is supported, then inspecting it in the
-browser. Existing tests and schemas do not establish that end-to-end result.
+An implemented path can still have missing real-provider validation. Session
+comparison uses existing ACT-140 records and a provider-free integration path;
+the browser view reads the same saved report as stage and pipeline comparisons.
 
 ## Known limitations
 
-- **Session groups cannot feed `compare`.** The loader explicitly refuses
-  session mode. Producing groups and reporting across cases are separate
-  capabilities; the latter remains pending.
+- **Session comparison does not isolate new inputs.** It consumes the frozen
+  case, fixture, transcript, and corpus rows already written by confirmation.
+  Global `CLAUDE.md` and skills remain refused by session confirmation until
+  their isolated delivery work lands.
 - **Session corpus isolation is partial.** Confirmation refuses declared global
   `CLAUDE.md` and skills. A directory-backed debug session also cannot deliver
   a skill variant, and its global instruction file is not overlaid. Live debug
@@ -83,14 +83,13 @@ instruction improvement from noise, watch a run's spend, and read a comparison
 well enough to decide whether an edit helped. The remaining work follows those
 goals:
 
-1. Make the session comparison loader consume the confirmation records the
-   runner now produces, then validate a full comparison and its browser view.
-2. Provide reproducible public pipeline case inputs.
-3. Deliver isolated session skill variants, generated fixtures, and preserved
+1. Validate the saved session comparison through the browser view and add
+   reproducible public pipeline case inputs.
+2. Deliver isolated session skill variants, generated fixtures, and preserved
    post-session state so realistic skill outcomes can be graded.
-4. Complete the evidence needed for useful UI views, including pipeline
+3. Complete the evidence needed for useful UI views, including pipeline
    transcripts, live run monitoring, and comparison explanations.
-5. Tighten corpus-source containment and measurement boundaries without
+4. Tighten corpus-source containment and measurement boundaries without
    claiming that host execution is a sandbox.
 
 These are contribution areas, not a fixed delivery schedule. For concrete entry

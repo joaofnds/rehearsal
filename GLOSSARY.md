@@ -60,13 +60,14 @@ See [current state](docs/status.md) for implementation coverage and
   mode, `run` returns a run artifact, session attempt, or confirmation report.
   `--json` selects record bytes, but pipeline progress can still share stdout.
   `show --json` reads the selected record directly.
-- **Comparison** — a deterministic report over completed stage or pipeline
-  confirmation evidence for at least two benchmark cases, each with baseline,
-  candidate, and control arms. It starts no paid sessions. Session groups are
-  currently refused by the comparison loader.
+- **Comparison** — a deterministic report over completed stage, pipeline, or
+  session confirmation evidence for at least two benchmark cases, each with
+  baseline, candidate, and control arms. It starts no paid sessions. Session
+  comparisons read the frozen case's checks and each recorded attempt, and do
+  not synthesize a pipeline final outcome.
 - **Comparison arm** — one role in a comparison: baseline, candidate, or the
   mandatory minimal-corpus control. An arm uses the same corpus snapshot across
-  every benchmark case.
+  every benchmark case; a session control may have an empty declared corpus.
 - **Benchmark case** — one frozen task with its source or checkpoint and all
   non-corpus inputs; the independent unit on which comparison arms are paired.
 - **Case** (design usage) — the UI design's phrase for a task plus the

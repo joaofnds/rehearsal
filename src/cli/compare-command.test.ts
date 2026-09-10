@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-support";
 import { parseComparisonReport } from "#benchmark/comparison-record";
+import { RefusedPreconditionError } from "#benchmark/exit-codes";
 import { runCompare } from "#cli/compare-command";
 import { UsageError } from "#cli/commands";
 import type { OutputRecorder } from "#cli/cli-test-support";
@@ -71,5 +72,16 @@ describe(runCompare.name, () => {
 				recorder.output,
 			),
 		).rejects.toThrow(UsageError);
+	});
+
+	it("classifies malformed comparison evidence as a refused precondition", async () => {
+		await rm(fixture.repFile("case-1", "baseline", 1));
+
+		expect(
+			runCompare(
+				{ manifestPath: fixture.manifestFile, runsDirectory, json: false },
+				recorder.output,
+			),
+		).rejects.toBeInstanceOf(RefusedPreconditionError);
 	});
 });

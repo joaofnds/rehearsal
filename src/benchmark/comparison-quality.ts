@@ -1,4 +1,4 @@
-import type { ConfirmationRepRecord } from "./confirmation-record";
+import type { ParsedConfirmationRepRecord } from "./confirmation-record";
 import type { ReliabilitySummary } from "./confirmation-report";
 import {
 	buildReliabilityReport,
@@ -40,10 +40,10 @@ export interface ComparisonQualityReport {
 
 function armQuality(
 	contract: Immutable<ComparisonProjectionInput["contract"]>,
-	reps: readonly Immutable<ConfirmationRepRecord>[],
+	reps: readonly Immutable<ParsedConfirmationRepRecord>[],
 ): readonly ReliabilitySummary[] {
 	const inputs = reps.map((rep) => {
-		if (contract.mode === "stage") {
+		if (contract.mode === "stage" || contract.mode === "session") {
 			return {
 				metricsComplete: rep.metrics.status === "COMPLETE",
 				stages: rep.stages,
@@ -62,7 +62,7 @@ function armQuality(
 	});
 	const quality = buildReliabilityReport(contract.declaredStages, inputs);
 
-	return contract.mode === "stage"
+	return contract.mode === "stage" || contract.mode === "session"
 		? quality.slice(0, contract.declaredStages.length)
 		: quality;
 }

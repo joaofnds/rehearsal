@@ -6,19 +6,20 @@ for remaining gaps, and the [glossary](../GLOSSARY.md) for domain terms.
 
 ## Execution modes
 
-| Request                               | Unit of work                                   | Execution directory                 | Result                               |
-| ------------------------------------- | ---------------------------------------------- | ----------------------------------- | ------------------------------------ |
-| `run --case <pipeline-case>`          | Whole workflow                                 | The target's `main` checkout        | Run artifact or stopped-stage record |
-| `run --case <session-case>`           | One Claude session                             | A fresh temporary attempt directory | Session attempt record               |
-| `replay --run <name> --stage <stage>` | One pipeline stage                             | A fresh target worktree             | Replay record                        |
-| Pipeline `run --confirm`              | Repeated whole workflows                       | Separate target worktrees           | Confirmation group and report        |
-| Session `run --confirm`               | Repeated sessions                              | Separate attempt directories        | Confirmation group and report        |
-| `replay --confirm`                    | Repeated stage executions                      | Separate target worktrees           | Confirmation group and report        |
-| `compare <manifest>`                  | Completed stage/pipeline confirmation evidence | No execution directory              | Comparison report                    |
+| Request                               | Unit of work                                              | Execution directory                 | Result                               |
+| ------------------------------------- | --------------------------------------------------------- | ----------------------------------- | ------------------------------------ |
+| `run --case <pipeline-case>`          | Whole workflow                                            | The target's `main` checkout        | Run artifact or stopped-stage record |
+| `run --case <session-case>`           | One Claude session                                        | A fresh temporary attempt directory | Session attempt record               |
+| `replay --run <name> --stage <stage>` | One pipeline stage                                        | A fresh target worktree             | Replay record                        |
+| Pipeline `run --confirm`              | Repeated whole workflows                                  | Separate target worktrees           | Confirmation group and report        |
+| Session `run --confirm`               | Repeated sessions                                         | Separate attempt directories        | Confirmation group and report        |
+| `replay --confirm`                    | Repeated stage executions                                 | Separate target worktrees           | Confirmation group and report        |
+| `compare <manifest>`                  | Completed stage/pipeline or session confirmation evidence | No execution directory              | Comparison report                    |
 
 A debug attempt helps inspect behavior. Confirmation repeats a frozen input set
 and reports reliability and resource use. Comparison consumes existing evidence;
-it does not launch agents. Session confirmation groups cannot yet feed `compare`.
+it does not launch agents. Session comparisons use recorded checks and worker
+metrics; they do not load pipeline Judges.
 
 ## Command interface
 
@@ -427,9 +428,12 @@ record the model probe and missing provider metrics explicitly.
 ## Comparison manifests
 
 `compare` requires at least two distinct cases, each with baseline, candidate,
-and minimal-corpus control arms. Each path names a completed stage or pipeline
-confirmation `group.json` and resolves relative to the manifest. The control
-corpus is supplied by the operator. For example:
+and minimal-corpus control arms. Each path names a completed stage, pipeline, or
+session confirmation `group.json` and resolves relative to the manifest. Session
+groups must carry one frozen case declaration, their recorded attempt evidence,
+and a corpus inventory matching that declaration. The control corpus may be
+empty for a session case. The control corpus is supplied by the operator. For
+example:
 
 ```json
 {
@@ -459,10 +463,17 @@ The loader checks schemas, frozen-file hashes, rep records, controlled inputs,
 mode/stage consistency, and corpus identity across cases before writing a
 report. Within a case the arms must preserve the controlled experiment inputs,
 including model, effort, budget, and non-corpus evidence. A changed corpus is
-the treatment. Debug attempts cannot substitute for confirmation groups.
+the treatment. Session checks are read from the recorded attempt and must agree
+with the frozen case declaration; no final-outcome row is synthesized. Debug
+attempts cannot substitute for confirmation groups.
 
 Statistics are recomputed from rep evidence, rather than copied from existing
 confirmation reports. The output at `comparisons/<manifest-sha256>/report.json`
 contains quality/resource contrasts for candidate minus baseline, candidate
-minus control, and baseline minus control, with Judge agreement context.
+minus control, and baseline minus control, with Judge agreement context. Session
+reports use schema version 3, retain an attempt path and hash beside every
+source repetition, and carry an empty Judge-agreement baseline.
 `compare --json` prints the report bytes without starting provider sessions.
+Session resource values are per-repetition worker metrics; group preflight cost
+remains at confirmation-group level, and unavailable metrics stay visible as
+unavailable.

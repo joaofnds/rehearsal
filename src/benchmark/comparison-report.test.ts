@@ -78,6 +78,9 @@ describe(buildComparisonReport.name, () => {
 			skippedCalibrations: 0,
 			baselines: [],
 		});
+		if (current.schemaVersion !== 2) {
+			throw new Error("expected a stage or pipeline comparison report");
+		}
 		const { judgeAgreement: _judgeAgreement, ...reportWithoutAgreement } =
 			current;
 		const legacy = { ...reportWithoutAgreement, schemaVersion: 1 as const };

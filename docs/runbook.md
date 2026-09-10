@@ -107,9 +107,21 @@ sample size appropriate to the result's variability.
 Session confirmation currently supports declared output styles, agent
 definitions, and rulebook files. Declared global `CLAUDE.md` and skills are
 refused before spending because their isolated delivery is not implemented.
-**Session groups cannot yet feed `compare`.** Read their summaries and individual
-attempt evidence directly. The [reference](reference.md) describes the supported
-stage/pipeline comparison path.
+Session groups can feed `compare` when each case has baseline, candidate, and
+control groups. The comparison reads the frozen case, checks, corpus inventory,
+rep records, and each referenced `attempt.json`; it starts no provider process.
+Use a manifest with the shape in the [reference](reference.md#comparison-manifests),
+then inspect the saved report:
+
+```sh
+mise exec -- bun run rehearsal compare path/to/comparison.json
+mise exec -- bun run rehearsal list comparisons
+mise exec -- bun run rehearsal show comparison:<manifest-sha256>
+mise exec -- bun run rehearsal show comparison:<manifest-sha256> --json
+```
+
+Session reports use the checks row only. A missing or inconsistent attempt is a
+refused comparison, and an empty declared control corpus is valid.
 
 ## Inspect staleness
 

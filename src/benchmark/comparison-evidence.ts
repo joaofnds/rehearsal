@@ -1,12 +1,16 @@
 import type {
-	ConfirmationGroupRecord,
+	ParsedConfirmationGroupRecord,
 	ConfirmationMode,
-	ConfirmationRepRecord,
+	ParsedConfirmationRepRecord,
 } from "./confirmation-record";
+import type { SessionCaseDeclaration } from "./case";
 import type { Immutable } from "./contracts";
 import type { ComparisonArm } from "./comparison-record";
+import type { SessionAttemptRecord } from "./session-record";
+import { RefusedPreconditionError } from "./exit-codes";
 
-export type FrozenFile = ConfirmationGroupRecord["inputs"]["files"][number];
+export type FrozenFile =
+	ParsedConfirmationGroupRecord["inputs"]["files"][number];
 
 export interface DigestedRecord<Record> {
 	readonly path: string;
@@ -23,10 +27,19 @@ export interface LoadedFrozenFile {
 export interface LoadedComparisonArmEvidence {
 	readonly role: ComparisonArm;
 	readonly declaredCaseId: string | undefined;
-	readonly group: DigestedRecord<Immutable<ConfirmationGroupRecord>>;
-	readonly reps: readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[];
+	readonly group: DigestedRecord<Immutable<ParsedConfirmationGroupRecord>>;
+	readonly reps: readonly DigestedComparisonRep[];
 	readonly frozenFiles: readonly LoadedFrozenFile[];
+	readonly sessionCase?: Immutable<SessionCaseDeclaration>;
 	readonly sourcePaths: readonly string[];
+}
+
+export interface DigestedComparisonRep {
+	readonly path: string;
+	readonly sha256: string;
+	readonly record: Immutable<ParsedConfirmationRepRecord>;
+	readonly canonicalPath?: string;
+	readonly attempt?: DigestedRecord<Immutable<SessionAttemptRecord>>;
 }
 
 export interface LoadedComparisonCaseEvidence {
@@ -37,10 +50,11 @@ export interface LoadedComparisonCaseEvidence {
 export interface ComparisonArmEvidence {
 	readonly role: ComparisonArm;
 	readonly declaredCaseId: string | undefined;
-	readonly group: DigestedRecord<Immutable<ConfirmationGroupRecord>>;
-	readonly reps: readonly DigestedRecord<Immutable<ConfirmationRepRecord>>[];
+	readonly group: DigestedRecord<Immutable<ParsedConfirmationGroupRecord>>;
+	readonly reps: readonly DigestedComparisonRep[];
 	readonly executedCorpus: readonly FrozenFile[];
 	readonly controlledFiles: readonly FrozenFile[];
+	readonly sessionCase?: Immutable<SessionCaseDeclaration>;
 	readonly sourcePaths: readonly string[];
 }
 
@@ -58,7 +72,7 @@ export interface ComparisonContract {
 export interface ComparisonRepCaseInput {
 	readonly caseId: string;
 	readonly arms: Readonly<
-		Record<ComparisonArm, readonly Immutable<ConfirmationRepRecord>[]>
+		Record<ComparisonArm, readonly Immutable<ParsedConfirmationRepRecord>[]>
 	>;
 }
 
@@ -77,6 +91,6 @@ export interface ComparisonEvidence {
 	readonly sourcePaths: readonly string[];
 }
 
-export class ComparisonEvidenceError extends Error {
+export class ComparisonEvidenceError extends RefusedPreconditionError {
 	public override name = "ComparisonEvidenceError";
 }

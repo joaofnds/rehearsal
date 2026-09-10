@@ -12,7 +12,10 @@ import type {
 } from "./comparison-quality";
 import { buildComparisonQuality } from "./comparison-quality";
 import type { ComparisonArm, ComparisonReport } from "./comparison-record";
-import { comparisonReportSchema } from "./comparison-record";
+import {
+	comparisonReportSchema,
+	sessionComparisonReportSchema,
+} from "./comparison-record";
 import type {
 	ArmResources,
 	ComparisonResourceCase,
@@ -58,6 +61,26 @@ export interface BuildReportArmRequest {
 export function buildReportArm(
 	request: Immutable<BuildReportArmRequest>,
 ): ComparisonReport["cases"][number]["arms"][ComparisonArm] {
+	const reps = request.evidence.reps.map((rep) => {
+		const source = {
+			repId: rep.record.repId,
+			ordinal: rep.record.ordinal,
+			path: rep.path,
+			sha256: rep.sha256,
+		};
+		if (rep.attempt === undefined) {
+			return source;
+		}
+
+		return {
+			...source,
+			attempt: {
+				path: rep.attempt.path,
+				sha256: rep.attempt.sha256,
+			},
+		};
+	});
+
 	return {
 		role: request.evidence.role,
 		source: {
@@ -65,12 +88,7 @@ export function buildReportArm(
 				path: request.evidence.group.path,
 				sha256: request.evidence.group.sha256,
 			},
-			reps: request.evidence.reps.map((rep) => ({
-				repId: rep.record.repId,
-				ordinal: rep.record.ordinal,
-				path: rep.path,
-				sha256: rep.sha256,
-			})),
+			reps,
 		},
 		executedCorpus: request.evidence.executedCorpus.map(({ path, sha256 }) => ({
 			path,
@@ -134,7 +152,8 @@ export function buildComparisonReport(
 		};
 	});
 	const report = {
-		schemaVersion: 2 as const,
+		schemaVersion:
+			evidence.contract.mode === "session" ? (3 as const) : (2 as const),
 		judgeAgreement,
 		manifest: { sha256: evidence.manifest.sha256 },
 		mode: evidence.contract.mode,
@@ -148,5 +167,7 @@ export function buildComparisonReport(
 		},
 	};
 
-	return comparisonReportSchema.parse(report);
+	return evidence.contract.mode === "session"
+		? sessionComparisonReportSchema.parse(report)
+		: comparisonReportSchema.parse(report);
 }

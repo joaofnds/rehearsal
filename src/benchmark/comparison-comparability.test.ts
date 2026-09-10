@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { ConfirmationGroupRecord } from "./confirmation-record";
+import type {
+	ConfirmationGroupRecord,
+	ParsedConfirmationGroupRecord,
+} from "./confirmation-record";
 import type { Immutable } from "./contracts";
 import type {
 	ComparisonArmEvidence,
@@ -92,29 +95,41 @@ function groupRecord(
 	};
 }
 
+function legacyRecord(
+	record: Immutable<ParsedConfirmationGroupRecord>,
+): Immutable<ConfirmationGroupRecord> {
+	if (record.schemaVersion !== 1) {
+		throw new Error("This fixture helper only edits legacy groups");
+	}
+
+	return record;
+}
+
 function withChangedScalar(
-	record: Immutable<ConfirmationGroupRecord>,
+	record: Immutable<ParsedConfirmationGroupRecord>,
 	field: ControlledScalar,
 	value: (typeof CHANGED_CONTROLLED_SCALARS)[number][1],
 ): Immutable<ConfirmationGroupRecord> {
+	const legacy = legacyRecord(record);
 	return {
-		...record,
+		...legacy,
 		inputs: {
-			...record.inputs,
+			...legacy.inputs,
 			[field]: value,
 		},
 	};
 }
 
 function withChangedFile(
-	record: Immutable<ConfirmationGroupRecord>,
+	record: Immutable<ParsedConfirmationGroupRecord>,
 	kind: "checkpoint" | "pipeline" | "product-brief" | "rubric" | "task",
 ): Immutable<ConfirmationGroupRecord> {
+	const legacy = legacyRecord(record);
 	return {
-		...record,
+		...legacy,
 		inputs: {
-			...record.inputs,
-			files: record.inputs.files.map((file) =>
+			...legacy.inputs,
+			files: legacy.inputs.files.map((file) =>
 				file.kind === kind
 					? { kind: file.kind, path: file.path, sha256: "f".repeat(64) }
 					: file,
@@ -125,7 +140,7 @@ function withChangedFile(
 
 function arm(
 	role: ComparisonArm,
-	record: Immutable<ConfirmationGroupRecord>,
+	record: Immutable<ParsedConfirmationGroupRecord>,
 ): ComparisonArmEvidence {
 	return {
 		role,
@@ -406,7 +421,7 @@ describe(assertComparableComparison.name, () => {
 
 	it("rejects a changed controlled lineage", () => {
 		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
-		const candidateRecord = first.arms.candidate.group.record;
+		const candidateRecord = legacyRecord(first.arms.candidate.group.record);
 		const changedCandidate = arm("candidate", {
 			...candidateRecord,
 			inputs: {
@@ -454,7 +469,7 @@ describe(assertComparableComparison.name, () => {
 		const second = benchmarkCase("case-2", CORPUS_DIGESTS);
 		const { candidate } = second.arms;
 		const changedCandidate = arm("candidate", {
-			...candidate.group.record,
+			...legacyRecord(candidate.group.record),
 			declaredStages: ["discuss", "build"],
 		});
 
@@ -490,7 +505,7 @@ describe(assertComparableComparison.name, () => {
 	it("rejects an arm whose group recorded a different case", () => {
 		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
 		const candidate = arm("candidate", {
-			...first.arms.candidate.group.record,
+			...legacyRecord(first.arms.candidate.group.record),
 			caseId: "case-2",
 		});
 
@@ -530,9 +545,10 @@ describe(assertComparableComparison.name, () => {
 
 	it("rejects an arm without the expected rep records", () => {
 		const first = benchmarkCase("case-1", CORPUS_DIGESTS);
+		const baselineRecord = legacyRecord(first.arms.baseline.group.record);
 		const baseline = arm("baseline", {
-			...first.arms.baseline.group.record,
-			repRecords: first.arms.baseline.group.record.repRecords.slice(0, 1),
+			...baselineRecord,
+			repRecords: baselineRecord.repRecords.slice(0, 1),
 		});
 
 		expect(() =>

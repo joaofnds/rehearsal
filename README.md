@@ -14,7 +14,8 @@ before deciding the instruction earned its place.
 
 **Early development.** The CLI is usable, and a local browser UI reads recorded
 evidence. Some workflows still depend on the maintainer's environment. Session
-confirmation groups work; multi-case comparisons of those groups do not yet.
+confirmation groups can feed multi-case comparisons alongside stage and pipeline
+groups.
 See [current state and priorities](docs/status.md) before planning an experiment.
 
 ## How it works
