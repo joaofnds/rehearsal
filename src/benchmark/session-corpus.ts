@@ -163,43 +163,34 @@ async function refuseSymlinks(
 		return;
 	}
 
-	await refuseNestedSymlinks(
-		source,
-		entry.sourcePath,
-		entry.layoutPath,
-		new Set(),
-	);
+	await refuseNestedSymlinks(source, entry, new Set());
 }
 
 async function refuseNestedSymlinks(
 	source: ResolvedCorpusSource,
-	sourceDirectory: string,
-	layoutDirectory: string,
+	directory: CorpusLayoutEntry,
 	visitedDirectories: Set<string>,
 ): Promise<void> {
-	const resolvedDirectory = await realpath(sourceDirectory);
+	const resolvedDirectory = await realpath(directory.sourcePath);
 	if (visitedDirectories.has(resolvedDirectory)) {
 		return;
 	}
 
 	visitedDirectories.add(resolvedDirectory);
 
-	for (const name of await readdir(sourceDirectory)) {
-		const sourcePath = join(sourceDirectory, name);
-		const layoutPath = join(layoutDirectory, name);
-		if (await resolvesOutsideCorpus(source, sourcePath)) {
-			throw symlinkedCorpusEntry(layoutPath);
+	for (const name of await readdir(directory.sourcePath)) {
+		const child = {
+			sourcePath: join(directory.sourcePath, name),
+			layoutPath: join(directory.layoutPath, name),
+		};
+		if (await resolvesOutsideCorpus(source, child.sourcePath)) {
+			throw symlinkedCorpusEntry(child.layoutPath);
 		}
 
-		const sourceStats = await stat(sourcePath);
+		const sourceStats = await stat(child.sourcePath);
 
 		if (sourceStats.isDirectory()) {
-			await refuseNestedSymlinks(
-				source,
-				sourcePath,
-				layoutPath,
-				visitedDirectories,
-			);
+			await refuseNestedSymlinks(source, child, visitedDirectories);
 		}
 	}
 }
