@@ -795,6 +795,99 @@ function assertSessionAttempt(
 	assertSessionAttemptAggregate(request, attempt, rep, field);
 }
 
+interface LoadSessionRepRequest {
+	readonly request: Readonly<LoadArmRequest>;
+	readonly group: Immutable<SessionGroupRecord>;
+	readonly reference: Immutable<SessionGroupRecord["repRecords"][number]>;
+	readonly record: Immutable<SessionRepRecord>;
+	readonly source: Readonly<EvidenceFile>;
+	readonly sessionCase: Immutable<SessionCaseDeclaration>;
+	readonly frozenCorpus: readonly FrozenFile[];
+	readonly field: string;
+	readonly path: string;
+}
+
+async function loadSessionRep(
+	input: Readonly<LoadSessionRepRequest>,
+): Promise<DigestedComparisonRep> {
+	const { request, group, reference, record, source, sessionCase } = input;
+	const { field, frozenCorpus, path } = input;
+	assertRepMatchesGroup(
+		{ caseId: request.caseId, arm: request.role, field },
+		reference,
+		record,
+		group,
+	);
+	const evidence = record.stages[0]?.evidence;
+	if (evidence === undefined) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.evidence`,
+			},
+			"session rep has no attempt evidence",
+		);
+	}
+	if (evidence.recordFile !== "attempt.json") {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.attempt.path`,
+			},
+			"session attempt evidence must be the producer's attempt.json file",
+		);
+	}
+	const attemptPath = descendantPath(
+		request,
+		dirname(path),
+		evidence.recordFile,
+		`${field}.attempt.path`,
+	);
+	const attemptSource = await readEvidenceFile({
+		caseId: request.caseId,
+		arm: request.role,
+		field: `${field}.attempt.path`,
+		path: attemptPath,
+	});
+	let attempt: SessionAttemptRecord;
+	try {
+		attempt = parseSessionAttemptRecord(attemptSource.text);
+	} catch {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `${field}.attempt.record`,
+			},
+			"invalid session attempt record",
+		);
+	}
+	assertSessionAttempt(
+		request,
+		group,
+		record,
+		attempt,
+		sessionCase,
+		frozenCorpus,
+		field,
+	);
+
+	return {
+		path: relative(request.manifestDirectory, path),
+		sha256: source.sha256,
+		record,
+		canonicalPath: source.canonicalPath,
+		attempt: {
+			path: relative(request.manifestDirectory, attemptPath),
+			sha256: attemptSource.sha256,
+			record: attempt,
+			canonicalPath: attemptSource.canonicalPath,
+		},
+	};
+}
+
 async function loadRepRecords(
 	request: Readonly<LoadArmRequest>,
 	groupPath: string,
@@ -842,85 +935,29 @@ async function loadRepRecords(
 					"session comparison requires a version-2 session rep",
 				);
 			}
-			assertRepMatchesGroup(
-				{ caseId: request.caseId, arm: request.role, field },
-				reference,
-				record,
-				group,
-			);
-			const evidence = record.stages[0]?.evidence;
-			if (evidence === undefined) {
-				throw evidenceError(
-					{
-						caseId: request.caseId,
-						arm: request.role,
-						field: `${field}.evidence`,
-					},
-					"session rep has no attempt evidence",
-				);
-			}
-			if (evidence.recordFile !== "attempt.json") {
-				throw evidenceError(
-					{
-						caseId: request.caseId,
-						arm: request.role,
-						field: `${field}.attempt.path`,
-					},
-					"session attempt evidence must be the producer's attempt.json file",
-				);
-			}
 			if (sessionCase === undefined) {
 				throw evidenceError(
-					{ caseId: request.caseId, arm: request.role, field: `${field}.case` },
+					{
+						caseId: request.caseId,
+						arm: request.role,
+						field: `${field}.case`,
+					},
 					"session rep has no frozen session case declaration",
 				);
 			}
-			const attemptPath = descendantPath(
-				request,
-				dirname(path),
-				evidence.recordFile,
-				`${field}.attempt.path`,
+			reps.push(
+				await loadSessionRep({
+					request,
+					group,
+					reference,
+					record,
+					source,
+					sessionCase,
+					frozenCorpus,
+					field,
+					path,
+				}),
 			);
-			const attemptSource = await readEvidenceFile({
-				caseId: request.caseId,
-				arm: request.role,
-				field: `${field}.attempt.path`,
-				path: attemptPath,
-			});
-			let attempt: SessionAttemptRecord;
-			try {
-				attempt = parseSessionAttemptRecord(attemptSource.text);
-			} catch {
-				throw evidenceError(
-					{
-						caseId: request.caseId,
-						arm: request.role,
-						field: `${field}.attempt.record`,
-					},
-					"invalid session attempt record",
-				);
-			}
-			assertSessionAttempt(
-				request,
-				group,
-				record,
-				attempt,
-				sessionCase,
-				frozenCorpus,
-				field,
-			);
-			reps.push({
-				path: relative(request.manifestDirectory, path),
-				sha256: source.sha256,
-				record,
-				canonicalPath: source.canonicalPath,
-				attempt: {
-					path: relative(request.manifestDirectory, attemptPath),
-					sha256: attemptSource.sha256,
-					record: attempt,
-					canonicalPath: attemptSource.canonicalPath,
-				},
-			});
 			continue;
 		}
 
