@@ -182,13 +182,26 @@ agents/<name>.md
 rulebook/...
 ```
 
-Absent `--corpus`, the live root is `~/.claude`. A declared directory source
-must exist and contain at least one recognized layout entry. Rehearsal consumes
-a directory; rendering a revision from a dotfiles repository is external work.
-Directory-backed session snapshots reject declared inputs resolving outside
-their root. Stage corpus capture and `stale` do not yet enforce that boundary
-uniformly for linked directory roots. Corpus sources must be trusted inputs.
-Live installs may use links into the operator's actual corpus.
+Absent `--corpus`, the live source permits files under `~/.claude` and one
+external backing tree. `BENCHMARK_LIVE_CORPUS_BACKING_ROOT` selects that tree
+and defaults to `~/.agents`. An override replaces the default and must be a
+non-empty absolute path without NUL bytes. A missing backing tree grants no
+permission. Rehearsal checks the backing tree only when a file resolves outside
+the live install, so files stored directly under `~/.claude` remain usable when
+the optional tree is missing or unreadable.
+
+Live instruction reads, declared-file hashes, and session confirmation copies
+refuse a file whose real path leaves both permitted trees. Records retain the
+file's path under `~/.claude`; the real path is used only for authorization. The
+corpus API reports an offending instruction as a refusal, omits its file and the
+whole-corpus digest, and continues to report healthy entries.
+
+A declared directory source must exist and contain at least one recognized
+layout entry. Rehearsal consumes a directory; rendering a revision from a
+dotfiles repository is external work. Directory-backed session snapshots
+reject declared inputs resolving outside their root. Stage corpus capture and
+`stale` do not yet enforce that boundary uniformly for linked directory roots.
+Corpus sources must be trusted inputs.
 
 | Mode                                | Live corpus                                           | Directory supplied with `--corpus`                                                 |
 | ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |

@@ -44,10 +44,11 @@ browser. Existing tests and schemas do not establish that end-to-end result.
   `CLAUDE.md` and skills. A directory-backed debug session also cannot deliver
   a skill variant, and its global instruction file is not overlaid. Live debug
   runs can read mutable installed files. See the [support matrix](reference.md#corpus-sources-and-delivery).
-- **Corpus containment is incomplete.** Directory-backed session snapshots
-  check whether inputs resolve outside the source. Stage capture and `stale`
-  can still follow linked directory roots beyond that boundary. Use trusted
-  corpus sources while this is being hardened.
+- **Corpus containment is incomplete.** Declared directory inputs stay within
+  their source. Declared live files stay within the install and configured
+  backing tree, including when session confirmation freezes them. Stage capture
+  and `stale` can still follow linked directory roots beyond those boundaries.
+  Use trusted corpus sources while this is being hardened.
 - **Pipeline `run --corpus` is refused.** Replay supports explicit corpus
   directories, but the forward pipeline command does not yet use that path.
 - **Several cases depend on private inputs.** `brief-reply-*` need ignored

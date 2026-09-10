@@ -211,5 +211,15 @@ local records and the live corpus; it does not launch experiments. It has no
 authentication and does not explicitly restrict its bind address to loopback,
 so do not expose its port as a public service.
 
+The live corpus permits `~/.claude` and the backing tree named by
+`BENCHMARK_LIVE_CORPUS_BACKING_ROOT`, which defaults to `~/.agents`. If the
+install links to a different backing tree, supply its absolute path to every
+Rehearsal command that reads the live corpus:
+
+```sh
+BENCHMARK_LIVE_CORPUS_BACKING_ROOT=/absolute/path/to/agents \
+  mise exec -- bun run serve
+```
+
 See [current UI coverage](status.md#browser-ui) for available routes and planned
 controls. An empty run-history page is expected in a fresh clone.
