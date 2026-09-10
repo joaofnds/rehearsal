@@ -155,6 +155,9 @@
   source is the live install. A source is resolved to one snapshot directory
   before any provider call, and that directory is the single place the bytes are
   read from for hashing and installing.
+  The live source's permitted extent is its install root and one backing tree
+  declared outside the corpus. A link may resolve within either tree; the
+  corpus's own links cannot declare another permitted tree.
 - **Corpus tier** — stage-local (a skill; testable in stage mode) or global
   (`CLAUDE.md`, doctrine; validated only end-to-end).
 - **Corpus variant** — one corpus a comparison arm runs against, identified by
