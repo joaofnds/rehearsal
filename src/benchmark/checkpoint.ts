@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
-import type { CorpusRoot } from "./corpus-file";
-import { liveCorpusRoot, resolvesOutside } from "./corpus-file";
+import type { CorpusRoot, LiveCorpusRoot } from "./corpus-file";
+import {
+	CORPUS_LAYOUT_DIRECTORIES,
+	readCorpusInstructions,
+	resolvesOutside,
+	resolvesOutsideCorpus,
+} from "./corpus-file";
 import type { Immutable } from "./contracts";
 import {
 	lstatIfPresent,
@@ -109,6 +114,10 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
 	}
 }
 
+type DirectoryWalkOptions =
+	| { readonly source: CorpusRoot }
+	| { readonly rootMayBeALink: boolean };
+
 /**
  * `walkDirectory` for a caller that refuses the whole tree on any refusal, so
  * the first one is the only one that changes its outcome.
@@ -116,11 +125,9 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
 export async function hashDirectory(
 	root: string,
 	prefix: string,
-	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
+	options: DirectoryWalkOptions,
 ): Promise<HashedFile[]> {
-	const { files, refusals } = await walkDirectory(root, prefix, {
-		rootMayBeALink,
-	});
+	const { files, refusals } = await walkDirectory(root, prefix, options);
 
 	const [first] = refusals;
 	if (first !== undefined) {
@@ -146,13 +153,9 @@ export async function hashDirectory(
  * while a declared file was never hashed, and a reader told it escaped the tree
  * would go looking for a leak that is not there.
  *
- * `rootMayBeALink` is the caller's answer for the root itself, which `readdir`
- * follows before this walk sees anything. Only a caller that resolved the root
- * from a trusted location may say yes: a `.claude` layout directory is
- * routinely a symlink into the real corpus, and refusing it would empty every
- * lineage this records. A root taken from a target repository or a case
- * declaration says no, or the link it is becomes the whole leak one directory
- * further up.
+ * Corpus walks carry the source permission for both the root and its entries.
+ * Generic fixture/workflow walks retain their walked-tree boundary and explicit
+ * root-link policy; a live backing tree never grants permission to those inputs.
  *
  * Both a checkpoint's workflow state and a session case's fixture hash through
  * here, because two copies of this walk could disagree about ordering or about
@@ -182,9 +185,13 @@ export async function hashDirectory(
 export async function walkDirectory(
 	root: string,
 	prefix: string,
-	{ rootMayBeALink }: { readonly rootMayBeALink: boolean },
+	options: DirectoryWalkOptions,
 ): Promise<WalkedDirectory> {
-	if (!rootMayBeALink) {
+	if ("source" in options) {
+		if (await resolvesOutsideCorpus(options.source, root)) {
+			throw symlinkedEntry(prefix);
+		}
+	} else if (!options.rootMayBeALink) {
 		await refuseIfLink(root, prefix);
 	}
 
@@ -211,7 +218,11 @@ export async function walkDirectory(
 				refused.push(entry);
 				continue;
 			}
-			if (await resolvesOutside(root, absolute)) {
+			const outside =
+				"source" in options
+					? await resolvesOutsideCorpus(options.source, absolute)
+					: await resolvesOutside(root, absolute);
+			if (outside) {
 				refusals.push(symlinkedEntry(join(prefix, entry)));
 				refused.push(entry);
 				continue;
@@ -244,8 +255,11 @@ export async function walkDirectory(
  * reads the frozen bytes a worktree's project-level `.claude` carries before
  * falling back to whatever is live at user level.
  */
-export function corpusLayoutRoots(targetDir: string): string[] {
-	return [join(targetDir, ".claude"), liveCorpusRoot()];
+export function corpusLayoutRoots(
+	targetDir: string,
+	source: LiveCorpusRoot,
+): readonly CorpusRoot[] {
+	return [{ kind: "directory", root: join(targetDir, ".claude") }, source];
 }
 
 /**
@@ -258,46 +272,56 @@ export function corpusLayoutRoots(targetDir: string): string[] {
 export function stageCorpusRoots(
 	source: CorpusRoot,
 	targetRoot: string,
-): readonly string[] {
-	return source.kind === "live" ? corpusLayoutRoots(targetRoot) : [source.root];
+): readonly CorpusRoot[] {
+	return source.kind === "live"
+		? corpusLayoutRoots(targetRoot, source)
+		: [source];
 }
 
-export async function resolveSkillDirectory(
-	skill: string,
-	roots: readonly string[],
-): Promise<string> {
-	for (const root of roots) {
-		const directory = join(root, "skills", skill);
-		const directoryStats = await statIfExists(directory);
-		if (directoryStats?.isDirectory() === true) {
-			return directory;
-		}
-	}
-
-	throw new Error(
-		`The ${skill} skill is not installed; searched ${roots.join(", ")}`,
-	);
+interface CorpusDirectory {
+	readonly source: CorpusRoot;
+	readonly layoutPath: string;
 }
 
-/**
- * The first root, project then user, that holds a whole `agents/` or
- * `output-styles/` directory. Neither kind is resolved by name the way a
- * skill is: the whole directory is either frozen corpus or it is live, never
- * merged file by file across roots.
- */
 async function resolveLayoutDirectory(
-	kind: string,
-	roots: readonly string[],
-): Promise<string | undefined> {
-	for (const root of roots) {
-		const directory = join(root, kind);
+	layoutPath: string,
+	roots: readonly CorpusRoot[],
+): Promise<CorpusDirectory | undefined> {
+	for (const source of roots) {
+		const directory = join(source.root, layoutPath);
 		const directoryStats = await statIfExists(directory);
 		if (directoryStats?.isDirectory() === true) {
-			return directory;
+			if (await resolvesOutsideCorpus(source, directory)) {
+				throw symlinkedEntry(layoutPath);
+			}
+
+			return { source, layoutPath };
 		}
 	}
 
 	return undefined;
+}
+
+async function resolveSkill(
+	skill: string,
+	roots: readonly CorpusRoot[],
+): Promise<CorpusDirectory> {
+	const directory = await resolveLayoutDirectory(join("skills", skill), roots);
+	if (directory !== undefined) {
+		return directory;
+	}
+
+	throw new Error(
+		`The ${skill} skill is not installed; searched ${roots.map(({ root }) => root).join(", ")}`,
+	);
+}
+
+export async function resolveSkillDirectory(
+	skill: string,
+	roots: readonly CorpusRoot[],
+): Promise<string> {
+	const { source, layoutPath } = await resolveSkill(skill, roots);
+	return join(source.root, layoutPath);
 }
 
 /**
@@ -330,93 +354,96 @@ const LAYOUT_DIRECTORY_KINDS: readonly string[] = [
  * it too, whole, from the first root that has them: a stage session's skill
  * can invoke either, and both must be frozen along with the skill it invokes.
  */
-export async function captureStageCorpus(
+async function stageCorpusDirectories(
 	skill: string,
-	instructions: string,
-	roots: readonly string[],
-): Promise<readonly HashedFile[]> {
-	const files: HashedFile[] = [
-		{ path: "CLAUDE.md", sha256: sha256(instructions) },
-	];
-
+	roots: readonly CorpusRoot[],
+): Promise<readonly CorpusDirectory[]> {
+	const directories: CorpusDirectory[] = [];
 	for (const kind of LAYOUT_DIRECTORY_KINDS) {
 		const directory = await resolveLayoutDirectory(kind, roots);
 		if (directory !== undefined) {
-			files.push(
-				...(await hashDirectory(directory, kind, {
-					rootMayBeALink: true,
-				})),
-			);
+			directories.push(directory);
 		}
 	}
 
-	// The stage's own skill is hashed once even when it is a global one:
-	// hashing it twice would say nothing more and would make the corpus
-	// depend on which stage happens to invoke it.
-	for (const global of GLOBAL_SKILLS) {
-		files.push(
-			...(await hashDirectory(
-				await resolveSkillDirectory(global, roots),
-				join("skills", global),
-				{ rootMayBeALink: true },
-			)),
-		);
+	for (const name of new Set([...GLOBAL_SKILLS, skill])) {
+		directories.push(await resolveSkill(name, roots));
 	}
-	if (!GLOBAL_SKILLS.includes(skill)) {
-		files.push(
-			...(await hashDirectory(
-				await resolveSkillDirectory(skill, roots),
-				join("skills", skill),
-				{ rootMayBeALink: true },
-			)),
+
+	return directories;
+}
+
+interface CapturedCorpusFile {
+	readonly source: CorpusRoot;
+	readonly file: HashedFile;
+}
+
+async function captureDirectories(
+	directories: readonly CorpusDirectory[],
+): Promise<readonly CapturedCorpusFile[]> {
+	const files: CapturedCorpusFile[] = [];
+	for (const { source, layoutPath } of directories) {
+		const hashed = await hashDirectory(
+			join(source.root, layoutPath),
+			layoutPath,
+			{ source },
 		);
+		files.push(...hashed.map((file) => ({ source, file })));
 	}
 
 	return files;
 }
 
+export async function captureStageCorpus(
+	skill: string,
+	instructions: string,
+	roots: readonly CorpusRoot[],
+): Promise<readonly HashedFile[]> {
+	const files = await captureDirectories(
+		await stageCorpusDirectories(skill, roots),
+	);
+	return [
+		{ path: "CLAUDE.md", sha256: sha256(instructions) },
+		...files.map(({ file }) => file),
+	];
+}
+
+interface CorpusCopy {
+	readonly directories: readonly CorpusDirectory[];
+	readonly files: readonly CapturedCorpusFile[];
+	readonly instructions: string;
+	readonly destination: string;
+}
+
+async function copyCorpusFiles(copy: CorpusCopy): Promise<void> {
+	for (const { layoutPath } of copy.directories) {
+		await mkdir(join(copy.destination, layoutPath), { recursive: true });
+	}
+
+	await Bun.write(join(copy.destination, "CLAUDE.md"), copy.instructions);
+
+	for (const { source, file } of copy.files) {
+		const target = join(copy.destination, file.path);
+
+		await mkdir(dirname(target), { recursive: true });
+		await cp(join(source.root, file.path), target, { dereference: true });
+	}
+}
+
 export async function snapshotStageCorpus(
 	skill: string,
 	instructions: string,
-	roots: readonly string[],
+	roots: readonly CorpusRoot[],
 	destination: string,
 ): Promise<readonly HashedFile[]> {
-	const skillsDirectory = join(destination, "skills");
-	await mkdir(skillsDirectory, { recursive: true });
-	await Bun.write(join(destination, "CLAUDE.md"), instructions);
+	const directories = await stageCorpusDirectories(skill, roots);
+	const files = await captureDirectories(directories);
 
-	const skills = new Set([...GLOBAL_SKILLS, skill]);
-	for (const name of skills) {
-		await cp(
-			await resolveSkillDirectory(name, roots),
-			join(skillsDirectory, name),
-			{ recursive: true },
-		);
-	}
+	await copyCorpusFiles({ directories, files, instructions, destination });
 
-	for (const kind of LAYOUT_DIRECTORY_KINDS) {
-		const directory = await resolveLayoutDirectory(kind, roots);
-		if (directory !== undefined) {
-			await cp(directory, join(destination, kind), { recursive: true });
-		}
-	}
-
-	return captureStageCorpus(skill, instructions, [destination]);
-}
-
-/**
- * A worktree is reused across every stage of a rep, so a kind a prior stage's
- * snapshot carried but this one doesn't must be cleared, not left behind: a
- * plain `cp` only overwrites same-named files and would leave the prior
- * stage's agents or output styles readable by a session whose recorded corpus
- * says it never had them.
- */
-async function replaceLayoutDirectory(
-	source: string,
-	target: string,
-): Promise<void> {
-	await rm(target, { recursive: true, force: true });
-	await cp(source, target, { recursive: true });
+	return captureStageCorpus(skill, instructions, [
+		{ kind: "directory", root: destination },
+	]);
 }
 
 /**
@@ -446,26 +473,27 @@ export async function installStageCorpusSnapshot(
 	targetDirectory: string,
 ): Promise<void> {
 	await refuseUncontainedEntries(snapshotDirectory);
-
-	const targetLayout = join(targetDirectory, ".claude");
-	await mkdir(targetLayout, { recursive: true });
-	await cp(
-		join(snapshotDirectory, "CLAUDE.md"),
-		join(targetLayout, "CLAUDE.md"),
-	);
-	await replaceLayoutDirectory(
-		join(snapshotDirectory, "skills"),
-		join(targetLayout, "skills"),
-	);
-
-	for (const kind of LAYOUT_DIRECTORY_KINDS) {
-		const source = join(snapshotDirectory, kind);
-		const target = join(targetLayout, kind);
-		const sourceStats = await statIfExists(source);
-		await (sourceStats?.isDirectory() === true
-			? replaceLayoutDirectory(source, target)
-			: rm(target, { recursive: true, force: true }));
+	const source = { kind: "directory", root: snapshotDirectory } as const;
+	const directories: CorpusDirectory[] = [];
+	for (const kind of CORPUS_LAYOUT_DIRECTORIES) {
+		const directory = await resolveLayoutDirectory(kind, [source]);
+		if (directory !== undefined) {
+			directories.push(directory);
+		}
 	}
+
+	const files = await captureDirectories(directories);
+	const instructions = await readCorpusInstructions(source);
+	const destination = join(targetDirectory, ".claude");
+
+	await mkdir(destination, { recursive: true });
+
+	// Each stage replaces the installed layout, including kinds it no longer has.
+	for (const kind of [...CORPUS_LAYOUT_DIRECTORIES, "CLAUDE.md"]) {
+		await rm(join(destination, kind), { recursive: true, force: true });
+	}
+
+	await copyCorpusFiles({ directories, files, instructions, destination });
 }
 
 /**

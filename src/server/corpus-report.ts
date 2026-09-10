@@ -199,7 +199,7 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 		}
 		try {
 			const walked = await walkDirectory(absolute, directory, {
-				rootMayBeALink: source.kind === "live",
+				source,
 			});
 			if (walked.refusals.length > 0) {
 				refusals.push(

@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "./corpus-file";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -38,7 +39,7 @@ export type ReplayDependencyOverride = (
 
 export interface ReplayConfirmationInputs {
 	readonly paths: BenchmarkRunPaths;
-	readonly corpusRoots: readonly string[];
+	readonly corpusRoots: readonly [CorpusRoot, ...CorpusRoot[]];
 }
 
 export type ReplayConfirmationRequestOverride = Partial<
@@ -59,7 +60,7 @@ export class ReplayConfirmationHarness {
 	public readonly corpusCaptures: {
 		readonly skill: string;
 		readonly instructions: string;
-		readonly roots: readonly string[];
+		readonly roots: readonly CorpusRoot[];
 	}[] = [];
 	public readonly settingSources: (string | undefined)[] = [];
 	public readonly settingsOverlays: (string | undefined)[] = [];
@@ -210,6 +211,7 @@ export class ReplayConfirmationHarness {
 		const { paths, corpusRoots } = inputs;
 		const { reps = 3 } = requestOverride;
 		const request: ReplayConfirmationRequest = {
+			corpusSource: corpusRoots[0],
 			paths,
 			stage: "discuss",
 			instructions: "Frozen instructions\n",

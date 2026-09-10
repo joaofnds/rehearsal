@@ -229,9 +229,9 @@ authentication and does not explicitly restrict its bind address to loopback,
 so do not expose its port as a public service.
 
 For linked instruction files, configure the server's shell using
-[live-corpus setup](#configure-a-linked-live-corpus). Use trusted live layout
-roots: the corpus API can still follow linked directory roots beyond the
-configured file-read boundary.
+[live-corpus setup](#configure-a-linked-live-corpus). A layout directory or
+entry outside the permitted extent produces a named refusal and withholds the
+corpus digest. Healthy layout directories remain visible.
 
 See [current UI coverage](status.md#browser-ui) for available routes and planned
 controls. An empty run-history page is expected in a fresh clone.

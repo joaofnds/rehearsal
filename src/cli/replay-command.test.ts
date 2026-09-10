@@ -279,6 +279,30 @@ describe(runReplayCommand.name, () => {
 });
 
 describe(replayCorpus.name, () => {
+	it("retains the captured live source alongside its instructions", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-live-source-"));
+		const source = {
+			kind: "live",
+			root,
+			backingRoot: join(root, "backing"),
+		} as const;
+		await Bun.write(join(root, "CLAUDE.md"), "captured instructions\n");
+
+		try {
+			const corpus = await replayCorpus(undefined, () =>
+				Promise.resolve(source),
+			);
+
+			expect(corpus).toEqual({
+				instructions: "captured instructions\n",
+				source,
+				settingSources: undefined,
+			});
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("classifies invalid live corpus configuration as a refused precondition", async () => {
 		const failure = await failureOf(
 			replayCorpus(undefined, () =>
@@ -296,8 +320,18 @@ describe(replayCorpusRoots.name, () => {
 		const manifestFile = await writeManifestFor("any-name-corpus-roots");
 
 		try {
-			expect(await replayCorpusRoots(manifestFile)).toEqual(
-				corpusLayoutRoots("/tmp/target"),
+			expect(
+				await replayCorpusRoots(manifestFile, {
+					kind: "live",
+					root: "/live",
+					backingRoot: "/backing",
+				}),
+			).toEqual(
+				corpusLayoutRoots("/tmp/target", {
+					kind: "live",
+					root: "/live",
+					backingRoot: "/backing",
+				}),
 			);
 		} finally {
 			await rm(manifestFile, { force: true });

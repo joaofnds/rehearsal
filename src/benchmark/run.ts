@@ -20,7 +20,7 @@ import {
 	initialCheckpointInputs,
 	recordCheckpoint,
 	resolveSkillDirectory,
-	corpusLayoutRoots,
+	stageCorpusRoots,
 } from "./checkpoint";
 import {
 	captureBaselineContext,
@@ -34,7 +34,8 @@ import type { BenchmarkCase } from "./case";
 import type { BenchmarkConfig, Effort, WorkflowStage } from "./config";
 import { CONTROL_DIR } from "./config";
 import { RefusedPreconditionError } from "./exit-codes";
-import { liveCorpusInstructions } from "./corpus-file";
+import type { CorpusRoot } from "./corpus-file";
+import { liveCorpusSource, readCorpusInstructions } from "./corpus-file";
 import type {
 	CalibrationResult,
 	ContextFile,
@@ -458,6 +459,7 @@ export interface StageDependencies extends StageSessionDependencies {
 }
 
 export interface StageContext {
+	readonly corpusSource: CorpusRoot;
 	readonly targetDir: string;
 	readonly initialLineage: string;
 	readonly model: string;
@@ -514,7 +516,7 @@ export interface StageSessionEnvironment {
 	readonly taskSha: string;
 	readonly baselineSha: string;
 	readonly commitSubjectPattern?: string | undefined;
-	readonly corpusRoots: readonly string[];
+	readonly corpusRoots: readonly CorpusRoot[];
 	readonly settingSources?: "project" | undefined;
 	readonly settingsOverlay?: string | undefined;
 	readonly runEvents?: RunEventRecorder | undefined;
@@ -676,7 +678,7 @@ export async function runGradedStages(
 	// resolved too, because every stage's corpus hashes them. Hashing waits
 	// for each stage's start: the lineage must record the corpus that fed the
 	// stage, and a skill can change while earlier stages run.
-	const corpusRoots = corpusLayoutRoots(context.targetDir);
+	const corpusRoots = stageCorpusRoots(context.corpusSource, context.targetDir);
 	for (const skill of [
 		...GLOBAL_SKILLS,
 		...context.pipeline.stages.map(({ skill: name }) => name),
@@ -922,8 +924,9 @@ export async function runBenchmark(
 				pipeline.target,
 			);
 		const { task, productBrief, finalRubric: rubric } = benchmarkCase;
+		const corpusSource = liveCorpusSource();
 		const [instructions, claudeVersion] = await Promise.all([
-			liveCorpusInstructions(),
+			readCorpusInstructions(corpusSource),
 			runCommand(["claude", "--version"], CONTROL_DIR),
 		]);
 		const rubricIds = validateRubricDefinition(rubric);
@@ -989,6 +992,7 @@ export async function runBenchmark(
 				},
 				{
 					targetDir: source.root,
+					corpusSource,
 					initialLineage: initialCheckpoint.lineage,
 					model: config.model,
 					effort: config.effort,

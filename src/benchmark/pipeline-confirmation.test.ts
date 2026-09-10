@@ -1,5 +1,8 @@
+import { failureOf } from "#cli/cli-test-support";
+import { confirmationGroupPaths } from "./run-layout";
+import { SymlinkedEntryError } from "./file-presence";
 import { describe, expect, it } from "bun:test";
-import { stat } from "node:fs/promises";
+import { readdir, stat, symlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import type { ConfirmationRepRecord } from "./confirmation-record";
@@ -33,6 +36,23 @@ function parseConfirmationRepRecord(text: string): ConfirmationRepRecord {
 }
 
 describe(runPipelineConfirmation.name, () => {
+	it("refuses a foreign layout before creating a repetition", async () => {
+		const harness = await PipelineConfirmationHarness.setup(testResources);
+		const outside = join(harness.runsDirectory, "foreign");
+		await Bun.write(join(outside, "private.md"), "foreign bytes\n");
+		await symlink(outside, join(harness.corpusRoot, "agents"));
+
+		const failure = await failureOf(harness.run({}));
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(harness.retained.size).toBe(0);
+		const group = confirmationGroupPaths(
+			harness.runsDirectory,
+			"pipeline-confirmation-1",
+		);
+		expect(await readdir(group.directory)).not.toContain("reps");
+	});
+
 	it("records the resolved Judge model in pipeline confirmation evidence", async () => {
 		const harness = await PipelineConfirmationHarness.setup(testResources);
 		const config = parseArgs(

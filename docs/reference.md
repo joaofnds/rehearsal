@@ -190,22 +190,30 @@ permission. Rehearsal checks the backing tree only when a file resolves outside
 the live install, so files stored directly under `~/.claude` remain usable when
 the optional tree is missing or unreadable.
 
-Live instruction reads, declared-file hashes, and session confirmation copies
-refuse a file whose real path leaves both permitted trees. Records retain the
-file's path under `~/.claude`; the real path is used only for authorization. The
-corpus API reports an offending instruction as a refusal, omits its file and the
-whole-corpus digest, and continues to report healthy entries.
+Live instruction reads, declared-file hashes, stage capture, and corpus layout
+reports refuse paths whose real paths leave both permitted trees. Checks cover
+each selected layout directory and its entries, including links through a parent
+directory. Allowed links may cross layout directories within the permitted
+extent. Records retain layout paths and content hashes; real paths authorize
+access without changing file identity.
 
-Whole-layout enumeration for the corpus API, stage capture, and `stale` can
-still follow a linked directory root beyond the live extent. Live layout roots
-must remain trusted.
+The corpus API returns HTTP 200 with a named refusal for an escaping layout,
+omits that directory's files and the whole-corpus digest, and retains healthy
+directories. Refusals name the corpus path without exposing the outside target
+or its descendants. Stage capture fails before the affected workflow runs;
+checkpoint staleness records the refusal as a cause.
 
 A declared directory source must exist and contain at least one recognized
 layout entry. Rehearsal consumes a directory; rendering a revision from a
-dotfiles repository is external work. Directory-backed session snapshots
-reject declared inputs resolving outside their root. Stage corpus capture and
-`stale` do not yet enforce that boundary uniformly for linked directory roots.
-Corpus sources must be trusted inputs.
+dotfiles repository is external work. Directory sources and frozen stage
+snapshots permit paths within their own root only. Project-level stage inputs
+keep that same boundary even when a live source supplies a fallback. The first
+selected directory shadows lower-priority roots; a refused directory cannot
+fall through to a different source.
+
+These checks do not constrain hard-linked data, make provider execution a
+filesystem sandbox, or prevent a concurrent process from replacing a link
+between its check and read. Corpus sources remain trusted experimental inputs.
 
 | Mode                                | Live corpus                                           | Directory supplied with `--corpus`                                                 |
 | ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -229,13 +237,16 @@ Only a declared output style is selected; an unrelated style in the source does
 not become the measured style.
 
 Stage snapshots include global instructions, the stage's skill, and available
-agents, output styles, and rulebook. The additional global-skills list is
-currently empty. Explicit-directory replay and stage/pipeline confirmation install snapshots
-under the worktree's `.claude/`, preserving its root project instructions, and
-use project settings sources. Plain live debug replay leaves `corpusDirectory`
-and settings sources unset and does not install a snapshot. It uses the live
-agent environment, as a live debug pipeline does. Consequently, corpus hashes alone do
-not establish equivalence between all ambient hooks, memory, and MCP behavior.
+agents, output styles, and rulebook. Snapshotting validates selected inputs
+before copying their files, and copies allowed links as ordinary files so the
+snapshot remains usable after the original trees change or disappear. The
+additional global-skills list is currently empty. Explicit-directory replay and
+stage/pipeline confirmation install snapshots under the worktree's `.claude/`,
+preserving its root project instructions, and use project settings sources.
+Plain live debug replay leaves settings sources unset and does not install a
+snapshot. It uses the live agent environment, as a live debug pipeline does.
+Consequently, corpus hashes alone do not establish equivalence between all
+ambient hooks, memory, and MCP behavior.
 
 ## Pipeline execution and grading
 

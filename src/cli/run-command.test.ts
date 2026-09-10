@@ -572,6 +572,7 @@ describe(buildConfirmationRequest.name, () => {
 		};
 
 		const request = buildConfirmationRequest({
+			corpusSource: { kind: "live", root: "/live", backingRoot: "/backing" },
 			benchmarkCase: followUp,
 			config: {
 				...parseArgs(
@@ -605,6 +606,7 @@ describe(buildConfirmationRequest.name, () => {
 
 	it("searches the target's corpus layout, not the control repository's", () => {
 		const request = buildConfirmationRequest({
+			corpusSource: { kind: "live", root: "/live", backingRoot: "/backing" },
 			benchmarkCase: auditLogCase,
 			config: parseArgs(
 				args,
@@ -626,7 +628,13 @@ describe(buildConfirmationRequest.name, () => {
 			loadedSettings,
 		});
 
-		expect(request.corpusRoots).toEqual(corpusLayoutRoots("/target"));
+		expect(request.corpusRoots).toEqual(
+			corpusLayoutRoots("/target", {
+				kind: "live",
+				root: "/live",
+				backingRoot: "/backing",
+			}),
+		);
 	});
 
 	it("carries the loaded settings file through to the confirmation request", () => {
@@ -636,6 +644,7 @@ describe(buildConfirmationRequest.name, () => {
 		};
 
 		const request = buildConfirmationRequest({
+			corpusSource: { kind: "live", root: "/live", backingRoot: "/backing" },
 			benchmarkCase: auditLogCase,
 			config: parseArgs(
 				args,

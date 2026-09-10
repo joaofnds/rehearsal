@@ -90,6 +90,50 @@ describe(staleCheckpoints.name, () => {
 		expect(stale).toEqual([]);
 	});
 
+	it("keeps a checkpoint fresh with linked files in the captured live backing tree", async () => {
+		const fixture = await writtenFixture();
+		const root = await corpusDirectory("build skill\n");
+		const backingRoot = await temporaryDirectory("rehearsal-stale-backing-");
+		await Bun.write(join(backingRoot, "reviewer.md"), "trusted reviewer\n");
+		await symlink(backingRoot, join(root, "agents"));
+		const source = { kind: "live", root, backingRoot } as const;
+		await fixture.recordCorpusFrom(source);
+
+		const stale = await staleCheckpoints(fixture.runsDirectory, source);
+
+		expect(stale).toEqual([]);
+	});
+
+	it("reports a refused layout root as the checkpoint's cause", async () => {
+		const fixture = await writtenFixture();
+		const root = await corpusDirectory("build skill\n");
+		await fixture.recordCorpusFrom(directorySource(root));
+		const outside = await temporaryDirectory("rehearsal-stale-foreign-");
+		await Bun.write(join(outside, "private.md"), "foreign bytes\n");
+		await symlink(outside, join(root, "agents"));
+
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(root),
+		);
+
+		expect(stale).toEqual([
+			{
+				id: `checkpoint:${fixture.replayableRun}/discuss`,
+				causes: [
+					"agents resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+				],
+			},
+			{
+				id: `checkpoint:${fixture.replayableRun}/build`,
+				causes: [
+					"upstream stage discuss is stale",
+					"agents resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+				],
+			},
+		]);
+	});
+
 	describe("when no corpus is named, which is the live install", () => {
 		it("answers over a runs directory holding no run, reaching no skill", async () => {
 			const runsDirectory = await temporaryDirectory("rehearsal-stale-live-");
@@ -124,7 +168,7 @@ describe(staleCheckpoints.name, () => {
 			const corpus = await corpusDirectory("build skill\n");
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			await symlink(
-				join(corpus, "CLAUDE.md"),
+				join(await corpusDirectory("foreign skill\n"), "CLAUDE.md"),
 				join(corpus, "skills", "build", "escape.md"),
 			);
 
@@ -144,7 +188,7 @@ describe(staleCheckpoints.name, () => {
 			const corpus = await corpusDirectory("build skill\n");
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			await symlink(
-				join(corpus, "CLAUDE.md"),
+				join(await corpusDirectory("foreign skill\n"), "CLAUDE.md"),
 				join(corpus, "skills", "build", "escape.md"),
 			);
 
@@ -163,7 +207,7 @@ describe(staleCheckpoints.name, () => {
 			const corpus = await corpusDirectory("build skill\n");
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			await symlink(
-				join(corpus, "CLAUDE.md"),
+				join(await corpusDirectory("foreign skill\n"), "CLAUDE.md"),
 				join(corpus, "skills", "build", "escape.md"),
 			);
 

@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "./corpus-file";
 import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -62,7 +63,7 @@ interface FrozenReplayInputs {
 export interface ReplayConfirmationRequest extends ReplayRequest {
 	readonly groupId: string;
 	readonly reps: number;
-	readonly corpusRoots: readonly string[];
+	readonly corpusRoots: readonly CorpusRoot[];
 	readonly projectedCost: ConfirmationCostProjection;
 	readonly approvalMethod: "interactive" | "yes";
 	readonly now?: (() => number) | undefined;
@@ -491,7 +492,9 @@ async function runReplayConfirmationBody(
 						taskSha: baseSha,
 						baselineSha: baseSha,
 						commitSubjectPattern: frozen.manifest.pipeline.commitSubjectPattern,
-						corpusRoots: [join(plan.worktreePath, ".claude")],
+						corpusRoots: [
+							{ kind: "directory", root: join(plan.worktreePath, ".claude") },
+						],
 						settingSources: "project",
 						settingsOverlay: request.loadedSettings?.json,
 					},

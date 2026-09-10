@@ -1,10 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { z } from "zod";
-import { recordCheckpoint } from "./checkpoint";
+import { SymlinkedEntryError } from "./file-presence";
+import {
+	captureStageCorpus,
+	resolveSkillDirectory,
+	recordCheckpoint,
+} from "./checkpoint";
 import { runChecks } from "./checks";
 import { CommandError, runCommand } from "./command";
 import { parseArgs } from "./config";
@@ -540,6 +545,7 @@ describe(runGradedStages.name, () => {
 
 		return {
 			targetDir: stageDirectory,
+			corpusSource: { kind: "directory", root: stageDirectory },
 			initialLineage: "initial-lineage",
 			model: "sonnet",
 			judgeModel: "sonnet",
@@ -1333,6 +1339,27 @@ describe(runGradedStages.name, () => {
 		expect(runGradedStages(missing, await stageContext())).rejects.toThrow(
 			"build skill is not installed",
 		);
+		expect(executed).toEqual([]);
+	});
+
+	it("refuses a foreign layout before invoking the affected workflow", async () => {
+		const { dependencies, executed } = fakeStageDependencies();
+		const context = await stageContext();
+		const root = join(context.targetDir, "corpus");
+		await Bun.write(join(root, "skills", "shape", "SKILL.md"), "shape\n");
+		await Bun.write(join(root, "skills", "build", "SKILL.md"), "build\n");
+		const outside = join(context.targetDir, "foreign");
+		await Bun.write(join(outside, "private.md"), "foreign bytes\n");
+		await symlink(outside, join(root, "agents"));
+
+		const failure = await failureOf(
+			runGradedStages(
+				{ ...dependencies, captureStageCorpus, resolveSkillDirectory },
+				{ ...context, corpusSource: { kind: "directory", root } },
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
 		expect(executed).toEqual([]);
 	});
 

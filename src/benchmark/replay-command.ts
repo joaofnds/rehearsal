@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "./corpus-file";
 import type { ConfirmationConfig } from "./config";
 import { projectConfirmationCost, runRequestedExecution } from "./confirmation";
 import type { ReplayRequest } from "./replay";
@@ -20,7 +21,7 @@ export interface ReplayStageExecutionDependencies<
 		request: ReplayConfirmationRequest,
 	) => Promise<ConfirmationEvidence>;
 	readonly groupId: () => string;
-	readonly corpusRoots: readonly string[];
+	readonly corpusRoots: readonly CorpusRoot[];
 }
 
 export function executeReplayStage<DebugEvidence, ConfirmationEvidence>(

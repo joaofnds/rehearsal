@@ -80,7 +80,7 @@ export interface CurrentSessionKnobs {
 async function hashedOrRefused(
 	skill: string,
 	instructions: string,
-	roots: readonly string[],
+	roots: readonly CorpusRoot[],
 ): Promise<StageCorpus> {
 	try {
 		return hashedCorpus(await captureStageCorpus(skill, instructions, roots));
@@ -109,7 +109,7 @@ async function currentStageCorpus(
 	instructions: string,
 ): Promise<ReadonlyMap<string, StageCorpus>> {
 	const corpus = new Map<string, StageCorpus>();
-	const roots = [source.root];
+	const roots = [source];
 
 	for (const record of chain) {
 		if (record.stage === INITIAL_CHECKPOINT_STAGE) {

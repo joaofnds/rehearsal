@@ -1,5 +1,7 @@
+import { failureOf } from "#cli/cli-test-support";
+import { SymlinkedEntryError } from "./file-presence";
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readdir, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
@@ -48,6 +50,27 @@ function parseConfirmationRepRecord(text: string): ConfirmationRepRecord {
 }
 
 describe(runReplayConfirmation.name, () => {
+	it("refuses a foreign layout before creating a replay repetition", async () => {
+		const harness = new ReplayConfirmationHarness(testResources);
+		const run = await harness.recordedRun();
+		const root = join(run.paths.runsDirectory, "corpus");
+		await Bun.write(join(root, "skills", "discuss", "SKILL.md"), "discuss\n");
+		const outside = join(run.paths.runsDirectory, "foreign");
+		await Bun.write(join(outside, "private.md"), "foreign bytes\n");
+		await symlink(outside, join(root, "agents"));
+
+		const failure = await failureOf(
+			harness.runConfirmation(
+				{ paths: run.paths, corpusRoots: [{ kind: "directory", root }] },
+				{},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(harness.worktrees).toEqual([]);
+		expect(harness.stageDirs).toEqual([]);
+	});
+
 	it("reports agreement for the resolved Judge model", async () => {
 		const harness = new ReplayConfirmationHarness(testResources);
 		const run = await harness.recordedRun();
@@ -114,7 +137,10 @@ describe(runReplayConfirmation.name, () => {
 		);
 
 		const outcome = await harness.runConfirmation(
-			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: run.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{ model: config.model, judgeModel: config.judgeModel },
 		);
 		const group = parseConfirmationGroupRecord(
@@ -161,7 +187,10 @@ describe(runReplayConfirmation.name, () => {
 		}
 
 		await fake.runConfirmation(
-			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: run.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{ stage: "build", reps: 2 },
 		);
 
@@ -187,7 +216,10 @@ describe(runReplayConfirmation.name, () => {
 		);
 
 		await fake.runConfirmation(
-			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: run.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{
 				loadedSettings: {
 					json: '{"disableAllHooks":true}',
@@ -322,7 +354,7 @@ describe(runReplayConfirmation.name, () => {
 
 		const fake = new ReplayConfirmationHarness(testResources);
 		const execution = fake.runConfirmation(
-			{ paths, corpusRoots: [corpusRoot] },
+			{ paths, corpusRoots: [{ kind: "directory", root: corpusRoot }] },
 			{ effort: "high", judgeEffort: "high" },
 			(defaults) => ({
 				...defaults,
@@ -549,7 +581,10 @@ describe(runReplayConfirmation.name, () => {
 		}
 
 		const outcome = await fake.runConfirmation(
-			{ paths: recorded.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: recorded.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{},
 			(dependencies) => ({
 				...dependencies,
@@ -621,7 +656,10 @@ describe(runReplayConfirmation.name, () => {
 		}
 
 		const outcome = await fake.runConfirmation(
-			{ paths: recorded.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: recorded.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{ groupId: "judge-execution-evidence", reps: 2 },
 			(dependencies) => ({
 				...dependencies,
@@ -745,7 +783,7 @@ describe(runReplayConfirmation.name, () => {
 		const fake = new ReplayConfirmationHarness(testResources);
 
 		const outcome = await fake.runConfirmation(
-			{ paths, corpusRoots: [corpusRoot] },
+			{ paths, corpusRoots: [{ kind: "directory", root: corpusRoot }] },
 			{ groupId: "confirmation-cleanup", reps: 2 },
 			(defaults) => ({
 				...defaults,
@@ -977,7 +1015,7 @@ describe(runReplayConfirmation.name, () => {
 		const worktreeCreated: string[] = [];
 		const fake = new ReplayConfirmationHarness(testResources);
 		const execution = fake.runConfirmation(
-			{ paths, corpusRoots: [corpusRoot] },
+			{ paths, corpusRoots: [{ kind: "directory", root: corpusRoot }] },
 			{ groupId: "confirmation-failures", reps: 4 },
 			(defaults) => ({
 				...defaults,
@@ -1147,7 +1185,10 @@ describe(runReplayConfirmation.name, () => {
 		);
 		const groupId = "confirmation-clock-failure";
 		const execution = harness.runConfirmation(
-			{ paths: run.paths, corpusRoots: [corpusRoot] },
+			{
+				paths: run.paths,
+				corpusRoots: [{ kind: "directory", root: corpusRoot }],
+			},
 			{
 				groupId,
 				now: () => {

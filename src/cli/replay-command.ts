@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "#benchmark/corpus-file";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
@@ -13,7 +14,7 @@ import {
 import {
 	captureStageCorpus,
 	materializeCheckpoint,
-	corpusLayoutRoots,
+	stageCorpusRoots,
 	installStageCorpusSnapshot,
 } from "#benchmark/checkpoint";
 import {
@@ -205,10 +206,11 @@ export async function replaySettingsFile(
  */
 export async function replayCorpusRoots(
 	manifestFile: string,
-): Promise<readonly string[]> {
+	source: CorpusRoot,
+): Promise<readonly CorpusRoot[]> {
 	const manifest = await loadRunManifest(manifestFile);
 
-	return corpusLayoutRoots(manifest.sourceRoot);
+	return stageCorpusRoots(source, manifest.sourceRoot);
 }
 
 async function reportOutcome(
@@ -314,9 +316,9 @@ export async function executeReplay(
 		paths,
 		stage: config.stage,
 		instructions: corpus.instructions,
+		corpusSource: corpus.source,
 		settingSources: corpus.settingSources,
 		loadedSettings,
-		corpusDirectory: corpus.directory,
 		controlSha: await currentControlSha(),
 		model: config.model,
 		effort: config.effort,
@@ -345,7 +347,7 @@ export async function executeReplay(
 			runConfirmed: (confirmationRequest) =>
 				runReplayConfirmation(replayDependencies, confirmationRequest),
 			groupId: randomUUID,
-			corpusRoots: await replayCorpusRoots(paths.manifestFile),
+			corpusRoots: await replayCorpusRoots(paths.manifestFile, corpus.source),
 		});
 	} finally {
 		questioner.close();
@@ -363,8 +365,8 @@ export async function replayCorpus(
 	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
 ): Promise<{
 	readonly instructions: string;
+	readonly source: CorpusRoot;
 	readonly settingSources: "project" | undefined;
-	readonly directory: string | undefined;
 }> {
 	try {
 		const source = await resolveCorpus(corpus);
@@ -372,15 +374,15 @@ export async function replayCorpus(
 		if (corpus === undefined) {
 			return {
 				instructions: await readCorpusInstructions(source),
+				source,
 				settingSources: undefined,
-				directory: undefined,
 			};
 		}
 
 		return {
 			instructions: await readCorpusInstructions(source),
+			source,
 			settingSources: "project",
-			directory: source.root,
 		};
 	} catch (error) {
 		if (error instanceof Error) {

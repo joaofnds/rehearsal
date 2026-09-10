@@ -14,6 +14,7 @@ describe(executeReplayStage.name, () => {
 			paths: benchmarkRunPaths("/runs", "run"),
 			stage: "build",
 			instructions: "instructions",
+			corpusSource: { kind: "directory", root: "/corpus" },
 			controlSha: "control-sha",
 			model: "sonnet",
 			judgeModel: "opus",
@@ -39,7 +40,7 @@ describe(executeReplayStage.name, () => {
 					throw new Error("confirmation must not run");
 				},
 				groupId: () => "confirmation-1",
-				corpusRoots: ["/corpus"],
+				corpusRoots: [{ kind: "directory", root: "/corpus" }],
 			},
 		);
 
@@ -56,6 +57,7 @@ describe(executeReplayStage.name, () => {
 			paths: benchmarkRunPaths("/runs", "run"),
 			stage: "build",
 			instructions: "instructions",
+			corpusSource: { kind: "directory", root: "/corpus" },
 			controlSha: "control-sha",
 			model: "sonnet",
 			effort: "high",
@@ -87,7 +89,7 @@ describe(executeReplayStage.name, () => {
 					return Promise.resolve({ group: request.groupId });
 				},
 				groupId: () => "confirmation-1",
-				corpusRoots: ["/corpus"],
+				corpusRoots: [{ kind: "directory", root: "/corpus" }],
 			},
 		);
 
@@ -113,7 +115,7 @@ describe(executeReplayStage.name, () => {
 				...replayRequest,
 				groupId: "confirmation-1",
 				reps: 3,
-				corpusRoots: ["/corpus"],
+				corpusRoots: [{ kind: "directory", root: "/corpus" }],
 				projectedCost: {
 					reps: 3,
 					perRepMaximumUsd: 20,

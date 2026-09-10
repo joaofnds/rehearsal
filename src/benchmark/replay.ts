@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "./corpus-file";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,7 +19,7 @@ import {
 	INITIAL_CHECKPOINT_STAGE,
 	lineageKey,
 	readCheckpointRecord,
-	corpusLayoutRoots,
+	stageCorpusRoots,
 } from "./checkpoint";
 import type { captureBaselineContext, captureFileHashes } from "./checks";
 import type { Effort } from "./config";
@@ -139,6 +140,7 @@ export interface ReplayDependencies {
 }
 
 export interface ReplayRequest {
+	readonly corpusSource: CorpusRoot;
 	readonly paths: BenchmarkRunPaths;
 	readonly stage: string;
 	readonly instructions: string;
@@ -150,7 +152,6 @@ export interface ReplayRequest {
 	readonly sessionBudgetUsd: number;
 	readonly settingSources?: "project" | undefined;
 	readonly loadedSettings?: LoadedStageSettings | undefined;
-	readonly corpusDirectory?: string | undefined;
 }
 
 export interface ReplayRecord {
@@ -319,7 +320,7 @@ async function currentChainCorpus(
 	plan: ReplayPlan,
 	manifest: RunManifest,
 	instructions: string,
-	roots: readonly string[],
+	roots: readonly CorpusRoot[],
 	captureStageCorpus: StageSessionDependencies["captureStageCorpus"],
 ): Promise<Map<string, StageCorpus>> {
 	const corpus = new Map<string, StageCorpus>();
@@ -375,12 +376,18 @@ export async function runReplay(
 			request.paths.checkpointDirectory(plan.consumed.stage),
 			worktreeDir,
 		);
-		if (request.corpusDirectory !== undefined) {
+		if (request.corpusSource.kind === "directory") {
 			await dependencies.installStageCorpusSnapshot(
-				request.corpusDirectory,
+				request.corpusSource.root,
 				worktreeDir,
 			);
 		}
+		const corpusRoots = stageCorpusRoots(
+			request.corpusSource.kind === "directory"
+				? { kind: "directory", root: join(worktreeDir, ".claude") }
+				: request.corpusSource,
+			worktreeDir,
+		);
 		const baseSha = await dependencies.currentSha(worktreeDir);
 		if (plan.definition.kind === "delivery") {
 			await dependencies.installDependencies(worktreeDir);
@@ -395,7 +402,7 @@ export async function runReplay(
 				plan,
 				manifest,
 				request.instructions,
-				corpusLayoutRoots(worktreeDir),
+				corpusRoots,
 				dependencies.stageSession.captureStageCorpus,
 			),
 			{
@@ -443,7 +450,7 @@ export async function runReplay(
 				taskSha: baseSha,
 				baselineSha: baseSha,
 				commitSubjectPattern: manifest.pipeline.commitSubjectPattern,
-				corpusRoots: corpusLayoutRoots(worktreeDir),
+				corpusRoots,
 				settingSources: request.settingSources,
 				settingsOverlay: request.loadedSettings?.json,
 			},

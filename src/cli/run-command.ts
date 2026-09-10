@@ -36,7 +36,11 @@ import {
 	parseCaseId,
 	parseSessionArgs,
 } from "#benchmark/config";
-import { liveCorpusInstructions } from "#benchmark/corpus-file";
+import type { LiveCorpusRoot } from "#benchmark/corpus-file";
+import {
+	liveCorpusSource,
+	readCorpusInstructions,
+} from "#benchmark/corpus-file";
 import { CorpusSourceError } from "#benchmark/corpus-source";
 import { runJudge, validateRubricDefinition } from "#benchmark/judge";
 import type {
@@ -303,6 +307,7 @@ interface ConfirmationApproval {
 }
 
 export interface ConfirmationRequestInputs {
+	readonly corpusSource: LiveCorpusRoot;
 	readonly benchmarkCase: BenchmarkCase;
 	readonly config: BenchmarkConfig;
 	readonly confirmation: ConfirmationApproval;
@@ -338,7 +343,7 @@ export function buildConfirmationRequest(
 		instructions: inputs.instructions,
 		finalRubric: benchmarkCase.finalRubric,
 		stageRubrics: benchmarkCase.stageRubrics,
-		corpusRoots: corpusLayoutRoots(inputs.source.root),
+		corpusRoots: corpusLayoutRoots(inputs.source.root, inputs.corpusSource),
 		model: config.model,
 		effort: config.effort,
 		judgeModel: config.judgeModel,
@@ -354,10 +359,11 @@ async function confirmRun(
 	confirmation: ConfirmationApproval,
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
+	const corpusSource = liveCorpusSource();
 	const [controlSha, source, instructions, loadedSettings] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
-		liveCorpusInstructions(),
+		readCorpusInstructions(corpusSource),
 		loadStageSettings(benchmarkCase.settingsFilePath),
 	]);
 	validateRubricDefinition(benchmarkCase.finalRubric);
@@ -410,6 +416,7 @@ async function confirmRun(
 			benchmarkCase,
 			config,
 			confirmation,
+			corpusSource,
 			controlSha,
 			source,
 			instructions,

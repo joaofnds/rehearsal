@@ -287,7 +287,7 @@ export class PipelineConfirmationHarness {
 					rubric: CONFIRMATION_STAGE_RUBRIC,
 				},
 			},
-			corpusRoots: [this.corpusRoot],
+			corpusRoots: [{ kind: "directory", root: this.corpusRoot }],
 			model: "sonnet",
 			effort: "high",
 			judgeModel: "opus",

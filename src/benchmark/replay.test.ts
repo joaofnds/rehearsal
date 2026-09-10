@@ -1,12 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadAttempts, presentAttempts } from "./attempts";
 import { assertPlanningStageCompleted } from "./backlog";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import {
+	captureStageCorpus,
+	installStageCorpusSnapshot,
 	hashWorkflowState,
 	initialCheckpointInputs,
 	lineageKey,
@@ -358,6 +360,7 @@ describe(runReplay.name, () => {
 			paths: run.paths,
 			stage,
 			instructions: "Current instructions",
+			corpusSource: { kind: "live", root: "/live", backingRoot: "/backing" },
 			controlSha: "control-sha",
 			model: "sonnet",
 			judgeModel: "opus",
@@ -412,7 +415,7 @@ describe(runReplay.name, () => {
 
 		await runReplay(fake.dependencies, {
 			...request(run, "build"),
-			corpusDirectory: "/frozen/corpus",
+			corpusSource: { kind: "directory", root: "/frozen/corpus" },
 		});
 
 		expect(fake.corpusInstalls).toEqual([
@@ -421,6 +424,40 @@ describe(runReplay.name, () => {
 				targetDirectory: fake.worktrees[0]?.path ?? "",
 			},
 		]);
+	});
+
+	it("replays a linked directory variant with the captured paths and hashes", async () => {
+		const sourceRoot = await mkdtemp(join(tmpdir(), "rehearsal-variant-"));
+		testResources.track(sourceRoot);
+		const instructions = "variant instructions";
+		await Bun.write(join(sourceRoot, "CLAUDE.md"), instructions);
+		for (const skill of ["discuss", "build"]) {
+			await Bun.write(join(sourceRoot, "skills", skill, "SKILL.md"), skill);
+		}
+		await Bun.write(join(sourceRoot, "shared", "review.md"), "variant agent");
+		await symlink(join(sourceRoot, "shared"), join(sourceRoot, "agents"));
+		const source = { kind: "directory", root: sourceRoot } as const;
+		const expected = await captureStageCorpus("build", instructions, [source]);
+		const run = await recordedRun(
+			await captureStageCorpus("discuss", instructions, [source]),
+		);
+		const fake = new ReplayConfirmationHarness(testResources);
+
+		const outcome = await runReplay(
+			{
+				...fake.dependencies,
+				installStageCorpusSnapshot,
+				stageSession: { ...fake.dependencies.stageSession, captureStageCorpus },
+			},
+			{
+				...request(run, "build"),
+				instructions,
+				corpusSource: source,
+			},
+		);
+
+		expect(outcome.record.corpusFiles).toEqual(expected);
+		expect(outcome.record.staleness).toEqual([]);
 	});
 
 	it("leaves setting sources unset when no corpus is given", async () => {
@@ -655,7 +692,13 @@ describe(runReplay.name, () => {
 			({ skill }) => skill === "discuss",
 		);
 		expect(upstream?.instructions).toBe("Current instructions");
-		expect(upstream?.roots).toEqual(corpusLayoutRoots(worktree));
+		expect(upstream?.roots).toEqual(
+			corpusLayoutRoots(worktree, {
+				kind: "live",
+				root: "/live",
+				backingRoot: "/backing",
+			}),
+		);
 	});
 
 	it("records the replay stale and names the changed upstream file", async () => {
@@ -906,6 +949,7 @@ describe(runReplay.name, () => {
 				paths,
 				stage: "discuss",
 				instructions: "Replayed instructions\n",
+				corpusSource: { kind: "live", root: "/live", backingRoot: "/backing" },
 				controlSha: "control-sha",
 				model: "sonnet",
 				judgeModel: "opus",

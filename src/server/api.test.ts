@@ -168,6 +168,38 @@ describe(createApiApp.name, () => {
 	});
 
 	describe("GET /api/corpus", () => {
+		it("refuses an escaping live layout root without revealing its target or descendants", async () => {
+			const corpus = await corpusDirectory();
+			const outside = await emptyDirectory("private-corpus-target-");
+			const backingRoot = await emptyDirectory("rehearsal-backing-");
+			await writeFile(
+				join(outside, "hidden-descendant.md"),
+				"private contents",
+			);
+			await symlink(outside, join(corpus, "agents"));
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: { kind: "live", root: corpus, backingRoot },
+			});
+
+			const response = await app.request("/api/corpus");
+			const text = await response.text();
+
+			expect(response.status).toBe(200);
+			const body = corpusResponseSchema.parse(JSON.parse(text));
+			expect(body.digest).toBeUndefined();
+			expect(body.refusals).toHaveLength(1);
+			expect(body.refusals[0]).toContain("agents");
+			expect(body.files.map(({ path }) => path)).toEqual([
+				"CLAUDE.md",
+				"skills/build/SKILL.md",
+				"skills/discuss/SKILL.md",
+			]);
+			assertDoesNotLeak(text, outside);
+			assertDoesNotLeak(text, "hidden-descendant.md");
+			assertDoesNotLeak(text, "private contents");
+		});
+
 		it("renders the corpus root unredacted, since the operator declared it and the server is theirs", async () => {
 			const corpus = await corpusDirectory();
 			const runsDirectory = await mkdtemp(

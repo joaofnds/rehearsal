@@ -1,3 +1,4 @@
+import type { CorpusRoot } from "./corpus-file";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -130,7 +131,7 @@ export interface PipelineConfirmationRequest {
 	readonly instructions: string;
 	readonly finalRubric: string;
 	readonly stageRubrics: Readonly<Record<string, LoadedStageRubric>>;
-	readonly corpusRoots: readonly string[];
+	readonly corpusRoots: readonly CorpusRoot[];
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly judgeModel: string;
@@ -421,7 +422,9 @@ async function runPipelineRep(
 					taskSha: frozen.taskSha,
 					baselineSha,
 					commitSubjectPattern: request.pipeline.commitSubjectPattern,
-					corpusRoots: [join(plan.worktreePath, ".claude")],
+					corpusRoots: [
+						{ kind: "directory", root: join(plan.worktreePath, ".claude") },
+					],
 					settingSources: "project",
 					settingsOverlay: request.loadedSettings?.json,
 				},

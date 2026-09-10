@@ -9,7 +9,7 @@ import {
 	symlink,
 	writeFile,
 } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile, StageCorpus } from "./checkpoint";
 import {
@@ -30,12 +30,16 @@ import {
 	snapshotStageCorpus,
 	stageCorpusRoots,
 } from "./checkpoint";
-import { liveCorpusRoot } from "./corpus-file";
+import type { CorpusRoot } from "./corpus-file";
 import { SymlinkedEntryError } from "./file-presence";
 import { failureOf } from "#cli/cli-test-support";
 import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
+
+function corpusSources(roots: readonly string[]): readonly CorpusRoot[] {
+	return roots.map((root) => ({ kind: "directory", root }));
+}
 
 describe(lineageKey.name, () => {
 	const base = {
@@ -91,6 +95,28 @@ describe(lineageKey.name, () => {
 });
 
 describe(captureStageCorpus.name, () => {
+	it("refuses a layout root outside the corpus without naming its descendants", async () => {
+		const parent = await mkdtemp(join(tmpdir(), "rehearsal-layout-root-"));
+		testResources.track(parent);
+		const root = join(parent, "corpus");
+		const foreign = join(parent, "private-project");
+		await mkdir(join(root, "skills", "build"), { recursive: true });
+		await mkdir(foreign);
+		await writeFile(join(root, "skills", "build", "SKILL.md"), "build");
+		await writeFile(join(foreign, "secret.md"), "foreign contents");
+		await symlink(foreign, join(root, "agents"));
+
+		const failure = await failureOf(
+			captureStageCorpus("build", "instructions", corpusSources([root])),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("agents");
+		expect(failure.message).not.toContain("private-project");
+		expect(failure.message).not.toContain("secret.md");
+		expect(failure.message).not.toContain("foreign contents");
+	});
+
 	async function corpusRoots(): Promise<[string, string]> {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
 		testResources.track(directory);
@@ -145,7 +171,11 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "discuss", "discuss skill");
 
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+		const corpus = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		expect(corpus.map(({ path }) => path)).toEqual([
 			"CLAUDE.md",
@@ -162,12 +192,16 @@ describe(captureStageCorpus.name, () => {
 			await installSkill(root, "discuss", "discuss skill");
 		}
 
-		const fromTarget = await captureStageCorpus("discuss", "instructions", [
-			targetRoot,
-		]);
-		const fromHome = await captureStageCorpus("discuss", "instructions", [
-			homeRoot,
-		]);
+		const fromTarget = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources([targetRoot]),
+		);
+		const fromHome = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources([homeRoot]),
+		);
 
 		expect(fromTarget).toEqual(fromHome);
 	});
@@ -188,7 +222,7 @@ describe(captureStageCorpus.name, () => {
 		const frozen = await snapshotStageCorpus(
 			"discuss",
 			"instructions",
-			roots,
+			corpusSources(roots),
 			snapshotDirectory,
 		);
 
@@ -201,12 +235,16 @@ describe(captureStageCorpus.name, () => {
 			installStageCorpusSnapshot(snapshotDirectory, secondWorktree),
 		]);
 
-		const first = await captureStageCorpus("discuss", "instructions", [
-			join(firstWorktree, ".claude"),
-		]);
-		const second = await captureStageCorpus("discuss", "instructions", [
-			join(secondWorktree, ".claude"),
-		]);
+		const first = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources([join(firstWorktree, ".claude")]),
+		);
+		const second = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources([join(secondWorktree, ".claude")]),
+		);
 		expect(first).toEqual(frozen);
 		expect(second).toEqual(frozen);
 		expect(
@@ -228,7 +266,7 @@ describe(captureStageCorpus.name, () => {
 		await snapshotStageCorpus(
 			"discuss",
 			"frozen instructions",
-			roots,
+			corpusSources(roots),
 			snapshotDirectory,
 		);
 
@@ -278,7 +316,12 @@ describe(captureStageCorpus.name, () => {
 		await mkdir(worktree, { recursive: true });
 
 		const firstSnapshot = join(parent, "first-snapshot");
-		await snapshotStageCorpus("discuss", "instructions", roots, firstSnapshot);
+		await snapshotStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+			firstSnapshot,
+		);
 		await installStageCorpusSnapshot(firstSnapshot, worktree);
 		expect(
 			await stat(join(worktree, ".claude", "agents", "reviewer.md")),
@@ -286,7 +329,12 @@ describe(captureStageCorpus.name, () => {
 
 		await rm(join(roots[1], "agents"), { recursive: true });
 		const secondSnapshot = join(parent, "second-snapshot");
-		await snapshotStageCorpus("build", "instructions", roots, secondSnapshot);
+		await snapshotStageCorpus(
+			"build",
+			"instructions",
+			corpusSources(roots),
+			secondSnapshot,
+		);
 		await installStageCorpusSnapshot(secondSnapshot, worktree);
 
 		expect(
@@ -300,10 +348,16 @@ describe(captureStageCorpus.name, () => {
 		await installSkill(roots[0], "discuss", "target copy");
 		await installSkill(roots[1], "discuss", "home copy");
 
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
-		const homeOnly = await captureStageCorpus("discuss", "instructions", [
-			roots[1],
-		]);
+		const corpus = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
+		const homeOnly = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources([roots[1]]),
+		);
 
 		expect(corpus).not.toEqual(homeOnly);
 	});
@@ -312,7 +366,7 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 
 		expect(
-			captureStageCorpus("discuss", "instructions", roots),
+			captureStageCorpus("discuss", "instructions", corpusSources(roots)),
 		).rejects.toThrow(/discuss.*not installed/u);
 	});
 
@@ -322,7 +376,11 @@ describe(captureStageCorpus.name, () => {
 		await installAgent(roots[1], "reviewer", "reviewer agent");
 		await installOutputStyle(roots[1], "brief", "brief style");
 
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+		const corpus = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		expect(corpus.map(({ path }) => path)).toEqual([
 			"CLAUDE.md",
@@ -340,7 +398,11 @@ describe(captureStageCorpus.name, () => {
 		await installAgent(roots[1], "reviewer", "user reviewer");
 		await installAgent(roots[1], "other", "user-only agent");
 
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+		const corpus = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		const agentFiles = corpus.filter(({ path }) => path.startsWith("agents/"));
 		expect(agentFiles.map(({ path }) => path)).toEqual(["agents/reviewer.md"]);
@@ -350,10 +412,18 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "discuss", "discuss skill");
 		await installRule(roots[1], "doctrine", "the doctrine");
-		const before = await captureStageCorpus("discuss", "instructions", roots);
+		const before = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		await installRule(roots[1], "doctrine", "the doctrine, revised");
-		const after = await captureStageCorpus("discuss", "instructions", roots);
+		const after = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		expect(before.some(({ path }) => path === "rulebook/doctrine.md")).toBe(
 			true,
@@ -365,7 +435,11 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "discuss", "discuss skill");
 
-		const corpus = await captureStageCorpus("discuss", "instructions", roots);
+		const corpus = await captureStageCorpus(
+			"discuss",
+			"instructions",
+			corpusSources(roots),
+		);
 
 		expect(corpus.some(({ path }) => path.startsWith("agents/"))).toBe(false);
 		expect(corpus.some(({ path }) => path.startsWith("output-styles/"))).toBe(
@@ -991,25 +1065,31 @@ describe(rootLineage.name, () => {
 
 describe(corpusLayoutRoots.name, () => {
 	it("searches the project layout root before the user's", () => {
-		expect(corpusLayoutRoots("/target")).toEqual([
-			"/target/.claude",
-			join(homedir(), ".claude"),
+		const source = {
+			kind: "live",
+			root: "/install",
+			backingRoot: "/backing",
+		} as const;
+
+		expect(corpusLayoutRoots("/target", source)).toEqual([
+			{ kind: "directory", root: "/target/.claude" },
+			source,
 		]);
 	});
 });
 
 describe(stageCorpusRoots.name, () => {
 	it("searches project level before user level for the live install", () => {
-		expect(
-			stageCorpusRoots(
-				{
-					kind: "live",
-					root: liveCorpusRoot(),
-					backingRoot: join(homedir(), ".agents"),
-				},
-				"/target",
-			),
-		).toEqual(corpusLayoutRoots("/target"));
+		const source = {
+			kind: "live",
+			root: "/install",
+			backingRoot: "/backing",
+		} as const;
+
+		expect(stageCorpusRoots(source, "/target")).toEqual([
+			{ kind: "directory", root: "/target/.claude" },
+			source,
+		]);
 	});
 
 	it("searches only the resolved root for a directory corpus", () => {
@@ -1018,7 +1098,7 @@ describe(stageCorpusRoots.name, () => {
 				{ kind: "directory", root: "/variants/brief" },
 				"/target",
 			),
-		).toEqual(["/variants/brief"]);
+		).toEqual([{ kind: "directory", root: "/variants/brief" }]);
 	});
 });
 
