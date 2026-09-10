@@ -126,6 +126,7 @@ function snapshotOf(
 		origin: originOf(source),
 		declaredPaths: [...declaredPaths],
 	};
+
 	if (source.kind === "live") {
 		return {
 			kind: source.kind,

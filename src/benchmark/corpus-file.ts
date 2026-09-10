@@ -15,11 +15,7 @@ export function liveCorpusRoot(): string {
 	return join(homedir(), ".claude");
 }
 
-/**
- * What resolving a layout path needs and nothing more: the root the bytes are
- * under, and whether that root is the live install. A resolved corpus source
- * and a corpus snapshot both satisfy it.
- */
+/** The roots a corpus source permits reads to resolve within. */
 export interface DirectoryCorpusRoot {
 	readonly kind: "directory";
 	readonly root: string;
@@ -140,6 +136,7 @@ export async function resolvesOutsideCorpus(
 	if (!(await resolvesOutside(source.root, absolute))) {
 		return false;
 	}
+
 	if (source.kind === "directory") {
 		return true;
 	}
@@ -148,6 +145,7 @@ export async function resolvesOutsideCorpus(
 	if (backing === undefined) {
 		return true;
 	}
+
 	if (!backing.isDirectory()) {
 		throw new CorpusConfigurationError(
 			`Live corpus backing root ${source.backingRoot} is not a directory`,
@@ -221,6 +219,7 @@ export function liveCorpusSource(
 		(options.env ?? Bun.env)[LIVE_CORPUS_BACKING_ROOT_ENV] ??
 		join(homedir(), ".agents");
 	const parsed = backingRootSchema.safeParse(configured);
+
 	if (!parsed.success) {
 		throw new CorpusConfigurationError(
 			`${LIVE_CORPUS_BACKING_ROOT_ENV} must name a non-empty absolute path without NUL bytes`,
