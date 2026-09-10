@@ -159,10 +159,8 @@ describe(runCalibrate.name, () => {
 					buildJudges: () => {
 						providerCalls += 1;
 						return {
-							stageJudge: () =>
-								Promise.reject(new Error("no stage rejudge")),
-							finalJudge: () =>
-								Promise.reject(new Error("no final rejudge")),
+							stageJudge: () => Promise.reject(new Error("no stage rejudge")),
+							finalJudge: () => Promise.reject(new Error("no final rejudge")),
 						};
 					},
 					output: recordOutput().output,

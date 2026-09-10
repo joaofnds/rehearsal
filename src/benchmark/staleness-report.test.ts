@@ -273,7 +273,9 @@ describe(staleCases.name, () => {
 		const recordedCorpus = await styleCorpus("the brief style\n");
 		const runsDirectory = await runsWithSmokeAttempt(recordedCorpus);
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-live-install-"));
-		const backingRoot = await mkdtemp(join(tmpdir(), "rehearsal-live-backing-"));
+		const backingRoot = await mkdtemp(
+			join(tmpdir(), "rehearsal-live-backing-"),
+		);
 		const outside = await styleCorpus("FOREIGN STYLE\n");
 		roots.push(root, backingRoot);
 		await mkdir(join(root, "output-styles"), { recursive: true });
