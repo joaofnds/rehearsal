@@ -220,6 +220,37 @@ describe(freezeSessionCorpus.name, () => {
 			await Bun.file(join(snapshot.root, "agents", "reviewer.md")).text(),
 		).toBe("original live agent\n");
 	});
+
+	it("refuses a live declared file outside the install and backing tree before copying it", async () => {
+		const outside = await directoryCorpus({
+			"output-styles/foreign.md": "FOREIGN STYLE\n",
+		});
+		const liveRoot = await resources.createControlDirectory();
+		const backingRoot = await resources.createControlDirectory();
+		await mkdir(join(liveRoot, "output-styles"), { recursive: true });
+		await symlink(
+			join(outside, "output-styles", "foreign.md"),
+			join(liveRoot, "output-styles", "foreign.md"),
+		);
+		const destination = join(
+			await resources.createControlDirectory(),
+			"corpus",
+		);
+
+		const failure = await failureOf(
+			freezeSessionCorpus(
+				{ kind: "live", root: liveRoot, backingRoot },
+				destination,
+				["output-styles/foreign.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("output-styles/foreign.md");
+		expect(
+			await Bun.file(join(destination, "output-styles", "foreign.md")).exists(),
+		).toBe(false);
+	});
 });
 
 describe("selecting the style and scoping the overlay to what the case declared", () => {

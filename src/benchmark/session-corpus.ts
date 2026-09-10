@@ -1,7 +1,7 @@
 import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
 import type { DirectoryCorpusRoot, LiveCorpusRoot } from "./corpus-file";
-import { resolvesOutside } from "./corpus-file";
+import { resolvesOutsideCorpus } from "./corpus-file";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
@@ -151,10 +151,10 @@ function snapshotOf(
  * skill entry is a directory, so the entries inside it are checked too.
  */
 async function refuseSymlinks(
-	root: string,
+	source: ResolvedCorpusSource,
 	entry: CorpusLayoutEntry,
 ): Promise<void> {
-	if (await resolvesOutside(root, entry.sourcePath)) {
+	if (await resolvesOutsideCorpus(source, entry.sourcePath)) {
 		throw symlinkedCorpusEntry(entry.layoutPath);
 	}
 
@@ -168,7 +168,7 @@ async function refuseSymlinks(
 		withFileTypes: true,
 	})) {
 		const nestedPath = join(nested.parentPath, nested.name);
-		if (await resolvesOutside(root, nestedPath)) {
+		if (await resolvesOutsideCorpus(source, nestedPath)) {
 			throw symlinkedCorpusEntry(
 				join(
 					entry.layoutPath,
@@ -197,9 +197,7 @@ async function copyDeclared(
 	for (const entry of entries.filter((candidate) =>
 		declares(declaredPaths, candidate.layoutPath),
 	)) {
-		if (source.kind === "directory") {
-			await refuseSymlinks(source.root, entry);
-		}
+		await refuseSymlinks(source, entry);
 
 		const target = join(destination, entry.layoutPath);
 		await mkdir(dirname(target), { recursive: true });
