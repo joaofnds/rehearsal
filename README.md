@@ -96,3 +96,7 @@ local use and has no authentication.
 The [documentation index](docs/README.md) also explains the status of the UI
 design and recovered historical material. Public project context lives in these
 tracked documents; the maintainer's personal task board is outside this repository.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
