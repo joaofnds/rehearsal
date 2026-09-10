@@ -1,169 +1,215 @@
-# Runbook: driving rehearsal yourself
+# Runbook
 
-Everything here is a command you run. No step needs a session.
+Start with a session case to learn the record format, then use repetitions to
+measure variability. Pipeline runs need a separate target repository and more
+setup. Read [current limitations](status.md#known-limitations) before using them.
 
-The point of the tool: change an instruction, and find out whether the change
-made your agent's work better or worse. Everything below builds to that.
+Commands below run from the Rehearsal repository root. Placeholders such as
+`<group-id>` must be replaced with IDs printed by your own commands.
 
-## 0. One-time check
+## Install and inspect without calling a model
 
 ```sh
 mise install
-bun install --frozen-lockfile
+mise exec -- bun install --frozen-lockfile
+mise exec -- bun run rehearsal --help
+mise exec -- bun run rehearsal case list
+mise exec -- bun run rehearsal case show smoke --json
 ```
 
-Then confirm the tool sees its cases:
+Mise pins Bun and Backlog.md. Follow the [Claude Code quickstart](https://code.claude.com/docs/en/quickstart)
+to install and authenticate the CLI separately, and make sure `claude` is on the command's `PATH` before running an
+experiment. Rehearsal invokes that installed CLI with your credentials.
+
+`case list` discovers declarations present in your checkout. `case show` prints
+the declaration's path by default and its JSON with `--json`. A declaration can
+exist even when its external inputs are missing; listing it is not a readiness check.
+
+## Supply the smoke case's corpus
+
+The [smoke declaration](../cases/smoke/case.json) asks for a one-word reply with
+no tools. It also declares `output-styles/brief.md`, which is not bundled in the
+repository. Create a small example corpus under the ignored run directory:
 
 ```sh
-bun run rehearsal case list
+mkdir -p .benchmark-runs/example-corpus/output-styles
+cat > .benchmark-runs/example-corpus/output-styles/brief.md <<'STYLE'
+---
+name: brief
+description: Concise replies for the Rehearsal smoke example.
+---
+Answer concisely. Follow the requested reply format.
+STYLE
 ```
 
-Six cases. Five are `session` cases (cheap, seconds, cents). One is a
-`pipeline` case, `audit-log`, which runs a full workflow against the NestJS
-template and costs real money.
+This is an example input you can edit, not the maintainer's personal style.
+Passing its directory with `--corpus` avoids installing it into your live agent
+configuration. Other live settings can still affect the session; this is not a
+sealed environment.
 
-## 1. See it work, for about a cent
+## Run one attempt
 
-Start here. This is the smallest thing that proves the tool runs at all.
+The next command calls the provider and costs money:
 
 ```sh
-bun run rehearsal case show smoke --json
+mise exec -- bun run rehearsal run --case smoke \
+  --corpus .benchmark-runs/example-corpus \
+  --model sonnet --session-budget-usd 0.2
 ```
 
-That prints the case: a prompt, and two deterministic checks (reply at most one
-word, no tool calls). Without `--json` you get only the declaration's path.
-Now run it:
+The session ceiling is USD 0.20. The model-availability probe is a separate paid
+call with a USD 0.10 ceiling. These are configured limits, not price estimates.
+An actual charge depends on the provider, context, and cache state. No paid
+recipe in this guide was exercised for the documentation audit.
+
+The command prints check results and an attempt record path. Inspect it with:
 
 ```sh
-bun run rehearsal run --case smoke
+mise exec -- bun run rehearsal list attempts
+mise exec -- bun run rehearsal show attempt:session:smoke/<uuid>
 ```
 
-The case declares its own model and session budget, so a run needs nothing
-beyond `--case`. Pass `--model` or `--session-budget-usd` to override what the
-case declares. A case that declares neither, run without either flag or its
-environment variable, refuses with exit 2 and one message naming both.
+Use the complete ID printed by `list attempts`. The record includes the prompt,
+reply, declared corpus digests, transcript evidence, check results, and provider
+metrics. `NO_REPLY` means the session ended without a final reply and the checks
+were not evaluated. Read the outcome even when the command exits 0; a recorded
+failing grade or check can be a successfully completed experiment.
 
-Because the declaration alone would let an unattended command start a paid run,
-a run whose model comes only from the case needs a terminal. From a script or a
-test, pass `--model` to say which model you meant to pay for.
-
-It prints one line per check and then the record's path:
-
-```text
-PASS word-band: 1 words within at most 1
-PASS tool-calls: 0 tool calls
-/Users/joaofnds/code/rehearsal/.benchmark-runs/sessions/smoke/<uuid>/attempt.json
-```
-
-Verified 2026-09-04: 0.049 USD, 2.6 seconds. Read the record:
+## Repeat with frozen inputs
 
 ```sh
-bun run rehearsal list attempts
-bun run rehearsal show attempt:session:smoke/<uuid>
+mise exec -- bun run rehearsal run --case smoke \
+  --corpus .benchmark-runs/example-corpus \
+  --model sonnet --session-budget-usd 0.2 \
+  --confirm --reps 2
 ```
 
-The record holds the prompt, the reply, the checks with a pass or fail each,
-the model, the corpus files with their digests, and what the call cost.
+The terminal asks you to approve the projected maximum before any provider call.
+For this example it is USD 0.50: two USD 0.20 sessions plus the USD 0.10 model
+probe. For automation, add `--yes` to approve that projection without a prompt.
+Keep `--model` explicit; `--yes` does not select or authorize a case-default model
+for unattended use.
 
-That is the whole shape of the tool in one cheap run: a declared case, a real
-session, deterministic judgment, a record you can read.
-
-## 2. See it catch a corpus change
-
-This is the loop the tool exists for, at session-case scale.
-
-The four `brief-reply-*` cases replay real turns from your own sessions and
-check the reply against the word band you actually accepted. They declare
-`output-styles/brief.md` as the corpus they measure.
-
-Ask which recorded work a corpus edit has already invalidated:
+A group freezes the declaration, fixture, prefix, and supported declared corpus
+inputs once. Each repetition gets its own attempt directory and evidence. Failed
+repetitions remain in the group rather than disappearing from the result.
 
 ```sh
-bun run rehearsal stale
+mise exec -- bun run rehearsal list groups
+mise exec -- bun run rehearsal show group:<group-id>
+mise exec -- bun run rehearsal show group:<group-id> --json
 ```
 
-Run on 2026-09-04 this printed:
+Two reps demonstrate the mechanism. They do not establish that an instruction
+helps. Confirmation defaults to five reps and requires at least two; choose a
+sample size appropriate to the result's variability.
 
-```text
-case:brief-reply-92b2e8b0	output-styles/brief.md changed
-```
+Session confirmation currently supports declared output styles, agent
+definitions, and rulebook files. Declared global `CLAUDE.md` and skills are
+refused before spending because their isolated delivery is not implemented.
+**Session groups cannot yet feed `compare`.** Read their summaries and individual
+attempt evidence directly. The [reference](reference.md) describes the supported
+stage/pipeline comparison path.
 
-That recorded result was produced against a version of `brief.md` that no
-longer matches the live file, so the tool refuses to treat it as current. Edit
-`~/.claude/output-styles/brief.md` and more cases join the list. Nothing comes
-back when everything on disk still matches the corpus that produced it.
+## Inspect staleness
 
-To ask the same question about a corpus you have not installed:
+After editing the example style, ask which recorded debug attempts or checkpoints
+no longer match it:
 
 ```sh
-bun run rehearsal stale --corpus <a directory in corpus layout>
+mise exec -- bun run rehearsal stale --corpus .benchmark-runs/example-corpus
 ```
 
-This is the invalidation graph, and it is the part of the tool that makes the
-rest honest: it knows which of your recorded results a given instruction edit
-made untrustworthy.
+The session result is reported at case level using its latest debug attempt.
+This command does not inventory confirmation groups. With no prior measurement
+there is nothing to mark stale. It reads the current corpus and starts no session.
 
-## 3. Run the full pipeline
+For pipeline checkpoints, add `--model` or `--effort` to check those conditions
+as well. Without them, the command checks corpus changes only.
 
-Real money. Roughly 0.50 to 3 USD depending on how far it gets.
+## Use a pipeline on a prepared target
 
-First, make the target green. This is not optional and nothing checks it for
-you yet:
+The bundled [audit-log case](../cases/audit-log/case.json) describes a NestJS
+feature and a `shape → build` workflow. Its relative default target is a sibling
+checkout used by the maintainer. It does not download a template. Supply your
+own compatible checkout with `--target`.
+
+Before running, prepare the target's dependencies, services, and database using
+that target's instructions. Inspect the [pipeline definition](../cases/audit-log/pipelines/default.json)
+for its commands and protected files. Its checks expect `CONFIG_PATH=src/config/test.yaml`
+and the scripts `typecheck`, `check`, and `test:unit`. An arbitrary repository
+will need its own case, rubrics, and pipeline.
+
+The control repository must be committed and clean. The target must be a
+separate clean Git repository root on `main`. The workflow needs the installed
+skills named by the pipeline, the corpus's global instructions, and working
+Backlog.md configuration. **Board bootstrapping is currently a portability
+blocker**: it reads `~/.agents/backlog-config.yml` when a target has no config,
+and the bootstrap tests currently fail. Resolve that setup before attempting
+this path; there is no verified generic setup recipe yet.
+
+Once those prerequisites are satisfied, the invocation is:
 
 ```sh
-cd /Users/joaofnds/code/nest/template
-docker compose up -d
-CONFIG_PATH=src/config/test.yaml bun run migrate up
-CONFIG_PATH=src/config/test.yaml bun run test:unit
+mise exec -- bun run rehearsal run --case audit-log \
+  --target /absolute/path/to/compatible-target \
+  --model sonnet --effort medium --session-budget-usd 10
 ```
 
-Expect `20 pass, 0 fail`. If you see `ECONNREFUSED`, Postgres is not up. If you
-see `relation "user" does not exist`, the migration did not run.
+This is paid workflow execution. The limit applies per session, not to the
+entire run: workers, the shared Product Owner, Judges, and rejudges can all
+consume budget. The CLI checks repository readiness and settings before its
+paid model probe. The harness then runs baseline target checks before launching
+workflow stages. A baseline failure therefore avoids workflow spend, but may
+follow the model probe.
 
-Then, from this repository, commit anything outstanding (the harness refuses a
-dirty control repo, deliberately: it is what pins which corpus produced the
-score), and run:
+A plain pipeline run works directly on the target's `main`, then restores it.
+It uses agents with permission bypass on the host. Use a designated benchmark
+target whose committed state and workflow artifacts can be restored; ignored
+build outputs and external services are not snapshotted. See
+[target restoration](reference.md#target-restoration) before relying on recovery.
+
+## Read, review, and replay a pipeline result
 
 ```sh
-bun run rehearsal run --case audit-log --effort medium
+mise exec -- bun run rehearsal list runs
+mise exec -- bun run rehearsal show run:<run-name>
+mise exec -- bun run rehearsal list checkpoints
 ```
 
-It prints its progress as it goes: baseline checks, then each stage's session,
-then that stage's judge. A stage graded below B stops the run and restores the
-target.
+Stopped runs are included. Their summary shows recorded stages, grades, failure
+information, and costs where available. The default stage continuation threshold
+is B; `--minimum-grade` changes it without changing the Judge's recorded grade.
 
-Stopping is a normal outcome, not a crash. The run on 2026-09-04 stopped at
-shape with an F, cost 0.43 USD, and produced five defect reports. That is the
-tool doing its job.
+Without `--pause`, a run requiring human review retains its candidate, restores
+the target, and exits. Review and calibration are separate commands. `--pause`
+keeps the candidate in place for interactive calibration and requires a terminal.
+Use the [review and calibration reference](reference.md#review-and-calibration)
+for verdicts, findings, and rejudging.
 
-## 4. Read what happened
+Replay a stage for which the run retained an input checkpoint:
 
 ```sh
-bun run rehearsal list checkpoints
-bun run rehearsal list attempts
+mise exec -- bun run rehearsal replay --run <run-name> --stage build \
+  --model sonnet --effort medium --session-budget-usd 10
 ```
 
-Run records currently land at `.benchmark-runs/<id>.<stage>.json` for a stopped
-run, and `list runs` cannot find them (ACT-44). Until that is fixed:
+Replay creates a temporary host worktree, runs only that stage, and writes an
+attempt. It can use `--corpus /absolute/path/to/variant` and can repeat with
+`--confirm`. Read the [corpus support matrix](reference.md#corpus-sources-and-delivery)
+before choosing a mode; pipeline `run` and `replay` have different support.
+
+## Open the browser UI
 
 ```sh
-ls .benchmark-runs/
+mise exec -- bun run build:client
+mise exec -- bun run serve
 ```
 
-The record is JSON. The fields worth reading first are `status`, `error`, and
-`input.harnessFailure`.
+Open `http://localhost:4173`. `PORT` overrides the server port. The server reads
+local records and the live corpus; it does not launch experiments. It has no
+authentication and does not explicitly restrict its bind address to loopback,
+so do not expose its port as a public service.
 
-## What is not yet true
-
-Honest list, so nothing here surprises you mid-run.
-
-- Nothing verifies the target is green before spending (ACT-45). Step 3 does it
-  by hand.
-- A stopped run is invisible to `list runs` and `show` (ACT-44).
-- The harness installs this repository's `CLAUDE.md` into the target as the
-  target's project instructions, so a pipeline agent is told the wrong stack
-  (ACT-41). Pipeline scores are not trustworthy until this is fixed.
-- A run record omits the judge's cost, so the reported price is low (ACT-43).
-- One error message covers three different baseline failures (ACT-42).
-- `compare` needs at least two confirmation groups, so the corpus A/B report is
-  not reachable from a single debug run.
+See [current UI coverage](status.md#browser-ui) for available routes and planned
+controls. An empty run-history page is expected in a fresh clone.

@@ -1,22 +1,23 @@
 # Glossary
 
-- **Accepted band** — the word range João's own accepted rewrites occupied on
-  the turns a case replays, measured from his real sessions rather than chosen:
-  51 to 154 across the population, 108 to 145 on these four turns. A case
-  declares its ceiling as a `word-band` check, never its floor, because a reply
-  shorter than the one he accepted is not a failure. The band is a property of
-  what he kept, so it moves only when new accepted replies are measured.
+Terms describe the harness unless explicitly marked as UI design concepts.
+See [current state](docs/status.md) for implementation coverage and
+[the reference](docs/reference.md) for command and delivery contracts.
+
+- **Accepted band** — the observed word range of accepted rewrites used to
+  design the brief-reply cases. Their `word-band` checks declare a ceiling
+  rather than a minimum. This is case-specific evidence, not a general rule for
+  reply length.
 - **Artifact** — durable output of a stage: a spec or plan document, a backlog
   card update, or commits.
 - **Attempt** — one execution of a case's unit of work: a stage at a checkpoint
   (the original run's stage result or any replay) or one session of a session
   case. The unit a comparison presents.
-- **Attempt record** — the strict record one session attempt writes: the case,
-  the lineage, the model and effort, the declared corpus files with their
-  digests, the corpus snapshot origin, the prompt, the reply, the path of the
-  transcript copy, the provider call metrics, and one result per declared check.
-  It is what `--json` prints. A record carrying no origin was written before the
-  field existed and read the live install.
+- **Attempt record** — the strict record a session attempt writes, including
+  case, lineage, model, declared corpus digests, prompt, transcript evidence,
+  checks, and provider metrics when available. A completed reply, no reply, and
+  an invocation failure have distinct outcomes. Older records may omit snapshot
+  provenance.
 - **Attempt directory** — the fresh temporary directory the harness creates and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
@@ -28,8 +29,9 @@
   function of the review, the frozen evidence, and the current rubrics and
   instructions, whether a paused run calls it in a retry loop or the
   `calibrate` command calls it once.
-- **Checkpoint** — frozen state after an accepted stage: target SHA, workflow
-  state, artifacts, and lineage.
+- **Checkpoint** — frozen input state that can start a stage, containing target
+  SHA, workflow state, artifacts, and lineage. A run records an initial
+  checkpoint after task setup and further checkpoints after accepted stages.
 - **Check-integrity file** — a target-relative file declared by the pipeline
   whose presence and bytes are frozen at baseline and compared after delivery.
 - **Check kind** — one deterministic assertion a session case may declare, the
@@ -46,7 +48,7 @@
   five reps. The UI's design calls this a **group** and counts it in plural
   **attempts** (`group · 6 attempts`, the `×1/×3/×6/×12` replay control, the
   Cases screen's **Run group** action); the word in code, records, and this
-  glossary stays confirmation run (decision-5).
+  glossary stays confirmation run (see [UI vocabulary](docs/design-handoff/README.md)).
 - **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
   `compare`, `review`, `calibrate`, `list`, `show`, `stale`, `case list`,
   `case show`, `case capture`), declaring its own flags with their defaults, environment
@@ -54,14 +56,14 @@
   tokens; the longer declared name wins over a prefix of it. The declaration is the single source of
   the flag's name in help, parsing, and documentation, and a command with no
   declared flag prints no flag section.
-- **Command record** — the strict, zod-validated artifact a command writes and
-  the only thing `--json` prints: the run artifact for `run`, the replay record
-  for `replay`, the comparison report for `compare`, and for `show` the bytes
-  of the one record file its id names. A command never prints a
-  second, summary-only shape.
-- **Comparison** — a deterministic report over completed confirmation evidence
-  for at least two benchmark cases, each containing the baseline, candidate,
-  and control arms. It does not execute paid sessions.
+- **Command record** — the validated evidence a command writes. Depending on
+  mode, `run` returns a run artifact, session attempt, or confirmation report.
+  `--json` selects record bytes, but pipeline progress can still share stdout.
+  `show --json` reads the selected record directly.
+- **Comparison** — a deterministic report over completed stage or pipeline
+  confirmation evidence for at least two benchmark cases, each with baseline,
+  candidate, and control arms. It starts no paid sessions. Session groups are
+  currently refused by the comparison loader.
 - **Comparison arm** — one role in a comparison: baseline, candidate, or the
   mandatory minimal-corpus control. An arm uses the same corpus snapshot across
   every benchmark case.
@@ -73,37 +75,36 @@
   declaration pins task, product brief, final rubric, per-stage rubrics,
   pipeline, and target, but has no case-level `corpus` field (corpus is
   chosen per run by `--corpus`) and no case-level threshold field (a minimum
-  grade lives inside stage grading, not on the case) (decision-5).
+  grade is a run setting, not part of the case declaration) (see [UI vocabulary](docs/design-handoff/README.md)).
 - **Case declaration** — the committed `case.json` that states a benchmark case
   as data: its id, kind, title, and the case-relative inputs the kind needs. It
-  is parsed once at the boundary into a value that cannot name a file outside
-  its case directory.
+  is parsed at the boundary. Case input paths stay within the case directory,
+  while a pipeline target may point to an external repository.
 - **Case directory** — `cases/<id>/`, the one place a case's declaration and its
-  input files live. The directory name is the case id, and every path inside the
-  declaration is resolved relative to it. Cases live in the control repository,
+  input files live. The directory name is the case id. Transcript prefixes
+  resolve through the separate ignored prefix store. Cases live in the control repository,
   never beside the corpus they grade.
 - **Case kind** — which inputs a case declares and how an attempt at it is run:
   `pipeline`, today's stage graph against a target repository, or `session`, one
   Claude session. The kind is the discriminator of the case declaration, so a
   case cannot carry another kind's inputs.
-- **Control repository** — this repository: harness, corpus under evaluation,
-  rubrics, and run artifacts.
+- **Control repository** — this repository, containing the harness, case
+  definitions, and rubrics, with local run artifacts under its ignored run
+  directory. Its contributor instructions are separate from the corpus under
+  evaluation.
 - **Contribution** — one of the three run-detail UI layouts. It grades a run's
   outcome on its own, from recorded evidence, then has an agent (not a
   deterministic computation) name a likely culprit stage among those that
   ran. The agent's reading is disclosed as an opinion, never as a
   measurement, and is provisional until the run ends. It is not an ablation:
   ablation needs a rerun per node and is a separate planned feature
-  (decision-5).
-- **Context manifest** — the complete set of instruction and context inputs one
-  attempt actually loaded, each named, classified by tier, and hashed where the
-  harness can resolve its bytes. It has two halves: the corpus half, the
-  engineer's global instruction set, varied by `--corpus`, and the project half,
-  the target repository's own instructions and documents, a property of the
-  target. It is observed from the transcript and reconciled against what the
-  case declared, so a divergence is reported rather than silently recorded. The
-  transcript names a load without carrying its bytes, so reconciliation is
-  name-against-name and every hash comes from the corpus resolver.
+  (see [UI vocabulary](docs/design-handoff/README.md)).
+- **Context manifest** — the declared and transcript-observed
+  instruction/context inputs for a session attempt, classified and hashed where
+  resolvable. Corpus inputs and target project files are separate halves.
+  Reconciliation reports differences between declarations and observations; it
+  cannot prove loads the transcript does not expose. Full pipeline context
+  observation is not yet wired.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, the agent
   definitions, and the rulebook. A case names the ones it reads in corpus
@@ -129,21 +130,19 @@
 - **Corpus layout path** — how a case names a corpus file, independent of where
   the corpus is installed: `CLAUDE.md`, `output-styles/<name>.md`,
   `agents/<name>.md`, `rulebook/<name>.md`, or `skills/<name>/...`. One
-  resolver maps a layout path onto the install, and a declared file that does
-  not resolve is refused before any provider call.
-- **Corpus snapshot** — the exact frozen project-instruction and stage/global
-  skill bytes used by a confirmation group. A control-repository commit alone
-  does not identify it because installed skills may live outside that repository.
-  A session attempt's snapshot holds the files its case declared and no others,
-  so a source carrying an undeclared style cannot change what the attempt runs
-  against.
-- **Corpus overlay** — the project-level files a session attempt is given so it
-  reads a corpus variant: the snapshot's output styles, agent definitions, and
-  rulebook files written under the attempt directory's `.claude/`, where they
-  shadow the same-named user-level ones. The session runs with the live
-  configuration, so its hooks, memory, and MCP are the real ones and nothing
-  installed moves. A skill cannot be delivered this way, because a
-  project-level skill does not shadow a user-level one.
+  resolver maps a layout path onto the selected corpus root. Missing files are
+  refused, although a debug command may already have paid for a model probe.
+- **Corpus snapshot** — a recorded set of corpus inputs and their provenance.
+  Confirmation and directory-backed session execution copy supported declared
+  inputs. A live session debug snapshot points at installed files and does not
+  freeze them. Stage snapshots capture the instructions and supporting files
+  needed for replay. Hashing an input is distinct from delivering it to the
+  provider.
+- **Corpus overlay** — the declared styles, agent definitions, and rulebook
+  files written under a session attempt's `.claude/` directory. This delivery
+  path does not overlay global `CLAUDE.md` or skills. Stage replay uses a
+  separate snapshot installation path. See the reference's corpus support
+  matrix.
 - **Corpus snapshot origin** — where a snapshot's bytes were read from, recorded
   beside them and persisted in the attempt record: the live install, or the
   directory the source named. What produced that directory is not recorded,
@@ -152,9 +151,8 @@
   `--corpus`: a directory already in corpus layout, and nothing else. A corpus
   that lives somewhere else is rendered to a directory with whatever tool owns
   it, outside rehearsal, and that directory is passed. Absent `--corpus` the
-  source is the live install. A source is resolved to one snapshot directory
-  before any provider call, and that directory is the single place the bytes are
-  read from for hashing and installing.
+  source is the live install. Whether bytes are copied and delivered depends on
+  the execution mode, as described in the reference support matrix.
   The live source's permitted extent is its install root and one backing tree
   declared outside the corpus. A link may resolve within either tree; the
   corpus's own links cannot declare another permitted tree.
@@ -167,8 +165,9 @@
 - **Delivery stage** — a stage whose artifact is committed code; its
   evidence is a diff, changed paths, check integrity, and local check results.
   Today, `build`.
-- **End-to-end mode** — running the whole pipeline and judging only the final
-  code; the integration test.
+- **End-to-end mode** — running the whole pipeline to evaluate its final
+  committed output. Stage gates still judge intermediate artifacts and can stop
+  execution before a final result exists.
 - **Exit code** — what the executable returns, with one meaning each: `0` the
   command completed and wrote its record, whatever the grade; `2` a usage error
   (unknown flag, missing required flag, unparseable value); `3` a refused
@@ -224,7 +223,7 @@
   writes the preliminary artifact, retains the candidate, restores the target,
   and exits, leaving the review and the calibration to their own commands.
 - **Pipeline** — the ordered stages and their judge attachments, declared as
-  data. The UI's design calls this a **task** (decision-5); the word in code,
+  data. The UI's design calls this a **task** (see [UI vocabulary](docs/design-handoff/README.md)); the word in code,
   records, and this glossary stays pipeline. Graded as a whole, a pipeline's
   grade is computed from its first input and its last artifact only, never by
   averaging stage grades, and a pipeline that stopped early is not gradable as
@@ -232,9 +231,10 @@
 - **Pipeline definition** — the declared, user-authored data the harness reads
   to know which stages to run, in what order, and with what skill, expected
   artifact, and rubric.
-- **Planning stage** — a stage whose artifact is a durable document attached to
-  the backlog card; it is carried forward as a prior artifact to later stages.
-  Today, `discuss`, `grill`, and `plan`.
+- **Planning stage** — a stage that produces planning artifacts such as
+  acceptance criteria, card updates, or an attached document. The declaration
+  decides which outputs are required. The bundled pipeline's planning stage is
+  `shape`.
 - **Project instructions** — the instruction file a repository carries in its
   own tree for agents working in it (`CLAUDE.md` or `AGENTS.md`). A property of
   the repository, never installed by the harness. Distinct from the corpus's
@@ -259,11 +259,12 @@
 - **Rep** — one repetition of a run; scores are distributions over reps, never
   a single rep. The UI's design's singular **attempt** already matches this
   glossary's Attempt entry and needs no mapping; the design's plural
-  **attempts** inside a group is this glossary's rep (decision-5).
-- **Rep outcome** — one binary reliability observation. A declared stage
-  succeeds with Judge grade A or B; the final outcome succeeds with Judge PASS;
-  a session case's rep succeeds when every check in its check list passes. A
-  stop or execution failure is unsuccessful.
+  **attempts** inside a group is this glossary's rep (see [UI vocabulary](docs/design-handoff/README.md)).
+- **Rep outcome** — one binary reliability observation. A stage succeeds with
+  Judge grade A or B, a final judgment succeeds with PASS, and a session
+  succeeds when its declared checks pass with the required evidence. A stop, no
+  reply, execution failure, or required missing metrics makes a confirmation rep
+  unsuccessful. Lowering a continuation threshold does not redefine success.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
 - **Retained candidate** — the run's final result commit, pinned in the target
@@ -285,26 +286,22 @@
 - **Run artifact transition** — one persistence operation that advances a run's
   main or stage record. Transitions are serialized; abort recording is terminal
   and cannot be overwritten by a later normal transition.
-- **Run event** — one timestamped fact about a run in progress (a stage
-  starting, a turn completing, a stage or the run finishing, a run reconciled
-  interrupted), appended to the SQLite store one shared database under
-  `.benchmark-runs/` holds, keyed by run id. It stays derived per decision-3:
-  the run artifact on disk remains authoritative for what a run concluded,
-  the event store can be deleted and rebuilt from those records, and a
-  reader replays it over the server's SSE endpoint, either live or from the
-  start for one attaching mid-run.
+- **Run event** — a timestamped progress fact appended to
+  `.benchmark-runs/run-events.sqlite`, keyed by run ID and streamed through the
+  server's SSE endpoint. It is best-effort derived progress state. JSON
+  artifacts remain authoritative for recorded conclusions; there is no
+  event-history rebuild command.
 - **Project slug** — the name the provider gives the directory it writes a
   session file into: the working directory's real path with every `/` replaced
   by `-`. On macOS `/tmp/x` resolves through its real path first, so it is
   `-private-tmp-x`.
 - **Sealed session** — a Claude session with safe mode and no tools, used for
   judges.
-- **Session case** — a benchmark case whose unit of work is one Claude session
-  rather than a stage graph. It declares an optional fixture tree, the prompt,
-  an optional transcript prefix to resume, the tool and settings overlays, any
-  agent definitions, the corpus files it reads, and its check list. It runs in
-  an attempt directory, once as a debug attempt or under `--confirm` as reps,
-  with the same records, reports, and cost ceiling as a stage replay.
+- **Session case** — a benchmark case whose unit of work is one Claude session.
+  It declares a prompt, tools, corpus files, checks, and optional fixture,
+  transcript prefix, settings, agents, and project files. It runs once for
+  debugging or as isolated confirmation reps. Current confirmation refuses
+  declared global instructions and skills.
 - **Session naming** — the uuid an attempt gives its own session before the
   call, as the fork's id when resuming and through `--session-id` otherwise. It
   is what lets the attempt name the one session file it owns under its slug, so
@@ -315,7 +312,7 @@
   spend limit.
 - **Stage** — one pipeline step: a skill invocation consuming upstream
   artifacts and emitting its own. The UI's design calls this a **step**
-  (decision-5); the word in code, records, and this glossary stays stage.
+  (see [UI vocabulary](docs/design-handoff/README.md)); the word in code, records, and this glossary stays stage.
 - **Stage commit history** — oldest-first subjects of the commits a stage added
   after its baseline; absent when the stage did not advance the target history.
 - **Stage scorecard** — persisted Judge result for one stage: its frozen input
@@ -332,8 +329,9 @@
   state; still replayable for exploration, refused in comparisons.
 - **Stage kind** — which validation and evidence strategy a stage uses:
   planning or delivery. Declared per stage, independent of the stage's name.
-- **Stage mode** — running one stage against frozen upstream artifacts; the
-  unit test, with clean attribution and a proxy score.
+- **Stage mode** — running one stage against frozen upstream artifacts. This
+  supports local debugging and repeated measurements, but an intermediate grade
+  remains a proxy for the quality of the complete workflow.
 - **Target repository (template project)** — the real application repository,
   kept at a stable baseline, that tasks run against.
 - **Target check** — one command declared by the pipeline and run against the
@@ -343,14 +341,18 @@
   instruction files loaded and artifacts produced) shown on the live monitor
   and, in reduced form, as "the map" on the run-detail Contribution layout.
   A UI concept only; nothing in the harness computes or stores a graph
-  (decision-5).
+  (see [UI vocabulary](docs/design-handoff/README.md)).
 - **Trajectory step** — one workflow-agent turn reported by the provider. PO and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
-- **Transcript prefix** — a real session file truncated at a cut, kept as the
-  frozen starting state of a session case. Its bytes are git-ignored under
-  `.benchmark-runs/cases/<case>/` and hashed into lineage; only its digest, its
-  source session, and its cut are committed, in the case declaration.
+- **Transcript prefix** — a real session file truncated at a cut and used as
+  frozen starting context. The loader reads its bytes from
+  `.benchmark-runs/cases/<case>/`, verifies the declared digest, and includes it
+  in lineage. Committing a declaration or a reference copy elsewhere does not
+  populate that local store.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
-- **Workflow state** — the untracked `backlog/` and `.boris/` trees that carry
-  workflow artifacts between stages and must be copied independently of Git.
+- **Workflow state** — the `backlog/` and `.boris/` trees copied independently
+  of Git to carry workflow artifacts across stage materialization and target
+  restoration. A target's Backlog configuration determines where its board
+  lives. These target artifacts are distinct from Rehearsal's external personal
+  board.

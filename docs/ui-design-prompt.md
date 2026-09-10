@@ -1,4 +1,8 @@
-# Prompt for Claude Design
+# Original UI design brief
+
+> Archived brief from 2026-09-04. Its “today” and “planned” sections describe
+> that design request, not the current release. Read [current state](status.md)
+> and the [design handoff index](design-handoff/README.md) before implementing it.
 
 Paste everything below the line.
 

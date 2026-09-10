@@ -1,5 +1,9 @@
 # Recovered: the benchmark-operations UI
 
+> Historical recovery report from 2026-09-04. Paths, counts, and recovery
+> conclusions below describe that investigation. These fragments are not part
+> of the current application; see [architecture](../design.md).
+
 There was a UI for this project. It was designed, planned across milestones,
 and built as a running NestJS server rendering a React client. It was never
 committed to git, and it was destroyed when the project was renamed from
@@ -153,6 +157,7 @@ ten files and the complete name manifest, is all that is left of them.
 ## The lesson worth keeping
 
 This work was lost because it lived only in the working tree and the board, and
-the rename cleared both. The current repository commits its board, which is why
-the last week survived the same kind of event. Anything that matters gets
-committed, including documents.
+the rename cleared both. Keep durable project knowledge in version control, including documents.
+The current personal board lives outside this repository; public project context
+belongs in the tracked documentation, with its upkeep described in
+[Contributing](../../CONTRIBUTING.md).

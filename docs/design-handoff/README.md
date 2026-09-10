@@ -1,19 +1,22 @@
-# Design handoff
+# UI design reference
 
-`SPEC.md` is the specification Claude Design produced on 2026-09-04, from the
-brief in `docs/ui-design-prompt.md`. It is the authority: read it for
-everything.
+[SPEC.md](SPEC.md) and [prototype.html](prototype.html) are the design handoff
+produced on 2026-09-04 from the [original brief](../ui-design-prompt.md). They
+describe intended visual structure and interactions beyond the implemented app.
+Use [current state](../status.md#browser-ui) to find what is available today.
 
-`prototype.html` is the design reference it shipped with. Open it from a local
-checkout to see the intended look, structure, and behavior of all nine screens.
+Open the prototype from a local checkout to inspect the intended appearance.
+[support.js](support.js) expands the design environment's custom markup. It is
+reference infrastructure, not application code, and must not be imported into
+the client.
 
-`support.js` is the design environment's streaming-template runtime. It is here
-only because the prototype does not render without it: the markup is custom
-elements the runtime expands. **Do not port it, and do not import it into the
-application.** The spec says so directly, and the prototype's own header calls
-itself a reference rather than production code.
+Read the specification for visual direction and the [architecture](../design.md)
+for implementation boundaries. Implement screens with the existing components
+and tokens under `client/src/system/`. Prototype version labels, example grades,
+prices, identifiers, and controls are illustrative rather than release data.
 
-The spec describes a product wider than the harness currently is, and it renames
-the domain. Neither is a defect. Both are decisions on the board: ACT-48 settles
-the vocabulary against the glossary, ACT-49 inventories what the design shows
-that the harness cannot yet supply.
+The design calls a pipeline a **task**, a stage a **step**, and a confirmation
+run a **group**. Code and records keep the harness terms; the [glossary](../../GLOSSARY.md)
+records their meaning. Features such as contribution opinions, instruction
+editing, and several complete screens remain planned. Do not infer an API or
+record field merely because the prototype displays one.

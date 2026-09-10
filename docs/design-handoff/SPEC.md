@@ -1,5 +1,8 @@
 # Handoff: Rehearsal — benchmark harness for an instruction corpus
 
+> Design reference from 2026-09-04, not an inventory of shipped features.
+> Read the [handoff index](README.md) for implementation scope and vocabulary.
+
 ## Overview
 
 Rehearsal is a local-only developer tool (runs on the engineer's machine, opens in their browser, single user) for benchmarking an *instruction corpus* — the project instruction file, skills, and rubrics an engineer writes for their coding agents.
