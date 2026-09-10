@@ -14,6 +14,7 @@ import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
 	hashCorpusFiles,
+	resolvesOutsideCorpus,
 } from "#benchmark/corpus-file";
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
 import { recordedCheckpoints } from "#cli/list-command";
@@ -198,6 +199,14 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 			continue;
 		}
 		try {
+			if (
+				source.kind === "live" &&
+				(await resolvesOutsideCorpus(source, absolute))
+			) {
+				throw new SymlinkedEntryError(
+					`Corpus directory ${directory} resolves outside the live corpus extent, so its bytes are not hashed`,
+				);
+			}
 			const walked = await walkDirectory(absolute, directory, {
 				rootMayBeALink: source.kind === "live",
 			});

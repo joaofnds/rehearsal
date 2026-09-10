@@ -268,6 +268,52 @@ describe(corpusReport.name, () => {
 		expect(JSON.stringify(report)).not.toContain("SECRET BYTES");
 	});
 
+	it("refuses a live layout directory outside the install and declared backing tree", async () => {
+		const root = await corpusDirectory();
+		const backingRoot = await corpusDirectory();
+		const outside = await corpusDirectory();
+		await writeFile(join(root, "CLAUDE.md"), "instructions\n");
+		await mkdir(join(outside, "skills", "foreign"), { recursive: true });
+		await writeFile(
+			join(outside, "skills", "foreign", "SKILL.md"),
+			"FOREIGN SKILL BYTES\n",
+		);
+		await symlink(join(outside, "skills"), join(root, "skills"));
+
+		const report = await corpusReport(
+			{ kind: "live", root, backingRoot },
+			await runsDirectory(),
+		);
+
+		expect(report.files.map(({ path }) => path)).toEqual(["CLAUDE.md"]);
+		expect(report.refusals).toEqual([
+			"Corpus directory skills resolves outside the live corpus extent, so its bytes are not hashed",
+		]);
+		expect(report.digest).toBeUndefined();
+		expect(JSON.stringify(report)).not.toContain("FOREIGN SKILL BYTES");
+	});
+
+	it("reports permitted backing-tree links like the same corpus stored locally", async () => {
+		const root = await corpusDirectory();
+		const backingRoot = await fullCorpusDirectory();
+		const localRoot = await fullCorpusDirectory();
+		await symlink(join(backingRoot, "CLAUDE.md"), join(root, "CLAUDE.md"));
+		await symlink(join(backingRoot, "skills"), join(root, "skills"));
+		const runs = await runsDirectory();
+
+		const linked = await corpusReport(
+			{ kind: "live", root, backingRoot },
+			runs,
+		);
+		const local = await corpusReport(directorySource(localRoot), runs);
+
+		expect(linked.files.map(({ path, sha256 }) => ({ path, sha256 }))).toEqual(
+			local.files.map(({ path, sha256 }) => ({ path, sha256 })),
+		);
+		expect(linked.refusals).toEqual([]);
+		expect(linked.digest).toBe(local.digest);
+	});
+
 	it("counts the run once when two of its stages both recorded the same file, since read-by is a run count", async () => {
 		const corpus = await fullCorpusDirectory();
 		const runs = await runsDirectory();

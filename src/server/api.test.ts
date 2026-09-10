@@ -237,6 +237,35 @@ describe(createApiApp.name, () => {
 			expect(body.files).toEqual([]);
 			expect(body.digest).toBeUndefined();
 		});
+
+		it("serves a live corpus with an out-of-extent instruction file as a partial report", async () => {
+			const corpus = await corpusDirectory();
+			const backingRoot = await emptyDirectory("rehearsal-api-backing-");
+			const outside = await emptyDirectory("rehearsal-api-outside-");
+			await rm(join(corpus, "CLAUDE.md"));
+			await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
+			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: { kind: "live", root: corpus, backingRoot },
+			});
+
+			const response = await app.request("/api/corpus");
+			const text = await response.text();
+			const body = corpusResponseSchema.parse(JSON.parse(text));
+
+			expect(response.status).toBe(200);
+			expect(body.files.map(({ path }) => path)).toEqual([
+				"skills/build/SKILL.md",
+				"skills/discuss/SKILL.md",
+			]);
+			expect(body.refusals).toEqual([
+				"Corpus file CLAUDE.md resolves outside the live corpus extent, which would hash bytes the corpus does not hold",
+			]);
+			expect(body.digest).toBeUndefined();
+			expect(text).not.toContain("SECRET BYTES");
+			expect(text).not.toContain(outside);
+		});
 	});
 
 	describe("GET /api/records/:id", () => {
