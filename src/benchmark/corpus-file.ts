@@ -1,7 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
-import { SymlinkedEntryError } from "./file-presence";
+import { isAbsolute, join, resolve, sep } from "node:path";
+import { z } from "zod";
+import { statIfExists, SymlinkedEntryError } from "./file-presence";
 
 /**
  * Where the corpus is installed for a session that names no source. Every
@@ -16,13 +17,25 @@ export function liveCorpusRoot(): string {
  * under, and whether that root is the live install. A resolved corpus source
  * and a corpus snapshot both satisfy it.
  */
-export interface CorpusRoot {
-	readonly kind: "live" | "directory";
+export interface DirectoryCorpusRoot {
+	readonly kind: "directory";
 	readonly root: string;
 }
 
+export interface LiveCorpusRoot {
+	readonly kind: "live";
+	readonly root: string;
+	readonly backingRoot: string;
+}
+
+export type CorpusRoot = DirectoryCorpusRoot | LiveCorpusRoot;
+
 export class CorpusFileError extends Error {
 	public override name = "CorpusFileError";
+}
+
+export class CorpusConfigurationError extends Error {
+	public override name = "CorpusConfigurationError";
 }
 
 /**
@@ -104,11 +117,9 @@ export function resolveCorpusFile(
  * and both sides get resolved because macOS resolves `/tmp` to `/private/tmp`,
  * so comparing a resolved path against a raw root rejects everything under it.
  *
- * A live source is exempt for the same reason `hashDirectory` takes
- * `rootMayBeALink`: a `.claude` install is a tree of links into the real corpus,
- * its own CLAUDE.md included, so containment against its root would refuse every
- * file it holds. Only `liveCorpusRoot()` builds a live root, so no declared
- * source can claim the exemption.
+ * A live source may resolve within its separately declared backing tree. That
+ * permission is carried by the source, rather than discovered from its links,
+ * so an escaping link cannot authorize its own target.
  */
 export async function resolvesOutside(
 	root: string,
@@ -117,7 +128,34 @@ export async function resolvesOutside(
 	const resolvedRoot = await realpath(root);
 	const resolvedPath = await realpath(absolute);
 
-	return !resolvedPath.startsWith(`${resolvedRoot}${sep}`);
+	return (
+		resolvedPath !== resolvedRoot &&
+		!resolvedPath.startsWith(`${resolvedRoot}${sep}`)
+	);
+}
+
+export async function resolvesOutsideCorpus(
+	source: CorpusRoot,
+	absolute: string,
+): Promise<boolean> {
+	if (!(await resolvesOutside(source.root, absolute))) {
+		return false;
+	}
+	if (source.kind === "directory") {
+		return true;
+	}
+
+	const backing = await statIfExists(source.backingRoot);
+	if (backing === undefined) {
+		return true;
+	}
+	if (!backing.isDirectory()) {
+		throw new CorpusConfigurationError(
+			`Live corpus backing root ${source.backingRoot} is not a directory`,
+		);
+	}
+
+	return resolvesOutside(source.backingRoot, absolute);
 }
 
 async function refuseUncontained(
@@ -125,13 +163,11 @@ async function refuseUncontained(
 	layoutPath: string,
 	absolute: string,
 ): Promise<void> {
-	if (source.kind === "live") {
-		return;
-	}
-
-	if (await resolvesOutside(source.root, absolute)) {
+	if (await resolvesOutsideCorpus(source, absolute)) {
 		throw new SymlinkedEntryError(
-			`Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`,
+			source.kind === "live"
+				? `Corpus file ${layoutPath} resolves outside the live corpus extent, which would hash bytes the corpus does not hold`
+				: `Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`,
 		);
 	}
 }
@@ -162,8 +198,37 @@ export async function readCorpusInstructions(
  * The live install as a corpus source. A run, replay, or calibration takes no
  * corpus source, so the corpus it measures is whatever is installed.
  */
-export function liveCorpusSource(): CorpusRoot {
-	return { kind: "live", root: liveCorpusRoot() };
+export const LIVE_CORPUS_BACKING_ROOT_ENV =
+	"BENCHMARK_LIVE_CORPUS_BACKING_ROOT";
+
+const backingRootSchema = z
+	.string()
+	.min(1)
+	.refine((path) => !path.includes("\0"))
+	.refine(isAbsolute);
+
+export interface LiveCorpusSourceOptions {
+	readonly root?: string | undefined;
+	readonly backingRoot?: string | undefined;
+	readonly env?: Readonly<Record<string, string | undefined>> | undefined;
+}
+
+export function liveCorpusSource(
+	options: LiveCorpusSourceOptions = {},
+): LiveCorpusRoot {
+	const root = options.root ?? liveCorpusRoot();
+	const configured =
+		options.backingRoot ??
+		(options.env ?? Bun.env)[LIVE_CORPUS_BACKING_ROOT_ENV] ??
+		join(homedir(), ".agents");
+	const parsed = backingRootSchema.safeParse(configured);
+	if (!parsed.success) {
+		throw new CorpusConfigurationError(
+			`${LIVE_CORPUS_BACKING_ROOT_ENV} must name a non-empty absolute path without NUL bytes`,
+		);
+	}
+
+	return { kind: "live", root, backingRoot: parsed.data };
 }
 
 export function liveCorpusInstructions(): Promise<string> {

@@ -324,8 +324,12 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
 		);
 		await symlink(join(outside, "agents.md"), join(root, "CLAUDE.md"));
 
-		expect(await readCorpusInstructions({ kind: "live", root })).toBe(
-			"the live corpus instructions\n",
-		);
+		expect(
+			await readCorpusInstructions({
+				kind: "live",
+				root,
+				backingRoot: outside,
+			}),
+		).toBe("the live corpus instructions\n");
 	});
 });

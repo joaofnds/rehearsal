@@ -207,7 +207,7 @@ describe(freezeSessionCorpus.name, () => {
 		const destination = await resources.createControlDirectory();
 
 		const snapshot = await freezeSessionCorpus(
-			{ kind: "live", root: liveRoot },
+			{ kind: "live", root: liveRoot, backingRoot: outside },
 			join(destination, "corpus"),
 			["agents/reviewer.md"],
 		);

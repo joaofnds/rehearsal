@@ -3,22 +3,13 @@ import { join, resolve } from "node:path";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
-	liveCorpusRoot,
+	liveCorpusSource,
 } from "./corpus-file";
+import type { DirectoryCorpusRoot, LiveCorpusRoot } from "./corpus-file";
 import { pathExists } from "./file-presence";
 
 export class CorpusSourceError extends Error {
 	public override name = "CorpusSourceError";
-}
-
-export interface LiveCorpusSource {
-	readonly kind: "live";
-	readonly root: string;
-}
-
-export interface DirectoryCorpusSource {
-	readonly kind: "directory";
-	readonly root: string;
 }
 
 /**
@@ -26,7 +17,7 @@ export interface DirectoryCorpusSource {
  * learns how the directory came to exist: `root` is the only thing hashing and
  * installing ever see.
  */
-export type ResolvedCorpusSource = LiveCorpusSource | DirectoryCorpusSource;
+export type ResolvedCorpusSource = LiveCorpusRoot | DirectoryCorpusRoot;
 
 /**
  * The entries a directory must hold at least one of to be a corpus. Without
@@ -48,7 +39,7 @@ async function holdsCorpusLayout(root: string): Promise<boolean> {
 	return false;
 }
 
-async function directorySource(source: string): Promise<DirectoryCorpusSource> {
+async function directorySource(source: string): Promise<DirectoryCorpusRoot> {
 	const root = resolve(source);
 	if (!(await pathExists(root))) {
 		throw new CorpusSourceError(
@@ -124,7 +115,7 @@ export function resolveCorpusSource(
 	source: string | undefined,
 ): Promise<ResolvedCorpusSource> {
 	if (source === undefined) {
-		return Promise.resolve({ kind: "live", root: liveCorpusRoot() });
+		return Promise.resolve(liveCorpusSource());
 	}
 
 	return directorySource(source);

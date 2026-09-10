@@ -1,5 +1,6 @@
 import { cp, lstat, mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
+import type { DirectoryCorpusRoot, LiveCorpusRoot } from "./corpus-file";
 import { resolvesOutside } from "./corpus-file";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
@@ -17,12 +18,13 @@ export class SessionCorpusError extends Error {
  * named, and installing or selecting one of those would run the attempt
  * against a corpus it never declared.
  */
-export interface SessionCorpusSnapshot {
-	readonly kind: ResolvedCorpusSource["kind"];
-	readonly root: string;
+interface SessionCorpusSnapshotFields {
 	readonly origin: CorpusSnapshotOrigin;
 	readonly declaredPaths: readonly string[];
 }
+
+export type SessionCorpusSnapshot = SessionCorpusSnapshotFields &
+	(LiveCorpusRoot | DirectoryCorpusRoot);
 
 /**
  * A project-level skill does not shadow the user-level one on claude 2.1.258,
@@ -120,11 +122,23 @@ function snapshotOf(
 	root: string,
 	declaredPaths: readonly string[],
 ): SessionCorpusSnapshot {
+	const fields: SessionCorpusSnapshotFields = {
+		origin: originOf(source),
+		declaredPaths: [...declaredPaths],
+	};
+	if (source.kind === "live") {
+		return {
+			kind: source.kind,
+			root,
+			backingRoot: source.backingRoot,
+			...fields,
+		};
+	}
+
 	return {
 		kind: source.kind,
 		root,
-		origin: originOf(source),
-		declaredPaths: [...declaredPaths],
+		...fields,
 	};
 }
 

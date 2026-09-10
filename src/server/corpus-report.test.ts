@@ -246,6 +246,28 @@ describe(corpusReport.name, () => {
 		]);
 	});
 
+	it("refuses a live instruction file outside the install and declared backing tree", async () => {
+		const root = await corpusDirectory();
+		const backingRoot = await corpusDirectory();
+		const outside = await corpusDirectory();
+		await mkdir(join(root, "skills", "build"), { recursive: true });
+		await writeFile(join(root, "skills", "build", "SKILL.md"), "build skill\n");
+		await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
+		await symlink(join(outside, "secret.md"), join(root, "CLAUDE.md"));
+		const source = { kind: "live" as const, root, backingRoot };
+
+		const report = await corpusReport(source, await runsDirectory());
+
+		expect(report.files.map(({ path }) => path)).toEqual([
+			"skills/build/SKILL.md",
+		]);
+		expect(report.refusals).toEqual([
+			"Corpus file CLAUDE.md resolves outside the live corpus extent, which would hash bytes the corpus does not hold",
+		]);
+		expect(report.digest).toBeUndefined();
+		expect(JSON.stringify(report)).not.toContain("SECRET BYTES");
+	});
+
 	it("counts the run once when two of its stages both recorded the same file, since read-by is a run count", async () => {
 		const corpus = await fullCorpusDirectory();
 		const runs = await runsDirectory();

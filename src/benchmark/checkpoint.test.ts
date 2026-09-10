@@ -1001,7 +1001,14 @@ describe(corpusLayoutRoots.name, () => {
 describe(stageCorpusRoots.name, () => {
 	it("searches project level before user level for the live install", () => {
 		expect(
-			stageCorpusRoots({ kind: "live", root: liveCorpusRoot() }, "/target"),
+			stageCorpusRoots(
+				{
+					kind: "live",
+					root: liveCorpusRoot(),
+					backingRoot: join(homedir(), ".agents"),
+				},
+				"/target",
+			),
 		).toEqual(corpusLayoutRoots("/target"));
 	});
 
