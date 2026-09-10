@@ -305,6 +305,43 @@ describe(freezeSessionCorpus.name, () => {
 			await Bun.file(join(destination, "output-styles", "foreign.md")).exists(),
 		).toBe(false);
 	});
+
+	it("refuses a foreign link nested under an allowed live directory before copying it", async () => {
+		const liveRoot = await resources.createControlDirectory();
+		const backingRoot = await resources.createControlDirectory();
+		const outside = await resources.createControlDirectory();
+		await Bun.write(join(outside, "secret.md"), "FOREIGN SECRET\n");
+		await mkdir(join(backingRoot, "carrier", "nested"), { recursive: true });
+		await symlink(
+			join(outside, "secret.md"),
+			join(backingRoot, "carrier", "nested", "leak.md"),
+		);
+		await mkdir(join(liveRoot, "output-styles"), { recursive: true });
+		await symlink(
+			join(backingRoot, "carrier"),
+			join(liveRoot, "output-styles", "declared"),
+		);
+		const destination = join(
+			await resources.createControlDirectory(),
+			"corpus",
+		);
+
+		const failure = await failureOf(
+			freezeSessionCorpus(
+				{ kind: "live", root: liveRoot, backingRoot },
+				destination,
+				["output-styles/declared/nested/leak.md"],
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionCorpusError);
+		expect(failure.message).toContain("output-styles/declared/nested/leak.md");
+		expect(
+			await Bun.file(
+				join(destination, "output-styles", "declared", "nested", "leak.md"),
+			).exists(),
+		).toBe(false);
+	});
 });
 
 describe("selecting the style and scoping the overlay to what the case declared", () => {

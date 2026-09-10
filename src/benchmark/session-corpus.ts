@@ -1,5 +1,5 @@
-import { cp, lstat, mkdir, readdir } from "node:fs/promises";
-import { basename, dirname, extname, join, relative } from "node:path";
+import { cp, mkdir, readdir, realpath, stat } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import type { DirectoryCorpusRoot, LiveCorpusRoot } from "./corpus-file";
 import { resolvesOutsideCorpus } from "./corpus-file";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
@@ -146,10 +146,9 @@ function snapshotOf(
 /**
  * A recursive copy dereferences, so an entry reached through a link copies bytes
  * from outside the source: the harness would hash and install whatever the link
- * points at while the record says it snapshotted a source. Containment of the
- * resolved path is what answers it, because the link can be the entry itself or
- * any directory above it, and an `lstat` on the entry sees only the first. A
- * skill entry is a directory, so the entries inside it are checked too.
+ * points at while the record says it snapshotted a source. Containment of every
+ * resolved path is what answers it, because the link can be the entry itself,
+ * any directory above it, or an entry nested beneath a linked directory.
  */
 async function refuseSymlinks(
 	source: ResolvedCorpusSource,
@@ -159,23 +158,47 @@ async function refuseSymlinks(
 		throw symlinkedCorpusEntry(entry.layoutPath);
 	}
 
-	const stats = await lstat(entry.sourcePath);
+	const stats = await stat(entry.sourcePath);
 	if (!stats.isDirectory()) {
 		return;
 	}
 
-	for (const nested of await readdir(entry.sourcePath, {
-		recursive: true,
-		withFileTypes: true,
-	})) {
-		const nestedPath = join(nested.parentPath, nested.name);
-		if (await resolvesOutsideCorpus(source, nestedPath)) {
-			throw symlinkedCorpusEntry(
-				join(
-					entry.layoutPath,
-					relative(entry.sourcePath, nested.parentPath),
-					nested.name,
-				),
+	await refuseNestedSymlinks(
+		source,
+		entry.sourcePath,
+		entry.layoutPath,
+		new Set(),
+	);
+}
+
+async function refuseNestedSymlinks(
+	source: ResolvedCorpusSource,
+	sourceDirectory: string,
+	layoutDirectory: string,
+	visitedDirectories: Set<string>,
+): Promise<void> {
+	const resolvedDirectory = await realpath(sourceDirectory);
+	if (visitedDirectories.has(resolvedDirectory)) {
+		return;
+	}
+
+	visitedDirectories.add(resolvedDirectory);
+
+	for (const name of await readdir(sourceDirectory)) {
+		const sourcePath = join(sourceDirectory, name);
+		const layoutPath = join(layoutDirectory, name);
+		if (await resolvesOutsideCorpus(source, sourcePath)) {
+			throw symlinkedCorpusEntry(layoutPath);
+		}
+
+		const sourceStats = await stat(sourcePath);
+
+		if (sourceStats.isDirectory()) {
+			await refuseNestedSymlinks(
+				source,
+				sourcePath,
+				layoutPath,
+				visitedDirectories,
 			);
 		}
 	}
