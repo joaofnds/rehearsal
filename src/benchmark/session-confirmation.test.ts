@@ -13,6 +13,7 @@ import {
 	SessionInvocationError,
 } from "./session-confirmation";
 import { parseGroupReportSummaryRecord } from "./record-summary";
+import { failureOf } from "#cli/cli-test-support";
 import { runList } from "#cli/list-command";
 import { runShow } from "#cli/show-command";
 
@@ -94,34 +95,36 @@ describe(runSessionConfirmation.name, () => {
 		};
 		let providerCalls = 0;
 
-		const failure = runSessionConfirmation(
-			{
-				resolveCorpus: () =>
-					Promise.resolve({ kind: "live", root: liveRoot, backingRoot }),
-				executeAttempt: () => {
-					providerCalls += 1;
-					return Promise.reject(new Error("a provider call must not happen"));
+		const failure = await failureOf(
+			runSessionConfirmation(
+				{
+					resolveCorpus: () =>
+						Promise.resolve({ kind: "live", root: liveRoot, backingRoot }),
+					executeAttempt: () => {
+						providerCalls += 1;
+						return Promise.reject(new Error("a provider call must not happen"));
+					},
 				},
-			},
-			{
-				runsDirectory: join(root, "runs"),
-				groupId: "hostile-live-group",
-				reps: 2,
-				projectedCost: {
+				{
+					runsDirectory: join(root, "runs"),
+					groupId: "hostile-live-group",
 					reps: 2,
-					perRepMaximumUsd: 0.2,
-					preflightMaximumUsd: 0.1,
-					totalMaximumUsd: 0.5,
+					projectedCost: {
+						reps: 2,
+						perRepMaximumUsd: 0.2,
+						preflightMaximumUsd: 0.1,
+						totalMaximumUsd: 0.5,
+					},
+					approvalMethod: "yes",
+					sessionCase,
+					model: "sonnet",
+					sessionBudgetUsd: 0.2,
+					preflight: { status: "MISSING", missing: "metrics" },
 				},
-				approvalMethod: "yes",
-				sessionCase,
-				model: "sonnet",
-				sessionBudgetUsd: 0.2,
-				preflight: { status: "MISSING", missing: "metrics" },
-			},
+			),
 		);
 
-		expect(failure).rejects.toThrow("output-styles/foreign.md");
+		expect(failure.message).toContain("output-styles/foreign.md");
 		expect(providerCalls).toBe(0);
 	});
 
