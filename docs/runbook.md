@@ -127,6 +127,21 @@ there is nothing to mark stale. It reads the current corpus and starts no sessio
 For pipeline checkpoints, add `--model` or `--effort` to check those conditions
 as well. Without them, the command checks corpus changes only.
 
+## Configure a linked live corpus
+
+Commands that use the live corpus read instructions from `~/.claude`. If your
+instruction files link into a backing tree other than the default `~/.agents`,
+set its absolute path in the shell where you run Rehearsal:
+
+```sh
+export BENCHMARK_LIVE_CORPUS_BACKING_ROOT=/absolute/path/to/agents
+```
+
+This setting applies to live corpus reads by CLI commands and the browser
+server. See [corpus sources and delivery](reference.md#corpus-sources-and-delivery)
+for the permitted paths, supported execution modes, and remaining containment
+limits.
+
 ## Use a pipeline on a prepared target
 
 The bundled [audit-log case](../cases/audit-log/case.json) describes a NestJS
@@ -143,7 +158,9 @@ will need its own case, rubrics, and pipeline.
 The control repository must be committed and clean. The target must be a
 separate clean Git repository root on `main`. The workflow needs the installed
 skills named by the pipeline, the corpus's global instructions, and working
-Backlog.md configuration. **Board bootstrapping is currently a portability
+Backlog.md configuration. For linked instruction files, follow
+[live-corpus setup](#configure-a-linked-live-corpus).
+**Board bootstrapping is currently a portability
 blocker**: it reads `~/.agents/backlog-config.yml` when a target has no config,
 and the bootstrap tests currently fail. Resolve that setup before attempting
 this path; there is no verified generic setup recipe yet.
@@ -211,20 +228,10 @@ local records and the live corpus; it does not launch experiments. It has no
 authentication and does not explicitly restrict its bind address to loopback,
 so do not expose its port as a public service.
 
-Live instruction reads, declared-file hashes, and confirmation copies permit
-`~/.claude` and the backing tree named by
-`BENCHMARK_LIVE_CORPUS_BACKING_ROOT`, which defaults to `~/.agents`. If those
-files link to a different backing tree, supply its absolute path to every
-Rehearsal command that reads them:
-
-```sh
-BENCHMARK_LIVE_CORPUS_BACKING_ROOT=/absolute/path/to/agents \
-  mise exec -- bun run serve
-```
-
-The corpus API's whole-layout enumeration can still follow a linked directory
-root beyond both trees. ACT-134 owns that remaining boundary. Use trusted live
-layout roots when running the server.
+For linked instruction files, configure the server's shell using
+[live-corpus setup](#configure-a-linked-live-corpus). Use trusted live layout
+roots: the corpus API can still follow linked directory roots beyond the
+configured file-read boundary.
 
 See [current UI coverage](status.md#browser-ui) for available routes and planned
 controls. An empty run-history page is expected in a fresh clone.
