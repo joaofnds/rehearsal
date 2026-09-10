@@ -196,6 +196,10 @@ file's path under `~/.claude`; the real path is used only for authorization. The
 corpus API reports an offending instruction as a refusal, omits its file and the
 whole-corpus digest, and continues to report healthy entries.
 
+Whole-layout enumeration for the corpus API, stage capture, and `stale` can
+still follow a linked directory root beyond the live extent. ACT-134 owns that
+remaining boundary, so live layout roots must remain trusted.
+
 A declared directory source must exist and contain at least one recognized
 layout entry. Rehearsal consumes a directory; rendering a revision from a
 dotfiles repository is external work. Directory-backed session snapshots
