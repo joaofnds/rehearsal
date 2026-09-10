@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
@@ -52,7 +52,7 @@ describe(liveCorpusSource.name, () => {
     },
   );
 
-  it("keeps the backing root captured when the environment changes", () => {
+	it("keeps the backing root captured when the environment changes", () => {
     const original = join(tmpdir(), "original-agents");
     const changed = join(tmpdir(), "changed-agents");
     const env: Record<string, string | undefined> = {
@@ -62,8 +62,38 @@ describe(liveCorpusSource.name, () => {
 
     env[LIVE_CORPUS_BACKING_ROOT_ENV] = changed;
 
-    expect(source.backingRoot).toBe(original);
-  });
+		expect(source.backingRoot).toBe(original);
+	});
+
+	it("permits only the configured backing tree after an explicit override", async () => {
+		const root = await resources.createControlDirectory();
+		const configured = await resources.createControlDirectory();
+		const formerDefault = await resources.createControlDirectory();
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await Bun.write(join(configured, "allowed.md"), "allowed\n");
+		await Bun.write(join(formerDefault, "refused.md"), "REFUSED BYTES\n");
+		await symlink(
+			join(configured, "allowed.md"),
+			join(root, "output-styles", "allowed.md"),
+		);
+		await symlink(
+			join(formerDefault, "refused.md"),
+			join(root, "output-styles", "refused.md"),
+		);
+		const source = liveCorpusSource({ root, backingRoot: configured });
+
+		const allowed = await hashCorpusFiles(source, [
+			"output-styles/allowed.md",
+		]);
+		const refusal = await failureOf(
+			hashCorpusFiles(source, ["output-styles/refused.md"]),
+		);
+
+		expect(allowed[0]?.sha256).toBe(
+			new Bun.CryptoHasher("sha256").update("allowed\n").digest("hex"),
+		);
+		expect(refusal).toBeInstanceOf(SymlinkedEntryError);
+	});
 });
 
 describe(resolveCorpusFile.name, () => {
@@ -435,7 +465,7 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
     expect(failure).toBeInstanceOf(CorpusConfigurationError);
   });
 
-  it("surfaces a backing-tree resolution error before reading outside bytes", async () => {
+	it("surfaces a backing-tree resolution error before reading outside bytes", async () => {
     const root = await resources.createControlDirectory();
     const parent = await resources.createControlDirectory();
     const backingRoot = join(parent, "loop");
@@ -448,8 +478,46 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
     );
 
     expect(failure).not.toBeInstanceOf(SymlinkedEntryError);
-    expect("code" in failure ? failure.code : undefined).toBe("ELOOP");
-  });
+		expect("code" in failure ? failure.code : undefined).toBe("ELOOP");
+	});
+
+	it("surfaces a permission error when authorization needs the backing tree", async () => {
+		const root = await resources.createControlDirectory();
+		const backingParent = await resources.createControlDirectory();
+		const backingRoot = join(backingParent, "private", "backing");
+		const secret = await outsideFile("SECRET BYTES\n");
+		await mkdir(backingRoot, { recursive: true });
+		await symlink(secret, join(root, "CLAUDE.md"));
+		await chmod(join(backingParent, "private"), 0o000);
+
+		try {
+			const failure = await failureOf(
+				readCorpusInstructions({ kind: "live", root, backingRoot }),
+			);
+
+			expect(failure).not.toBeInstanceOf(SymlinkedEntryError);
+			expect("code" in failure ? failure.code : undefined).toBe("EACCES");
+		} finally {
+			await chmod(join(backingParent, "private"), 0o700);
+		}
+	});
+
+	it("reads an install file without consulting an unreadable backing tree", async () => {
+		const root = await resources.createControlDirectory();
+		const backingParent = await resources.createControlDirectory();
+		const backingRoot = join(backingParent, "private", "backing");
+		await mkdir(backingRoot, { recursive: true });
+		await Bun.write(join(root, "CLAUDE.md"), "install bytes\n");
+		await chmod(join(backingParent, "private"), 0o000);
+
+		try {
+			expect(
+				await readCorpusInstructions({ kind: "live", root, backingRoot }),
+			).toBe("install bytes\n");
+		} finally {
+			await chmod(join(backingParent, "private"), 0o700);
+		}
+	});
 
   it("refuses a file reached through an intermediate directory outside the live extent", async () => {
     const root = await resources.createControlDirectory();
