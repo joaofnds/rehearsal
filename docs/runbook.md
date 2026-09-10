@@ -160,10 +160,17 @@ separate clean Git repository root on `main`. The workflow needs the installed
 skills named by the pipeline, the corpus's global instructions, and working
 Backlog.md configuration. For linked instruction files, follow
 [live-corpus setup](#configure-a-linked-live-corpus).
-**Board bootstrapping is currently a portability
-blocker**: it reads `~/.agents/backlog-config.yml` when a target has no config,
-and the bootstrap tests currently fail. Resolve that setup before attempting
-this path; there is no verified generic setup recipe yet.
+
+When a target has no board, the harness initializes one under `backlog/` with
+the pinned Backlog.md CLI and excludes its workflow state through the
+repository's private Git excludes. It writes no agent instruction file or
+commit. An existing `backlog.config.yml`, `backlog/config.yml`, or
+`.backlog/config.yml` is retained. The harness updates an untracked
+configuration with the pipeline's statuses. A tracked configuration must
+already be normalized by the pinned Backlog.md CLI and its status list must
+match the pipeline exactly, so task creation cannot enter the measured source
+diff. The board directory must contain no tracked files other than its folder
+configuration file.
 
 Once those prerequisites are satisfied, the invocation is:
 
@@ -185,6 +192,8 @@ It uses agents with permission bypass on the host. Use a designated benchmark
 target whose committed state and workflow artifacts can be restored; ignored
 build outputs and external services are not snapshotted. See
 [target restoration](reference.md#target-restoration) before relying on recovery.
+The repository-private board exclusions remain after restoration and are reused
+by later runs.
 
 ## Read, review, and replay a pipeline result
 

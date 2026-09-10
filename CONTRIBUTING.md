@@ -43,10 +43,6 @@ mise exec -- bun test --path-ignore-patterns "**/node_modules/**" \
   --preload ./client/test-setup.ts ./client
 ```
 
-See [known limitations](docs/status.md#known-limitations) for the current
-Backlog.md bootstrap failure. Record the failures you observe instead of
-claiming the combined suite passed.
-
 For an integrated browser check, run `mise exec -- bun run build:client`, then
 `mise exec -- bun run serve`. The `dev:client` script runs Vite alone; its current
 configuration has no API proxy. Use the built client with the server when

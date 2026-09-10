@@ -1,12 +1,22 @@
-import { readdir } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, join, relative } from "node:path";
+import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
+import {
+	BacklogConfigurationError,
+	existingBacklogLayout,
+} from "./backlog-layout";
 import { runCommand } from "./command";
 import { StageValidationError } from "./contracts";
+import { RefusedPreconditionError } from "./exit-codes";
 import type { PlanningStageDefinition } from "./pipeline";
 import type { ExpectedBranch } from "./target";
-import { capturePlanningAdvance, git } from "./target";
+import {
+	assertWorkflowBoardPrivate,
+	capturePlanningAdvance,
+	git,
+} from "./target";
+import { managedWorkflowPaths } from "./workflow-state";
 import type { Immutable } from "./contracts";
 
 const taskViewSchema = z
@@ -22,14 +32,7 @@ const taskViewSchema = z
 
 type TaskView = Immutable<z.infer<typeof taskViewSchema>>;
 
-/**
- * The base configuration names `.boris/backlog`, which the operator's global
- * gitignore covers. A board at backlog's own default is untracked in a target
- * that never opted into one, and the harness writes no commit for the board it
- * creates, so the stage would be failed for a dirty worktree holding the
- * harness's own scaffolding.
- */
-const BASE_BOARD_CONFIG = join(homedir(), ".agents", "backlog-config.yml");
+const GITIGNORE_SPECIAL_CHARACTERS = new Set(["\\", "*", "?", "[", "]"]);
 
 interface TaskSeed {
 	readonly title: string;
@@ -50,43 +53,156 @@ function parseTaskSeed(task: string): TaskSeed {
 	return { title: heading.slice(2).trim(), description };
 }
 
-/**
- * Where the board lives for this target. The base configuration moves it off
- * backlog's own default, so a reader that assumes the default finds nothing.
- */
 async function boardDirectory(targetDir: string): Promise<string> {
-	const config = await Bun.file(join(targetDir, "backlog.config.yml"))
-		.text()
-		.catch(() => "");
-	const configured = /^backlog_directory:\s*"?(?<path>[^"\n]+)"?\s*$/mu.exec(
-		config,
-	);
+	const layout = await existingBacklogLayout(targetDir);
+	return layout?.directory ?? join(targetDir, "backlog");
+}
 
-	return join(targetDir, configured?.groups?.["path"]?.trim() ?? "backlog");
+/**
+ * The harness owns its board scaffolding but not the target's `.gitignore`.
+ * Repository-private excludes keep a previously boardless target clean without
+ * changing the files a stage is measured against or depending on global Git
+ * configuration.
+ */
+async function excludeWorkflowState(targetDir: string): Promise<void> {
+	const commonDirectory = await git(targetDir, "rev-parse", "--git-common-dir");
+	const excludePath = resolve(targetDir, commonDirectory, "info", "exclude");
+	let existing: string;
+	try {
+		existing = await readFile(excludePath, "utf8");
+	} catch (error) {
+		if (
+			!(error instanceof Error && "code" in error && error.code === "ENOENT")
+		) {
+			throw error;
+		}
+		existing = "";
+	}
+	const paths = await managedWorkflowPaths(targetDir);
+	const patterns = [
+		...new Set(
+			paths.map((path) => {
+				const normalized = path.split(sep).join("/");
+				if (normalized.includes("\n") || normalized.includes("\r")) {
+					throw new Error("Backlog directory must fit on one Git exclude line");
+				}
+				let escaped = "";
+				for (const character of normalized) {
+					if (GITIGNORE_SPECIAL_CHARACTERS.has(character)) {
+						escaped += "\\";
+					}
+					escaped += character;
+				}
+				return `/${escaped}${normalized === "backlog.config.yml" ? "" : "/"}`;
+			}),
+		),
+	];
+	const lines = new Set(
+		existing.split("\n").map((line) => line.replace(/\r$/u, "")),
+	);
+	const missing = patterns.filter((path) => !lines.has(path));
+	if (missing.length === 0) {
+		return;
+	}
+
+	await mkdir(dirname(excludePath), { recursive: true });
+	const separator = existing === "" || existing.endsWith("\n") ? "" : "\n";
+	await Bun.write(
+		excludePath,
+		`${existing}${separator}${missing.join("\n")}\n`,
+	);
 }
 
 async function configureBacklog(
 	targetDir: string,
 	statuses: readonly string[],
 ): Promise<void> {
-	const configPath = join(targetDir, "backlog.config.yml");
-	const configFile = Bun.file(configPath);
-
-	if (!(await configFile.exists())) {
-		const base = await Bun.file(BASE_BOARD_CONFIG).text();
-		await Bun.write(configPath, base.replace("PLACEHOLDER", "Template"));
+	let layout = await existingBacklogLayout(targetDir);
+	if (layout === undefined) {
+		await runCommand(
+			[
+				"backlog",
+				"init",
+				"Template",
+				"--defaults",
+				"--integration-mode",
+				"cli",
+				"--agent-instructions",
+				"none",
+				"--backlog-dir",
+				"backlog",
+				"--config-location",
+				"folder",
+				"--no-git",
+			],
+			targetDir,
+		);
+		layout = await existingBacklogLayout(targetDir);
+		if (layout === undefined) {
+			throw new Error("Backlog initialization did not create a configuration");
+		}
 	}
 
-	const config = await Bun.file(configPath).text();
-	const statusesLine = `statuses: [${statuses
-		.map((status) => JSON.stringify(status))
-		.join(", ")}]`;
-	const configured = config.replace(/^statuses:.*$/mu, statusesLine);
-	if (configured === config && !config.includes(statusesLine)) {
-		throw new Error("Backlog configuration does not declare statuses");
+	const { value: document } = layout.config;
+	if (document.statuses === undefined) {
+		throw new BacklogConfigurationError(layout.configPath, {
+			cause: new Error("statuses is missing"),
+		});
 	}
 
-	await Bun.write(configPath, configured);
+	const statusesMatch =
+		document.statuses.length === statuses.length &&
+		document.statuses.every((status, index) => status === statuses[index]);
+
+	const configRelativePath = relative(targetDir, layout.configPath);
+	const tracked = await git(targetDir, "ls-files", "--", configRelativePath);
+	const configIsTracked = tracked.split("\n").includes(configRelativePath);
+	if (configIsTracked && !statusesMatch) {
+		throw new RefusedPreconditionError(
+			"A tracked Backlog configuration must already declare the pipeline statuses",
+		);
+	}
+	if (configIsTracked) {
+		await assertPinnedCliPreservesConfiguration(targetDir, layout);
+		return;
+	}
+	if (statusesMatch) {
+		return;
+	}
+
+	const configured = Bun.YAML.stringify(
+		{ ...document, statuses: [...statuses] },
+		null,
+		2,
+	);
+
+	await Bun.write(layout.configPath, configured);
+}
+
+async function assertPinnedCliPreservesConfiguration(
+	targetDir: string,
+	layout: Immutable<
+		NonNullable<Awaited<ReturnType<typeof existingBacklogLayout>>>
+	>,
+): Promise<void> {
+	const fixture = await mkdtemp(join(tmpdir(), "rehearsal-backlog-config-"));
+	try {
+		const configPath = join(fixture, relative(targetDir, layout.configPath));
+		const boardPath = join(fixture, relative(targetDir, layout.directory));
+		await mkdir(dirname(configPath), { recursive: true });
+		await mkdir(boardPath, { recursive: true });
+		await Bun.write(configPath, layout.config.source);
+		await runCommand(["git", "init", "-q", "-b", "main"], fixture);
+		await runCommand(["backlog", "task", "list", "--plain"], fixture);
+
+		if ((await Bun.file(configPath).text()) !== layout.config.source) {
+			throw new RefusedPreconditionError(
+				"A tracked Backlog configuration must already be normalized by the pinned Backlog CLI",
+			);
+		}
+	} finally {
+		await rm(fixture, { force: true, recursive: true });
+	}
 }
 
 /**
@@ -106,7 +222,9 @@ export async function seedTaskBoard(
 		throw new Error("The pipeline must declare at least one board status");
 	}
 
+	await assertWorkflowBoardPrivate(targetDir);
 	await configureBacklog(targetDir, statuses);
+	await excludeWorkflowState(targetDir);
 	const { title, description } = parseTaskSeed(task);
 	const createdTask = await runCommand(
 		[

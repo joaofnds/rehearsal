@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { seedTaskBoard } from "./backlog";
 import { CommandError, runCommand } from "./command";
 import { StageValidationError } from "./contracts";
 import {
@@ -427,9 +428,175 @@ describe(restoreTarget.name, () => {
 		).toBe(false);
 		expect(stat(join(source.directory, ".boris"))).rejects.toThrow();
 	});
+
+	it("removes a seeded task when restoring an existing .backlog board", async () => {
+		const source = await testResources.createRepository();
+		const configPath = join(source.directory, ".backlog", "config.yml");
+		await runCommand(
+			[
+				"backlog",
+				"init",
+				"Existing",
+				"--defaults",
+				"--integration-mode",
+				"cli",
+				"--agent-instructions",
+				"none",
+				"--backlog-dir",
+				".backlog",
+				"--config-location",
+				"folder",
+				"--no-git",
+			],
+			source.directory,
+		);
+		const original = await Bun.file(configPath).text();
+		await runCommand(
+			["git", "add", "-f", ".backlog/config.yml"],
+			source.directory,
+		);
+		await runCommand(
+			["git", "commit", "-m", "chore: configure backlog"],
+			source.directory,
+		);
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await seedTaskBoard(
+			source.directory,
+			"# Review fixture\n\nExercise restoration.\n",
+			["To Do", "In Progress", "Done"],
+		);
+
+		await restoreTarget(baseline, backup);
+
+		expect(await Bun.file(configPath).text()).toBe(original);
+		expect(
+			await Bun.file(
+				join(
+					source.directory,
+					".backlog",
+					"tasks",
+					"work-1 - Review-fixture.md",
+				),
+			).exists(),
+		).toBe(false);
+	});
+
+	it("restores an ignored custom board and root configuration exactly", async () => {
+		const source = await testResources.createRepository();
+		const configPath = join(source.directory, "backlog.config.yml");
+		const boardDirectory = join(source.directory, "workflow-board");
+		const originalConfig = [
+			'project_name: "Existing"',
+			'default_status: "To Do"',
+			'statuses: ["To Do"]',
+			"task_prefix: work",
+			'backlog_directory: "workflow-board"',
+			"",
+		].join("\n");
+		await Bun.write(
+			join(source.directory, ".git", "info", "exclude"),
+			"/backlog.config.yml\n/workflow-board/\n",
+		);
+		await mkdir(boardDirectory);
+		await Bun.write(configPath, originalConfig);
+		await Bun.write(join(boardDirectory, "original.md"), "original\n");
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await seedTaskBoard(
+			source.directory,
+			"# Review fixture\n\nExercise restoration.\n",
+			["To Do", "Done"],
+		);
+
+		await restoreTarget(baseline, backup);
+
+		expect(await Bun.file(configPath).text()).toBe(originalConfig);
+		expect(await Bun.file(join(boardDirectory, "original.md")).text()).toBe(
+			"original\n",
+		);
+		expect(
+			await Bun.file(
+				join(boardDirectory, "tasks", "work-1 - Review-fixture.md"),
+			).exists(),
+		).toBe(false);
+	});
+
+	it("does not grant candidate configuration ownership of tracked source", async () => {
+		const source = await testResources.createRepository();
+		await mkdir(join(source.directory, "src"));
+		await Bun.write(join(source.directory, "src", "app.ts"), "source\n");
+		await commitAll(source.directory, "feat: add source");
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await Bun.write(
+			join(source.directory, "backlog.config.yml"),
+			'statuses: ["To Do", "Done"]\nbacklog_directory: "src"\n',
+		);
+
+		await restoreTarget(baseline, backup);
+
+		expect(await Bun.file(join(source.directory, "src", "app.ts")).text()).toBe(
+			"source\n",
+		);
+		expect(
+			await runCommand(
+				["git", "status", "--porcelain", "--untracked-files=all"],
+				source.directory,
+			),
+		).toBe("");
+	});
+
+	it("restores a target whose candidate configuration is malformed", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		await Bun.write(
+			join(source.directory, "backlog.config.yml"),
+			"statuses: [unterminated\n",
+		);
+
+		await restoreTarget(baseline, backup);
+
+		expect(
+			await Bun.file(join(source.directory, "backlog.config.yml")).exists(),
+		).toBe(false);
+		expect(
+			await runCommand(
+				["git", "status", "--porcelain", "--untracked-files=all"],
+				source.directory,
+			),
+		).toBe("");
+	});
 });
 
 describe(captureWorkflowBackup.name, () => {
+	it("refuses to treat tracked source as workflow state", async () => {
+		const source = await testResources.createRepository();
+		await mkdir(join(source.directory, "src"));
+		await Bun.write(join(source.directory, "src", "app.ts"), "source\n");
+		await Bun.write(
+			join(source.directory, "backlog.config.yml"),
+			'statuses: ["To Do", "Done"]\nbacklog_directory: "src"\n',
+		);
+		await runCommand(
+			["git", "add", "src/app.ts", "backlog.config.yml"],
+			source.directory,
+		);
+		await runCommand(
+			["git", "commit", "-m", "chore: configure tracked board"],
+			source.directory,
+		);
+
+		expect(captureWorkflowBackup(source.directory)).rejects.toThrow(
+			"must not contain tracked files: src/app.ts",
+		);
+	});
+
 	it("rejects a workflow path discovery failure, leaving no backup directory", async () => {
 		const source = await testResources.createRepository();
 		await mkdir(join(source.directory, "backlog"));

@@ -12,17 +12,17 @@ still requires environment-specific setup.
 
 ## Implemented
 
-| Capability                  | Current boundary                                                                                           | Source                                                                                                                             |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Data-declared cases         | Session and pipeline kinds; bundled inputs have differing portability                                      | [Case loader](../src/benchmark/case.ts)                                                                                            |
-| Session attempts            | Fixture/prefix support and deterministic reply/transcript checks                                           | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
-| Session confirmation        | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
-| Pipeline execution          | Configured stages, dynamic PO, stage/final Judges, baseline checks, calibration, restoration               | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
-| Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                           | [Replay command](../src/cli/replay-command.ts)                                                                                     |
-| Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                     | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
-| Comparison reports          | At least two cases, baseline/candidate/control arms; stage/pipeline evidence only                          | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
-| Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness            | [CLI commands](../src/cli/commands.ts)                                                                                             |
-| Local read UI and event API | Partial browser views and server-side event streaming                                                      | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
+| Capability                  | Current boundary                                                                                               | Source                                                                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Data-declared cases         | Session and pipeline kinds; bundled inputs have differing portability                                          | [Case loader](../src/benchmark/case.ts)                                                                                            |
+| Session attempts            | Fixture/prefix support and deterministic reply/transcript checks                                               | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
+| Session confirmation        | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight     | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
+| Pipeline execution          | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
+| Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                               | [Replay command](../src/cli/replay-command.ts)                                                                                     |
+| Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                         | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
+| Comparison reports          | At least two cases, baseline/candidate/control arms; stage/pipeline evidence only                              | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
+| Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                | [CLI commands](../src/cli/commands.ts)                                                                                             |
+| Local read UI and event API | Partial browser views and server-side event streaming                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
 An implemented path can still have missing real-provider validation. The board's
 pending comparison work includes running a complete two-case, three-arm session
@@ -31,12 +31,6 @@ browser. Existing tests and schemas do not establish that end-to-end result.
 
 ## Known limitations
 
-- **Pipeline board setup is not portable yet.** When the target lacks
-  `backlog.config.yml`, [board setup](../src/benchmark/backlog.ts) reads
-  `~/.agents/backlog-config.yml`, outside the clone. The pinned toolchain audit
-  on 2026-09-10 reproduced six `seedTaskBoard` test failures with “No Backlog.md
-  project found.” Reproduce with `mise exec -- bun test src/benchmark/backlog.test.ts`.
-  Do not assume a fresh target will bootstrap successfully.
 - **Session groups cannot feed `compare`.** The loader explicitly refuses
   session mode. Producing groups and reporting across cases are separate
   capabilities; the latter remains pending.
@@ -91,8 +85,7 @@ goals:
 
 1. Make the session comparison loader consume the confirmation records the
    runner now produces, then validate a full comparison and its browser view.
-2. Remove personal environment dependencies from pipeline board setup and
-   provide reproducible public case inputs.
+2. Provide reproducible public pipeline case inputs.
 3. Deliver isolated session skill variants, generated fixtures, and preserved
    post-session state so realistic skill outcomes can be graded.
 4. Complete the evidence needed for useful UI views, including pipeline

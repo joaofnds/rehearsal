@@ -529,6 +529,49 @@ describe(recordCheckpoint.name, () => {
 		expect(draftsStats.isDirectory()).toBe(true);
 	});
 
+	it("materializes a root configuration and its custom board", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-checkpoint-"));
+		testResources.track(directory);
+		const targetDir = join(directory, "target");
+		const checkpointDir = join(directory, "checkpoint");
+		const destination = join(directory, "materialized");
+		const config = [
+			'project_name: "Existing"',
+			'statuses: ["To Do", "Done"]',
+			'backlog_directory: "workflow-board"',
+			"",
+		].join("\n");
+		await mkdir(join(targetDir, "workflow-board", "tasks"), {
+			recursive: true,
+		});
+		await Bun.write(join(targetDir, "backlog.config.yml"), config);
+		await Bun.write(
+			join(targetDir, "workflow-board", "tasks", "work-1.md"),
+			"the task\n",
+		);
+
+		const record = await recordCheckpoint(
+			targetDir,
+			checkpointDir,
+			checkpointInputs,
+		);
+		await mkdir(destination, { recursive: true });
+		await materializeCheckpoint(checkpointDir, destination);
+
+		expect(record.workflowState.map(({ path }) => path).toSorted()).toEqual([
+			"backlog.config.yml",
+			"workflow-board/tasks/work-1.md",
+		]);
+		expect(await Bun.file(join(destination, "backlog.config.yml")).text()).toBe(
+			config,
+		);
+		expect(
+			await Bun.file(
+				join(destination, "workflow-board", "tasks", "work-1.md"),
+			).text(),
+		).toBe("the task\n");
+	});
+
 	it("refuses to materialize a tampered snapshot, copying nothing", async () => {
 		const { targetDir, checkpointDir, destination } = await checkpointFixture();
 		await recordCheckpoint(targetDir, checkpointDir, checkpointInputs);

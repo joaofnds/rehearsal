@@ -1,13 +1,19 @@
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { z } from "zod";
+import { existingBacklogLayout } from "./backlog-layout";
 import { captureBoundedContent } from "./checks";
 import { CommandError, runCommand } from "./command";
 import { CONTROL_DIR } from "./config";
 import { StageValidationError } from "./contracts";
+import { RefusedPreconditionError } from "./exit-codes";
 import type { WorkflowPath } from "./workflow-state";
-import { copyWorkflowState, replaceWorkflowState } from "./workflow-state";
+import {
+	copyWorkflowState,
+	managedWorkflowPaths,
+	replaceWorkflowState,
+} from "./workflow-state";
 
 export interface SourceBaseline {
 	readonly root: string;
@@ -17,6 +23,7 @@ export interface SourceBaseline {
 
 export interface WorkflowBackup {
 	readonly directory: string;
+	readonly managedPaths: readonly WorkflowPath[];
 	readonly presentPaths: readonly WorkflowPath[];
 }
 
@@ -108,14 +115,51 @@ export async function assertControlReady(): Promise<string> {
 export async function captureWorkflowBackup(
 	targetDir: string,
 ): Promise<WorkflowBackup> {
+	await assertWorkflowBoardPrivate(targetDir);
+
 	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
 	try {
-		const presentPaths = await copyWorkflowState(targetDir, directory);
+		const managedPaths = await managedWorkflowPaths(targetDir);
+		const presentPaths = await copyWorkflowState(
+			targetDir,
+			directory,
+			managedPaths,
+		);
 
-		return { directory, presentPaths };
+		return { directory, managedPaths, presentPaths };
 	} catch (error) {
 		await rm(directory, { force: true, recursive: true });
 		throw error;
+	}
+}
+
+export async function assertWorkflowBoardPrivate(
+	targetDir: string,
+): Promise<void> {
+	const layout = await existingBacklogLayout(targetDir);
+	const configPath =
+		layout === undefined ? undefined : relative(targetDir, layout.configPath);
+	const trackedBoardFiles: string[] = [];
+
+	for (const path of await managedWorkflowPaths(targetDir)) {
+		if (path === "backlog.config.yml") {
+			continue;
+		}
+
+		const tracked = await git(targetDir, "ls-files", "-z", "--", path);
+		trackedBoardFiles.push(
+			...tracked
+				.split("\0")
+				.filter(
+					(trackedPath) => trackedPath !== "" && trackedPath !== configPath,
+				),
+		);
+	}
+
+	if (trackedBoardFiles.length > 0) {
+		throw new RefusedPreconditionError(
+			`Backlog workflow state must not contain tracked files: ${trackedBoardFiles.join(", ")}`,
+		);
 	}
 }
 
@@ -184,6 +228,7 @@ export async function restoreTarget(
 			backup.directory,
 			source.root,
 			backup.presentPaths,
+			backup.managedPaths,
 		);
 	}
 

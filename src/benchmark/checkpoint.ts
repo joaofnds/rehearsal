@@ -17,7 +17,7 @@ import {
 	statIfExists,
 	SymlinkedEntryError,
 } from "./file-presence";
-import { copyWorkflowState, existingWorkflowTrees } from "./workflow-state";
+import { copyWorkflowState, existingWorkflowEntries } from "./workflow-state";
 
 export interface HashedFile {
 	readonly path: string;
@@ -771,12 +771,19 @@ export async function hashWorkflowState(
 ): Promise<readonly HashedFile[]> {
 	const files: HashedFile[] = [];
 
-	for (const tree of await existingWorkflowTrees(targetDir)) {
-		files.push(
-			...(await hashDirectory(tree.directory, tree.path, {
-				rootMayBeALink: false,
-			})),
-		);
+	for (const entry of await existingWorkflowEntries(targetDir)) {
+		if (entry.isDirectory) {
+			files.push(
+				...(await hashDirectory(entry.absolutePath, entry.path, {
+					rootMayBeALink: false,
+				})),
+			);
+		} else {
+			files.push({
+				path: entry.path,
+				sha256: await hashFile(entry.absolutePath),
+			});
+		}
 	}
 
 	return files;

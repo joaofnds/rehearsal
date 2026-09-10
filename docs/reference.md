@@ -252,8 +252,10 @@ ambient hooks, memory, and MCP behavior.
 
 A debug pipeline requires a clean control repository and a separate clean target
 repository root on `main`, including ordinary untracked files. The harness
-claims the target, backs up `backlog/` and `.boris/`, runs baseline checks,
-verifies the unchanged clean baseline, and captures context/integrity bytes.
+claims the target and backs up its managed workflow state: the root Backlog
+configuration, `backlog/`, `.backlog/`, `.boris/`, and a configured custom board
+path when one exists. It then runs baseline checks, verifies the unchanged clean
+baseline, and captures context/integrity bytes.
 It then seeds a real Backlog.md task and records an initial checkpoint.
 
 Each stage starts a fresh engineering session with its named skill. Durable
@@ -369,10 +371,12 @@ Changing the model or rubric starts a distinct agreement baseline.
 ## Target restoration
 
 Normal direct-target cleanup force-switches to `main`, resets to the original
-SHA, cleans ordinary untracked files, restores `backlog/` and `.boris/`, then
-verifies the original clean state before removing the run marker and backup.
-Candidate commits survive through retained refs. Ignored dependency/build
-folders outside the workflow paths are not restored byte for byte.
+SHA, cleans ordinary untracked files, restores the workflow paths recorded in
+the pre-run backup, then verifies the original clean state before removing the
+run marker and backup. Candidate commits survive through retained refs. Ignored
+dependency/build folders outside the workflow paths are not restored byte for
+byte. Repository-private Backlog exclude entries remain in Git metadata after
+restoration and are reused by later runs.
 
 SIGINT, SIGTERM, and SIGHUP stop child process groups and trigger restoration.
 A hard kill or crash may leave `.git/benchmark-run.json` and a temporary workflow
