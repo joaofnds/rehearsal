@@ -269,6 +269,35 @@ describe(staleCases.name, () => {
 		expect(report.records).toEqual([]);
 	});
 
+	it("names an out-of-extent live file as a stale cause instead of freshness", async () => {
+		const recordedCorpus = await styleCorpus("the brief style\n");
+		const runsDirectory = await runsWithSmokeAttempt(recordedCorpus);
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-live-install-"));
+		const backingRoot = await mkdtemp(join(tmpdir(), "rehearsal-live-backing-"));
+		const outside = await styleCorpus("FOREIGN STYLE\n");
+		roots.push(root, backingRoot);
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await symlink(
+			join(outside, "output-styles", "brief.md"),
+			join(root, "output-styles", "brief.md"),
+		);
+
+		const report = await staleCases(runsDirectory, {
+			kind: "live",
+			root,
+			backingRoot,
+		});
+
+		expect(report.records).toEqual([
+			{
+				id: "case:smoke",
+				causes: [
+					"Corpus file output-styles/brief.md resolves outside the live corpus extent, which would hash bytes the corpus does not hold",
+				],
+			},
+		]);
+	});
+
 	describe("when a case has two attempts", () => {
 		const OLDER = "0f6b6f2a-0000-4000-8000-00000000000a";
 		const NEWER = "0f6b6f2a-0000-4000-8000-00000000000b";

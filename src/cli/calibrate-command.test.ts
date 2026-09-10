@@ -6,6 +6,7 @@ import { CalibrationIncompleteError } from "#benchmark/calibration";
 import { CONTROL_DIR } from "#benchmark/config";
 import { calibratableArtifactSchema } from "#benchmark/calibration-record";
 import { loadJudgeAgreementReport } from "#benchmark/judge-agreement";
+import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type {
 	CalibrateDependencies,
 	CurrentControlSources,
@@ -134,6 +135,50 @@ describe(readControlSources.name, () => {
 });
 
 describe(runCalibrate.name, () => {
+	it("rejects an escaping revised instruction before rejudging", async () => {
+		const fixture = await writeRunFixture();
+		directories.push(fixture.runsDirectory);
+		await writeReview(fixture.reviewFile, []);
+		let providerCalls = 0;
+
+		const failure = await failureOf(
+			runCalibrate(
+				{
+					id: RUN_NAME,
+					runsDirectory: fixture.runsDirectory,
+					json: false,
+					confirmRejudge: false,
+					readCurrentSources: () =>
+						Promise.reject(
+							new SymlinkedEntryError(
+								"Corpus file CLAUDE.md resolves outside the live corpus extent",
+							),
+						),
+				},
+				{
+					buildJudges: () => {
+						providerCalls += 1;
+						return {
+							stageJudge: () =>
+								Promise.reject(new Error("no stage rejudge")),
+							finalJudge: () =>
+								Promise.reject(new Error("no final rejudge")),
+						};
+					},
+					output: recordOutput().output,
+					probeModel: () => {
+						providerCalls += 1;
+						return Promise.resolve();
+					},
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SymlinkedEntryError);
+		expect(failure.message).toContain("CLAUDE.md");
+		expect(providerCalls).toBe(0);
+	});
+
 	it("halts before rejudging when the recorded Judge model is not available", async () => {
 		const fixture = await writeRunFixture();
 		directories.push(fixture.runsDirectory);
