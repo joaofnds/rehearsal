@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "./case";
@@ -67,6 +67,62 @@ describe(runSessionConfirmation.name, () => {
 				.splice(0)
 				.map((directory) => rm(directory, { force: true, recursive: true })),
 		);
+	});
+
+	it("refuses an out-of-extent live corpus file before starting a rep", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-live-"));
+		temporaryDirectories.push(root);
+		const liveRoot = join(root, "install");
+		const backingRoot = join(root, "backing");
+		const outside = join(root, "outside");
+		await mkdir(join(liveRoot, "output-styles"), { recursive: true });
+		await mkdir(backingRoot, { recursive: true });
+		await mkdir(outside, { recursive: true });
+		await Bun.write(join(outside, "foreign.md"), "FOREIGN STYLE\n");
+		await symlink(
+			join(outside, "foreign.md"),
+			join(liveRoot, "output-styles", "foreign.md"),
+		);
+		const declared = simpleSessionCase("hostile-live");
+		const sessionCase: SessionCase = {
+			...declared,
+			declaration: {
+				...declared.declaration,
+				corpusFiles: ["output-styles/foreign.md"],
+			},
+			corpusFiles: ["output-styles/foreign.md"],
+		};
+		let providerCalls = 0;
+
+		const failure = runSessionConfirmation(
+			{
+				resolveCorpus: () =>
+					Promise.resolve({ kind: "live", root: liveRoot, backingRoot }),
+				executeAttempt: () => {
+					providerCalls += 1;
+					return Promise.reject(new Error("a provider call must not happen"));
+				},
+			},
+			{
+				runsDirectory: join(root, "runs"),
+				groupId: "hostile-live-group",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 0.2,
+					preflightMaximumUsd: 0.1,
+					totalMaximumUsd: 0.5,
+				},
+				approvalMethod: "yes",
+				sessionCase,
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+				preflight: { status: "MISSING", missing: "metrics" },
+			},
+		);
+
+		expect(failure).rejects.toThrow("output-styles/foreign.md");
+		expect(providerCalls).toBe(0);
 	});
 
 	it("runs every rep from one frozen input set and records a provider failure", async () => {

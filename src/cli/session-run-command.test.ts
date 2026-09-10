@@ -236,6 +236,42 @@ describe(runSessionDebugAttempt.name, () => {
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
 		expect(failure.message).toContain("no-such-style.md");
 	});
+
+	it("refuses an out-of-extent live corpus file before any provider call", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+		const root = await temporary("rehearsal-live-install-");
+		const backingRoot = await temporary("rehearsal-live-backing-");
+		const outside = await temporary("rehearsal-live-outside-");
+		await Bun.write(join(outside, "foreign.md"), "FOREIGN STYLE\n");
+		await mkdir(join(root, "output-styles"), { recursive: true });
+		await symlink(
+			join(outside, "foreign.md"),
+			join(root, "output-styles", "foreign.md"),
+		);
+		let providerCalls = 0;
+
+		const failure = await failureOf(
+			runSessionDebugAttempt({
+				sessionCase: sessionCase({
+					corpusFiles: ["output-styles/foreign.md"],
+				}),
+				config,
+				runsDirectory: runs,
+				resolveCorpus: () =>
+					Promise.resolve({ kind: "live", root, backingRoot }),
+				runClaude: () => {
+					providerCalls += 1;
+					return Promise.reject(new Error("a provider call must not happen"));
+				},
+				projectsDirectory: projects,
+			}),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(failure.message).toContain("live corpus extent");
+		expect(providerCalls).toBe(0);
+	});
 });
 
 describe("running a session case against a corpus source", () => {

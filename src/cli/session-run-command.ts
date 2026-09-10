@@ -7,6 +7,7 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
 import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
+import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
@@ -42,6 +43,9 @@ export interface SessionRunRequest {
 	readonly runsDirectory: string;
 	readonly runClaude: ClaudeRunner;
 	readonly projectsDirectory: string;
+	readonly resolveCorpus?:
+		| ((source: string | undefined) => Promise<ResolvedCorpusSource>)
+		| undefined;
 }
 
 function settingsOf(config: SessionRunConfig): SessionSettings {
@@ -68,8 +72,11 @@ async function requireCorpus(
 	sessionCase: SessionCase,
 	corpus: string | undefined,
 	snapshotDirectory: string,
+	resolveCorpus: (
+		source: string | undefined,
+	) => Promise<ResolvedCorpusSource> = resolveCorpusSource,
 ): Promise<AttemptCorpus> {
-	const source = await asUsageErrorAsync(() => resolveCorpusSource(corpus));
+	const source = await asUsageErrorAsync(() => resolveCorpus(corpus));
 
 	try {
 		const snapshot = await snapshotSessionCorpus(
@@ -157,6 +164,7 @@ export async function runSessionDebugAttempt(
 		sessionCase,
 		config.corpus,
 		attemptPaths.corpusDirectory,
+		request.resolveCorpus,
 	);
 	const corpusFiles = corpus.files;
 	const lineage = await lineageOf(sessionCase, corpusFiles, settings);
