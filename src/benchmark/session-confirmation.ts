@@ -8,7 +8,7 @@ import type { Immutable } from "./contracts";
 import type { ResolvedCorpusFile } from "./corpus-file";
 import { CORPUS_INSTRUCTIONS_PATH, hashCorpusFiles } from "./corpus-file";
 import { resolveCorpusSource } from "./corpus-source";
-import type { ResolvedCorpusSource } from "./corpus-source";
+import type { CorpusSourceResolver } from "./corpus-source";
 import type { SessionConfirmationRepRecord } from "./confirmation-record";
 import { sessionConfirmationRepRecordSchema } from "./confirmation-record";
 import {
@@ -64,9 +64,7 @@ export interface SessionConfirmationDependencies {
 		plan: Immutable<SessionConfirmationRepPlan>,
 	) => Promise<SessionAttempt>;
 	readonly now?: (() => number) | undefined;
-	readonly resolveCorpus?:
-		| ((source: string | undefined) => Promise<ResolvedCorpusSource>)
-		| undefined;
+	readonly resolveCorpus?: CorpusSourceResolver | undefined;
 }
 
 interface FrozenSessionInputs {
@@ -95,9 +93,7 @@ async function freezeInputs(
 	request: SessionConfirmationRequest,
 	groupDirectory: string,
 	inputsDirectory: string,
-	resolveCorpus: (
-		source: string | undefined,
-	) => Promise<ResolvedCorpusSource> = resolveCorpusSource,
+	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
 ): Promise<FrozenSessionInputs> {
 	assertSessionConfirmationInputsSupported(request.sessionCase);
 	await mkdir(inputsDirectory, { recursive: true });

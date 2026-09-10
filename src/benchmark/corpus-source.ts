@@ -14,10 +14,14 @@ export class CorpusSourceError extends Error {
 
 /**
  * Where an attempt's corpus bytes come from, parsed once so nothing downstream
- * learns how the directory came to exist: `root` is the only thing hashing and
- * installing ever see.
+ * learns how the directory came to exist. Live sources also carry the backing
+ * tree they permit, so later reads do not consult mutable process configuration.
  */
 export type ResolvedCorpusSource = LiveCorpusRoot | DirectoryCorpusRoot;
+
+export type CorpusSourceResolver = (
+	source: string | undefined,
+) => Promise<ResolvedCorpusSource>;
 
 /**
  * The entries a directory must hold at least one of to be a corpus. Without

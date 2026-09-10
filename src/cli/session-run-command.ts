@@ -11,7 +11,7 @@ import {
 	CorpusFileError,
 	hashCorpusFiles,
 } from "#benchmark/corpus-file";
-import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
+import type { CorpusSourceResolver } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
 	ClaudeRunner,
@@ -47,9 +47,7 @@ export interface SessionRunRequest {
 	readonly runsDirectory: string;
 	readonly runClaude: ClaudeRunner;
 	readonly projectsDirectory: string;
-	readonly resolveCorpus?:
-		| ((source: string | undefined) => Promise<ResolvedCorpusSource>)
-		| undefined;
+	readonly resolveCorpus?: CorpusSourceResolver | undefined;
 }
 
 function settingsOf(config: SessionRunConfig): SessionSettings {
@@ -76,9 +74,7 @@ async function requireCorpus(
 	sessionCase: SessionCase,
 	corpus: string | undefined,
 	snapshotDirectory: string,
-	resolveCorpus: (
-		source: string | undefined,
-	) => Promise<ResolvedCorpusSource> = resolveCorpusSource,
+	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
 ): Promise<AttemptCorpus> {
 	const source = await asUsageErrorAsync(() => resolveCorpus(corpus));
 
