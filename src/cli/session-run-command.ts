@@ -6,7 +6,11 @@ import { runCommand } from "#benchmark/command";
 import type { SessionRunConfig } from "#benchmark/config";
 import { CLAUDE_TIMEOUT_MS } from "#benchmark/config";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
-import { CorpusFileError, hashCorpusFiles } from "#benchmark/corpus-file";
+import {
+	CorpusConfigurationError,
+	CorpusFileError,
+	hashCorpusFiles,
+} from "#benchmark/corpus-file";
 import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
 import type {
@@ -91,6 +95,7 @@ async function requireCorpus(
 		};
 	} catch (error) {
 		if (
+			error instanceof CorpusConfigurationError ||
 			error instanceof CorpusFileError ||
 			error instanceof SessionCorpusError ||
 			error instanceof SymlinkedEntryError

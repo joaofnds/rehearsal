@@ -39,6 +39,7 @@ import {
 } from "#benchmark/config";
 import { loadRunManifest } from "#benchmark/manifest";
 import {
+	CorpusConfigurationError,
 	CorpusFileError,
 	liveCorpusInstructions,
 	readCorpusInstructions,
@@ -366,15 +367,15 @@ async function replayCorpus(corpus: string | undefined): Promise<{
 	readonly settingSources: "project" | undefined;
 	readonly directory: string | undefined;
 }> {
-	if (corpus === undefined) {
-		return {
-			instructions: await liveCorpusInstructions(),
-			settingSources: undefined,
-			directory: undefined,
-		};
-	}
-
 	try {
+		if (corpus === undefined) {
+			return {
+				instructions: await liveCorpusInstructions(),
+				settingSources: undefined,
+				directory: undefined,
+			};
+		}
+
 		const source = await resolveCorpusSource(corpus);
 
 		return {
@@ -384,6 +385,7 @@ async function replayCorpus(corpus: string | undefined): Promise<{
 		};
 	} catch (error) {
 		if (
+			error instanceof CorpusConfigurationError ||
 			error instanceof CorpusFileError ||
 			error instanceof SymlinkedEntryError
 		) {

@@ -1,6 +1,9 @@
 import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type { StaleCliConfig } from "#benchmark/config";
-import { CorpusFileError } from "#benchmark/corpus-file";
+import {
+	CorpusConfigurationError,
+	CorpusFileError,
+} from "#benchmark/corpus-file";
 import type { ResolvedCorpusSource } from "#benchmark/corpus-source";
 import {
 	CorpusSourceError,
@@ -41,6 +44,7 @@ async function refusingCorpusFailures<Answer>(
 	} catch (error) {
 		if (
 			error instanceof CorpusSourceError ||
+			error instanceof CorpusConfigurationError ||
 			error instanceof CorpusFileError ||
 			error instanceof SymlinkedEntryError
 		) {

@@ -37,6 +37,7 @@ import {
 	parseSessionArgs,
 } from "#benchmark/config";
 import {
+	CorpusConfigurationError,
 	CorpusFileError,
 	liveCorpusInstructions,
 } from "#benchmark/corpus-file";
@@ -508,6 +509,7 @@ export function executeSessionRun(
 					throw new UsageError(error.message);
 				}
 				if (
+					error instanceof CorpusConfigurationError ||
 					error instanceof CorpusFileError ||
 					error instanceof SessionCorpusError ||
 					error instanceof SymlinkedEntryError
