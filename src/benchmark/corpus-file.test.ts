@@ -55,9 +55,9 @@ describe(liveCorpusSource.name, () => {
 	it("keeps the backing root captured when the environment changes", () => {
 		const original = join(tmpdir(), "original-agents");
 		const changed = join(tmpdir(), "changed-agents");
-		const env: Record<string, string | undefined> = {
+		const env = {
 			[LIVE_CORPUS_BACKING_ROOT_ENV]: original,
-		};
+		} satisfies Record<string, string | undefined>;
 		const source = liveCorpusSource({ env });
 
 		env[LIVE_CORPUS_BACKING_ROOT_ENV] = changed;

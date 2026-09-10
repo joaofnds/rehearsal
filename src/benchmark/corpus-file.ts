@@ -2,7 +2,10 @@ import { realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { z } from "zod";
+import { CorpusConfigurationError } from "./corpus-configuration";
 import { statIfExists, SymlinkedEntryError } from "./file-presence";
+
+export { CorpusConfigurationError } from "./corpus-configuration";
 
 /**
  * Where the corpus is installed for a session that names no source. Every
@@ -32,10 +35,6 @@ export type CorpusRoot = DirectoryCorpusRoot | LiveCorpusRoot;
 
 export class CorpusFileError extends Error {
 	public override name = "CorpusFileError";
-}
-
-export class CorpusConfigurationError extends Error {
-	public override name = "CorpusConfigurationError";
 }
 
 /**
