@@ -2,8 +2,9 @@
 
 Assessed on **2026-09-11**, against implementation commit
 `abc6855a6860efe5e390d5c7a55db5e2bcb6049b`, maintained documentation, the design
-handoff, and the maintainer's roadmap. This is an investigation and proposed
-delivery sequence, not an implemented feature or a build-ready specification.
+handoff, and the maintainer's roadmap. The product direction and delivery
+sequence are accepted. Implementation details still require shaping; the
+capabilities below remain planned.
 
 ## Product conclusion
 
@@ -110,6 +111,47 @@ does not establish that the instruction caused all that work. A report can
 identify an expensive interval or a pruning hypothesis; controlled reruns must
 establish the effect of the edit.
 
+## Cost attribution from the same usage evidence
+
+Token and cost attribution belong in the same investigation. Selecting a skill
+invocation, subagent, step, or task should show its attributable token usage and
+corresponding cost together, with the executing model attached to each request.
+Mixed-model work must be priced request by request before aggregation.
+
+For known billing categories, the token charge is the sum of each category's
+tokens multiplied by its applicable per-token rate. Input, output, cache reads,
+and cache writes can have different rates; the provider and execution mode can
+also affect pricing. Retain the rate source and effective version with the
+calculation so later price changes do not silently reprice historical work.
+These distinctions follow the provider's
+[pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing).
+
+Keep provider-reported cost and calculated token cost identifiable. Show any
+unexplained difference or missing rates, and separate additional non-token
+charges where available. A calculation using public API rates is an estimate
+under those rates, not necessarily the user's subscription or negotiated bill.
+
+Attribute requests to observable execution boundaries. For a skill that launches
+reviewers, show its own execution cost and its cost including descendants.
+Shared requests or overlapping skills need an explicit allocation rule or an
+unattributed remainder. Summing parent totals that include children together
+with those same children would count their cost twice. A file's estimated token
+size remains useful evidence of content introduced; pricing that size once is
+not the cost of executing the skill or the savings from removing it.
+
+The roadmap carries these observable requirements:
+
+- Selecting a skill invocation or subagent shows tokens and cost for the same
+  scope, with request/model provenance and a visible attribution basis.
+- A skill's own and descendant-inclusive totals are distinguishable; the task
+  total counts each request once and exposes shared or unattributed usage.
+- A mixed-model, mixed-cache fixture is priced with each request's applicable
+  rates, and a later rate-table change leaves its recorded calculation intact.
+- Missing attribution, rates, or usage produces incomplete or unavailable
+  readings. Provider-reported and calculated totals remain distinguishable.
+- Comparing variants shows token and cost deltas beside the unchanged quality
+  criteria, allowing the same evidence to explain both resource effects.
+
 ## The visual investigation
 
 The entry point should be an attempt's context history, reachable from a run,
@@ -190,12 +232,16 @@ retention and redacted export behavior, and make missing capture visible.
 Preserve compatibility with older records; analysis must not rewrite their
 historical observations.
 
-## Proposed roadmap
+## Accepted roadmap
 
 The product direction follows the requirement to explain context use while
-preserving quality. This sequence is a recommendation with independently useful
+preserving quality. This sequence has independently useful
 exits. Exact schemas, tokenizer choice, provider integration, UI design, and
 statistical acceptance thresholds remain work for the relevant shaping tasks.
+
+Cost attribution is part of these slices: request pricing accompanies the
+measured timeline, skill and subagent totals accompany the review tree, and
+cost deltas accompany efficiency comparisons. It is not a separate later phase.
 
 | Slice                                    | Operator-visible exit                                                                                                                 | Existing work to reuse                                                                            | New scope                                                                                                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -234,7 +280,7 @@ the outcomes above are understandable without board access:
   durations. ACT-151 supplies existing multi-case session comparison support.
   These are foundations for the review benchmark, not context visualizations.
 
-This recommendation adds a visible product stream without changing existing
+This roadmap adds a visible product stream without changing existing
 card statuses, milestone order, or treating older Done cards as unfinished.
 Independent import of ordinary sessions outside Rehearsal may later make
 diagnosis more convenient; imported traces remain observational evidence until
@@ -266,7 +312,7 @@ A success rate, dollar total, or context chart alone cannot supply the verdict.
 ## Evidence and first validation targets
 
 The following provider-free checks passed on 2026-09-11: **99 tests, 0 failures**.
-They verify existing behavior, not delivery of the proposed capabilities.
+They verify existing behavior, not delivery of the planned capabilities.
 
 ```sh
 mise exec -- bun test src/benchmark/context-manifest.test.ts \

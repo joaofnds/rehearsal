@@ -97,8 +97,9 @@ goals, with context visibility added to help explain resource use:
 3. Make context use inspectable alongside outcomes. Begin with saved-session
    event and source inspection, validate per-request collection, then extend
    to pipeline steps and reviewer trees. Use a review-efficiency comparison to
-   demonstrate reduced tokens with retained quality. The
-   [proposed sequence](context-visibility.md#proposed-roadmap) reuses transcript,
+   demonstrate reduced tokens and cost with retained quality. Attribute both
+   to skills and subagents using request-level model and pricing evidence. The
+   [accepted sequence](context-visibility.md#accepted-roadmap) reuses transcript,
    comparison, and monitor work; context history need not wait for live UI.
    Complete comparison explanations and live monitoring as the related evidence
    becomes available.

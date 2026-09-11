@@ -64,13 +64,19 @@ its own context; a smaller parent session can still require more tokens across
 its reviewers. Declared inputs, observed loads, and evidence that an instruction
 was followed must also remain distinct.
 
+Context and cost attribution should share the same evidence. An engineer should
+be able to select a skill, subagent, step, or task and see both attributable
+tokens and cost, priced for the models and usage categories involved. Show
+direct work and work delegated to descendants without double counting, and
+label estimated or unallocated costs where the evidence is incomplete.
+
 These views should help form a testable edit, such as reducing repeated evidence
 delivery in a review procedure. Confirm the edit against fixed quality criteria
 and repeated trials. Lower resource use is an improvement only when the outcome
 remains acceptable; an inconclusive quality comparison cannot establish that
 quality was preserved.
 
-The [context assessment and proposed roadmap](context-visibility.md) separates
+The [context assessment and accepted roadmap](context-visibility.md) separates
 existing evidence, prior plans, and the additional collection and visualization
 work this direction requires.
 

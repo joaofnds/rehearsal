@@ -85,7 +85,7 @@ loaded it. Session context manifests reconcile declared inputs with transcript
 observations, within what those transcripts expose. Pipeline transcript capture
 and complete context attribution remain unfinished.
 
-The [context assessment](context-visibility.md) describes the proposed evidence
+The [context assessment](context-visibility.md) describes the planned evidence
 and visualization work. Current provider metrics are CLI-call aggregates, and
 progress events contain neither token readings nor instruction-load events.
 Their spend scope varies by lifecycle event. Neither source alone reconstructs
