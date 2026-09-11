@@ -14,6 +14,10 @@ Rehearsal makes those choices testable. Removal is as valuable an outcome as a
 better instruction. The intended user is an engineer maintaining their own
 corpus and willing to inspect the evidence behind a result.
 
+An instruction can also be effective and unnecessarily expensive. Rehearsal
+should help preserve its outcome while reducing the context and tokens needed
+to achieve it. That requires explaining resource use, beyond reporting a total.
+
 This document describes the direction. [Current state](status.md) separates
 implemented capabilities from remaining work, and [architecture](design.md)
 describes how the implementation works.
@@ -46,6 +50,30 @@ instructions can influence every stage, so a local replay alone cannot validate
 their overall effect. Frozen inputs reduce confounding; repeated trials and
 controls are still needed for attribution.
 
+## Context visibility in the debug loop
+
+The engineer should be able to follow context growth through a session, a
+workflow step, and the agents it launches: when instructions and files enter
+context, which agents receive them, what gets read again, and where large tool
+results or compaction change the trajectory. A useful view connects each
+observation to its recorded source and exposes gaps in collection.
+
+Show content introduced, context at individual requests, cumulative token
+usage, cache usage, cost, and elapsed time as distinct readings. Each agent has
+its own context; a smaller parent session can still require more tokens across
+its reviewers. Declared inputs, observed loads, and evidence that an instruction
+was followed must also remain distinct.
+
+These views should help form a testable edit, such as reducing repeated evidence
+delivery in a review procedure. Confirm the edit against fixed quality criteria
+and repeated trials. Lower resource use is an improvement only when the outcome
+remains acceptable; an inconclusive quality comparison cannot establish that
+quality was preserved.
+
+The [context assessment and proposed roadmap](context-visibility.md) separates
+existing evidence, prior plans, and the additional collection and visualization
+work this direction requires.
+
 ## Principles
 
 - Use the real agent CLI on the engineer's machine. Preserve the parts of its
@@ -71,6 +99,6 @@ new model, remove logical instruction blocks in controlled experiments, and
 surface both pruning candidates and regressions.
 
 The browser UI should make that evidence easy to navigate, from a run's spend
-and progress to the instruction change and the comparison that justifies it.
+and context history to the instruction change and the comparison that justifies it.
 Editing and reviewing instructions inside the tool is a later capability.
 Automated proposals must meet the same confirmation standard as manual edits.

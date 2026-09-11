@@ -12,17 +12,18 @@ still requires environment-specific setup.
 
 ## Implemented
 
-| Capability                  | Current boundary                                                                                               | Source                                                                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Data-declared cases         | Session and pipeline kinds; bundled inputs have differing portability                                          | [Case loader](../src/benchmark/case.ts)                                                                                            |
-| Session attempts            | Fixture/prefix support and deterministic reply/transcript checks                                               | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
-| Session confirmation        | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight     | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
-| Pipeline execution          | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
-| Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                               | [Replay command](../src/cli/replay-command.ts)                                                                                     |
-| Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                         | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
-| Comparison reports          | At least two cases with baseline/candidate/control arms; stage, pipeline, and provider-free session evidence   | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
-| Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                | [CLI commands](../src/cli/commands.ts)                                                                                             |
-| Local read UI and event API | Partial browser views and server-side event streaming                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
+| Capability                  | Current boundary                                                                                                          | Source                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Data-declared cases         | Session and pipeline kinds; bundled inputs have differing portability                                                     | [Case loader](../src/benchmark/case.ts)                                                                                            |
+| Session attempts            | Fixture/prefix support and deterministic reply/transcript checks                                                          | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
+| Session confirmation        | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight                | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
+| Pipeline execution          | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration            | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
+| Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                                          | [Replay command](../src/cli/replay-command.ts)                                                                                     |
+| Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                                    | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
+| Comparison reports          | At least two cases with baseline/candidate/control arms; stage, pipeline, and provider-free session evidence              | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
+| Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                           | [CLI commands](../src/cli/commands.ts)                                                                                             |
+| Session context manifests   | Deduplicated Read/Skill/style observations, corpus/project classification, and declared-input reconciliation; no timeline | [Manifest construction](../src/benchmark/context-manifest.ts)                                                                      |
+| Local read UI and event API | Partial browser views and server-side event streaming                                                                     | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
 An implemented path can still have missing real-provider validation. Session
 comparison uses existing ACT-140 records and a provider-free integration path;
@@ -57,10 +58,16 @@ the browser view reads the same saved report as stage and pipeline comparisons.
   evidence that its implementation is correct.
 - **Pipeline progress can mix with JSON stdout.** Read the saved record or use
   `show <id> --json` when consuming pipeline evidence programmatically.
-- **Context and cost coverage have limits.** Pipeline raw transcript capture is
-  unfinished, event streaming is coarse progress rather than token streaming,
-  and missing provider metrics must remain visible as missing. Review the
-  recorded evidence before drawing attribution or price conclusions.
+- **Context visibility is incomplete.** Session manifests retain names, not
+  load timing, repeated deliveries, or bytes observed. Pipeline raw transcript
+  capture, per-request context measurements, nested-agent accounting, and
+  context visualizations are unfinished. Missing session transcripts can become
+  empty saved files, so absence of observations is not proof of zero activity.
+- **Progress events are not a resource timeline.** They contain no token/load
+  events, and spend changes scope between worker turns, stage completion, and
+  run completion. Aggregate provider usage cannot establish active context size
+  or a file's causal cost. See the [context assessment](context-visibility.md)
+  before drawing attribution conclusions.
 
 ## Browser UI
 
@@ -81,14 +88,20 @@ authentication and no explicit loopback-only bind; use it locally.
 The board's goals are to let a second person run an experiment, distinguish an
 instruction improvement from noise, watch a run's spend, and read a comparison
 well enough to decide whether an edit helped. The remaining work follows those
-goals:
+goals, with context visibility added to help explain resource use:
 
 1. Validate the saved session comparison through the browser view and add
    reproducible public pipeline case inputs.
 2. Deliver isolated session skill variants, generated fixtures, and preserved
    post-session state so realistic skill outcomes can be graded.
-3. Complete the evidence needed for useful UI views, including pipeline
-   transcripts, live run monitoring, and comparison explanations.
+3. Make context use inspectable alongside outcomes. Begin with saved-session
+   event and source inspection, validate per-request collection, then extend
+   to pipeline steps and reviewer trees. Use a review-efficiency comparison to
+   demonstrate reduced tokens with retained quality. The
+   [proposed sequence](context-visibility.md#proposed-roadmap) reuses transcript,
+   comparison, and monitor work; context history need not wait for live UI.
+   Complete comparison explanations and live monitoring as the related evidence
+   becomes available.
 4. Tighten corpus-source containment and measurement boundaries without
    claiming that host execution is a sandbox.
 

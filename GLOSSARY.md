@@ -100,12 +100,13 @@ See [current state](docs/status.md) for implementation coverage and
   measurement, and is provisional until the run ends. It is not an ablation:
   ablation needs a rerun per node and is a separate planned feature
   (see [UI vocabulary](docs/design-handoff/README.md)).
-- **Context manifest** — the declared and transcript-observed
-  instruction/context inputs for a session attempt, classified and hashed where
-  resolvable. Corpus inputs and target project files are separate halves.
-  Reconciliation reports differences between declarations and observations; it
-  cannot prove loads the transcript does not expose. Full pipeline context
-  observation is not yet wired.
+- **Context manifest** — the transcript-observed instruction/context paths for
+  a session attempt, classified as corpus or project inputs and reconciled
+  against declarations. Observed entries are name-only; declared corpus hashes
+  are separate evidence. An invocation does not prove successful delivery or
+  that the instruction was followed, and missing observations do not prove
+  absence from context. The manifest deduplicates paths rather than retaining
+  a load history. Full pipeline context observation is not yet wired.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, the agent
   definitions, and the rulebook. A case names the ones it reads in corpus

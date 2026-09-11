@@ -83,16 +83,17 @@ local use and has no authentication.
 
 ## Documentation
 
-| I want to…                                        | Read                                           |
-| ------------------------------------------------- | ---------------------------------------------- |
-| Understand the goals and long-term direction      | [Vision](docs/vision.md)                       |
-| Know what works and what needs work               | [Current state and priorities](docs/status.md) |
-| Run an experiment and inspect its evidence        | [Runbook](docs/runbook.md)                     |
-| Configure cases, replay, grading, and comparisons | [Harness reference](docs/reference.md)         |
-| Understand the implementation                     | [Architecture](docs/design.md)                 |
-| Contribute code or keep the docs current          | [Contributing](CONTRIBUTING.md)                |
-| Look up a project term                            | [Glossary](GLOSSARY.md)                        |
-| Read the evaluation methodology                   | [Research](docs/research.md)                   |
+| I want to…                                         | Read                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| Understand the goals and long-term direction       | [Vision](docs/vision.md)                                     |
+| Understand context visibility and efficiency plans | [Context assessment and roadmap](docs/context-visibility.md) |
+| Know what works and what needs work                | [Current state and priorities](docs/status.md)               |
+| Run an experiment and inspect its evidence         | [Runbook](docs/runbook.md)                                   |
+| Configure cases, replay, grading, and comparisons  | [Harness reference](docs/reference.md)                       |
+| Understand the implementation                      | [Architecture](docs/design.md)                               |
+| Contribute code or keep the docs current           | [Contributing](CONTRIBUTING.md)                              |
+| Look up a project term                             | [Glossary](GLOSSARY.md)                                      |
+| Read the evaluation methodology                    | [Research](docs/research.md)                                 |
 
 The [documentation index](docs/README.md) also explains the status of the UI
 design and recovered historical material. Public project context lives in these

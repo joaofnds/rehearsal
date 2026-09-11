@@ -14,6 +14,8 @@ Start with the [project README](../README.md) for the purpose and first commands
 ## Understanding the project
 
 - [Vision](vision.md): the problem, goals, evidence standards, and longer-term direction.
+- [Context visibility](context-visibility.md): current evidence, gaps, and a proposed
+  roadmap for understanding context growth and preserving quality at lower token use.
 - [Architecture](design.md): current components and execution boundaries.
 - [Glossary](../GLOSSARY.md): domain terms, including the UI's vocabulary mapping.
 - [Research](research.md): primary sources behind the evaluation methodology.
