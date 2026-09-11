@@ -266,6 +266,26 @@ The first completed-run view need not wait for live streaming.
 The maintainer board holds related work. These identifiers are cross-references;
 the outcomes above are understandable without board access:
 
+| Delivery card | Accepted outcome                                                              |
+| ------------- | ----------------------------------------------------------------------------- |
+| ACT-155       | Saved instruction/file inspector, consuming ACT-148 diagnostics               |
+| ACT-156       | Bounded verification of provider collection signals and accounting boundaries |
+| ACT-157       | Per-request context, token usage, and model-priced cost timeline              |
+| ACT-158       | Pipeline-step and replay context inspection, after ACT-123 capture            |
+| ACT-159       | Reviewer trees and direct/descendant skill and subagent costs                 |
+| ACT-160       | Review-efficiency benchmark and linked quality/resource comparisons           |
+| ACT-161       | Live context and cost views, coordinated with ACT-154 monitor shaping         |
+| ACT-162       | Saved pipeline/replay reviewer-tree integration, before live monitoring       |
+
+These cards enter shaping with sourced acceptance criteria. ACT-156 is a
+provider-free investigation; no provider budget is assigned to this stream.
+The first inspector follows ACT-148, while collection verification can proceed
+independently. ACT-123 retains its deferral until the pipeline slice is selected.
+ACT-162 joins pipeline inspection and session reviewer trees; ACT-161 follows
+that saved integration so it can reuse the same interpretation live.
+
+Existing scope reused by these cards:
+
 - ACT-59 and ACT-61 delivered the limited session manifest. ACT-123 owns
   pipeline raw capture, but does not include its downstream manifest or UI.
 - ACT-96 covers file-use roles; ACT-97 covers openable Judge evidence. Reuse
