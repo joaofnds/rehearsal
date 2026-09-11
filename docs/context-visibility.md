@@ -266,6 +266,11 @@ The first completed-run view need not wait for live streaming.
 The maintainer board holds related work. These identifiers are cross-references;
 the outcomes above are understandable without board access:
 
+Milestone **m-8: Explain context and cost while preserving quality** groups the
+eight delivery cards. Each slice can ship independently; the milestone groups
+progress without assigning a deadline or changing execution priority. Shared
+prerequisites retain their existing milestones.
+
 | Delivery card | Accepted outcome                                                              |
 | ------------- | ----------------------------------------------------------------------------- |
 | ACT-155       | Saved instruction/file inspector, consuming ACT-148 diagnostics               |
