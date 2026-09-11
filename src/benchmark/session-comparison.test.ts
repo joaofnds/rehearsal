@@ -1167,6 +1167,60 @@ describe("session comparison", () => {
 		);
 	});
 
+	it("refuses a session frozen input outside its kind directory", async () => {
+		const runsDirectory = join(root, "runs");
+		const manifestPath = await writeManifest(root, runsDirectory);
+		const candidateGroupFile = sessionGroupFile(
+			runsDirectory,
+			"case-one",
+			"candidate",
+		);
+		const group = parseConfirmationGroupRecord(
+			await Bun.file(candidateGroupFile).text(),
+		);
+		if (group.schemaVersion !== 2 || group.mode !== "session") {
+			throw new Error("expected a session group");
+		}
+		const corpusFile = group.inputs.files.find(({ kind }) => kind === "corpus");
+		if (corpusFile === undefined) {
+			throw new Error("expected a frozen corpus file");
+		}
+		await Bun.write(
+			candidateGroupFile,
+			`${JSON.stringify(
+				{
+					...group,
+					inputs: {
+						...group.inputs,
+						files: group.inputs.files.map((file) =>
+							file === corpusFile
+								? {
+										kind: "fixture" as const,
+										path: "inputs/corpus/missing-fixture.md",
+										sha256: file.sha256,
+									}
+								: file,
+						),
+					},
+				},
+				null,
+				2,
+			)}\n`,
+		);
+
+		const comparison = writeComparisonReport({ manifestPath, runsDirectory });
+		expect(comparison).rejects.toThrow(
+			"case case-one arm candidate field inputs.files[fixture:inputs/corpus/missing-fixture.md]: session fixture input must be under inputs/fixture/",
+		);
+		await comparison.catch(() => undefined);
+		const manifestSha = digest(await Bun.file(manifestPath).text());
+		expect(
+			await Bun.file(
+				comparisonReportPaths(runsDirectory, manifestSha).reportFile,
+			).exists(),
+		).toBe(false);
+	});
+
 	it("refuses malformed session attempt evidence without writing a report", async () => {
 		const runsDirectory = join(root, "runs");
 		const manifestPath = await writeManifest(root, runsDirectory);

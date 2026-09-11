@@ -223,6 +223,9 @@ async function assertFrozenFiles(
 
 		identities.add(identity);
 		kinds.add(frozen.kind);
+		if (group.mode === "session") {
+			sessionFrozenPath(request, frozen);
+		}
 		const path =
 			group.mode === "session"
 				? descendantPath(
@@ -270,8 +273,19 @@ async function assertFrozenFiles(
 function sessionFrozenPath(
 	request: Readonly<LoadArmRequest>,
 	file: FrozenFile,
-	prefix: string,
 ): string {
+	if (!isSessionFrozenFileKind(file.kind)) {
+		throw evidenceError(
+			{
+				caseId: request.caseId,
+				arm: request.role,
+				field: `inputs.files[${file.kind}:${file.path}]`,
+			},
+			`unsupported session frozen input kind ${file.kind}`,
+		);
+	}
+
+	const prefix = sessionFrozenPrefix(file.kind);
 	const normalized = file.path.replaceAll("\\", "/");
 	if (!normalized.startsWith(prefix)) {
 		throw evidenceError(
@@ -304,6 +318,39 @@ function sessionFrozenPath(
 	return relativePath;
 }
 
+type SessionFrozenFileKind = "case" | "fixture" | "transcript" | "corpus";
+
+function isSessionFrozenFileKind(
+	kind: FrozenFile["kind"],
+): kind is SessionFrozenFileKind {
+	return (
+		kind === "case" ||
+		kind === "fixture" ||
+		kind === "transcript" ||
+		kind === "corpus"
+	);
+}
+
+function sessionFrozenPrefix(kind: SessionFrozenFileKind): string {
+	switch (kind) {
+		case "case": {
+			return "inputs/";
+		}
+		case "fixture": {
+			return "inputs/fixture/";
+		}
+		case "transcript": {
+			return "inputs/transcript/";
+		}
+		case "corpus": {
+			return "inputs/corpus/";
+		}
+		default: {
+			return unhandled(kind, "session frozen file kind");
+		}
+	}
+}
+
 function sessionCaseFile(
 	request: Readonly<LoadArmRequest>,
 	files: readonly LoadedFrozenFile[],
@@ -323,8 +370,6 @@ function sessionCaseFile(
 			"source group records no case file",
 		);
 	}
-	sessionFrozenPath(request, caseFile.record, "inputs/");
-
 	return caseFile;
 }
 
@@ -365,9 +410,6 @@ function assertSessionFrozenFiles(
 			"session case declares no fixture but source group records fixture files",
 		);
 	}
-	for (const { record } of fixtureFiles) {
-		sessionFrozenPath(request, record, "inputs/fixture/");
-	}
 	const transcriptFiles = frozen.files.filter(
 		({ record }) => record.kind === "transcript",
 	);
@@ -384,11 +426,7 @@ function assertSessionFrozenFiles(
 			`source group records ${transcriptFiles.length} transcript files for the declared session input`,
 		);
 	}
-	if (sessionCase.transcript === undefined) {
-		for (const { record } of transcriptFiles) {
-			sessionFrozenPath(request, record, "inputs/transcript/");
-		}
-	} else {
+	if (sessionCase.transcript !== undefined) {
 		const [transcriptFile] = transcriptFiles;
 		if (transcriptFile === undefined) {
 			throw evidenceError(
@@ -400,11 +438,7 @@ function assertSessionFrozenFiles(
 				"source group records no transcript file",
 			);
 		}
-		const transcriptPath = sessionFrozenPath(
-			request,
-			transcriptFile.record,
-			"inputs/transcript/",
-		);
+		const transcriptPath = sessionFrozenPath(request, transcriptFile.record);
 		if (transcriptPath !== basename(sessionCase.transcript.file)) {
 			throw evidenceError(
 				{
@@ -432,7 +466,7 @@ function assertSessionFrozenFiles(
 	);
 	const declaredCorpus = sessionCase.corpusFiles.toSorted();
 	const frozenCorpus = corpusFiles
-		.map(({ record }) => sessionFrozenPath(request, record, "inputs/corpus/"))
+		.map(({ record }) => sessionFrozenPath(request, record))
 		.toSorted();
 	if (!sameValue(declaredCorpus, frozenCorpus)) {
 		throw evidenceError(
@@ -552,7 +586,7 @@ function assertSessionAttemptInputs(
 
 	const expectedCorpus = frozenCorpus
 		.map((file) => ({
-			path: sessionFrozenPath(request, file, "inputs/corpus/"),
+			path: sessionFrozenPath(request, file),
 			sha256: file.sha256,
 		}))
 		.toSorted((left, right) => left.path.localeCompare(right.path));
