@@ -74,6 +74,13 @@ See [current state](docs/status.md) for implementation coverage and
 - **Comparison arm** — one role in a comparison: baseline, candidate, or the
   mandatory minimal-corpus control. An arm uses the same corpus snapshot across
   every benchmark case; a session control may have an empty declared corpus.
+- **Quality reading (comparison)**: a per-case, per-arm-pair, per-measure
+  interpretation of the observed spread across repeated attempts. It carries
+  each arm's low-to-high grade or PASS/FAIL interval and one verdict: the spans
+  overlap within rerun noise, both arms already succeed on every requested rep,
+  or the spans are separated and the arm that succeeds more often is named. It
+  is derived from each arm's recorded reliability summary, not from the paired
+  estimate across cases.
 - **Benchmark case** — one frozen task with its source or checkpoint and all
   non-corpus inputs; the independent unit on which comparison arms are paired.
 - **Case** (design usage) — the UI design's phrase for a task plus the
