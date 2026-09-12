@@ -78,6 +78,7 @@ export function comparisonReport(
 			byPair[pair] = comparisonAttribution(
 				benchmarkCase.arms[minuend].executedCorpus,
 				benchmarkCase.arms[subtrahend].executedCorpus,
+				report.mode,
 			);
 			qualityByPair[pair] = qualityReadingsByMeasure(
 				benchmarkCase,

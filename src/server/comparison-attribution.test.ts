@@ -17,7 +17,7 @@ describe(comparisonAttribution.name, () => {
 			file("CLAUDE.md", "a".repeat(64)),
 		];
 
-		const result = comparisonAttribution(left, right);
+		const result = comparisonAttribution(left, right, "pipeline");
 
 		expect(result).toEqual({ claim: "identical" });
 	});
@@ -32,7 +32,7 @@ describe(comparisonAttribution.name, () => {
 			file("CLAUDE.md", "b".repeat(64)),
 		];
 
-		const result = comparisonAttribution(left, right);
+		const result = comparisonAttribution(left, right, "pipeline");
 
 		expect(result).toEqual({ claim: "refused", differingPaths: ["CLAUDE.md"] });
 	});
@@ -47,7 +47,7 @@ describe(comparisonAttribution.name, () => {
 			file("skills/build/SKILL.md", "c".repeat(64)),
 		];
 
-		const result = comparisonAttribution(left, right);
+		const result = comparisonAttribution(left, right, "pipeline");
 
 		expect(result).toEqual({
 			claim: "refused",
@@ -62,7 +62,7 @@ describe(comparisonAttribution.name, () => {
 			file("skills/discuss/SKILL.md", "a".repeat(64)),
 		];
 
-		const result = comparisonAttribution(left, right);
+		const result = comparisonAttribution(left, right, "pipeline");
 
 		expect(result).toEqual({
 			claim: "refused",
@@ -80,11 +80,27 @@ describe(comparisonAttribution.name, () => {
 			file("inputs/corpus/build/CLAUDE.md", "b".repeat(64)),
 		];
 
-		const result = comparisonAttribution(left, right);
+		const result = comparisonAttribution(left, right, "pipeline");
 
 		expect(result).toEqual({
 			claim: "refused",
 			differingPaths: ["CLAUDE.md"],
+		});
+	});
+
+	it("keeps session corpus layout categories with the same basename distinct", () => {
+		const left = [
+			file("inputs/corpus/agents/team.md", "a".repeat(64)),
+		];
+		const right = [
+			file("inputs/corpus/output-styles/team.md", "a".repeat(64)),
+		];
+
+		const result = comparisonAttribution(left, right, "session");
+
+		expect(result).toEqual({
+			claim: "refused",
+			differingPaths: ["agents/team.md", "output-styles/team.md"],
 		});
 	});
 });
