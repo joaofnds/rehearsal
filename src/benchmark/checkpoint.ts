@@ -13,7 +13,9 @@ import {
 } from "./corpus-file";
 import type { Immutable } from "./contracts";
 import {
+	classifyEntry,
 	lstatIfPresent,
+	refusedEntryReason,
 	statIfExists,
 	SymlinkedEntryError,
 } from "./file-presence";
@@ -89,6 +91,9 @@ export async function hashFile(path: string): Promise<string> {
 		.digest("hex");
 }
 
+const ESCAPES_TREE_REASON =
+	"resolves outside the tree it is named under, so its bytes are not the ones that tree holds";
+
 /**
  * The path is named the way the hashes are, `join(prefix, entry)`, because the
  * corpus screen redacts the absolute root before a reader sees the message. An
@@ -96,15 +101,90 @@ export async function hashFile(path: string): Promise<string> {
  * a link, with no way to tell which layout directory holds it.
  */
 function symlinkedEntry(path: string): SymlinkedEntryError {
-	return new SymlinkedEntryError(
-		`${path} resolves outside the tree it is named under, so its bytes are not the ones that tree holds`,
-	);
+	return refusedEntry(path, ESCAPES_TREE_REASON);
 }
 
-function danglingEntry(path: string): SymlinkedEntryError {
-	return new SymlinkedEntryError(
-		`${path} is a link whose target is missing, so the bytes it names cannot be read`,
-	);
+/**
+ * A refusal naming the entry and the reason it was refused for, so every
+ * refusal in one list reads as one kind of statement whether the entry escaped
+ * the tree or could not be read at all.
+ */
+function refusedEntry(path: string, reason: string): SymlinkedEntryError {
+	return new SymlinkedEntryError(`${path} ${reason}`);
+}
+
+type Probed<Value> = { readonly value: Value } | { readonly reason: string };
+
+/**
+ * A probe of one entry whose failure this walk can name. Classifying the entry
+ * is not enough on its own: resolving where it leads and reading its bytes both
+ * touch the entry again, and a filesystem may refuse either after allowing the
+ * `stat` pair. An unreadable regular file has been observed answering `lstat`
+ * and `stat` and then refusing `realpath`, so a code `refusedEntryReason` knows
+ * becomes this entry's refusal wherever it surfaces, as long as the failure is
+ * about this entry and not about something else the probe had to consult.
+ */
+async function probed<Value>(
+	path: string,
+	work: () => Promise<Value>,
+): Promise<Probed<Value>> {
+	try {
+		return { value: await work() };
+	} catch (error) {
+		const reason =
+			error instanceof Error ? refusedEntryReason(error, path) : undefined;
+		if (reason === undefined) {
+			throw error;
+		}
+
+		return { reason };
+	}
+}
+
+/**
+ * Every path under the tree, relative to it, or the refusal listing them
+ * raised. A recursive listing opens each entry to decide whether to descend, so
+ * one self-referential link refuses the listing whole and no per-entry check
+ * ever runs: the tree is enumerated or it is not.
+ *
+ * The refusal names the entry the failure identifies, since that is the file
+ * whoever reads it has to go fix, and falls back to the tree when the failure
+ * names nothing under it. Unlike an entry refused mid-walk, this one takes its
+ * tree's files with it, because a listing that failed reports no file at all:
+ * the digest is withheld for either refusal, so neither serves a partial tree
+ * as a whole one.
+ */
+async function listedEntries(
+	root: string,
+	prefix: string,
+): Promise<Probed<string[]>> {
+	try {
+		return { value: await readdir(root, { recursive: true }) };
+	} catch (error) {
+		if (!(error instanceof Error)) {
+			throw error;
+		}
+
+		const reason = refusedEntryReason(error, undefined);
+		if (reason === undefined) {
+			throw error;
+		}
+
+		return { reason: `${listedEntryPath(error, root, prefix)} ${reason}` };
+	}
+}
+
+function listedEntryPath(
+	error: Readonly<Error>,
+	root: string,
+	prefix: string,
+): string {
+	const path = "path" in error ? String(error.path) : "";
+	const entry = path.startsWith(`${root}${sep}`)
+		? relative(root, path)
+		: undefined;
+
+	return entry === undefined ? prefix || root : join(prefix, entry);
 }
 
 async function refuseIfLink(root: string, prefix: string): Promise<void> {
@@ -112,6 +192,52 @@ async function refuseIfLink(root: string, prefix: string): Promise<void> {
 	if (stats?.isSymbolicLink() === true) {
 		throw symlinkedEntry(prefix === "" ? root : prefix);
 	}
+}
+
+/**
+ * What one listed entry contributes: bytes under its own path, a refusal the
+ * walk names it by, or nothing. A directory is skipped because the listing
+ * already carries its children, and anything that is neither a directory nor a
+ * regular file holds no bytes to hash.
+ */
+type WalkedEntry =
+	| { readonly skipped: true }
+	| { readonly refused: string }
+	| { readonly sha256: string };
+
+async function walkedEntry(
+	root: string,
+	absolute: string,
+	options: DirectoryWalkOptions,
+): Promise<WalkedEntry> {
+	const classified = await classifyEntry(absolute);
+	if (classified.kind === "absent") {
+		return { skipped: true };
+	}
+	if (classified.kind === "refused") {
+		return { refused: classified.reason };
+	}
+
+	const outside = await probed(absolute, () =>
+		"source" in options
+			? resolvesOutsideCorpus(options.source, absolute)
+			: resolvesOutside(root, absolute),
+	);
+	if ("reason" in outside) {
+		return { refused: outside.reason };
+	}
+	if (outside.value) {
+		return { refused: ESCAPES_TREE_REASON };
+	}
+	if (classified.kind !== "file") {
+		return { skipped: true };
+	}
+
+	const hashed = await probed(absolute, () => hashFile(absolute));
+
+	return "reason" in hashed
+		? { refused: hashed.reason }
+		: { sha256: hashed.value };
 }
 
 type DirectoryWalkOptions =
@@ -175,12 +301,17 @@ export async function hashDirectory(
  * for them, but the live corpus root the corpus screen hashes is a directory
  * another process can still be writing to.
  *
- * An entry that cannot be read at all still fails the whole walk, since a
- * directory nobody can hash is not a partial corpus to display. A refusal
- * already found outranks it: the walk carries on past the offending entry now,
- * so an unreadable file later in the tree would otherwise replace a named
- * refusal with a raw `EACCES` carrying an absolute path, and which one the
- * caller saw would turn on where the two sat in sorted order.
+ * An entry whose bytes cannot be read at all is refused by name too, for the
+ * reason the escaping and missing-target entries are: a caller that displays
+ * refusals can name the file that broke the tree, and the digest is withheld
+ * either way, so a partial tree is never served as a whole one. This walk used
+ * to fail entirely on that entry, to keep a raw `EACCES` carrying an absolute
+ * path from replacing a named refusal; naming it removes that reason, and no
+ * refusal can hide another because every one of them is reported.
+ *
+ * A failure this cannot name still fails the walk, and a refusal already found
+ * outranks it, since which of the two a caller saw would otherwise turn on
+ * where they sat in sorted order.
  */
 export async function walkDirectory(
 	root: string,
@@ -195,45 +326,37 @@ export async function walkDirectory(
 		await refuseIfLink(root, prefix);
 	}
 
-	const entries = await readdir(root, { recursive: true });
+	const listed = await listedEntries(root, prefix);
+	if ("reason" in listed) {
+		return {
+			files: [],
+			refusals: [new SymlinkedEntryError(listed.reason)],
+		};
+	}
+
 	const files: HashedFile[] = [];
 	const refusals: SymlinkedEntryError[] = [];
 	const refused: string[] = [];
 
 	try {
-		for (const entry of entries.toSorted()) {
+		for (const entry of listed.value.toSorted()) {
 			if (refused.some((above) => entry.startsWith(`${above}${sep}`))) {
 				continue;
 			}
 
-			const absolute = join(root, entry);
-			const linkStats = await lstatIfPresent(absolute);
-			if (linkStats === undefined) {
+			const walked = await walkedEntry(root, join(root, entry), options);
+			if ("skipped" in walked) {
 				continue;
 			}
-
-			const entryStats = await statIfExists(absolute);
-			if (entryStats === undefined) {
-				refusals.push(danglingEntry(join(prefix, entry)));
+			if ("refused" in walked) {
+				refusals.push(refusedEntry(join(prefix, entry), walked.refused));
 				refused.push(entry);
-				continue;
-			}
-			const outside =
-				"source" in options
-					? await resolvesOutsideCorpus(options.source, absolute)
-					: await resolvesOutside(root, absolute);
-			if (outside) {
-				refusals.push(symlinkedEntry(join(prefix, entry)));
-				refused.push(entry);
-				continue;
-			}
-			if (!entryStats.isFile()) {
 				continue;
 			}
 
 			files.push({
 				path: join(prefix, entry),
-				sha256: await hashFile(absolute),
+				sha256: walked.sha256,
 			});
 		}
 	} catch (error) {

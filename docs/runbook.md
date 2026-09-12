@@ -139,6 +139,10 @@ there is nothing to mark stale. It reads the current corpus and starts no sessio
 For pipeline checkpoints, add `--model` or `--effort` to check those conditions
 as well. Without them, the command checks corpus changes only.
 
+A corpus that cannot supply a file a record hashed, including a missing,
+unreadable, or escaping `CLAUDE.md`, is reported as that record's cause rather
+than refusing the whole report.
+
 ## Configure a linked live corpus
 
 Commands that use the live corpus read instructions from `~/.claude`. If your
@@ -251,8 +255,10 @@ so do not expose its port as a public service.
 
 For linked instruction files, configure the server's shell using
 [live-corpus setup](#configure-a-linked-live-corpus). A layout directory or
-entry outside the permitted extent produces a named refusal and withholds the
-corpus digest. Healthy layout directories remain visible.
+entry the harness cannot hash, because it leaves the permitted extent, never
+resolves, or cannot be read, produces a named refusal and withholds the corpus
+digest. Healthy layout directories remain visible, and run history stays
+readable with the refusal as a staleness cause.
 
 See [current UI coverage](status.md#browser-ui) for available routes and planned
 controls. An empty run-history page is expected in a fresh clone.

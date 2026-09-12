@@ -13,8 +13,6 @@ import {
 	directorySource,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
-import { SymlinkedEntryError } from "#benchmark/file-presence";
-import { failureOf } from "#cli/cli-test-support";
 import type { CorpusReport } from "./corpus-report";
 import { corpusReport } from "./corpus-report";
 
@@ -161,21 +159,47 @@ describe(corpusReport.name, () => {
 		]);
 	});
 
-	it("rejects when a layout directory cannot be read at all, rather than reporting the failure as a refusal", async () => {
+	it("names a layout entry it cannot read as a refusal, rather than failing the report", async () => {
 		const root = await fullCorpusDirectory();
 		await mkdir(join(root, "agents"), { recursive: true });
+		await writeFile(join(root, "agents", "normal.md"), "an agent\n");
 		await writeFile(join(root, "agents", "unreadable.md"), "an agent\n");
 		await chmod(join(root, "agents", "unreadable.md"), 0o000);
 		const runs = await corpusDirectory();
 		await new RecordedRunsFixture(runs).write();
 
-		const failure = await failureOf(corpusReport(directorySource(root), runs));
+		const report = await corpusReport(directorySource(root), runs);
 
-		expect(failure).not.toBeInstanceOf(SymlinkedEntryError);
-		expect(failure.message).toContain("EACCES");
+		expect(report.refusals).toEqual([
+			"agents/unreadable.md cannot be read, so its bytes cannot be hashed",
+		]);
+		expect(report.digest).toBeUndefined();
+		expect(JSON.stringify(report.refusals)).not.toContain("EACCES");
+		expect(report.files.map(({ path }) => path)).toContain(
+			"skills/build/SKILL.md",
+		);
 	});
 
-	it("names the refusal rather than the read failure, so an unreadable file cannot hide an escaping one", async () => {
+	it("names a self-referential link as a refusal, though the whole listing of its directory fails", async () => {
+		const root = await fullCorpusDirectory();
+		await mkdir(join(root, "agents"), { recursive: true });
+		await symlink(
+			join(root, "agents", "loop.md"),
+			join(root, "agents", "loop.md"),
+		);
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.refusals).toEqual([
+			"agents/loop.md is a link that never resolves to a file, so it names no bytes",
+		]);
+		expect(report.digest).toBeUndefined();
+		expect(JSON.stringify(report.refusals)).not.toContain("ELOOP");
+	});
+
+	it("names both an unreadable entry and an escaping one, so neither hides the other", async () => {
 		const root = await fullCorpusDirectory();
 		const outside = await corpusDirectory();
 		await writeFile(join(outside, "secret.md"), "secret bytes\n");
@@ -193,6 +217,7 @@ describe(corpusReport.name, () => {
 
 		expect(report.refusals).toEqual([
 			"agents/escape.md resolves outside the tree it is named under, so its bytes are not the ones that tree holds",
+			"agents/zz-unreadable.md cannot be read, so its bytes cannot be hashed",
 		]);
 		expect(JSON.stringify(report.refusals)).not.toContain("EACCES");
 	});
@@ -366,7 +391,7 @@ describe(corpusReport.name, () => {
 		const report = await corpusReport(directorySource(root), runs);
 
 		expect(report.refusals).toEqual([
-			"Corpus file CLAUDE.md is not a regular file, so it holds no instruction bytes to hash",
+			"Corpus file CLAUDE.md is not a regular file, so it holds no bytes to hash",
 		]);
 		expect(report.digest).toBeUndefined();
 	});
@@ -379,7 +404,7 @@ describe(corpusReport.name, () => {
 		const report = await corpusReport(directorySource(root), runs);
 
 		expect(report.refusals).toEqual([
-			"Corpus file CLAUDE.md is not a regular file, so it holds no instruction bytes to hash",
+			"Corpus file CLAUDE.md is not a regular file, so it holds no bytes to hash",
 		]);
 		expect(report.digest).toBeUndefined();
 	});
@@ -407,7 +432,7 @@ describe(corpusReport.name, () => {
 		const report = await corpusReport(directorySource(root), runs);
 
 		expect(report.refusals).toEqual([
-			"Corpus file CLAUDE.md is a directory, so it holds no instruction bytes to hash",
+			"Corpus file CLAUDE.md is a directory, so it holds no bytes to hash",
 		]);
 		expect(report.digest).toBeUndefined();
 	});

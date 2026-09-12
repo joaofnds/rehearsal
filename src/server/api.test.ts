@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	mkdtemp,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import type { CorpusRoot } from "#benchmark/corpus-file";
 import {
 	directorySource,
 	RecordedRunsFixture,
@@ -41,7 +49,11 @@ const corpusResponseSchema = z.object({
 });
 
 const runHistoryRowSchema = z
-	.object({ run: z.string(), stale: z.boolean() })
+	.object({
+		run: z.string(),
+		stale: z.boolean(),
+		staleCauses: z.array(z.string()),
+	})
 	.loose();
 const runHistoryResponseSchema = z.object({
 	rows: z.array(runHistoryRowSchema),
@@ -136,6 +148,86 @@ describe(createApiApp.name, () => {
 
 			expect(response.status).toBe(200);
 			expect(body.rows).toEqual([]);
+		});
+
+		/**
+		 * Run history answers for every recorded run, and the corpus supplies one
+		 * half of every staleness comparison. A corpus that cannot supply its
+		 * instruction file invalidates the measurements that hashed one, which is
+		 * a cause each affected row carries, not an error that blanks the screen
+		 * and names nothing.
+		 */
+		describe("when the corpus cannot supply its instruction file", () => {
+			async function historyFor(
+				corpusSource: CorpusRoot,
+			): Promise<z.infer<typeof runHistoryResponseSchema>> {
+				const fixture = await writtenFixture();
+				const app = createApiApp({
+					runsDirectory: fixture.runsDirectory,
+					corpusSource,
+				});
+
+				const response = await app.request("/api/runs");
+
+				expect(response.status).toBe(200);
+
+				return runHistoryResponseFrom(response);
+			}
+
+			it("names a CLAUDE.md that links out of a directory source as the cause", async () => {
+				const corpus = await corpusDirectory();
+				const outside = await emptyDirectory("rehearsal-api-outside-");
+				await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
+				await rm(join(corpus, "CLAUDE.md"));
+				await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
+
+				const body = await historyFor(directorySource(corpus));
+
+				expect(body.rows.flatMap((row) => row.staleCauses)).toContain(
+					"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
+				);
+				expect(body.rows.some((row) => row.stale)).toBe(true);
+				assertDoesNotLeak(JSON.stringify(body), "SECRET BYTES");
+				assertDoesNotLeak(JSON.stringify(body), outside);
+			});
+
+			it("names a CLAUDE.md that never resolves as the cause, not as a file that does not exist", async () => {
+				const corpus = await corpusDirectory();
+				const backingRoot = await emptyDirectory("rehearsal-api-backing-");
+				await rm(join(corpus, "CLAUDE.md"));
+				await symlink(join(corpus, "CLAUDE.md"), join(corpus, "CLAUDE.md"));
+
+				const body = await historyFor({
+					kind: "live",
+					root: corpus,
+					backingRoot,
+				});
+
+				expect(body.rows.flatMap((row) => row.staleCauses)).toContain(
+					"Corpus file CLAUDE.md is a link that never resolves to a file, so it names no bytes",
+				);
+			});
+
+			it("names the absent instruction file as the cause, a corpus state the corpus report calls valid", async () => {
+				const corpus = await corpusDirectory();
+				await rm(join(corpus, "CLAUDE.md"));
+
+				const body = await historyFor(directorySource(corpus));
+
+				expect(body.rows.flatMap((row) => row.staleCauses)).toContain(
+					"Corpus file CLAUDE.md is not in the corpus under test, so a checkpoint that hashed it cannot be compared",
+				);
+			});
+
+			it("keeps every row readable, so history is not hidden behind one corpus state", async () => {
+				const corpus = await corpusDirectory();
+				await rm(join(corpus, "CLAUDE.md"));
+
+				const body = await historyFor(directorySource(corpus));
+
+				expect(body.rows.length).toBeGreaterThan(1);
+				expect(body.unreadable).toEqual([]);
+			});
 		});
 
 		it("recomputes staleness fresh on every request rather than caching it", async () => {
@@ -268,6 +360,54 @@ describe(createApiApp.name, () => {
 			]);
 			expect(body.files).toEqual([]);
 			expect(body.digest).toBeUndefined();
+		});
+
+		it("names an unreadable layout entry as a refusal, rather than failing the screen", async () => {
+			const corpus = await corpusDirectory();
+			await mkdir(join(corpus, "agents"), { recursive: true });
+			await writeFile(join(corpus, "agents", "private.md"), "an agent\n");
+			await chmod(join(corpus, "agents", "private.md"), 0o000);
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/corpus");
+			const text = await response.text();
+			const body = corpusResponseSchema.parse(JSON.parse(text));
+
+			expect(response.status).toBe(200);
+			expect(body.refusals).toEqual([
+				"agents/private.md cannot be read, so its bytes cannot be hashed",
+			]);
+			expect(body.digest).toBeUndefined();
+			expect(text).not.toContain("EACCES");
+			assertDoesNotLeak(body.refusals.join(""), corpus);
+		});
+
+		it("names a self-referential layout entry as a refusal, rather than failing the screen", async () => {
+			const corpus = await corpusDirectory();
+			await mkdir(join(corpus, "agents"), { recursive: true });
+			await symlink(
+				join(corpus, "agents", "loop.md"),
+				join(corpus, "agents", "loop.md"),
+			);
+			const app = createApiApp({
+				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/corpus");
+			const text = await response.text();
+			const body = corpusResponseSchema.parse(JSON.parse(text));
+
+			expect(response.status).toBe(200);
+			expect(body.refusals).toEqual([
+				"agents/loop.md is a link that never resolves to a file, so it names no bytes",
+			]);
+			expect(body.digest).toBeUndefined();
+			expect(text).not.toContain("ELOOP");
+			assertDoesNotLeak(body.refusals.join(""), corpus);
 		});
 
 		it("serves a live corpus with an out-of-extent instruction file as a partial report", async () => {

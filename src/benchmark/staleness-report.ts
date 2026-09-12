@@ -11,13 +11,15 @@ import {
 	parseCheckpointRecord,
 	refusedCorpus,
 } from "./checkpoint";
-import { SymlinkedEntryError } from "./file-presence";
+import { refusedEntryReason, SymlinkedEntryError } from "./file-presence";
 import type { Effort } from "./config";
 import type { CorpusRoot } from "./corpus-file";
 import {
+	CORPUS_INSTRUCTIONS_PATH,
 	CorpusFileError,
+	corpusFileRefusal,
+	corpusInstructionsEntry,
 	hashCorpusFiles,
-	readCorpusInstructions,
 } from "./corpus-file";
 import { loadRunManifest } from "./manifest";
 import type { RunManifest } from "./manifest";
@@ -94,6 +96,53 @@ async function hashedOrRefused(
 }
 
 /**
+ * The instructions a replay would read, or the reason this corpus cannot supply
+ * them. A refusal is not a failure of the report: every recorded checkpoint
+ * hashed an instruction file into its corpus, so a corpus that cannot produce
+ * one invalidates those measurements exactly as an edited file does, and that
+ * is a cause the reader is owed rather than an error that takes every other
+ * run's answer with it.
+ *
+ * Every refusal names the layout path alone. `stale` prints these on stdout and
+ * the run-history report copies them into its rows, where an absolute path
+ * would carry the operator's home directory to every reader.
+ */
+type CurrentInstructions =
+	| { readonly text: string }
+	| { readonly refused: string };
+
+async function currentInstructions(
+	source: CorpusRoot,
+): Promise<CurrentInstructions> {
+	const entry = await corpusInstructionsEntry(source);
+	if (entry.kind === "absent") {
+		return {
+			refused: corpusFileRefusal(
+				CORPUS_INSTRUCTIONS_PATH,
+				"is not in the corpus under test, so a checkpoint that hashed it cannot be compared",
+			),
+		};
+	}
+	if (entry.kind === "refused") {
+		return { refused: entry.refusal };
+	}
+
+	try {
+		return { text: await Bun.file(entry.path).text() };
+	} catch (error) {
+		const reason =
+			error instanceof Error
+				? refusedEntryReason(error, entry.path)
+				: undefined;
+		if (reason === undefined) {
+			throw error;
+		}
+
+		return { refused: corpusFileRefusal(CORPUS_INSTRUCTIONS_PATH, reason) };
+	}
+}
+
+/**
  * `stale` answers one question per invocation: what the corpus the operator
  * named invalidated. So a live corpus here is the operator's install, not the
  * target each run recorded, even though `replay` resolves the same source
@@ -106,7 +155,7 @@ async function currentStageCorpus(
 	manifest: RunManifest,
 	chain: readonly CheckpointRecord[],
 	source: CorpusRoot,
-	instructions: string,
+	instructions: CurrentInstructions,
 ): Promise<ReadonlyMap<string, StageCorpus>> {
 	const corpus = new Map<string, StageCorpus>();
 	const roots = [source];
@@ -125,7 +174,9 @@ async function currentStageCorpus(
 
 		corpus.set(
 			record.stage,
-			await hashedOrRefused(definition.skill, instructions, roots),
+			"refused" in instructions
+				? refusedCorpus(instructions.refused)
+				: await hashedOrRefused(definition.skill, instructions.text, roots),
 		);
 	}
 
@@ -162,6 +213,10 @@ async function checkpointChain(
  * the corpus under test. A run whose manifest cannot be read contributes
  * nothing rather than failing the report: it was never replayable, so nothing
  * about it can go stale.
+ *
+ * The instruction file is read once for the whole report rather than once per
+ * run: the corpus under test does not change between runs, so one read answers
+ * for all of them and a refusal is decided in one place.
  */
 export async function staleCheckpoints(
 	runsDirectory: string,
@@ -169,6 +224,7 @@ export async function staleCheckpoints(
 	knobs: CurrentSessionKnobs = {},
 ): Promise<readonly StaleRecord[]> {
 	const stale: StaleRecord[] = [];
+	const instructions = await currentInstructions(source);
 
 	for (const run of await recordedRunNames(runsDirectory)) {
 		const paths = benchmarkRunPaths(runsDirectory, run);
@@ -178,7 +234,6 @@ export async function staleCheckpoints(
 		}
 
 		const manifest = await loadRunManifest(paths.manifestFile);
-		const instructions = await readCorpusInstructions(source);
 		const chain = await checkpointChain(
 			runsDirectory,
 			run,

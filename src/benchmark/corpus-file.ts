@@ -3,7 +3,14 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { z } from "zod";
 import { CorpusConfigurationError } from "./corpus-configuration";
-import { statIfExists, SymlinkedEntryError } from "./file-presence";
+import { unhandled } from "./contracts";
+import type { ClassifiedEntry } from "./file-presence";
+import {
+	classifyEntry,
+	refusedEntryReason,
+	statIfExists,
+	SymlinkedEntryError,
+} from "./file-presence";
 
 export { CorpusConfigurationError } from "./corpus-configuration";
 
@@ -155,40 +162,156 @@ export async function resolvesOutsideCorpus(
 	return resolvesOutside(source.backingRoot, absolute);
 }
 
+/**
+ * The refusal containment makes, or `undefined` when the path is contained.
+ *
+ * Resolving the path touches the file itself, so a filesystem that answered the
+ * `stat` pair can still refuse this: an unreadable regular file has been
+ * observed refusing `realpath` after `classifyEntry` called it a file. A path
+ * whose real location cannot be established is refused for that reason, since
+ * the question this asks about it has no answer.
+ *
+ * A failure naming anything else is not this file's refusal and surfaces
+ * unchanged. A live source's authorization consults the configured backing
+ * tree, and a backing tree that loops or cannot be read is a configuration
+ * failure the operator has to see as one.
+ */
+async function uncontainedRefusal(
+	source: CorpusRoot,
+	layoutPath: string,
+	absolute: string,
+): Promise<string | undefined> {
+	let outside: boolean;
+	try {
+		outside = await resolvesOutsideCorpus(source, absolute);
+	} catch (error) {
+		const reason =
+			error instanceof Error ? refusedEntryReason(error, absolute) : undefined;
+		if (reason === undefined) {
+			throw error;
+		}
+
+		return corpusFileRefusal(layoutPath, reason);
+	}
+	if (!outside) {
+		return undefined;
+	}
+
+	return source.kind === "live"
+		? `Corpus file ${layoutPath} resolves outside the live corpus extent, which would hash bytes the corpus does not hold`
+		: `Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`;
+}
+
 async function refuseUncontained(
 	source: CorpusRoot,
 	layoutPath: string,
 	absolute: string,
 ): Promise<void> {
-	if (await resolvesOutsideCorpus(source, absolute)) {
-		throw new SymlinkedEntryError(
-			source.kind === "live"
-				? `Corpus file ${layoutPath} resolves outside the live corpus extent, which would hash bytes the corpus does not hold`
-				: `Corpus file ${layoutPath} resolves outside the corpus source, which would hash bytes the corpus does not hold`,
-		);
+	const refusal = await uncontainedRefusal(source, layoutPath, absolute);
+	if (refusal !== undefined) {
+		throw new SymlinkedEntryError(refusal);
 	}
 }
 
 /**
+ * What a corpus file cannot yield, named for the reader of a report: the state
+ * `classifyEntry` refused, or a path that is there and holds no bytes anyway.
+ * A directory and an irregular entry are refused here and skipped by a
+ * recursive walk, because a declared file names bytes the corpus promised
+ * while a walk is only enumerating what it finds.
+ */
+export function corpusFileRefusal(layoutPath: string, reason: string): string {
+	return `Corpus file ${layoutPath} ${reason}`;
+}
+
+function refusalForEntry(
+	layoutPath: string,
+	classified: ClassifiedEntry,
+): string | undefined {
+	switch (classified.kind) {
+		case "refused": {
+			return corpusFileRefusal(layoutPath, classified.reason);
+		}
+		case "directory": {
+			return corpusFileRefusal(
+				layoutPath,
+				"is a directory, so it holds no bytes to hash",
+			);
+		}
+		case "irregular": {
+			return corpusFileRefusal(
+				layoutPath,
+				"is not a regular file, so it holds no bytes to hash",
+			);
+		}
+		case "absent":
+		case "file": {
+			return undefined;
+		}
+		default: {
+			return unhandled(classified, "corpus entry classification");
+		}
+	}
+}
+
+/**
+ * What the corpus holds at its instruction path: nothing, bytes at a resolved
+ * path, or a refusal naming what stands there instead.
+ *
+ * A corpus root with no CLAUDE.md is valid, so absence is its own answer and
+ * not a refusal. A CLAUDE.md that is present but cannot yield bytes is a
+ * refusal, because reading it as absence would report a corpus that has no
+ * instruction file, under a digest that says so confidently.
+ *
+ * One reader, because every caller asks the same question of the same path: the
+ * corpus screen renders the refusal, `stale` makes it a cause, and the runtime
+ * read throws it. A second reader of its own would let the screen name a state
+ * the runtime calls missing, which is what a looping CLAUDE.md used to do.
+ */
+export type CorpusInstructionsEntry =
+	| { readonly kind: "absent" }
+	| { readonly kind: "present"; readonly path: string }
+	| { readonly kind: "refused"; readonly refusal: string };
+
+export async function corpusInstructionsEntry(
+	source: CorpusRoot,
+): Promise<CorpusInstructionsEntry> {
+	const path = resolveCorpusFile(source, CORPUS_INSTRUCTIONS_PATH);
+	const classified = await classifyEntry(path);
+	if (classified.kind === "absent") {
+		return { kind: "absent" };
+	}
+
+	const refusal =
+		refusalForEntry(CORPUS_INSTRUCTIONS_PATH, classified) ??
+		(await uncontainedRefusal(source, CORPUS_INSTRUCTIONS_PATH, path));
+
+	return refusal === undefined
+		? { kind: "present", path }
+		: { kind: "refused", refusal };
+}
+
+/**
  * The corpus's global instructions, read through the same resolution every
- * other corpus kind goes through. A corpus source holding any one kind is
- * valid, so a source with no CLAUDE.md is possible and is refused here in the
- * caller's terms rather than as a raw ENOENT at the point of use.
+ * other corpus kind goes through. A source with no CLAUDE.md is refused here
+ * in the caller's terms rather than as a raw ENOENT at the point of use, and
+ * names the resolved path, which is what tells an operator that `--corpus`
+ * pointed somewhere they did not mean.
  */
 export async function readCorpusInstructions(
 	source: CorpusRoot,
 ): Promise<string> {
-	const path = resolveCorpusFile(source, CORPUS_INSTRUCTIONS_PATH);
-	const file = Bun.file(path);
-	if (!(await file.exists())) {
+	const entry = await corpusInstructionsEntry(source);
+	if (entry.kind === "absent") {
 		throw new CorpusFileError(
-			`Corpus file ${CORPUS_INSTRUCTIONS_PATH} does not exist at ${path}`,
+			`Corpus file ${CORPUS_INSTRUCTIONS_PATH} does not exist at ${resolveCorpusFile(source, CORPUS_INSTRUCTIONS_PATH)}`,
 		);
 	}
+	if (entry.kind === "refused") {
+		throw new SymlinkedEntryError(entry.refusal);
+	}
 
-	await refuseUncontained(source, CORPUS_INSTRUCTIONS_PATH, path);
-
-	return file.text();
+	return Bun.file(entry.path).text();
 }
 
 /**
@@ -251,15 +374,21 @@ export async function hashCorpusFiles(
 	const hashed: ResolvedCorpusFile[] = [];
 	for (const layoutPath of layoutPaths) {
 		const resolvedPath = resolveCorpusFile(source, layoutPath);
-		const file = Bun.file(resolvedPath);
-		if (!(await file.exists())) {
+		const classified = await classifyEntry(resolvedPath);
+		if (classified.kind === "absent") {
 			throw new CorpusFileError(
 				`Corpus file ${layoutPath} does not exist at ${resolvedPath}`,
 			);
 		}
 
+		const refusal = refusalForEntry(layoutPath, classified);
+		if (refusal !== undefined) {
+			throw new SymlinkedEntryError(refusal);
+		}
+
 		await refuseUncontained(source, layoutPath, resolvedPath);
 
+		const file = Bun.file(resolvedPath);
 		hashed.push({
 			path: layoutPath,
 			resolvedPath,

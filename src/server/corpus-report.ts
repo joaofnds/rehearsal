@@ -1,18 +1,18 @@
-import type { Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
 import { parseCheckpointRecord, walkDirectory } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import {
-	lstatIfPresent,
 	pathExists,
-	statIfExists,
+	refusedEntryReason,
 	SymlinkedEntryError,
 } from "#benchmark/file-presence";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
 	CORPUS_LAYOUT_DIRECTORIES,
+	corpusFileRefusal,
+	corpusInstructionsEntry,
 	hashCorpusFiles,
 } from "#benchmark/corpus-file";
 import { benchmarkRunPaths, checkpointRecordFile } from "#benchmark/run-layout";
@@ -66,89 +66,6 @@ async function readCountsByPath(
 	);
 }
 
-const UNHASHABLE_INSTRUCTION_CODES = new Map([
-	["ELOOP", "is a link that never resolves to a file, so it names no bytes"],
-	["EACCES", "cannot be read, so its bytes cannot be hashed"],
-	["EPERM", "cannot be read, so its bytes cannot be hashed"],
-]);
-
-function refusalForCode(code: string): string | undefined {
-	const reason = UNHASHABLE_INSTRUCTION_CODES.get(code);
-
-	return reason === undefined
-		? undefined
-		: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} ${reason}`;
-}
-
-interface InstructionsEntry {
-	readonly present: boolean;
-	readonly refusal: string | undefined;
-}
-
-/**
- * A corpus root with no CLAUDE.md is valid, so absence is not a refusal. A
- * CLAUDE.md that is present but cannot yield instruction bytes is: reading
- * either as absence would report the corpus as one that has no instruction
- * file, under a digest that says so confidently.
- *
- * What this decides is what the entry *is*: absent, or present as something
- * that cannot hold instruction bytes. Only a regular file can, so a missing
- * link target, a link chain that never resolves, a directory, a device, and a
- * pipe are each refused here by name. Whether the bytes can actually be read,
- * and whether the path stays inside the corpus, are answered by the hash
- * itself, so those two refusals are made at the call site below.
- *
- * The device and the pipe are why this runs before the hash rather than
- * leaving every failure to the catch there. `hashCorpusFiles` reports a device
- * as a file that does not exist, which is false and sends the reader looking
- * for a file that is there. A pipe with no writer blocks its read forever, so
- * the request never returns at all and the screen waits instead of failing.
- */
-async function readInstructionsEntry(root: string): Promise<InstructionsEntry> {
-	const path = join(root, CORPUS_INSTRUCTIONS_PATH);
-	let target: Stats | undefined;
-	try {
-		if (!(await lstatIfPresent(path))) {
-			return { present: false, refusal: undefined };
-		}
-
-		target = await statIfExists(path);
-	} catch (error) {
-		const refusal =
-			error instanceof Error && "code" in error
-				? refusalForCode(String(error.code))
-				: undefined;
-		if (refusal === undefined) {
-			throw error;
-		}
-
-		return { present: true, refusal };
-	}
-
-	if (target === undefined) {
-		return {
-			present: true,
-			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a link whose target is missing, so the bytes it names cannot be read`,
-		};
-	}
-
-	if (target.isDirectory()) {
-		return {
-			present: true,
-			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is a directory, so it holds no instruction bytes to hash`,
-		};
-	}
-
-	if (!target.isFile()) {
-		return {
-			present: true,
-			refusal: `Corpus file ${CORPUS_INSTRUCTIONS_PATH} is not a regular file, so it holds no instruction bytes to hash`,
-		};
-	}
-
-	return { present: true, refusal: undefined };
-}
-
 /**
  * The corpus is the instruction file and `CORPUS_LAYOUT_DIRECTORIES` beside
  * it. Hashing the root whole instead sweeps in whatever else lives under it,
@@ -170,20 +87,25 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 	const files: HashedFile[] = [];
 	const refusals: string[] = [];
 
-	const instructions = await readInstructionsEntry(root);
-	if (instructions.refusal !== undefined) {
-		refusals.push(instructions.refusal);
-	} else if (instructions.present) {
+	const instructions = await corpusInstructionsEntry(source);
+	if (instructions.kind === "refused") {
+		refusals.push(redactAbsolutePaths(instructions.refusal));
+	} else if (instructions.kind === "present") {
 		try {
 			const hashed = await hashCorpusFiles(source, [CORPUS_INSTRUCTIONS_PATH]);
 			files.push(...hashed.map(({ path, sha256 }) => ({ path, sha256 })));
 		} catch (error) {
-			const unreadable =
-				error instanceof Error && "code" in error
-					? refusalForCode(String(error.code))
+			/**
+			 * The entry classified as a regular file inside the corpus, so what
+			 * is left to fail is the open itself, which reports a hostile entry
+			 * on filesystems where the `stat` pair did not.
+			 */
+			const reason =
+				error instanceof Error
+					? refusedEntryReason(error, instructions.path)
 					: undefined;
-			if (unreadable !== undefined) {
-				refusals.push(unreadable);
+			if (reason !== undefined) {
+				refusals.push(corpusFileRefusal(CORPUS_INSTRUCTIONS_PATH, reason));
 			} else if (error instanceof SymlinkedEntryError) {
 				refusals.push(redactAbsolutePaths(error.message));
 			} else {

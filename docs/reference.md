@@ -198,11 +198,21 @@ directory. Allowed links may cross layout directories within the permitted
 extent. Records retain layout paths and content hashes; real paths authorize
 access without changing file identity.
 
-The corpus API returns HTTP 200 with a named refusal for an escaping layout,
-omits that directory's files and the whole-corpus digest, and retains healthy
-directories. Refusals name the corpus path without exposing the outside target
-or its descendants. Stage capture fails before the affected workflow runs;
-checkpoint staleness records the refusal as a cause.
+A corpus entry is refused by name whenever it cannot yield the bytes its layout
+path claims: it escapes the permitted trees, its link target is missing, its
+link never resolves, or its bytes cannot be read. One refusal omits its own
+layout directory's files and the whole-corpus digest, and retains healthy
+directories.
+
+The corpus API returns HTTP 200 carrying those refusals. Refusals name the
+corpus path without exposing the outside target or its descendants. Stage
+capture fails before the affected workflow runs.
+
+An instruction file the corpus cannot supply, including one it simply does not
+hold, is a staleness cause rather than a failure: every checkpoint hashed one,
+so those measurements can no longer be reproduced. The run-history API and
+`stale` both report it that way, per checkpoint, and keep answering for every
+other record.
 
 A declared directory source must exist and contain at least one recognized
 layout entry. Rehearsal consumes a directory; rendering a revision from a

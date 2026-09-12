@@ -40,6 +40,42 @@ describe(RunHistoryPage.name, () => {
 		});
 	});
 
+	/**
+	 * The corpus state that used to fail `/api/runs` outright, which this screen
+	 * could only render as its query error: the refusal now arrives as a row's
+	 * staleness cause, so the history reads and the corpus screen is where the
+	 * operator learns which file broke.
+	 */
+	it("renders the history, not the query error, when the corpus refuses its instruction file", async () => {
+		respondingWith({
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "COMPLETE",
+					stage: "build",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: true,
+					staleCauses: [
+						"Corpus file CLAUDE.md resolves outside the corpus source, which would hash bytes the corpus does not hold",
+					],
+				},
+			],
+			unreadable: [],
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("2026-09-06T21-58-29.508Z")).toBeInTheDocument();
+		});
+		expect(screen.getByText("stale")).toBeInTheDocument();
+		expect(
+			screen.queryByText("Could not load run history."),
+		).not.toBeInTheDocument();
+	});
+
 	it("renders a row for every recorded run, status and corpus as design-system components", async () => {
 		respondingWith({
 			rows: [

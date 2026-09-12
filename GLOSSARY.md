@@ -145,6 +145,13 @@ See [current state](docs/status.md) for implementation coverage and
   path does not overlay global `CLAUDE.md` or skills. Stage replay uses a
   separate snapshot installation path. See the reference's corpus support
   matrix.
+- **Corpus refusal** — a named statement that one corpus entry cannot yield the
+  bytes its layout path claims, carrying the layout path and the reason: it
+  resolves outside the permitted extent, its link target is missing, its link
+  never resolves, it cannot be read, or it is not a regular file. A refusal is
+  data a report carries, not a failure of the report: the reading surface names
+  the entry, omits its layout directory's files, and withholds the corpus
+  digest, so an unidentifiable corpus is never served as an identified one.
 - **Corpus snapshot origin** — where a snapshot's bytes were read from, recorded
   beside them and persisted in the attempt record: the live install, or the
   directory the source named. What produced that directory is not recorded,

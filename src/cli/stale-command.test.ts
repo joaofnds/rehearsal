@@ -272,7 +272,14 @@ describe(runStale.name, () => {
 		});
 
 		describe("and a run recorded a checkpoint", () => {
-			it("refuses the precondition naming the file the corpus lacks", async () => {
+			/**
+			 * Every checkpoint hashed an instruction file, so a corpus that has
+			 * none cannot reproduce any of them. That is what the command exists
+			 * to report, and it is the same answer its other half already gives a
+			 * case whose declared file the corpus lacks, so it is a cause here
+			 * too rather than a refusal that takes every other record with it.
+			 */
+			it("names the instruction file the corpus lacks as a cause", async () => {
 				const corpus = await corpusDirectory("build skill\n");
 				const fixture = await fixtureRecordedAgainst(corpus);
 				const styles = await temporaryDirectory("rehearsal-stale-styles-only-");
@@ -282,16 +289,17 @@ describe(runStale.name, () => {
 				);
 				const recorder = recordOutput();
 
-				const failure = await failureOf(
-					runStale(
-						{ corpus: styles, runsDirectory: fixture.runsDirectory },
-						{ output: recorder.output },
-					),
+				await runStale(
+					{ corpus: styles, runsDirectory: fixture.runsDirectory },
+					{ output: recorder.output },
 				);
 
-				expect(failure).toBeInstanceOf(RefusedPreconditionError);
-				expect(failure.message).toContain("CLAUDE.md");
-				expect(recorder.stdout).toEqual([]);
+				const printed = recorder.stdout.join("");
+				expect(printed).toContain(`checkpoint:${fixture.replayableRun}/build`);
+				expect(printed).toContain(
+					"Corpus file CLAUDE.md is not in the corpus under test",
+				);
+				expect(printed).not.toContain(styles);
 			});
 		});
 	});
@@ -384,7 +392,7 @@ describe(runStale.name, () => {
 		});
 	});
 
-	it("refuses a corpus whose CLAUDE.md is a symlink out of the root, as a precondition", async () => {
+	it("names a CLAUDE.md that is a symlink out of the root as a cause, carrying neither its target nor its bytes", async () => {
 		const fixture = await fixtureRecordedAgainst(
 			await corpusDirectory("build skill\n"),
 		);
@@ -393,15 +401,17 @@ describe(runStale.name, () => {
 		await Bun.write(join(outside, "secret.md"), "SECRET BYTES\n");
 		await rm(join(linked, "CLAUDE.md"));
 		await symlink(join(outside, "secret.md"), join(linked, "CLAUDE.md"));
+		const recorder = recordOutput();
 
-		const failure = await failureOf(
-			runStale(
-				{ corpus: linked, runsDirectory: fixture.runsDirectory },
-				{ output: recordOutput().output },
-			),
+		await runStale(
+			{ corpus: linked, runsDirectory: fixture.runsDirectory },
+			{ output: recorder.output },
 		);
 
-		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).not.toContain("SECRET BYTES");
+		const printed = recorder.stdout.join("");
+		expect(printed).toContain(`checkpoint:${fixture.replayableRun}/build`);
+		expect(printed).toContain("CLAUDE.md resolves outside the corpus source");
+		expect(printed).not.toContain("SECRET BYTES");
+		expect(printed).not.toContain(outside);
 	});
 });
