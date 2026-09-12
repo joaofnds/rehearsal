@@ -37,6 +37,7 @@ describe(comparisonAttribution.name, () => {
 		expect(result).toEqual({
 			claim: "attributable",
 			differingPath: "CLAUDE.md",
+			differingPaths: ["CLAUDE.md"],
 		});
 	});
 
@@ -70,6 +71,7 @@ describe(comparisonAttribution.name, () => {
 		expect(result).toEqual({
 			claim: "attributable",
 			differingPath: "skills/discuss/SKILL.md",
+			differingPaths: ["skills/discuss/SKILL.md"],
 		});
 	});
 
@@ -88,6 +90,7 @@ describe(comparisonAttribution.name, () => {
 		expect(result).toEqual({
 			claim: "attributable",
 			differingPath: "CLAUDE.md",
+			differingPaths: ["CLAUDE.md"],
 		});
 	});
 
@@ -100,6 +103,44 @@ describe(comparisonAttribution.name, () => {
 		expect(result).toEqual({
 			claim: "refused",
 			differingPaths: ["agents/team.md", "output-styles/team.md"],
+		});
+	});
+
+	it("keeps a nested corpus segment inside a session layout path", () => {
+		const left = [
+			file(
+				"inputs/corpus/agents/corpus/output-styles/brief.md",
+				"a".repeat(64),
+			),
+			file("inputs/corpus/output-styles/brief.md", "a".repeat(64)),
+		];
+		const right = [
+			file(
+				"inputs/corpus/agents/corpus/output-styles/brief.md",
+				"a".repeat(64),
+			),
+			file("inputs/corpus/output-styles/brief.md", "b".repeat(64)),
+		];
+
+		const result = comparisonAttribution(left, right, "session");
+
+		expect(result).toEqual({
+			claim: "attributable",
+			differingPath: "output-styles/brief.md",
+			differingPaths: ["output-styles/brief.md"],
+		});
+	});
+
+	it("normalizes a pipeline stage named corpus positionally", () => {
+		const left = [file("inputs/corpus/corpus/CLAUDE.md", "a".repeat(64))];
+		const right = [file("inputs/corpus/corpus/CLAUDE.md", "b".repeat(64))];
+
+		const result = comparisonAttribution(left, right, "pipeline");
+
+		expect(result).toEqual({
+			claim: "attributable",
+			differingPath: "CLAUDE.md",
+			differingPaths: ["CLAUDE.md"],
 		});
 	});
 });

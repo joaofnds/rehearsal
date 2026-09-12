@@ -107,10 +107,29 @@ function comparisonResponseBody(): ComparisonResponseFixture {
 				candidateMinusBaseline: {
 					claim: "attributable",
 					differingPath: "output-styles/brief.md",
+					differingPaths: ["output-styles/brief.md"],
+				},
+				candidateMinusControl: {
+					claim: "attributable",
+					differingPath: "output-styles/brief.md",
+					differingPaths: ["output-styles/brief.md"],
+				},
+				baselineMinusControl: {
+					claim: "attributable",
+					differingPath: "output-styles/brief.md",
+					differingPaths: ["output-styles/brief.md"],
 				},
 			},
 			"case-2": {
 				candidateMinusBaseline: {
+					claim: "refused",
+					differingPaths: ["CLAUDE.md", "skills/discuss/SKILL.md"],
+				},
+				candidateMinusControl: {
+					claim: "refused",
+					differingPaths: ["CLAUDE.md", "skills/discuss/SKILL.md"],
+				},
+				baselineMinusControl: {
 					claim: "refused",
 					differingPaths: ["CLAUDE.md", "skills/discuss/SKILL.md"],
 				},
@@ -137,9 +156,11 @@ describe(ComparisonPage.name, () => {
 	it("renders one row per case, not per attempt pair", async () => {
 		renderPage();
 
-		await waitFor(() => {
-			expect(screen.getByText("case-1")).toBeInTheDocument();
-		});
+		const table = await screen.findByRole("table");
+
+		expect(within(table).getByText("case-1")).toBeInTheDocument();
+		expect(within(table).getByText("case-2")).toBeInTheDocument();
+		expect(within(table).getAllByRole("row")).toHaveLength(3);
 	});
 
 	it("renders each arm's grade distribution as counts, never a synthesized median", async () => {
@@ -191,16 +212,31 @@ describe(ComparisonPage.name, () => {
 		const caseTwo = screen.getByRole("region", {
 			name: "Attribution · case-2",
 		});
+		const attributableCopy =
+			"The only corpus difference between these arms is output-styles/brief.md. A movement between them is attributable to that file.";
 		expect(
-			within(caseOne).getByText(/movement.*attributable/iu),
-		).toBeInTheDocument();
+			within(caseOne).getAllByText(
+				(_content, element) => element?.textContent === attributableCopy,
+			),
+		).toHaveLength(3);
+		expect(within(caseOne).getAllByText("output-styles/brief.md")).toHaveLength(
+			3,
+		);
+		for (const pair of [
+			"candidate vs baseline",
+			"candidate vs control",
+			"baseline vs control",
+		]) {
+			expect(within(caseOne).getByText(pair)).toBeInTheDocument();
+			expect(within(caseTwo).getByText(pair)).toBeInTheDocument();
+		}
 		expect(
-			within(caseOne).getByText("output-styles/brief.md"),
-		).toBeInTheDocument();
+			within(caseTwo).getAllByText(/refuses the attribution claim/iu),
+		).toHaveLength(3);
+		expect(within(caseTwo).getAllByText("CLAUDE.md")).toHaveLength(3);
 		expect(
-			within(caseTwo).getByText(/refuses the attribution claim/iu),
-		).toBeInTheDocument();
-		expect(within(caseTwo).getByText("CLAUDE.md")).toBeInTheDocument();
+			within(caseTwo).getAllByText("skills/discuss/SKILL.md"),
+		).toHaveLength(3);
 		expect(
 			within(caseTwo).queryByText("output-styles/brief.md"),
 		).not.toBeInTheDocument();

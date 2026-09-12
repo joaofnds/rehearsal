@@ -7,14 +7,23 @@ import type {
 
 export type ComparisonAttribution =
 	| { readonly claim: "identical" }
-	| { readonly claim: "attributable"; readonly differingPath: string }
-	| { readonly claim: "refused"; readonly differingPaths: readonly string[] };
+	| {
+			readonly claim: "attributable";
+			readonly differingPath: string;
+			readonly differingPaths: readonly [string];
+	  }
+	| {
+			readonly claim: "refused";
+			readonly differingPaths: readonly [string, string, ...string[]];
+	  };
 
 const ATTRIBUTION_WORDING = {
 	modified: (path: string) => path,
 	missingFromRight: (path: string) => path,
 	missingFromLeft: (path: string) => path,
 };
+
+type ComparisonMode = (ComparisonReport | LegacyComparisonReport)["mode"];
 
 /**
  * A pipeline arm's `executedCorpus` path is stage-qualified
@@ -27,16 +36,13 @@ const ATTRIBUTION_WORDING = {
  * count one file once per stage; dropping a segment from a session path can
  * collapse distinct layout files that share a basename.
  */
-type ComparisonMode = (ComparisonReport | LegacyComparisonReport)["mode"];
-
 function layoutPath(path: string, mode: ComparisonMode): string {
 	const segments = path.split("/");
-	const corpusIndex = segments.lastIndexOf("corpus");
-	if (corpusIndex === -1) {
+	if (segments[0] !== "inputs" || segments[1] !== "corpus") {
 		return path;
 	}
 
-	const layoutStart = corpusIndex + (mode === "session" ? 1 : 2);
+	const layoutStart = mode === "session" ? 2 : 3;
 	const layoutSegments = segments.slice(layoutStart);
 
 	return layoutSegments.length === 0 ? path : layoutSegments.join("/");
@@ -68,12 +74,19 @@ export function comparisonAttribution(
 		ATTRIBUTION_WORDING,
 	);
 
-	if (differingPaths.length === 0) {
+	const [first, second, ...rest] = differingPaths;
+	if (first === undefined) {
 		return { claim: "identical" };
 	}
+	if (second === undefined) {
+		return {
+			claim: "attributable",
+			differingPath: first,
+			// A previously loaded client reads this field before it knows the new
+			// discriminator, so the additive response stays renderable during deploys.
+			differingPaths: [first],
+		};
+	}
 
-	const [differingPath] = differingPaths;
-	return differingPaths.length === 1 && differingPath !== undefined
-		? { claim: "attributable", differingPath }
-		: { claim: "refused", differingPaths };
+	return { claim: "refused", differingPaths: [first, second, ...rest] };
 }
