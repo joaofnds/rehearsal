@@ -57,6 +57,38 @@ export async function asRefusedPrecondition<Loaded>(
 
 export type ModelProbe = () => Promise<string>;
 
+export type ClaudeHelpRunner = (
+	command: readonly string[],
+	cwd: string,
+) => Promise<string>;
+
+const SYSTEM_PROMPT_SNAPSHOT_CAPABILITY = "--system-prompt-snapshot <on|off>";
+
+/**
+ * A resumed case needs the current system prompt to be rendered from its
+ * declared settings and corpus. Capability discovery uses local CLI help so an
+ * incompatible executable is refused before the paid model probe.
+ */
+export async function assertSystemPromptSnapshotSupported(
+	run: ClaudeHelpRunner = runCommand,
+): Promise<void> {
+	let help: string;
+	try {
+		help = await run(["claude", "--help"], CONTROL_DIR);
+	} catch (error) {
+		const detail = error instanceof Error ? `: ${error.message}` : "";
+		throw new RefusedPreconditionError(
+			`Resumed session cases require Claude CLI support for ${SYSTEM_PROMPT_SNAPSHOT_CAPABILITY}, but \`claude --help\` failed${detail}`,
+		);
+	}
+
+	if (!help.includes(SYSTEM_PROMPT_SNAPSHOT_CAPABILITY)) {
+		throw new RefusedPreconditionError(
+			`Resumed session cases require Claude CLI support for ${SYSTEM_PROMPT_SNAPSHOT_CAPABILITY}, but \`claude --help\` did not advertise it`,
+		);
+	}
+}
+
 export type ModelPreflightEvidence =
 	| {
 			readonly status: "COMPLETE";

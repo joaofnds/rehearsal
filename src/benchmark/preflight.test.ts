@@ -3,6 +3,7 @@ import { CommandError } from "./command";
 import { PipelineDefinitionError } from "./pipeline";
 import { StageSettingsError } from "./stage-settings";
 import {
+	assertSystemPromptSnapshotSupported,
 	assertPipelinePreflight,
 	asRefusedPrecondition,
 	defaultModelProbe,
@@ -21,6 +22,34 @@ interface FakeEnvelope {
 function fakeProbe(envelope: FakeEnvelope): () => Promise<string> {
 	return () => Promise.resolve(JSON.stringify(envelope));
 }
+
+describe(assertSystemPromptSnapshotSupported.name, () => {
+	it("accepts a Claude CLI that advertises prompt snapshot control", async () => {
+		await assertSystemPromptSnapshotSupported(() =>
+			Promise.resolve(
+				"--system-prompt-snapshot <on|off>  Control prompt snapshots",
+			),
+		);
+	});
+
+	it("refuses a Claude CLI without prompt snapshot control", () => {
+		const failure = assertSystemPromptSnapshotSupported(() =>
+			Promise.resolve("Usage: claude [options]"),
+		);
+
+		expect(failure).rejects.toBeInstanceOf(RefusedPreconditionError);
+		expect(failure).rejects.toThrow("did not advertise");
+	});
+
+	it("refuses when Claude help cannot run", () => {
+		const failure = assertSystemPromptSnapshotSupported(() =>
+			Promise.reject(new Error("spawn ENOENT")),
+		);
+
+		expect(failure).rejects.toBeInstanceOf(RefusedPreconditionError);
+		expect(failure).rejects.toThrow("claude --help` failed");
+	});
+});
 
 describe(probeModelAvailable.name, () => {
 	it("returns cleanly when the provider accepts the model", async () => {

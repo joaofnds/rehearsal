@@ -142,8 +142,9 @@ export function sessionCaseArgs(
 		...(sessionCase.agents === undefined
 			? []
 			: ["--agents", JSON.stringify(sessionCase.agents)]),
-		session.resumed ? "--resume" : "--session-id",
-		session.sessionId,
+		...(session.resumed
+			? ["--system-prompt-snapshot", "off", "--resume", session.sessionId]
+			: ["--session-id", session.sessionId]),
 	];
 }
 

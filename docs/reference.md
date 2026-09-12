@@ -74,6 +74,10 @@ but baseline target checks happen afterward. Session execution also probes
 before some corpus and transcript validation. A refused input therefore does
 not universally mean zero spend.
 
+Before that paid probe, a resumed session case checks local `claude --help` for
+`--system-prompt-snapshot <on|off>`. A CLI without that capability is refused;
+fresh session cases do not need the check.
+
 The session budget applies separately to workflow sessions, the shared PO
 session, and Judge invocations. It is not a whole-run ceiling. Confirmation
 projects rep costs from those budgets; session confirmation includes the probe
@@ -164,7 +168,10 @@ Prefix bytes are ignored local run state. A committed declaration does not make
 them available to another clone. The loader uses the prefix store even if a
 similarly named file exists inside the committed case directory. Resumption
 checks the declared digest, forks the prefix under a fresh session ID, and owns
-only the forked session file for cleanup. Missing or changed bytes are refused.
+only the forked session file for cleanup. Its Claude invocation sets
+`--system-prompt-snapshot off`, so the system prompt is rendered again from the
+case's declared settings and installed corpus rather than reused from the
+prefix's original conversation. Missing or changed bytes are refused.
 
 ## Corpus sources and delivery
 

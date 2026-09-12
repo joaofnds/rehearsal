@@ -279,8 +279,18 @@ describe(sessionCaseArgs.name, () => {
 		expect(valueAfter(args({}, "fresh-uuid"), "--resume")).toBe("fresh-uuid");
 	});
 
+	it("rerenders the system prompt when resuming a forked session", () => {
+		expect(valueAfter(args({}, "fresh-uuid"), "--system-prompt-snapshot")).toBe(
+			"off",
+		);
+	});
+
 	it("omits --resume when no transcript is declared", () => {
 		expect(args()).not.toContain("--resume");
+	});
+
+	it("does not configure prompt snapshots for a fresh session", () => {
+		expect(args()).not.toContain("--system-prompt-snapshot");
 	});
 
 	it("names the session it is about to create when no transcript is declared", () => {

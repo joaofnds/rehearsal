@@ -68,6 +68,20 @@ const smokeCase: SessionCase = {
 	checks: [{ kind: "word-band", max: 1 }],
 };
 
+const resumedSmokeCase: SessionCase = {
+	...smokeCase,
+	declaration: {
+		...smokeCase.declaration,
+		transcript: {
+			file: "prefix.jsonl",
+			sha256: "a".repeat(64),
+			sourceSession: "source-session",
+			cut: 1,
+		},
+	},
+	transcriptPath: "/cases/smoke/prefix.jsonl",
+};
+
 const sessionMetrics = {
 	costUsd: 0.02,
 	inputTokens: 10,
@@ -701,6 +715,50 @@ describe("runRunCommand for a session case", () => {
 		);
 
 		expect(stdout.join("")).toBe("/runs/attempt.json\n");
+	});
+
+	it("refuses an unsupported resumed session before the model probe", async () => {
+		const { output } = recordOutput();
+		const paidCalls: string[] = [];
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: ["--case", "smoke", ...sessionArgs],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: () => Promise.resolve(resumedSmokeCase),
+					assertPreflight: passingPreflight,
+					probeModel: () => {
+						paidCalls.push("probe");
+
+						return Promise.resolve(missingPreflight);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							assertSystemPromptSnapshotSupported: () =>
+								Promise.reject(
+									new RefusedPreconditionError(
+										"Claude does not support prompt snapshot control",
+									),
+								),
+							runDebug: () => {
+								paidCalls.push("attempt");
+
+								return Promise.reject(new Error("must not run"));
+							},
+						}),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(paidCalls).toEqual([]);
 	});
 
 	it("approves the whole confirmed command before the model probe and reps", async () => {

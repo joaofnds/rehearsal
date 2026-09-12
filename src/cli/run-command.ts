@@ -47,7 +47,10 @@ import type {
 	ModelPreflightEvidence,
 	PipelinePreflightInputs,
 } from "#benchmark/preflight";
-import { asRefusedPrecondition } from "#benchmark/preflight";
+import {
+	asRefusedPrecondition,
+	assertSystemPromptSnapshotSupported,
+} from "#benchmark/preflight";
 import type { PipelineConfirmationRequest } from "#benchmark/pipeline-confirmation";
 import { runPipelineConfirmation } from "#benchmark/pipeline-confirmation";
 import type {
@@ -426,13 +429,14 @@ async function confirmRun(
 }
 
 export interface SessionRunExecutionDependencies extends SessionExecutionBoundary {
+	readonly assertSystemPromptSnapshotSupported?: typeof assertSystemPromptSnapshotSupported;
 	readonly runDebug?: typeof runSessionDebugAttempt;
 	readonly executeAttempt?: SessionConfirmationDependencies["executeAttempt"];
 	readonly resolveCorpus?: SessionConfirmationDependencies["resolveCorpus"];
 	readonly runsDirectory?: string;
 }
 
-export function executeSessionRun(
+export async function executeSessionRun(
 	config: SessionRunConfig,
 	output: CommandOutput,
 	sessionCase: SessionCase,
@@ -440,6 +444,12 @@ export function executeSessionRun(
 ): Promise<RunOutcome> {
 	if (config.confirmation !== undefined) {
 		assertSessionConfirmationInputsSupported(sessionCase);
+	}
+	if (sessionCase.declaration.transcript !== undefined) {
+		await (
+			dependencies.assertSystemPromptSnapshotSupported ??
+			assertSystemPromptSnapshotSupported
+		)();
 	}
 
 	const questioner = terminalQuestioner();
