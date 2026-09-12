@@ -4,7 +4,7 @@ import type { CheckpointRecord, HashedFile } from "#benchmark/checkpoint";
 import { parseCheckpointRecord, walkDirectory } from "#benchmark/checkpoint";
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import {
-	pathExists,
+	classifyEntry,
 	refusedEntryReason,
 	SymlinkedEntryError,
 } from "#benchmark/file-presence";
@@ -116,9 +116,21 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 
 	for (const directory of CORPUS_LAYOUT_DIRECTORIES) {
 		const absolute = join(root, directory);
-		if (!(await pathExists(absolute))) {
+		const entry = await classifyEntry(absolute);
+		if (entry.kind === "absent") {
 			continue;
 		}
+		if (entry.kind === "refused") {
+			refusals.push(`${directory} ${entry.reason}`);
+			continue;
+		}
+		if (entry.kind !== "directory") {
+			refusals.push(
+				`${directory} is not a directory, so it cannot contain corpus files to hash`,
+			);
+			continue;
+		}
+
 		try {
 			const walked = await walkDirectory(absolute, directory, {
 				source,
@@ -132,10 +144,17 @@ async function hashCorpusLayout(source: CorpusRoot): Promise<HashedLayout> {
 
 			files.push(...walked.files);
 		} catch (error) {
-			if (!(error instanceof SymlinkedEntryError)) {
+			const reason =
+				error instanceof Error
+					? refusedEntryReason(error, absolute)
+					: undefined;
+			if (reason !== undefined) {
+				refusals.push(`${directory} ${reason}`);
+			} else if (error instanceof SymlinkedEntryError) {
+				refusals.push(redactAbsolutePaths(error.message));
+			} else {
 				throw error;
 			}
-			refusals.push(redactAbsolutePaths(error.message));
 		}
 	}
 

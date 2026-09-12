@@ -410,6 +410,38 @@ describe(createApiApp.name, () => {
 			assertDoesNotLeak(body.refusals.join(""), corpus);
 		});
 
+		it.each([
+			[
+				"a self-referential directory",
+				(path: string) => symlink(path, path),
+				"agents is a link that never resolves to a file, so it names no bytes",
+			],
+			[
+				"a regular file",
+				(path: string) => writeFile(path, "not a directory\n"),
+				"agents is not a directory, so it cannot contain corpus files to hash",
+			],
+		])(
+			"names %s at a top-level layout path as a refusal, rather than returning 500",
+			async (_name, plant, expectedRefusal) => {
+				const corpus = await corpusDirectory();
+				await plant(join(corpus, "agents"));
+				const app = createApiApp({
+					runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+					corpusSource: directorySource(corpus),
+				});
+
+				const response = await app.request("/api/corpus");
+				const text = await response.text();
+				const body = corpusResponseSchema.parse(JSON.parse(text));
+
+				expect(response.status).toBe(200);
+				expect(body.refusals).toEqual([expectedRefusal]);
+				expect(body.digest).toBeUndefined();
+				assertDoesNotLeak(body.refusals.join(""), corpus);
+			},
+		);
+
 		it("serves a live corpus with an out-of-extent instruction file as a partial report", async () => {
 			const corpus = await corpusDirectory();
 			const backingRoot = await emptyDirectory("rehearsal-api-backing-");

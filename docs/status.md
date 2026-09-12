@@ -44,9 +44,10 @@ the browser view reads the same saved report as stage and pipeline comparisons.
   source extent. Live sources allow the install and configured backing tree;
   directory sources and frozen snapshots stay within their own root. These
   checks do not constrain hard-linked data, sandbox provider tools, or prevent
-  concurrent link replacement. A corpus entry that cannot yield bytes, whether
-  it escapes, dangles, never resolves, or cannot be read, produces a named
-  refusal; the refused entry's layout directory then contributes no files and
+  concurrent link replacement. A corpus path selected for reading that cannot
+  supply its claimed entries or bytes, whether it escapes, dangles, never
+  resolves, cannot be read, or has the wrong file type, produces a named
+  refusal; the refused path's layout directory then contributes no files and
   the corpus digest is withheld.
 - **Pipeline `run --corpus` is refused.** Replay supports explicit corpus
   directories, but the forward pipeline command does not yet use that path.

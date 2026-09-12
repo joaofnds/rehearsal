@@ -254,11 +254,13 @@ authentication and does not explicitly restrict its bind address to loopback,
 so do not expose its port as a public service.
 
 For linked instruction files, configure the server's shell using
-[live-corpus setup](#configure-a-linked-live-corpus). A layout directory or
-entry the harness cannot hash, because it leaves the permitted extent, never
-resolves, or cannot be read, produces a named refusal and withholds the corpus
-digest. Healthy layout directories remain visible, and run history stays
-readable with the refusal as a staleness cause.
+[live-corpus setup](#configure-a-linked-live-corpus). A layout directory or file
+entry selected for reading that the harness cannot hash, because it leaves the
+permitted extent, never resolves, cannot be read, or has the wrong file type,
+produces a named refusal and withholds the corpus digest. Healthy layout
+directories remain visible. An unavailable instruction file or a refusal while
+hashing a selected layout directory becomes a staleness cause, so run history
+stays readable.
 
 See [current UI coverage](status.md#browser-ui) for available routes and planned
 controls. An empty run-history page is expected in a fresh clone.

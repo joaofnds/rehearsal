@@ -198,11 +198,11 @@ directory. Allowed links may cross layout directories within the permitted
 extent. Records retain layout paths and content hashes; real paths authorize
 access without changing file identity.
 
-A corpus entry is refused by name whenever it cannot yield the bytes its layout
-path claims: it escapes the permitted trees, its link target is missing, its
-link never resolves, or its bytes cannot be read. One refusal omits its own
-layout directory's files and the whole-corpus digest, and retains healthy
-directories.
+A corpus path selected for reading is refused by name whenever it cannot supply
+the directory entries or file bytes its role claims: it escapes the permitted
+trees, its link target is missing, its link never resolves, its bytes cannot be
+read, or it has the wrong file type. One refusal omits its own layout
+directory's files and the whole-corpus digest, and retains healthy directories.
 
 The corpus API returns HTTP 200 carrying those refusals. Refusals name the
 corpus path without exposing the outside target or its descendants. Stage

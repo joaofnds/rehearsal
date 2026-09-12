@@ -159,6 +159,44 @@ describe(corpusReport.name, () => {
 		]);
 	});
 
+	it("names a self-referential layout directory as a refusal, rather than failing the report", async () => {
+		const root = await fullCorpusDirectory();
+		await symlink(join(root, "agents"), join(root, "agents"));
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.files.map(({ path }) => path)).toEqual([
+			"CLAUDE.md",
+			"skills/build/SKILL.md",
+			"skills/discuss/SKILL.md",
+		]);
+		expect(report.refusals).toEqual([
+			"agents is a link that never resolves to a file, so it names no bytes",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
+	it("names a file occupying a layout directory path as a refusal, rather than failing the report", async () => {
+		const root = await fullCorpusDirectory();
+		await writeFile(join(root, "agents"), "not a directory\n");
+		const runs = await corpusDirectory();
+		await new RecordedRunsFixture(runs).write();
+
+		const report = await corpusReport(directorySource(root), runs);
+
+		expect(report.files.map(({ path }) => path)).toEqual([
+			"CLAUDE.md",
+			"skills/build/SKILL.md",
+			"skills/discuss/SKILL.md",
+		]);
+		expect(report.refusals).toEqual([
+			"agents is not a directory, so it cannot contain corpus files to hash",
+		]);
+		expect(report.digest).toBeUndefined();
+	});
+
 	it("names a layout entry it cannot read as a refusal, rather than failing the report", async () => {
 		const root = await fullCorpusDirectory();
 		await mkdir(join(root, "agents"), { recursive: true });
