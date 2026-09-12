@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { CommandError } from "./command";
+import { CONTROL_DIR } from "./config";
 import { PipelineDefinitionError } from "./pipeline";
 import { StageSettingsError } from "./stage-settings";
 import {
@@ -25,11 +26,19 @@ function fakeProbe(envelope: FakeEnvelope): () => Promise<string> {
 
 describe(assertSystemPromptSnapshotSupported.name, () => {
 	it("accepts a Claude CLI that advertises prompt snapshot control", async () => {
-		await assertSystemPromptSnapshotSupported(() =>
-			Promise.resolve(
+		const calls: { command: readonly string[]; cwd: string }[] = [];
+
+		await assertSystemPromptSnapshotSupported((command, cwd) => {
+			calls.push({ command, cwd });
+
+			return Promise.resolve(
 				"--system-prompt-snapshot <on|off>  Control prompt snapshots",
-			),
-		);
+			);
+		});
+
+		expect(calls).toEqual([
+			{ command: ["claude", "--help"], cwd: CONTROL_DIR },
+		]);
 	});
 
 	it("refuses a Claude CLI without prompt snapshot control", () => {

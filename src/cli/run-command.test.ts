@@ -761,6 +761,101 @@ describe("runRunCommand for a session case", () => {
 		expect(paidCalls).toEqual([]);
 	});
 
+	it("checks a supported resumed session before its model probe and attempt", async () => {
+		const { output } = recordOutput();
+		const events: string[] = [];
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: ["--case", "smoke", ...sessionArgs],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: () => Promise.resolve(resumedSmokeCase),
+					assertPreflight: passingPreflight,
+					probeModel: () => {
+						events.push("probe");
+
+						return Promise.resolve(missingPreflight);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							assertSystemPromptSnapshotSupported: () => {
+								events.push("capability");
+
+								return Promise.resolve();
+							},
+							runDebug: () => {
+								events.push("attempt");
+
+								return Promise.reject(new Error("attempt reached"));
+							},
+						}),
+				},
+			),
+		);
+
+		expect(failure.message).toBe("attempt reached");
+		expect(events).toEqual(["capability", "probe", "attempt"]);
+	});
+
+	it("refuses an unsupported resumed confirmation before its model probe and reps", async () => {
+		const { output } = recordOutput();
+		const paidCalls: string[] = [];
+
+		const failure = await failureOf(
+			runRunCommand(
+				{
+					args: [
+						"--case",
+						"smoke",
+						...sessionArgs,
+						"--confirm",
+						"--reps",
+						"2",
+						"--yes",
+					],
+					json: false,
+					stdinIsTerminal: false,
+				},
+				{
+					output,
+					requireCase: () => Promise.resolve(resumedSmokeCase),
+					assertPreflight: passingPreflight,
+					probeModel: () => {
+						paidCalls.push("probe");
+
+						return Promise.resolve(missingPreflight);
+					},
+					execute: () => Promise.reject(new Error("no pipeline here")),
+					executeSession: (config, commandOutput, loaded, boundary) =>
+						executeSessionRun(config, commandOutput, loaded, {
+							...boundary,
+							assertSystemPromptSnapshotSupported: () =>
+								Promise.reject(
+									new RefusedPreconditionError(
+										"Claude does not support prompt snapshot control",
+									),
+								),
+							executeAttempt: () => {
+								paidCalls.push("rep");
+
+								return Promise.reject(new Error("must not run"));
+							},
+						}),
+				},
+			),
+		);
+
+		expect(failure).toBeInstanceOf(RefusedPreconditionError);
+		expect(paidCalls).toEqual([]);
+	});
+
 	it("approves the whole confirmed command before the model probe and reps", async () => {
 		const { output } = recordOutput();
 		const runsDirectory = await testResources.createControlDirectory();
