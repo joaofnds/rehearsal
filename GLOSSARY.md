@@ -22,6 +22,11 @@ See [current state](docs/status.md) for implementation coverage and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
   directory's real path is what names the attempt's project slug.
+- **Attribution (comparison)** — the claim permitted by corpus differences
+  between two named comparison arms after repeated stage captures have been
+  deduplicated by corpus layout path. No differing path means the corpora are
+  identical; exactly one means a movement can be attributed to that path; more
+  than one refuses attribution and names every differing path.
 - **Calibration** — the step that validates a Judge result against a human
   review and turns findings into rubric or instruction changes. It reads the
   frozen evidence a run recorded and the corpus files as they stand now, never

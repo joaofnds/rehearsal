@@ -12,6 +12,10 @@ import { createApiApp } from "./api";
 const attributionSchema = z.discriminatedUnion("claim", [
 	z.object({ claim: z.literal("identical") }),
 	z.object({
+		claim: z.literal("attributable"),
+		differingPath: z.string(),
+	}),
+	z.object({
 		claim: z.literal("refused"),
 		differingPaths: z.array(z.string()),
 	}),
@@ -87,8 +91,8 @@ describe("GET /api/comparisons/:digest", () => {
 		expect(response.status).toBe(200);
 		expect(body.report.cases.length).toBeGreaterThanOrEqual(2);
 		expect(body.attribution["case-1"]?.["candidateMinusBaseline"]).toEqual({
-			claim: "refused",
-			differingPaths: ["inputs/corpus/SKILL.md"],
+			claim: "attributable",
+			differingPath: "inputs/corpus/SKILL.md",
 		});
 	});
 

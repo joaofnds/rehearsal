@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComparisonReport } from "#benchmark/comparison-record";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
@@ -86,13 +92,27 @@ function comparisonResponseBody(): ComparisonResponseFixture {
 						control: arm("control", "3", BASELINE_LAGS),
 					},
 				},
+				{
+					caseId: "case-2",
+					arms: {
+						baseline: arm("baseline", "4", BASELINE_LAGS),
+						candidate: arm("candidate", "5", CANDIDATE_CLEARS),
+						control: arm("control", "6", BASELINE_LAGS),
+					},
+				},
 			],
 		},
 		attribution: {
 			"case-1": {
 				candidateMinusBaseline: {
+					claim: "attributable",
+					differingPath: "output-styles/brief.md",
+				},
+			},
+			"case-2": {
+				candidateMinusBaseline: {
 					claim: "refused",
-					differingPaths: ["CLAUDE.md"],
+					differingPaths: ["CLAUDE.md", "skills/discuss/SKILL.md"],
 				},
 			},
 		},
@@ -159,16 +179,31 @@ describe(ComparisonPage.name, () => {
 		expect(screen.queryByRole("table")).not.toBeInTheDocument();
 	});
 
-	it("refuses the attribution claim and lists the differing paths when the corpora disagree", async () => {
+	it("associates each case with its own attribution reading", async () => {
 		renderPage();
 
 		await waitFor(() => {
 			expect(screen.getByText("case-1")).toBeInTheDocument();
 		});
+		const caseOne = screen.getByRole("region", {
+			name: "Attribution · case-1",
+		});
+		const caseTwo = screen.getByRole("region", {
+			name: "Attribution · case-2",
+		});
 		expect(
-			screen.getByText(/refuses the attribution claim/iu),
+			within(caseOne).getByText(/movement.*attributable/iu),
 		).toBeInTheDocument();
-		expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
+		expect(
+			within(caseOne).getByText("output-styles/brief.md"),
+		).toBeInTheDocument();
+		expect(
+			within(caseTwo).getByText(/refuses the attribution claim/iu),
+		).toBeInTheDocument();
+		expect(within(caseTwo).getByText("CLAUDE.md")).toBeInTheDocument();
+		expect(
+			within(caseTwo).queryByText("output-styles/brief.md"),
+		).not.toBeInTheDocument();
 	});
 
 	it("labels the arm pair lowercase, not 'candidate vs Baseline'", async () => {
@@ -177,7 +212,12 @@ describe(ComparisonPage.name, () => {
 		await waitFor(() => {
 			expect(screen.getByText("case-1")).toBeInTheDocument();
 		});
-		expect(screen.getByText("candidate vs baseline")).toBeInTheDocument();
+		const caseOne = screen.getByRole("region", {
+			name: "Attribution · case-1",
+		});
+		expect(
+			within(caseOne).getByText("candidate vs baseline"),
+		).toBeInTheDocument();
 	});
 
 	it("renders the empty state, not a generic error, when no comparison is recorded for the digest", async () => {

@@ -7,6 +7,7 @@ import type {
 
 export type ComparisonAttribution =
 	| { readonly claim: "identical" }
+	| { readonly claim: "attributable"; readonly differingPath: string }
 	| { readonly claim: "refused"; readonly differingPaths: readonly string[] };
 
 const ATTRIBUTION_WORDING = {
@@ -67,7 +68,12 @@ export function comparisonAttribution(
 		ATTRIBUTION_WORDING,
 	);
 
-	return differingPaths.length === 0
-		? { claim: "identical" }
+	if (differingPaths.length === 0) {
+		return { claim: "identical" };
+	}
+
+	const [differingPath] = differingPaths;
+	return differingPaths.length === 1 && differingPath !== undefined
+		? { claim: "attributable", differingPath }
 		: { claim: "refused", differingPaths };
 }

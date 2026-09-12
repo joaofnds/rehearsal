@@ -83,36 +83,74 @@ function AttributionCard({
 			<span className="rh-comparison__attribution-pair">
 				{armPairLabel(pairKey)}
 			</span>
-			{attribution.claim === "identical" ? (
-				<p>No corpus difference between these arms.</p>
-			) : (
-				<div>
-					<p>
-						Refuses the attribution claim: more than one file could explain a
-						movement between these arms.
-					</p>
-					<ul>
-						{attribution.differingPaths.map((path) => (
-							<li key={path}>{path}</li>
-						))}
-					</ul>
-				</div>
-			)}
+			<AttributionReading attribution={attribution} />
+		</div>
+	);
+}
+
+function AttributionReading({
+	attribution,
+}: {
+	readonly attribution: ComparisonAttribution;
+}): React.JSX.Element {
+	if (attribution.claim === "identical") {
+		return <p>No corpus difference between these arms.</p>;
+	}
+
+	if (attribution.claim === "attributable") {
+		return (
+			<p>
+				The only corpus difference between these arms is{" "}
+				<code className="rh-comparison__attribution-path">
+					{attribution.differingPath}
+				</code>
+				. A movement between them is attributable to that file.
+			</p>
+		);
+	}
+
+	return (
+		<div>
+			<p>
+				Refuses the attribution claim: more than one file could explain a
+				movement between these arms.
+			</p>
+			<ul>
+				{attribution.differingPaths.map((path) => (
+					<li key={path}>{path}</li>
+				))}
+			</ul>
 		</div>
 	);
 }
 
 function AttributionCards({
+	caseId,
 	attribution,
 }: {
+	readonly caseId: string;
 	readonly attribution: Readonly<Record<string, ComparisonAttribution>>;
 }): React.JSX.Element {
+	const headingId = `comparison-attribution-${caseId}`;
+
 	return (
-		<div className="rh-comparison__attribution-list">
-			{Object.entries(attribution).map(([pairKey, claim]) => (
-				<AttributionCard key={pairKey} pairKey={pairKey} attribution={claim} />
-			))}
-		</div>
+		<section
+			className="rh-comparison__attribution-group"
+			aria-labelledby={headingId}
+		>
+			<h2 id={headingId} className="rh-comparison__attribution-heading">
+				Attribution · {caseId}
+			</h2>
+			<div className="rh-comparison__attribution-list">
+				{Object.entries(attribution).map(([pairKey, claim]) => (
+					<AttributionCard
+						key={pairKey}
+						pairKey={pairKey}
+						attribution={claim}
+					/>
+				))}
+			</div>
+		</section>
 	);
 }
 
@@ -163,6 +201,7 @@ export function ComparisonPage({
 					{query.data.report.cases.map((benchmarkCase) => (
 						<AttributionCards
 							key={benchmarkCase.caseId}
+							caseId={benchmarkCase.caseId}
 							attribution={query.data.attribution[benchmarkCase.caseId] ?? {}}
 						/>
 					))}
