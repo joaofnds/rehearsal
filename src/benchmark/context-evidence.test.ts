@@ -1,14 +1,49 @@
 import { describe, expect, it } from "bun:test";
 import {
 	contextEvidenceSourceSchema,
+	contextRateCatalogSchema,
 	normalizeContextEvidence,
 } from "#benchmark/context-evidence";
+import type { JsonObject } from "#benchmark/json-value";
 
 async function sourceFixture(): Promise<unknown> {
 	return Bun.file(
 		new URL("./__fixtures__/context-evidence-source.json", import.meta.url),
 	).json();
 }
+
+function objectAt(record: JsonObject, key: string): JsonObject {
+	const value = record[key];
+	if (value === null || typeof value !== "object" || Array.isArray(value))
+		throw new Error("fixture has no object at " + key);
+
+	return value as JsonObject;
+}
+
+const rates = contextRateCatalogSchema.parse({
+	schemaVersion: 1,
+	source: "synthetic-rate-card",
+	version: "2026-09-13",
+	currency: "USD",
+	models: [
+		{
+			model: "claude-sonnet-5",
+			inputUsdPerMillion: 3,
+			outputUsdPerMillion: 15,
+			cacheReadUsdPerMillion: 0.3,
+			cacheWrite5mUsdPerMillion: 3.75,
+			cacheWrite1hUsdPerMillion: 6,
+		},
+		{
+			model: "claude-haiku-5",
+			inputUsdPerMillion: 1,
+			outputUsdPerMillion: 5,
+			cacheReadUsdPerMillion: 0.1,
+			cacheWrite5mUsdPerMillion: 1.25,
+			cacheWrite1hUsdPerMillion: 2,
+		},
+	],
+});
 
 describe(normalizeContextEvidence.name, () => {
 	it("derives joined requests, nested lineage and explicit loss states from provider-shaped sources", async () => {
@@ -192,4 +227,91 @@ describe(normalizeContextEvidence.name, () => {
 			sources: ["stream"],
 		});
 	});
+
+	it("prices each request from its model and reconciled cache TTL categories", async () => {
+		const source = contextEvidenceSourceSchema.parse(await sourceFixture());
+
+		const evidence = normalizeContextEvidence(source, rates);
+
+		expect(
+			evidence.projection.requests.map(({ requestId, pricing }) => ({
+				requestId,
+				pricing,
+			})),
+		).toEqual([
+			{
+				requestId: "req-child-1",
+				pricing: {
+					state: "complete",
+					calculatedCostUsd: 0.005712,
+					rateSource: "synthetic-rate-card",
+					rateVersion: "2026-09-13",
+					currency: "USD",
+				},
+			},
+			{
+				requestId: "req-child-missing",
+				pricing: { state: "usage-missing" },
+			},
+			{
+				requestId: "req-main-1",
+				pricing: {
+					state: "complete",
+					calculatedCostUsd: 0.045606,
+					rateSource: "synthetic-rate-card",
+					rateVersion: "2026-09-13",
+					currency: "USD",
+				},
+			},
+			{
+				requestId: "req-nested-1",
+				pricing: {
+					state: "complete",
+					calculatedCostUsd: 0.000593,
+					rateSource: "synthetic-rate-card",
+					rateVersion: "2026-09-13",
+					currency: "USD",
+				},
+			},
+		]);
+	});
+
+	it.each([
+		{
+			name: "missing",
+			cache: undefined,
+			expected: "ttl-split-missing",
+		},
+		{
+			name: "conflicting",
+			cache: {
+				ephemeral_5m_input_tokens: 201,
+				ephemeral_1h_input_tokens: 200,
+			},
+			expected: "ttl-split-conflict",
+		},
+	])(
+		"keeps a $name cache TTL split incomplete",
+		async ({ cache, expected }) => {
+			const source = contextEvidenceSourceSchema.parse(await sourceFixture());
+			const child =
+				source.files.transcripts[
+					"transcripts/subagents/agent-agent-review-1.jsonl"
+				]?.[0];
+			if (child === undefined)
+				throw new Error("fixture has no child transcript");
+			const message = objectAt(child, "message");
+			const usage = objectAt(message, "usage");
+			if (cache === undefined) Reflect.deleteProperty(usage, "cache_creation");
+			else Object.assign(usage, { cache_creation: cache });
+
+			const evidence = normalizeContextEvidence(source, rates);
+
+			expect(
+				evidence.projection.requests.find(
+					(request) => request.requestId === "req-child-1",
+				)?.pricing.state,
+			).toBe(expected);
+		},
+	);
 });

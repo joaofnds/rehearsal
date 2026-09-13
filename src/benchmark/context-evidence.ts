@@ -35,6 +35,27 @@ export const contextEvidenceSourceSchema = z
 	})
 	.strict();
 
+const modelRateSchema = z
+	.object({
+		model: z.string().min(1),
+		inputUsdPerMillion: z.number().nonnegative(),
+		outputUsdPerMillion: z.number().nonnegative(),
+		cacheReadUsdPerMillion: z.number().nonnegative(),
+		cacheWrite5mUsdPerMillion: z.number().nonnegative(),
+		cacheWrite1hUsdPerMillion: z.number().nonnegative(),
+	})
+	.strict();
+
+export const contextRateCatalogSchema = z
+	.object({
+		schemaVersion: z.literal(1),
+		source: z.string().min(1),
+		version: z.string().min(1),
+		currency: z.string().min(1),
+		models: z.array(modelRateSchema),
+	})
+	.strict();
+
 const tokenUsageSchema = z
 	.object({
 		inputTokens: z.number().int().nonnegative(),
@@ -160,6 +181,7 @@ export const contextEvidenceSchema = z
 
 export type ContextEvidenceSource = z.infer<typeof contextEvidenceSourceSchema>;
 export type ContextEvidence = z.infer<typeof contextEvidenceSchema>;
+export type ContextRateCatalog = z.infer<typeof contextRateCatalogSchema>;
 
 function objectValue(record: JsonObject, key: string): JsonObject | undefined {
 	const value = record[key];
@@ -401,9 +423,48 @@ function requestModel(
 	return null;
 }
 
+function requestPricing(
+	usageState: ContextEvidence["projection"]["requests"][number]["usageState"],
+	usage: ContextEvidence["projection"]["requests"][number]["usage"],
+	model: string | null,
+	rates: ContextRateCatalog | undefined,
+): ContextEvidence["projection"]["requests"][number]["pricing"] {
+	if (usageState === "conflict") return { state: "usage-conflict" };
+	if (usageState !== "complete" || usage === undefined)
+		return { state: "usage-missing" };
+	if (
+		usage.cacheWrite5mTokens === undefined ||
+		usage.cacheWrite1hTokens === undefined
+	)
+		return { state: "ttl-split-missing" };
+	if (
+		usage.cacheWrite5mTokens + usage.cacheWrite1hTokens !==
+		usage.cacheWriteTokens
+	)
+		return { state: "ttl-split-conflict" };
+	const rate = rates?.models.find((entry) => entry.model === model);
+	if (rates === undefined || rate === undefined)
+		return { state: "rates-missing" };
+
+	return {
+		state: "complete",
+		calculatedCostUsd:
+			(usage.inputTokens * rate.inputUsdPerMillion +
+				usage.outputTokens * rate.outputUsdPerMillion +
+				usage.cacheReadTokens * rate.cacheReadUsdPerMillion +
+				usage.cacheWrite5mTokens * rate.cacheWrite5mUsdPerMillion +
+				usage.cacheWrite1hTokens * rate.cacheWrite1hUsdPerMillion) /
+			1_000_000,
+		rateSource: rates.source,
+		rateVersion: rates.version,
+		currency: rates.currency,
+	};
+}
+
 function normalizedRequests(
 	files: ContextEvidenceSource["files"],
 	indexes: TranscriptIndexes,
+	rates: ContextRateCatalog | undefined,
 ): Pick<
 	ContextEvidence["projection"],
 	"requests" | "keylessRequests" | "accountingState"
@@ -491,28 +552,18 @@ function normalizedRequests(
 					: baseUsage === undefined
 						? ("partial" as const)
 						: ("complete" as const);
-		const pricingState =
-			usageState === "missing"
-				? ("usage-missing" as const)
-				: usageState === "conflict"
-					? ("usage-conflict" as const)
-					: split === undefined
-						? ("ttl-split-missing" as const)
-						: baseUsage !== undefined &&
-							  split.five + split.one !== baseUsage.cacheWriteTokens
-							? ("ttl-split-conflict" as const)
-							: ("rates-missing" as const);
 		const providerCostUsd = attributes && numberValue(attributes, "cost_usd");
+		const model = requestModel(distinct[0], transcriptRows);
 
 		return {
 			requestId,
 			agentId,
 			...(attributionState === undefined ? {} : { attributionState }),
-			model: requestModel(distinct[0], transcriptRows),
+			model,
 			usageState,
 			...(usage === undefined ? {} : { usage }),
 			...(providerCostUsd === undefined ? {} : { providerCostUsd }),
-			pricing: { state: pricingState },
+			pricing: requestPricing(usageState, usage, model, rates),
 			otelOccurrences: logs.length,
 			uniqueOtelOccurrences: distinct.length,
 			transcriptOccurrences: transcriptRows.length,
@@ -602,9 +653,10 @@ function normalizedCompactions(
 
 export function normalizeContextEvidence(
 	source: ContextEvidenceSource,
+	rates?: ContextRateCatalog,
 ): ContextEvidence {
 	const indexes = transcriptIndexes(source.files);
-	const requests = normalizedRequests(source.files, indexes);
+	const requests = normalizedRequests(source.files, indexes, rates);
 	const projection: ContextEvidence["projection"] = {
 		agents: normalizedAgents(source.files, indexes),
 		...requests,
