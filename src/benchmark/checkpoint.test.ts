@@ -881,6 +881,18 @@ describe(deriveStaleness.name, () => {
 		]);
 	});
 
+	it("marks a checkpoint stale when current settings are unavailable", () => {
+		const refusal =
+			"stage settings file cases/audit-log/settings.json is unavailable";
+
+		const [staleness] = deriveStaleness([initial], new Map(), {
+			...request,
+			settingsFileRefusal: refusal,
+		});
+
+		expect(staleness?.causes).toEqual([refusal]);
+	});
+
 	it("blames the first stale stage, not the nearest, further down the chain", () => {
 		const review = checkpoint("review", build.lineage, [
 			claudeMd,

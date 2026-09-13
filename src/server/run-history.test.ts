@@ -200,6 +200,32 @@ describe(runHistoryReport.name, () => {
 		expect(row?.grade).toBeUndefined();
 	});
 
+	it("reports staleness from a stopped run's initial checkpoint", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeStoppedRun();
+		await fixture.writeInitialCheckpoint(fixture.stoppedRun, {
+			path: "stage-settings.json",
+			sha256: "0".repeat(64),
+		});
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+		);
+
+		const row = rows.find((candidate) => candidate.run === fixture.stoppedRun);
+		expect(row).toEqual({
+			run: fixture.stoppedRun,
+			caseId: "audit-log",
+			status: "STOPPED:build",
+			stage: undefined,
+			grade: undefined,
+			corpus: undefined,
+			stale: true,
+			staleCauses: ["stage settings file stage-settings.json changed"],
+		});
+	});
+
 	it("reports a run reconciled to INTERRUPTED, which today's checkpoint- and stage-file reads alone leave invisible", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeInterruptedRun();

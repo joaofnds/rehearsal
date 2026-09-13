@@ -13,7 +13,7 @@ import {
 } from "./checkpoint";
 import { refusedEntryReason, SymlinkedEntryError } from "./file-presence";
 import type { Effort } from "./config";
-import { loadCurrentStageSettings } from "./current-stage-settings";
+import { compareCurrentStageSettings } from "./current-stage-settings";
 import type { CorpusRoot } from "./corpus-file";
 import {
 	CORPUS_INSTRUCTIONS_PATH,
@@ -249,12 +249,12 @@ export async function staleCheckpoints(
 			source,
 			instructions,
 		);
-		const settingsFile = (await loadCurrentStageSettings(manifest.caseId)).hashed;
+		const settings = await compareCurrentStageSettings(manifest.caseId);
 
 		for (const staleness of deriveStaleness(chain, current, {
 			model: knobs.model ?? manifest.model,
 			effort: knobs.effort ?? manifest.effort,
-			settingsFile,
+			...settings,
 		})) {
 			if (staleness.stale) {
 				stale.push({

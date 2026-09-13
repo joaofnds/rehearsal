@@ -8,8 +8,10 @@ import { CONTROL_DIR, displayPath } from "./config";
 import {
 	DEFAULT_STAGE_SETTINGS_FILE,
 	loadStageSettings,
+	StageSettingsError,
 } from "./stage-settings";
 import type { LoadedStageSettings } from "./stage-settings";
+import type { HashedFile } from "./checkpoint";
 
 export interface CurrentStageSettingsReference {
 	readonly sourcePath: string;
@@ -71,4 +73,35 @@ export async function loadCurrentStageSettings(
 	const reference = await currentStageSettingsReference(caseId, dependencies);
 
 	return dependencies.loadStageSettings(reference.sourcePath);
+}
+
+export type CurrentStageSettingsComparison =
+	| { readonly settingsFile: HashedFile }
+	| { readonly settingsFileRefusal: string };
+
+/**
+ * Reporting cannot make one unreadable settings file hide every other run.
+ * Keep replay's strict loader for paid work, but turn its known settings error
+ * into a per-run comparison refusal with only the durable path identity.
+ */
+export async function compareCurrentStageSettings(
+	caseId: string,
+	dependencies: CurrentStageSettingsDependencies = currentSettingsDependencies,
+): Promise<CurrentStageSettingsComparison> {
+	const reference = await currentStageSettingsReference(caseId, dependencies);
+	try {
+		return {
+			settingsFile: (
+				await dependencies.loadStageSettings(reference.sourcePath)
+			).hashed,
+		};
+	} catch (error) {
+		if (!(error instanceof StageSettingsError)) {
+			throw error;
+		}
+
+		return {
+			settingsFileRefusal: `stage settings file ${reference.recordPath} is unavailable: ${error.message.replaceAll(reference.sourcePath, reference.recordPath)}`,
+		};
+	}
 }

@@ -60,6 +60,33 @@ describe(staleCheckpoints.name, () => {
 		return fixture;
 	}
 
+	async function declarePipelineCase(
+		caseId: string,
+		settingsContent?: string,
+	): Promise<void> {
+		const directory = join(CONTROL_DIR, CASES_DIRECTORY, caseId);
+		roots.push(directory);
+		await mkdir(directory, { recursive: true });
+		await Bun.write(
+			join(directory, "case.json"),
+			JSON.stringify({
+				id: caseId,
+				kind: "pipeline",
+				title: "Settings probe",
+				task: "task.md",
+				productBrief: "brief.md",
+				finalRubric: "rubric.md",
+				pipeline: "pipeline.json",
+				rubrics: "rubrics",
+				target: { path: "/target" },
+				settingsFile: "settings.json",
+			}),
+		);
+		if (settingsContent !== undefined) {
+			await Bun.write(join(directory, "settings.json"), settingsContent);
+		}
+	}
+
 	it("names the stage whose recorded corpus no longer matches, with its cause", async () => {
 		const fixture = await writtenFixture();
 		const corpus = await corpusDirectory("build skill, edited\n");
@@ -143,6 +170,63 @@ describe(staleCheckpoints.name, () => {
 			`checkpoint:${fixture.replayableRun}/discuss`,
 			`checkpoint:${fixture.replayableRun}/build`,
 		]);
+	});
+
+	it("keeps healthy runs readable when another run's settings file is missing", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		const brokenRun = "2026-09-07T00-00-00.000Z";
+		const caseId = "zz-settings-missing";
+		await declarePipelineCase(caseId);
+		await fixture.writePipelineRun(brokenRun, caseId, {
+			path: `cases/${caseId}/settings.json`,
+			sha256: "0".repeat(64),
+		});
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await fixture.recordCorpusFrom(directorySource(corpus), brokenRun);
+
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		expect(stale.map(({ id }) => id)).toEqual([
+			`checkpoint:${brokenRun}/discuss`,
+			`checkpoint:${brokenRun}/build`,
+		]);
+		expect(stale.at(0)?.causes.join(" ")).toContain(
+			`cases/${caseId}/settings.json`,
+		);
+		expect(stale.flatMap(({ causes }) => causes).join(" ")).not.toContain(
+			CONTROL_DIR,
+		);
+	});
+
+	it("keeps healthy runs readable when another run's settings file is invalid", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		const brokenRun = "2026-09-08T00-00-00.000Z";
+		const caseId = "zz-settings-invalid";
+		await declarePipelineCase(caseId, JSON.stringify({ hooks: {} }));
+		await fixture.writePipelineRun(brokenRun, caseId, {
+			path: `cases/${caseId}/settings.json`,
+			sha256: "0".repeat(64),
+		});
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await fixture.recordCorpusFrom(directorySource(corpus), brokenRun);
+
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		expect(stale.map(({ id }) => id)).toEqual([
+			`checkpoint:${brokenRun}/discuss`,
+			`checkpoint:${brokenRun}/build`,
+		]);
+		expect(stale.at(0)?.causes.join(" ")).toContain(
+			`cases/${caseId}/settings.json`,
+		);
 	});
 
 	it("keeps a checkpoint fresh with linked files in the captured live backing tree", async () => {

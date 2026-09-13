@@ -670,6 +670,7 @@ export interface StalenessRequest {
 	readonly model: string;
 	readonly effort?: Effort | undefined;
 	readonly settingsFile?: HashedFile | undefined;
+	readonly settingsFileRefusal?: string | undefined;
 }
 
 export interface CheckpointStaleness {
@@ -811,7 +812,9 @@ export function deriveStaleness(
 				`effort ${record.effort ?? "none"} is now ${request.effort ?? "none"}`,
 			);
 		}
-		if (record.settingsFile?.sha256 !== request.settingsFile?.sha256) {
+		if (request.settingsFileRefusal !== undefined) {
+			causes.push(request.settingsFileRefusal);
+		} else if (record.settingsFile?.sha256 !== request.settingsFile?.sha256) {
 			const candidate =
 				request.settingsFile?.path ?? record.settingsFile?.path ?? "none";
 			const path = isAbsolute(candidate) ? basename(candidate) : candidate;

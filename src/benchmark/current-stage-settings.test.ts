@@ -4,9 +4,11 @@ import { CaseDeclarationError } from "./case";
 import type { CaseDeclaration } from "./case";
 import { CONTROL_DIR } from "./config";
 import {
+	compareCurrentStageSettings,
 	currentStageSettingsReference,
 	loadCurrentStageSettings,
 } from "./current-stage-settings";
+import { StageSettingsError } from "./stage-settings";
 import type { LoadedStageSettings } from "./stage-settings";
 
 const pipelineCase: CaseDeclaration = {
@@ -73,5 +75,22 @@ describe(loadCurrentStageSettings.name, () => {
 		expect(paths).toEqual([
 			join(CONTROL_DIR, "cases", "audit-log", "settings/stage.json"),
 		]);
+	});
+});
+
+describe(compareCurrentStageSettings.name, () => {
+	it("turns an unavailable selected file into a redacted refusal", async () => {
+		const result = await compareCurrentStageSettings("audit-log", {
+			readCaseDeclaration: () => Promise.resolve(pipelineCase),
+			loadStageSettings: (path) =>
+				Promise.reject(
+					new StageSettingsError(`No stage settings file at ${path}`),
+				),
+		});
+
+		expect(result).toEqual({
+			settingsFileRefusal:
+				"stage settings file cases/audit-log/settings/stage.json is unavailable: No stage settings file at cases/audit-log/settings/stage.json",
+		});
 	});
 });

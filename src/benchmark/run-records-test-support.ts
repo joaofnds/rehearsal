@@ -70,9 +70,13 @@ function serialize(record: Immutable<WrittenRecord>): string {
 	return `${JSON.stringify(record, null, 2)}\n`;
 }
 
-function manifest(timestamp: string, sourceRoot: string): RunManifest {
+function manifest(
+	timestamp: string,
+	sourceRoot: string,
+	caseId = CASE_ID,
+): RunManifest {
 	return {
-		caseId: CASE_ID,
+		caseId,
 		timestamp,
 		controlSha: "1".repeat(40),
 		sourceRoot,
@@ -347,41 +351,77 @@ export class RecordedRunsFixture {
 	 * corpus root rather than a directory path is what lets the live install be
 	 * recorded against too.
 	 */
-	public async recordCorpusFrom(source: CorpusRoot): Promise<void> {
-		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+	public async recordCorpusFrom(
+		source: CorpusRoot,
+		run = this.replayableRun,
+	): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, run);
 		const instructions = await Bun.file(
 			resolveCorpusFile(source, "CLAUDE.md"),
 		).text();
 		const roots = stageCorpusRoots(source, this.sourceRoot);
-		const settingsFile = await currentSettingsFile();
 
 		for (const stage of this.stages) {
 			const corpusFiles = await captureStageCorpus(stage, instructions, roots);
 			const directory = paths.checkpointDirectory(stage);
+			const record = parseCheckpointRecord(
+				await Bun.file(checkpointRecordFile(directory)).text(),
+			);
 			await Bun.write(
 				checkpointRecordFile(directory),
-				serialize({
-					...checkpoint(stage, corpusPath(stage), settingsFile),
-					corpusFiles,
-				}),
+				serialize({ ...record, corpusFiles }),
 			);
 		}
 	}
 
-	public async writeInitialCheckpoint(): Promise<void> {
-		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+	public async writePipelineRun(
+		run: string,
+		caseId: string,
+		settingsFile?: HashedFile,
+	): Promise<void> {
+		const recordedSettings = settingsFile ?? (await currentSettingsFile());
+		const paths = benchmarkRunPaths(this.runsDirectory, run);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(run, this.sourceRoot, caseId),
+		);
+
+		for (const stage of this.stages) {
+			const directory = paths.checkpointDirectory(stage);
+			await mkdir(directory, { recursive: true });
+			await Bun.write(
+				checkpointRecordFile(directory),
+				serialize(checkpoint(stage, corpusPath(stage), recordedSettings)),
+			);
+		}
+
+		await Bun.write(
+			paths.artifactFile,
+			serialize(this.artifact(run, "COMPLETE", caseId)),
+		);
+	}
+
+	public async writeInitialCheckpoint(
+		run = this.replayableRun,
+		settingsFile?: HashedFile,
+	): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, run);
 		const directory = paths.checkpointDirectory(INITIAL_CHECKPOINT_STAGE);
 		await mkdir(directory, { recursive: true });
 		await Bun.write(
 			checkpointRecordFile(directory),
-			serialize(initialCheckpoint(await currentSettingsFile())),
+			serialize(
+				initialCheckpoint(settingsFile ?? (await currentSettingsFile())),
+			),
 		);
 	}
 
 	public async recordSettingsFile(
 		settingsFile: HashedFile | undefined,
+		run = this.replayableRun,
 	): Promise<void> {
-		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+		const paths = benchmarkRunPaths(this.runsDirectory, run);
 		for (const stage of [INITIAL_CHECKPOINT_STAGE, ...this.stages]) {
 			const file = Bun.file(
 				checkpointRecordFile(paths.checkpointDirectory(stage)),
@@ -638,27 +678,7 @@ export class RecordedRunsFixture {
 	}
 
 	private async writeReplayableRun(): Promise<void> {
-		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
-		await mkdir(paths.checkpointsDirectory, { recursive: true });
-		await writeRunManifest(
-			paths.manifestFile,
-			manifest(this.replayableRun, this.sourceRoot),
-		);
-
-		const settingsFile = await currentSettingsFile();
-		for (const stage of this.stages) {
-			const directory = paths.checkpointDirectory(stage);
-			await mkdir(directory, { recursive: true });
-			await Bun.write(
-				checkpointRecordFile(directory),
-				serialize(checkpoint(stage, corpusPath(stage), settingsFile)),
-			);
-		}
-
-		await Bun.write(
-			paths.artifactFile,
-			serialize(this.artifact(this.replayableRun, "COMPLETE")),
-		);
+		await this.writePipelineRun(this.replayableRun, CASE_ID);
 	}
 
 	private async writeUnreplayableRun(): Promise<void> {
@@ -670,9 +690,13 @@ export class RecordedRunsFixture {
 		);
 	}
 
-	private artifact(timestamp: string, status: string): RunSummaryRecord {
+	private artifact(
+		timestamp: string,
+		status: string,
+		caseId = CASE_ID,
+	): RunSummaryRecord {
 		return runSummarySchema.parse({
-			caseId: CASE_ID,
+			caseId,
 			timestamp,
 			status,
 			grade: {
