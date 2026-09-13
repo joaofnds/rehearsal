@@ -1280,10 +1280,9 @@ describe(runGradedStages.name, () => {
 		const outcome = await runGradedStages(dependencies, context);
 
 		expect(settingsOverlays).toEqual([settings.json, settings.json]);
-		expect(outcome.checkpoints.map(({ settingsFile }) => settingsFile)).toEqual([
-			settings.hashed,
-			settings.hashed,
-		]);
+		expect(outcome.checkpoints.map(({ settingsFile }) => settingsFile)).toEqual(
+			[settings.hashed, settings.hashed],
+		);
 		for (const checkpoint of outcome.checkpoints) {
 			const written = await Bun.file(
 				join(context.checkpointDirectory(checkpoint.stage), "checkpoint.json"),

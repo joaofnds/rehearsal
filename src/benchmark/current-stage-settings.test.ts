@@ -44,7 +44,9 @@ describe(currentStageSettingsReference.name, () => {
 	it("falls back to the root default when the case no longer loads", async () => {
 		const reference = await currentStageSettingsReference("removed", {
 			readCaseDeclaration: () =>
-				Promise.reject(new CaseDeclarationError("case declaration unavailable")),
+				Promise.reject(
+					new CaseDeclarationError("case declaration unavailable"),
+				),
 		});
 
 		expect(reference).toEqual({

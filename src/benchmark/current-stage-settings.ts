@@ -91,9 +91,8 @@ export async function compareCurrentStageSettings(
 	const reference = await currentStageSettingsReference(caseId, dependencies);
 	try {
 		return {
-			settingsFile: (
-				await dependencies.loadStageSettings(reference.sourcePath)
-			).hashed,
+			settingsFile: (await dependencies.loadStageSettings(reference.sourcePath))
+				.hashed,
 		};
 	} catch (error) {
 		if (!(error instanceof StageSettingsError)) {

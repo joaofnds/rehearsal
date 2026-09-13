@@ -22,10 +22,7 @@ import {
 	captureFileHashes,
 	captureTreatmentChecks,
 } from "#benchmark/checks";
-import {
-	CaseDeclarationError,
-	readCaseDeclaration,
-} from "#benchmark/case";
+import { CaseDeclarationError, readCaseDeclaration } from "#benchmark/case";
 import { runCommand } from "#benchmark/command";
 import type { ReplayCliConfig } from "#benchmark/config";
 import {

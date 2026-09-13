@@ -142,8 +142,7 @@ async function rowFor(
 	const { status, caseId, gradeByStage } = identity;
 	const stage = await latestCheckpointStage(runsDirectory, run);
 	if (stage === undefined) {
-		const causes =
-			staleByCheckpointId.get(`checkpoint:${run}/initial`) ?? [];
+		const causes = staleByCheckpointId.get(`checkpoint:${run}/initial`) ?? [];
 
 		return {
 			run,
