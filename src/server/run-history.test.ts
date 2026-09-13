@@ -241,6 +241,34 @@ describe(runHistoryReport.name, () => {
 		expect(row).toMatchObject({ status: "INTERRUPTED" });
 	});
 
+	it("reports staleness from an interrupted run's initial checkpoint", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeInterruptedRun();
+		await fixture.writeInitialCheckpoint(fixture.interruptedRun, {
+			path: "stage-settings.json",
+			sha256: "0".repeat(64),
+		});
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+		);
+
+		const row = rows.find(
+			(candidate) => candidate.run === fixture.interruptedRun,
+		);
+		expect(row).toEqual({
+			run: fixture.interruptedRun,
+			caseId: "audit-log",
+			status: "INTERRUPTED",
+			stage: undefined,
+			grade: undefined,
+			corpus: undefined,
+			stale: true,
+			staleCauses: ["stage settings file stage-settings.json changed"],
+		});
+	});
+
 	it("collects a run stopped mid-stage with no manifest as unreadable, matching list runs, rather than dropping it silently", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRunWithoutManifest();
