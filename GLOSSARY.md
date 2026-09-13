@@ -70,7 +70,11 @@ See [current state](docs/status.md) for implementation coverage and
   session confirmation evidence for at least two benchmark cases, each with
   baseline, candidate, and control arms. It starts no paid sessions. Session
   comparisons read the frozen case's checks and each recorded attempt, and do
-  not synthesize a pipeline final outcome.
+  not synthesize a pipeline final outcome. A version-4 report keeps each source
+  rep's ordered quality outcomes beside its identity, so a reader can associate
+  an ordinal with its grades and non-judged statuses without reopening source
+  records. Version-1 through version-3 reports remain readable with their
+  original fields.
 - **Comparison arm** — one role in a comparison: baseline, candidate, or the
   mandatory minimal-corpus control. An arm uses the same corpus snapshot across
   every benchmark case; a session control may have an empty declared corpus.
@@ -288,7 +292,9 @@ See [current state](docs/status.md) for implementation coverage and
   Judge grade A or B, a final judgment succeeds with PASS, and a session
   succeeds when its declared checks pass with the required evidence. A stop, no
   reply, execution failure, or required missing metrics makes a confirmation rep
-  unsuccessful. Lowering a continuation threshold does not redefine success.
+  unsuccessful. A comparison records this success value with the judged grade,
+  or records `EXECUTION_FAILED`, `METRICS_MISSING`, or `NOT_REACHED` without a
+  grade. Lowering a continuation threshold does not redefine success.
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
 - **Retained candidate** — the run's final result commit, pinned in the target

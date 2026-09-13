@@ -4,9 +4,280 @@ import {
 	parseComparisonReport,
 	serializeComparisonReport,
 } from "./comparison-record";
-import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
+import type { ComparisonReport } from "./comparison-record";
+import {
+	comparisonEvidenceFixture,
+	comparisonReps,
+	FAIL,
+	PASS,
+	withMissingMetrics,
+} from "./comparison-test-fixtures";
+
+type ReportArm = ComparisonReport["cases"][number]["arms"]["baseline"];
+type SourceRep = ReportArm["source"]["reps"][number];
+type QualitySummary = ReportArm["quality"][number];
+
+interface MalformedRepOutcome {
+	readonly name: string;
+	readonly status: string;
+	readonly grade?: string | undefined;
+	readonly successful: boolean;
+}
+
+type MalformedSourceRep = Omit<SourceRep, "repId" | "ordinal" | "outcomes"> & {
+	readonly repId?: string | undefined;
+	readonly ordinal?: number | undefined;
+	readonly outcomes: readonly MalformedRepOutcome[];
+};
+type MalformedReportArm = Omit<ReportArm, "source"> & {
+	readonly source: Omit<ReportArm["source"], "reps"> & {
+		readonly reps: readonly MalformedSourceRep[];
+	};
+};
+type ReportCase = ComparisonReport["cases"][number];
+type MalformedReportCase = Omit<ReportCase, "arms"> & {
+	readonly arms: Omit<ReportCase["arms"], "baseline"> & {
+		readonly baseline: MalformedReportArm;
+	};
+};
+type MalformedComparisonReport = Omit<ComparisonReport, "cases"> & {
+	readonly cases: readonly MalformedReportCase[];
+};
+
+function changeFirstBaseline(
+	report: ComparisonReport,
+	change: (arm: ReportArm) => MalformedReportArm,
+): MalformedComparisonReport {
+	const [firstCase, ...remainingCases] = report.cases;
+	if (firstCase === undefined) {
+		throw new Error("comparison report has no first case");
+	}
+
+	return {
+		...report,
+		cases: [
+			{
+				...firstCase,
+				arms: {
+					...firstCase.arms,
+					baseline: change(firstCase.arms.baseline),
+				},
+			},
+			...remainingCases,
+		],
+	};
+}
+
+function changeFirstRep(
+	arm: ReportArm,
+	change: (rep: SourceRep) => MalformedSourceRep,
+): MalformedReportArm {
+	const [firstRep, ...remainingReps] = arm.source.reps;
+	if (firstRep === undefined) {
+		throw new Error("comparison arm has no first rep");
+	}
+
+	return {
+		...arm,
+		source: {
+			...arm.source,
+			reps: [change(firstRep), ...remainingReps],
+		},
+	};
+}
+
+function changeSecondRep(
+	arm: ReportArm,
+	change: (rep: SourceRep) => MalformedSourceRep,
+): MalformedReportArm {
+	const [firstRep, secondRep, ...remainingReps] = arm.source.reps;
+	if (firstRep === undefined || secondRep === undefined) {
+		throw new Error("comparison arm has fewer than two reps");
+	}
+
+	return {
+		...arm,
+		source: {
+			...arm.source,
+			reps: [firstRep, change(secondRep), ...remainingReps],
+		},
+	};
+}
+
+function changeFirstOutcome(
+	arm: ReportArm,
+	change: (outcome: SourceRep["outcomes"][number]) => MalformedRepOutcome,
+): MalformedReportArm {
+	return changeFirstRep(arm, (rep) => {
+		const [firstOutcome, ...remainingOutcomes] = rep.outcomes;
+		if (firstOutcome === undefined) {
+			throw new Error("comparison rep has no first outcome");
+		}
+
+		return {
+			...rep,
+			outcomes: [change(firstOutcome), ...remainingOutcomes],
+		};
+	});
+}
+
+function changeFirstSummary(
+	arm: ReportArm,
+	change: (summary: QualitySummary) => QualitySummary,
+): MalformedReportArm {
+	const [firstSummary, ...remainingSummaries] = arm.quality;
+	if (firstSummary === undefined) {
+		throw new Error("comparison arm has no first quality summary");
+	}
+
+	return {
+		...arm,
+		quality: [change(firstSummary), ...remainingSummaries],
+	};
+}
 
 describe(buildComparisonReport.name, () => {
+	it("keeps each repetition's outcomes when aggregate distributions match", () => {
+		const fixture = comparisonEvidenceFixture();
+		const candidateRecords = comparisonReps("case-1", "candidate", [
+			FAIL,
+			FAIL,
+			PASS,
+			PASS,
+		]);
+		const [firstCase] = fixture.cases;
+		if (firstCase === undefined) {
+			throw new Error("fixture has no first case");
+		}
+		const evidence = {
+			...fixture,
+			cases: [
+				{
+					...firstCase,
+					arms: {
+						...firstCase.arms,
+						candidate: {
+							...firstCase.arms.candidate,
+							reps: Array.from(firstCase.arms.candidate.reps, (rep, index) => ({
+								...rep,
+								record: candidateRecords[index] ?? rep.record,
+							})),
+						},
+					},
+				},
+				...fixture.cases.slice(1),
+			],
+		};
+
+		const report = buildComparisonReport(evidence, {
+			skippedCalibrations: 0,
+			baselines: [],
+		});
+		const [benchmarkCase] = report.cases;
+
+		expect(report.schemaVersion).toBe(4);
+		expect(benchmarkCase?.arms.baseline.quality[0]?.gradeDistribution).toEqual(
+			Object.fromEntries([
+				["A", 2],
+				["D", 2],
+			]),
+		);
+		expect(benchmarkCase?.arms.candidate.quality[0]?.gradeDistribution).toEqual(
+			Object.fromEntries([
+				["A", 2],
+				["D", 2],
+			]),
+		);
+		expect(
+			benchmarkCase?.arms.baseline.source.reps.map(({ ordinal, outcomes }) => ({
+				ordinal,
+				outcome: outcomes[0],
+			})),
+		).toEqual([
+			{
+				ordinal: 1,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+			},
+			{
+				ordinal: 2,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+			},
+			{
+				ordinal: 3,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "D",
+					successful: false,
+				},
+			},
+			{
+				ordinal: 4,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "D",
+					successful: false,
+				},
+			},
+		]);
+		expect(
+			benchmarkCase?.arms.candidate.source.reps.map(
+				({ ordinal, outcomes }) => ({
+					ordinal,
+					outcome: outcomes[0],
+				}),
+			),
+		).toEqual([
+			{
+				ordinal: 1,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "D",
+					successful: false,
+				},
+			},
+			{
+				ordinal: 2,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "D",
+					successful: false,
+				},
+			},
+			{
+				ordinal: 3,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+			},
+			{
+				ordinal: 4,
+				outcome: {
+					name: "discuss",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+			},
+		]);
+	});
+
 	it("records strict versioned results and all frozen source provenance", () => {
 		const judgeAgreement = {
 			skippedCalibrations: 1,
@@ -41,7 +312,7 @@ describe(buildComparisonReport.name, () => {
 		expect(serializeComparisonReport(report)).toBe(
 			`${JSON.stringify(report, null, 2)}\n`,
 		);
-		expect(report.schemaVersion).toBe(2);
+		expect(report.schemaVersion).toBe(4);
 		expect(report.judgeAgreement).toEqual(judgeAgreement);
 		expect(report.manifest).toEqual({ sha256: "8".repeat(64) });
 		expect(report.mode).toBe("pipeline");
@@ -57,6 +328,26 @@ describe(buildComparisonReport.name, () => {
 			ordinal: 1,
 			path: "groups/case-1-candidate/reps/case-1-candidate-rep-1/rep.json",
 			sha256: "7".repeat(64),
+			outcomes: [
+				{
+					name: "discuss",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+				{
+					name: "build",
+					status: "JUDGED",
+					grade: "A",
+					successful: true,
+				},
+				{
+					name: "final",
+					status: "JUDGED",
+					grade: "PASS",
+					successful: true,
+				},
+			],
 		});
 		expect(candidate?.executedCorpus).toEqual([
 			{
@@ -73,16 +364,130 @@ describe(buildComparisonReport.name, () => {
 		).toThrow();
 	});
 
-	it("parses persisted version-one reports strictly", () => {
+	it("preserves non-judged outcomes and metrics-aware judged success", () => {
+		const fixture = comparisonEvidenceFixture();
+		const [firstCase] = fixture.cases;
+		if (firstCase === undefined) {
+			throw new Error("fixture has no first case");
+		}
+		const baseline = comparisonReps("case-1", "baseline", [
+			PASS,
+			{
+				discussion: "error",
+				build: "not-reached",
+				final: "not-reached",
+			},
+			{
+				discussion: "pass",
+				build: "metrics-missing",
+				final: "not-reached",
+			},
+			PASS,
+		]);
+		const lastRep = baseline.at(3);
+		if (lastRep === undefined) {
+			throw new Error("fixture has no fourth baseline rep");
+		}
+		const evidence = {
+			...fixture,
+			cases: [
+				{
+					...firstCase,
+					arms: {
+						...firstCase.arms,
+						baseline: {
+							...firstCase.arms.baseline,
+							reps: Array.from(firstCase.arms.baseline.reps, (rep, index) => ({
+								...rep,
+								record:
+									index === 3
+										? withMissingMetrics(lastRep, "final judge metrics")
+										: (baseline[index] ?? rep.record),
+							})),
+						},
+					},
+				},
+				...fixture.cases.slice(1),
+			],
+		};
+
+		const report = buildComparisonReport(evidence, {
+			skippedCalibrations: 0,
+			baselines: [],
+		});
+		const [reportedCase] = report.cases;
+		const reps = reportedCase?.arms.baseline.source.reps;
+
+		expect(reps?.[1]?.outcomes).toEqual([
+			{
+				name: "discuss",
+				status: "EXECUTION_FAILED",
+				successful: false,
+			},
+			{ name: "build", status: "NOT_REACHED", successful: false },
+			{ name: "final", status: "NOT_REACHED", successful: false },
+		]);
+		expect(reps?.[2]?.outcomes).toEqual([
+			{ name: "discuss", status: "JUDGED", grade: "A", successful: true },
+			{ name: "build", status: "METRICS_MISSING", successful: false },
+			{ name: "final", status: "NOT_REACHED", successful: false },
+		]);
+		expect(reps?.[3]?.outcomes).toEqual([
+			{ name: "discuss", status: "JUDGED", grade: "A", successful: false },
+			{ name: "build", status: "JUDGED", grade: "A", successful: false },
+			{ name: "final", status: "JUDGED", grade: "PASS", successful: false },
+		]);
+	});
+
+	it("parses persisted version-one and version-two reports strictly", () => {
 		const current = buildComparisonReport(comparisonEvidenceFixture(), {
 			skippedCalibrations: 0,
 			baselines: [],
 		});
-		if (current.schemaVersion !== 2) {
+		if (current.mode !== "pipeline") {
 			throw new Error("expected a stage or pipeline comparison report");
 		}
+		const withoutOutcomes = (
+			rep: (typeof current.cases)[number]["arms"]["baseline"]["source"]["reps"][number],
+		): Omit<typeof rep, "outcomes"> => {
+			const { outcomes: _outcomes, ...legacyRep } = rep;
+
+			return legacyRep;
+		};
+		const cases = current.cases.map(({ caseId, arms }) => ({
+			caseId,
+			arms: {
+				baseline: {
+					...arms.baseline,
+					source: {
+						...arms.baseline.source,
+						reps: arms.baseline.source.reps.map(withoutOutcomes),
+					},
+				},
+				candidate: {
+					...arms.candidate,
+					source: {
+						...arms.candidate.source,
+						reps: arms.candidate.source.reps.map(withoutOutcomes),
+					},
+				},
+				control: {
+					...arms.control,
+					source: {
+						...arms.control.source,
+						reps: arms.control.source.reps.map(withoutOutcomes),
+					},
+				},
+			},
+		}));
+		const versionTwo = { ...current, schemaVersion: 2 as const, cases };
+
+		expect(parseComparisonReport(JSON.stringify(versionTwo))).toEqual(
+			versionTwo,
+		);
+
 		const { judgeAgreement: _judgeAgreement, ...reportWithoutAgreement } =
-			current;
+			versionTwo;
 		const legacy = { ...reportWithoutAgreement, schemaVersion: 1 as const };
 
 		expect(parseComparisonReport(JSON.stringify(legacy))).toEqual(legacy);
@@ -91,5 +496,132 @@ describe(buildComparisonReport.name, () => {
 				JSON.stringify({ ...legacy, unexpected: "not strict" }),
 			),
 		).toThrow();
+	});
+
+	it("rejects version-four reports whose outcomes disagree with their arm", () => {
+		const report = buildComparisonReport(comparisonEvidenceFixture(), {
+			skippedCalibrations: 0,
+			baselines: [],
+		});
+		const rejects = (candidate: MalformedComparisonReport): void => {
+			expect(() => parseComparisonReport(JSON.stringify(candidate))).toThrow();
+		};
+
+		rejects(
+			changeFirstBaseline(report, (arm) => ({
+				...arm,
+				source: { ...arm.source, reps: arm.source.reps.slice(1) },
+			})),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstRep(arm, (rep) => {
+					const { ordinal: _ordinal, ...withoutOrdinal } = rep;
+
+					return withoutOrdinal;
+				}),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeSecondRep(arm, (rep) => ({ ...rep, ordinal: 1 })),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstRep(arm, (rep) => {
+					const { repId: _repId, ...withoutRepId } = rep;
+
+					return withoutRepId;
+				}),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeSecondRep(arm, (rep) => ({
+					...rep,
+					repId: arm.source.reps[0]?.repId,
+				})),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstRep(arm, (rep) => {
+					const [firstOutcome, secondOutcome, ...remainingOutcomes] =
+						rep.outcomes;
+					if (firstOutcome === undefined || secondOutcome === undefined) {
+						throw new Error("comparison rep has fewer than two outcomes");
+					}
+
+					return {
+						...rep,
+						outcomes: [secondOutcome, firstOutcome, ...remainingOutcomes],
+					};
+				}),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstOutcome(arm, (outcome) => ({
+					...outcome,
+					name: "wrong-measure",
+				})),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstOutcome(arm, (outcome) => ({
+					...outcome,
+					grade: "PASS",
+				})),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstRep(arm, (rep) => ({
+					...rep,
+					outcomes: Array.from(rep.outcomes, (outcome) =>
+						outcome.name === "final" ? { ...outcome, grade: "A" } : outcome,
+					),
+				})),
+			),
+		);
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstSummary(arm, (summary) => ({
+					...summary,
+					name: "wrong-measure",
+				})),
+			),
+		);
+
+		for (const field of [
+			"requested",
+			"attempted",
+			"notReached",
+			"failed",
+			"successful",
+			"successRate",
+			"standardError",
+			"passK",
+		] as const) {
+			rejects(
+				changeFirstBaseline(report, (arm) =>
+					changeFirstSummary(arm, (summary) => ({
+						...summary,
+						[field]: summary[field] + 0.01,
+					})),
+				),
+			);
+		}
+
+		rejects(
+			changeFirstBaseline(report, (arm) =>
+				changeFirstSummary(arm, (summary) => ({
+					...summary,
+					gradeDistribution: Object.fromEntries([["A", 999]]),
+				})),
+			),
+		);
 	});
 });

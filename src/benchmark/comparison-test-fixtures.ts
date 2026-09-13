@@ -13,7 +13,12 @@ import type {
 import type { ComparisonArm } from "./comparison-record";
 import type { Immutable } from "./contracts";
 
-type StageFixtureOutcome = "pass" | "fail" | "error" | "not-reached";
+type StageFixtureOutcome =
+	| "pass"
+	| "fail"
+	| "error"
+	| "metrics-missing"
+	| "not-reached";
 type FinalFixtureOutcome = "pass" | "fail" | "not-reached";
 
 export interface RepFixtureOutcomes {
@@ -31,6 +36,9 @@ function stageOutcome(
 	}
 	if (outcome === "error") {
 		return { stage, status: "EXECUTION_FAILED", error: "execution failed" };
+	}
+	if (outcome === "metrics-missing") {
+		return { stage, status: "METRICS_MISSING", error: "metrics missing" };
 	}
 
 	return {

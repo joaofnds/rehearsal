@@ -3,6 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
+import type {
+	ComparisonReport,
+	LegacyComparisonReport,
+} from "#benchmark/comparison-record";
+import { parseComparisonReport } from "#benchmark/comparison-record";
+import { comparisonReportPaths } from "#benchmark/run-layout";
 import { RecordedRunsFixture } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
@@ -20,6 +26,131 @@ function lines(stdout: readonly string[]): readonly string[] {
 
 function ids(stdout: readonly string[]): readonly string[] {
 	return lines(stdout).map((line) => line.split("\t")[0] ?? "");
+}
+
+type VersionTwoReport = Extract<
+	LegacyComparisonReport,
+	{ readonly schemaVersion: 2 }
+>;
+type LegacyPipelineArm = VersionTwoReport["cases"][number]["arms"]["baseline"];
+type VersionThreeReport = Extract<
+	LegacyComparisonReport,
+	{ readonly schemaVersion: 3 }
+>;
+type LegacySessionArm = VersionThreeReport["cases"][number]["arms"]["baseline"];
+
+function parseLegacyCandidate(text: string): LegacyComparisonReport {
+	const parsed = parseComparisonReport(text);
+	if (parsed.schemaVersion === 4) {
+		throw new Error("expected a legacy comparison report");
+	}
+
+	return parsed;
+}
+
+function withoutOutcomeArm(
+	arm: ComparisonReport["cases"][number]["arms"]["baseline"],
+): LegacyPipelineArm {
+	return {
+		...arm,
+		source: {
+			...arm.source,
+			reps: arm.source.reps.map((rep) => {
+				const { outcomes: _outcomes, ...legacyRep } = rep;
+
+				return legacyRep;
+			}),
+		},
+	};
+}
+
+function withoutOutcomes(report: ComparisonReport): VersionTwoReport["cases"] {
+	return report.cases.map(({ caseId, arms }) => ({
+		caseId,
+		arms: {
+			baseline: withoutOutcomeArm(arms.baseline),
+			candidate: withoutOutcomeArm(arms.candidate),
+			control: withoutOutcomeArm(arms.control),
+		},
+	}));
+}
+
+function legacyComparisonReport(
+	report: ComparisonReport,
+	version: 1 | 2 | 3,
+): LegacyComparisonReport {
+	const cases = withoutOutcomes(report);
+	if (version === 1) {
+		const { judgeAgreement: _judgeAgreement, ...fields } = report;
+
+		return parseLegacyCandidate(
+			JSON.stringify({ ...fields, schemaVersion: 1, cases }),
+		);
+	}
+	if (version === 2) {
+		return parseLegacyCandidate(
+			JSON.stringify({ ...report, schemaVersion: 2, cases }),
+		);
+	}
+
+	const sessionArm = (arm: LegacyPipelineArm): LegacySessionArm => ({
+		...arm,
+		source: {
+			...arm.source,
+			reps: Array.from(arm.source.reps, (rep) => ({
+				...rep,
+				attempt: {
+					path: `attempts/${rep.repId}.json`,
+					sha256: "a".repeat(64),
+				},
+			})),
+		},
+		quality: Array.from(arm.quality.slice(0, 1), (summary) => ({
+			...summary,
+			name: "checks",
+		})),
+	});
+	const sessionCases: VersionThreeReport["cases"] = cases.map(
+		({ caseId, arms }) => ({
+			caseId,
+			arms: {
+				baseline: sessionArm(arms.baseline),
+				candidate: sessionArm(arms.candidate),
+				control: sessionArm(arms.control),
+			},
+		}),
+	);
+	const sessionContrast = (
+		contrast: ComparisonReport["contrasts"]["candidateMinusBaseline"],
+	): VersionThreeReport["contrasts"]["candidateMinusBaseline"] => ({
+		...contrast,
+		quality: Array.from(contrast.quality.slice(0, 1), (summary) => ({
+			...summary,
+			name: "checks",
+		})),
+	});
+
+	return parseLegacyCandidate(
+		JSON.stringify({
+			...report,
+			schemaVersion: 3,
+			mode: "session",
+			declaredStages: ["checks"],
+			judgeAgreement: { skippedCalibrations: 0, baselines: [] },
+			cases: sessionCases,
+			contrasts: {
+				candidateMinusBaseline: sessionContrast(
+					report.contrasts.candidateMinusBaseline,
+				),
+				candidateMinusControl: sessionContrast(
+					report.contrasts.candidateMinusControl,
+				),
+				baselineMinusControl: sessionContrast(
+					report.contrasts.baselineMinusControl,
+				),
+			},
+		}),
+	);
 }
 
 describe(runList.name, () => {
@@ -211,6 +342,62 @@ describe(runList.name, () => {
 			`comparison:${fixture.comparisonDigest}\t2 cases\t4 reps`,
 		]);
 	});
+
+	it.each([1, 2, 3] as const)(
+		"lists and shows a version-%i comparison without changing its bytes",
+		async (version) => {
+			const fixture = await writtenFixture();
+			const paths = comparisonReportPaths(
+				fixture.runsDirectory,
+				fixture.comparisonDigest,
+			);
+			const current = parseComparisonReport(
+				await Bun.file(paths.reportFile).text(),
+			);
+			if (current.schemaVersion !== 4) {
+				throw new Error("expected the fixture to write a version-4 report");
+			}
+			const text = `${JSON.stringify(
+				legacyComparisonReport(current, version),
+				null,
+				2,
+			)}\n`;
+			await Bun.write(paths.reportFile, text);
+
+			const listed = recordOutput();
+			await runList(
+				{ kind: "comparisons", runsDirectory: fixture.runsDirectory },
+				listed.output,
+			);
+			expect(lines(listed.stdout)).toEqual([
+				`comparison:${fixture.comparisonDigest}\t2 cases\t4 reps`,
+			]);
+			expect(listed.stderr).toEqual([]);
+
+			const shownJson = recordOutput();
+			await runShow(
+				{
+					id: `comparison:${fixture.comparisonDigest}`,
+					json: true,
+					runsDirectory: fixture.runsDirectory,
+				},
+				shownJson.output,
+			);
+			expect(shownJson.stdout.join("")).toBe(text);
+			expect(parseComparisonReport(text).schemaVersion).toBe(version);
+
+			const shownSummary = recordOutput();
+			await runShow(
+				{
+					id: `comparison:${fixture.comparisonDigest}`,
+					json: false,
+					runsDirectory: fixture.runsDirectory,
+				},
+				shownSummary.output,
+			);
+			expect(shownSummary.stdout.join("")).toContain("2 cases");
+		},
+	);
 
 	it("prints one line per attempt of both kinds with its case, outcome, and model", async () => {
 		const fixture = await writtenFixture();

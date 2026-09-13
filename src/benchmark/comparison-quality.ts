@@ -1,5 +1,8 @@
 import type { ParsedConfirmationRepRecord } from "./confirmation-record";
-import type { ReliabilitySummary } from "./confirmation-report";
+import type {
+	ConfirmationReliabilityRep,
+	ReliabilitySummary,
+} from "./confirmation-report";
 import {
 	buildReliabilityReport,
 	reliabilitySummaryNamed,
@@ -38,28 +41,33 @@ export interface ComparisonQualityReport {
 	>;
 }
 
+export function comparisonReliabilityRep(
+	contract: Immutable<ComparisonProjectionInput["contract"]>,
+	rep: Immutable<ParsedConfirmationRepRecord>,
+): ConfirmationReliabilityRep {
+	if (contract.mode === "stage" || contract.mode === "session") {
+		return {
+			metricsComplete: rep.metrics.status === "COMPLETE",
+			stages: rep.stages,
+			finalOutcome: { status: "NOT_REACHED" },
+		};
+	}
+	if (rep.finalOutcome.status === "NOT_APPLICABLE") {
+		throw new Error("Pipeline comparison rep has no final outcome");
+	}
+
+	return {
+		metricsComplete: rep.metrics.status === "COMPLETE",
+		stages: rep.stages,
+		finalOutcome: rep.finalOutcome,
+	};
+}
+
 function armQuality(
 	contract: Immutable<ComparisonProjectionInput["contract"]>,
 	reps: readonly Immutable<ParsedConfirmationRepRecord>[],
 ): readonly ReliabilitySummary[] {
-	const inputs = reps.map((rep) => {
-		if (contract.mode === "stage" || contract.mode === "session") {
-			return {
-				metricsComplete: rep.metrics.status === "COMPLETE",
-				stages: rep.stages,
-				finalOutcome: { status: "NOT_REACHED" as const },
-			};
-		}
-		if (rep.finalOutcome.status === "NOT_APPLICABLE") {
-			throw new Error("Pipeline comparison rep has no final outcome");
-		}
-
-		return {
-			metricsComplete: rep.metrics.status === "COMPLETE",
-			stages: rep.stages,
-			finalOutcome: rep.finalOutcome,
-		};
-	});
+	const inputs = reps.map((rep) => comparisonReliabilityRep(contract, rep));
 	const quality = buildReliabilityReport(contract.declaredStages, inputs);
 
 	return contract.mode === "stage" || contract.mode === "session"

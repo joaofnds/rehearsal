@@ -10,8 +10,6 @@ import {
 import {
 	COMPARISON_ARMS,
 	parseComparisonReport,
-	serializeComparisonReport,
-	sessionComparisonReportSchema,
 } from "#benchmark/comparison-record";
 import { comparisonReportPaths } from "#benchmark/run-layout";
 import { createApiApp } from "./api";
@@ -45,6 +43,7 @@ const qualityReadingSchema = z.object({
 const comparisonResponseSchema = z.object({
 	report: z
 		.object({
+			schemaVersion: z.number(),
 			mode: z.enum(["stage", "pipeline", "session"]),
 			cases: z.array(z.object({ caseId: z.string() })),
 		})
@@ -70,11 +69,11 @@ async function rewriteFixtureAsSession(
 		fixture.comparisonDigest,
 	);
 	const pipeline = parseComparisonReport(await Bun.file(reportFile).text());
-	if (pipeline.schemaVersion !== 2) {
+	if (pipeline.schemaVersion !== 4 || pipeline.mode !== "pipeline") {
 		throw new Error("expected the fixture to write a current pipeline report");
 	}
 
-	const session = sessionComparisonReportSchema.parse({
+	const session = {
 		...pipeline,
 		schemaVersion: 3,
 		mode: "session",
@@ -89,13 +88,17 @@ async function rewriteFixtureAsSession(
 						...arms[role],
 						source: {
 							...arms[role].source,
-							reps: arms[role].source.reps.map((rep) => ({
-								...rep,
-								attempt: {
-									path: `attempts/${rep.repId}.json`,
-									sha256: "a".repeat(64),
-								},
-							})),
+							reps: arms[role].source.reps.map((rep) => {
+								const { outcomes: _outcomes, ...legacyRep } = rep;
+
+								return {
+									...legacyRep,
+									attempt: {
+										path: `attempts/${rep.repId}.json`,
+										sha256: "a".repeat(64),
+									},
+								};
+							}),
 						},
 						executedCorpus:
 							role === "control"
@@ -118,9 +121,56 @@ async function rewriteFixtureAsSession(
 				},
 			]),
 		),
-	});
+	};
+	const sessionText = `${JSON.stringify(session, null, 2)}\n`;
 
-	await Bun.write(reportFile, serializeComparisonReport(session));
+	parseComparisonReport(sessionText);
+	await Bun.write(reportFile, sessionText);
+}
+
+async function rewriteFixtureAsLegacyPipeline(
+	fixture: RecordedRunsFixture,
+	version: 1 | 2,
+): Promise<void> {
+	const { reportFile } = comparisonReportPaths(
+		fixture.runsDirectory,
+		fixture.comparisonDigest,
+	);
+	const current = parseComparisonReport(await Bun.file(reportFile).text());
+	if (current.schemaVersion !== 4 || current.mode !== "pipeline") {
+		throw new Error("expected the fixture to write a current pipeline report");
+	}
+	const cases = current.cases.map(({ caseId, arms }) => ({
+		caseId,
+		arms: Object.fromEntries(
+			COMPARISON_ARMS.map((role) => [
+				role,
+				{
+					...arms[role],
+					source: {
+						...arms[role].source,
+						reps: arms[role].source.reps.map((rep) => {
+							const { outcomes: _outcomes, ...legacyRep } = rep;
+
+							return legacyRep;
+						}),
+					},
+				},
+			]),
+		),
+	}));
+	const legacy =
+		version === 2
+			? { ...current, schemaVersion: 2, cases }
+			: (() => {
+					const { judgeAgreement: _judgeAgreement, ...fields } = current;
+
+					return { ...fields, schemaVersion: 1, cases };
+				})();
+	const text = `${JSON.stringify(legacy, null, 2)}\n`;
+
+	parseComparisonReport(text);
+	await Bun.write(reportFile, text);
 }
 
 describe("GET /api/comparisons/:digest", () => {
@@ -200,6 +250,27 @@ describe("GET /api/comparisons/:digest", () => {
 			differingPaths: ["output-styles/brief.md"],
 		});
 	});
+
+	it.each([1, 2] as const)(
+		"serves a version-%i pipeline report through the public API",
+		async (version) => {
+			const fixture = await writtenFixture();
+			await rewriteFixtureAsLegacyPipeline(fixture, version);
+			const app = createApiApp({
+				runsDirectory: fixture.runsDirectory,
+				corpusSource: directorySource(await corpusDirectory()),
+			});
+
+			const response = await app.request(
+				`/api/comparisons/${fixture.comparisonDigest}`,
+			);
+			const body = await comparisonResponseFrom(response);
+
+			expect(response.status).toBe(200);
+			expect(body.report.schemaVersion).toBe(version);
+			expect(body.report.mode).toBe("pipeline");
+		},
+	);
 
 	it("renders a quality reading for the discuss measure, per case per contrast", async () => {
 		const fixture = await writtenFixture();

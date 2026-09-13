@@ -1,4 +1,8 @@
-import type { ReliabilitySummary } from "./confirmation-report";
+import type {
+	ReliabilityOutcome,
+	ReliabilitySummary,
+} from "./confirmation-report";
+import { buildReliabilityOutcomes } from "./confirmation-report";
 import type {
 	ComparisonArmEvidence,
 	ComparisonEvidence,
@@ -10,12 +14,12 @@ import type {
 	ComparisonQualityCase,
 	ComparisonQualityReport,
 } from "./comparison-quality";
-import { buildComparisonQuality } from "./comparison-quality";
-import type { ComparisonArm, ComparisonReport } from "./comparison-record";
 import {
-	comparisonReportSchema,
-	sessionComparisonReportSchema,
-} from "./comparison-record";
+	buildComparisonQuality,
+	comparisonReliabilityRep,
+} from "./comparison-quality";
+import type { ComparisonArm, ComparisonReport } from "./comparison-record";
+import { comparisonReportSchema } from "./comparison-record";
 import type {
 	ArmResources,
 	ComparisonResourceCase,
@@ -54,19 +58,51 @@ function reportResourceCase(
 
 export interface BuildReportArmRequest {
 	readonly evidence: ComparisonArmEvidence;
+	readonly contract: ComparisonProjectionInput["contract"];
 	readonly quality: readonly ReliabilitySummary[];
 	readonly resources: ArmResources;
 }
 
-export function buildReportArm(
+interface BuiltReportArm {
+	readonly role: ComparisonArm;
+	readonly source: {
+		readonly group: { readonly path: string; readonly sha256: string };
+		readonly reps: readonly {
+			readonly repId: string;
+			readonly ordinal: number;
+			readonly path: string;
+			readonly sha256: string;
+			readonly outcomes: readonly ReliabilityOutcome[];
+			readonly attempt?:
+				| { readonly path: string; readonly sha256: string }
+				| undefined;
+		}[];
+	};
+	readonly executedCorpus: readonly {
+		readonly path: string;
+		readonly sha256: string;
+	}[];
+	readonly quality: readonly ReliabilitySummary[];
+	readonly resources: ArmResources;
+}
+
+function buildReportArm(
 	request: Immutable<BuildReportArmRequest>,
-): ComparisonReport["cases"][number]["arms"][ComparisonArm] {
+): BuiltReportArm {
 	const reps = request.evidence.reps.map((rep) => {
+		const outcomes = buildReliabilityOutcomes(
+			request.contract.declaredStages,
+			comparisonReliabilityRep(request.contract, rep.record),
+		);
 		const source = {
 			repId: rep.record.repId,
 			ordinal: rep.record.ordinal,
 			path: rep.path,
 			sha256: rep.sha256,
+			outcomes:
+				request.contract.mode === "pipeline"
+					? outcomes
+					: outcomes.slice(0, request.contract.declaredStages.length),
 		};
 		if (rep.attempt === undefined) {
 			return source;
@@ -135,16 +171,19 @@ export function buildComparisonReport(
 			arms: {
 				baseline: buildReportArm({
 					evidence: benchmarkCase.arms.baseline,
+					contract: evidence.contract,
 					quality: caseQuality.arms.baseline,
 					resources: caseResources.arms.baseline,
 				}),
 				candidate: buildReportArm({
 					evidence: benchmarkCase.arms.candidate,
+					contract: evidence.contract,
 					quality: caseQuality.arms.candidate,
 					resources: caseResources.arms.candidate,
 				}),
 				control: buildReportArm({
 					evidence: benchmarkCase.arms.control,
+					contract: evidence.contract,
 					quality: caseQuality.arms.control,
 					resources: caseResources.arms.control,
 				}),
@@ -152,8 +191,7 @@ export function buildComparisonReport(
 		};
 	});
 	const report = {
-		schemaVersion:
-			evidence.contract.mode === "session" ? (3 as const) : (2 as const),
+		schemaVersion: 4 as const,
 		judgeAgreement,
 		manifest: { sha256: evidence.manifest.sha256 },
 		mode: evidence.contract.mode,
@@ -167,7 +205,5 @@ export function buildComparisonReport(
 		},
 	};
 
-	return evidence.contract.mode === "session"
-		? sessionComparisonReportSchema.parse(report)
-		: comparisonReportSchema.parse(report);
+	return comparisonReportSchema.parse(report);
 }

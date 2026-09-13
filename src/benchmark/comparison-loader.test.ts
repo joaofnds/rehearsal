@@ -443,7 +443,7 @@ describe(loadComparisonEvidence.name, () => {
 		});
 		const report = z
 			.object({
-				schemaVersion: z.literal(2),
+				schemaVersion: z.literal(4),
 				judgeAgreement: z.object({
 					baselines: z.array(
 						z.object({

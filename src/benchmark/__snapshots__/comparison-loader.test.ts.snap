@@ -2,7 +2,7 @@
 
 exports[`loadComparisonEvidence serializes a completed comparison fixture byte for byte 1`] = `
 "{
-  "schemaVersion": 2,
+  "schemaVersion": 4,
   "judgeAgreement": {
     "skippedCalibrations": 0,
     "baselines": []
@@ -31,13 +31,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-1-baseline/reps/case-1-baseline-rep-1/rep.json",
                 "sha256": "7e347fa59cd0bb0b8bf38deecddbb7d7fa4acc1d6aed377a05e29ceedbf06921",
                 "repId": "case-1-baseline-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-1-baseline/reps/case-1-baseline-rep-2/rep.json",
                 "sha256": "038aca7c0a5c9bb40077bf2ab63f18dcceb02967a07f94ce30dc70d72379da45",
                 "repId": "case-1-baseline-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },
@@ -275,13 +291,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-1-candidate/reps/case-1-candidate-rep-1/rep.json",
                 "sha256": "94f7c7924fb03d2cae859474db2ace1d3a251c6f390d2f445c62e54f062167e4",
                 "repId": "case-1-candidate-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-1-candidate/reps/case-1-candidate-rep-2/rep.json",
                 "sha256": "f74dbe90d68972e0619ed2ba3796734b269210a66930ac21389b1f49b9655351",
                 "repId": "case-1-candidate-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },
@@ -519,13 +551,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-1-control/reps/case-1-control-rep-1/rep.json",
                 "sha256": "3e542db17dbb4745a7d6d15b573d2b8c8a76ea8d74b2b1020de07dc903b07c87",
                 "repId": "case-1-control-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-1-control/reps/case-1-control-rep-2/rep.json",
                 "sha256": "bb2b782396bfd85f523d88f8a7ab51e9890cdcea1b003712e8089c7edc769874",
                 "repId": "case-1-control-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },
@@ -768,13 +816,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-2-baseline/reps/case-2-baseline-rep-1/rep.json",
                 "sha256": "792e2ff12bb15b6abe05cdc453f0af86f5a1b8d525f88b33b1d810fccbc1b9cd",
                 "repId": "case-2-baseline-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-2-baseline/reps/case-2-baseline-rep-2/rep.json",
                 "sha256": "fb2d7af682af89c5d9e1220d153fc97803f359af0043e2793fa82abcdc440fa0",
                 "repId": "case-2-baseline-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },
@@ -1012,13 +1076,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-2-candidate/reps/case-2-candidate-rep-1/rep.json",
                 "sha256": "79234d75395c32bc631ac8333011e230cb982fbfc01ad041c0e7e445cbbf4867",
                 "repId": "case-2-candidate-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-2-candidate/reps/case-2-candidate-rep-2/rep.json",
                 "sha256": "00b3b78771a6ddddec0d2fa46cb11d572daafd6f35fd5b9b29d152031acb89a3",
                 "repId": "case-2-candidate-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },
@@ -1256,13 +1336,29 @@ exports[`loadComparisonEvidence serializes a completed comparison fixture byte f
                 "path": "groups/case-2-control/reps/case-2-control-rep-1/rep.json",
                 "sha256": "0d8580066305de1188730c18120fc6e8bd635c546a1f0828875b7f66c2be7b14",
                 "repId": "case-2-control-rep-1",
-                "ordinal": 1
+                "ordinal": 1,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               },
               {
                 "path": "groups/case-2-control/reps/case-2-control-rep-2/rep.json",
                 "sha256": "9aa6e6017934f1bad0408f1e38f1e63d891741f4f80a7278dd5e01b31efa7855",
                 "repId": "case-2-control-rep-2",
-                "ordinal": 2
+                "ordinal": 2,
+                "outcomes": [
+                  {
+                    "name": "build",
+                    "status": "JUDGED",
+                    "grade": "A",
+                    "successful": true
+                  }
+                ]
               }
             ]
           },

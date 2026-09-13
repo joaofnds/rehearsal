@@ -10,8 +10,10 @@ import {
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import type { SessionConfirmationGroupRecord } from "./confirmation-record";
+import { comparisonReliabilityRep } from "./comparison-quality";
 import { parseComparisonReport } from "./comparison-record";
 import { writeComparisonReport } from "./comparison-command";
+import { buildReliabilityOutcomes } from "./confirmation-report";
 import type { Immutable } from "./contracts";
 import { runSessionConfirmation } from "./session-confirmation";
 import type {
@@ -233,6 +235,7 @@ async function expectedSessionSource(
 		path: string;
 		sha256: string;
 		attempt: { path: string; sha256: string };
+		outcomes: ReturnType<typeof buildReliabilityOutcomes>;
 	}[];
 }> {
 	const groupPath = sessionGroupFile(runsDirectory, caseId, role);
@@ -265,6 +268,13 @@ async function expectedSessionSource(
 					path: relative(manifestDirectory, attemptPath),
 					sha256: digest(attemptText),
 				},
+				outcomes: buildReliabilityOutcomes(
+					["checks"],
+					comparisonReliabilityRep(
+						{ mode: "session", declaredStages: ["checks"], reps: group.reps },
+						rep,
+					),
+				).slice(0, 1),
 			};
 		}),
 	);
@@ -652,9 +662,9 @@ describe("session comparison", () => {
 		});
 		const report = parseComparisonReport(await Bun.file(reportFile).text());
 
-		expect(report.schemaVersion).toBe(3);
-		if (report.schemaVersion !== 3) {
-			throw new Error("expected a version-3 session comparison report");
+		expect(report.schemaVersion).toBe(4);
+		if (report.schemaVersion !== 4) {
+			throw new Error("expected a version-4 session comparison report");
 		}
 		expect(report.mode).toBe("session");
 		expect(report.declaredStages).toEqual(["checks"]);
@@ -812,7 +822,7 @@ describe("session comparison", () => {
 				stderr: () => undefined,
 			},
 		);
-		expect(parseComparisonReport(shownJson.join("")).schemaVersion).toBe(3);
+		expect(parseComparisonReport(shownJson.join("")).schemaVersion).toBe(4);
 		expect(() =>
 			parseComparisonReport(JSON.stringify({ ...report, mode: "pipeline" })),
 		).toThrow();
@@ -876,6 +886,9 @@ describe("session comparison", () => {
 				await writeComparisonReport({ manifestPath, runsDirectory }),
 			).text(),
 		);
+		if (report.schemaVersion !== 4 || report.mode !== "session") {
+			throw new Error("expected a version-4 session comparison report");
+		}
 		const [benchmarkCase] = report.cases;
 		if (benchmarkCase === undefined) {
 			throw new Error("expected the first comparison case");
@@ -899,6 +912,70 @@ describe("session comparison", () => {
 			failed: 1,
 			successful: 1,
 		});
+		expect(
+			benchmarkCase.arms.candidate.source.reps.map(({ outcomes }) => outcomes),
+		).toEqual([
+			[
+				{
+					name: "checks",
+					status: "NOT_REACHED",
+					successful: false,
+				},
+			],
+			[
+				{
+					name: "checks",
+					status: "EXECUTION_FAILED",
+					successful: false,
+				},
+			],
+		]);
+		expect(benchmarkCase.arms.baseline.source.reps[1]?.outcomes).toEqual([
+			{
+				name: "checks",
+				status: "METRICS_MISSING",
+				successful: false,
+			},
+		]);
+		expect(() =>
+			parseComparisonReport(
+				JSON.stringify({
+					...report,
+					cases: Array.from(report.cases, (candidateCase, caseIndex) =>
+						caseIndex === 0
+							? {
+									...candidateCase,
+									arms: {
+										...candidateCase.arms,
+										baseline: {
+											...candidateCase.arms.baseline,
+											source: {
+												...candidateCase.arms.baseline.source,
+												reps: Array.from(
+													candidateCase.arms.baseline.source.reps,
+													(rep, repIndex) =>
+														repIndex === 0
+															? {
+																	...rep,
+																	outcomes: Array.from(
+																		rep.outcomes,
+																		(outcome) => ({
+																			...outcome,
+																			grade: "B",
+																		}),
+																	),
+																}
+															: rep,
+												),
+											},
+										},
+									},
+								}
+							: candidateCase,
+					),
+				}),
+			),
+		).toThrow();
 		expect(benchmarkCase.arms.baseline.resources.status).toBe("UNAVAILABLE");
 	});
 

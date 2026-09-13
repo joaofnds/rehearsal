@@ -47,6 +47,14 @@ function arm(
 					sha256: "0".repeat(64),
 					repId: "rep-1",
 					ordinal: 1,
+					outcomes: [
+						{
+							name: "final",
+							status: "JUDGED",
+							grade: "PASS",
+							successful: true,
+						},
+					],
 				},
 			],
 		},

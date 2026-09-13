@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Immutable } from "./contracts";
+import { stageLetterGradeSchema } from "./contracts";
 import { judgeAgreementReportSchema } from "./judge-agreement";
 
 export const COMPARISON_ARMS = ["baseline", "candidate", "control"] as const;
@@ -153,6 +154,31 @@ const sessionSourceRepSchema = digestedPathSchema
 		attempt: digestedPathSchema,
 	})
 	.strict();
+const judgedRepOutcomeSchema = z
+	.object({
+		name: z.string().min(1),
+		status: z.literal("JUDGED"),
+		grade: z.union([stageLetterGradeSchema, z.enum(["PASS", "FAIL"])]),
+		successful: z.boolean(),
+	})
+	.strict();
+const unjudgedRepOutcomeSchema = z
+	.object({
+		name: z.string().min(1),
+		status: z.enum(["EXECUTION_FAILED", "METRICS_MISSING", "NOT_REACHED"]),
+		successful: z.literal(false),
+	})
+	.strict();
+const repOutcomeSchema = z.union([
+	judgedRepOutcomeSchema,
+	unjudgedRepOutcomeSchema,
+]);
+const currentSourceRepSchema = sourceRepSchema
+	.extend({ outcomes: z.array(repOutcomeSchema).min(1) })
+	.strict();
+const currentSessionSourceRepSchema = sessionSourceRepSchema
+	.extend({ outcomes: z.array(repOutcomeSchema).min(1) })
+	.strict();
 const reliabilitySummarySchema = z
 	.object({
 		name: z.string().min(1),
@@ -258,6 +284,26 @@ const sessionReportArmSchema = z
 		resources: armResourcesSchema,
 	})
 	.strict();
+const currentReportArmSchema = reportArmSchema
+	.extend({
+		source: z
+			.object({
+				group: digestedPathSchema,
+				reps: z.array(currentSourceRepSchema).min(1),
+			})
+			.strict(),
+	})
+	.strict();
+const currentSessionReportArmSchema = sessionReportArmSchema
+	.extend({
+		source: z
+			.object({
+				group: digestedPathSchema,
+				reps: z.array(currentSessionSourceRepSchema).min(1),
+			})
+			.strict(),
+	})
+	.strict();
 const reportCaseSchema = z
 	.object({
 		caseId: identitySchema,
@@ -278,6 +324,28 @@ const sessionReportCaseSchema = z
 				baseline: sessionReportArmSchema,
 				candidate: sessionReportArmSchema,
 				control: sessionReportArmSchema,
+			})
+			.strict(),
+	})
+	.strict();
+const currentReportCaseSchema = reportCaseSchema
+	.extend({
+		arms: z
+			.object({
+				baseline: currentReportArmSchema,
+				candidate: currentReportArmSchema,
+				control: currentReportArmSchema,
+			})
+			.strict(),
+	})
+	.strict();
+const currentSessionReportCaseSchema = sessionReportCaseSchema
+	.extend({
+		arms: z
+			.object({
+				baseline: currentSessionReportArmSchema,
+				candidate: currentSessionReportArmSchema,
+				control: currentSessionReportArmSchema,
 			})
 			.strict(),
 	})
@@ -354,7 +422,7 @@ const comparisonReportFields = {
 const legacyComparisonReportSchema = z
 	.object({ schemaVersion: z.literal(1), ...comparisonReportFields })
 	.strict();
-export const comparisonReportSchema = z
+const versionTwoComparisonReportSchema = z
 	.object({
 		schemaVersion: z.literal(2),
 		judgeAgreement: judgeAgreementReportSchema,
@@ -367,7 +435,7 @@ export const comparisonReportSchema = z
  * judge calibration. Keeping that distinction in the report version prevents
  * consumers from mistaking a worker check for a pipeline judge outcome.
  */
-export const sessionComparisonReportSchema = z
+const versionThreeSessionComparisonReportSchema = z
 	.object({
 		schemaVersion: z.literal(3),
 		judgeAgreement: judgeAgreementReportSchema.extend({
@@ -380,22 +448,287 @@ export const sessionComparisonReportSchema = z
 	})
 	.strict();
 
+const currentStageComparisonReportSchema = z
+	.object({
+		schemaVersion: z.literal(4),
+		judgeAgreement: judgeAgreementReportSchema,
+		...comparisonReportFields,
+		mode: z.literal("stage"),
+		cases: z.array(currentReportCaseSchema).min(2),
+	})
+	.strict();
+const currentPipelineComparisonReportSchema = z
+	.object({
+		schemaVersion: z.literal(4),
+		judgeAgreement: judgeAgreementReportSchema,
+		...comparisonReportFields,
+		mode: z.literal("pipeline"),
+		cases: z.array(currentReportCaseSchema).min(2),
+	})
+	.strict();
+const currentSessionComparisonReportSchema = z
+	.object({
+		schemaVersion: z.literal(4),
+		judgeAgreement: judgeAgreementReportSchema.extend({
+			baselines: z.array(z.never()).length(0),
+		}),
+		...comparisonReportFields,
+		mode: z.literal("session"),
+		declaredStages: z.tuple([z.literal("checks")]),
+		cases: z.array(currentSessionReportCaseSchema).min(2),
+	})
+	.strict();
+
+const currentComparisonReportSchema = z.union([
+	currentStageComparisonReportSchema,
+	currentPipelineComparisonReportSchema,
+	currentSessionComparisonReportSchema,
+]);
+
+type CurrentComparisonReport = Immutable<
+	z.infer<typeof currentComparisonReportSchema>
+>;
+type CurrentReportArm =
+	CurrentComparisonReport["cases"][number]["arms"][ComparisonArm];
+
+interface ReportRefinementContext {
+	readonly addIssue: z.RefinementCtx["addIssue"];
+}
+
+function sameStrings(
+	left: readonly string[],
+	right: readonly string[],
+): boolean {
+	return (
+		left.length === right.length &&
+		left.every((value, index) => value === right[index])
+	);
+}
+
+function sameDistribution(
+	left: Readonly<Record<string, number>>,
+	right: Readonly<Record<string, number>>,
+): boolean {
+	const leftEntries = Object.entries(left).toSorted(([leftName], [rightName]) =>
+		leftName.localeCompare(rightName),
+	);
+	const rightEntries = Object.entries(right).toSorted(
+		([leftName], [rightName]) => leftName.localeCompare(rightName),
+	);
+
+	return JSON.stringify(leftEntries) === JSON.stringify(rightEntries);
+}
+
+function expectedOutcomeNames(
+	report: CurrentComparisonReport,
+): readonly string[] {
+	return report.mode === "pipeline"
+		? [...report.declaredStages, "final"]
+		: report.declaredStages;
+}
+
+function gradeMatchesMode(
+	report: CurrentComparisonReport,
+	name: string,
+	grade: string,
+): boolean {
+	if (report.mode === "session") {
+		return grade === "A" || grade === "F";
+	}
+	if (report.mode === "pipeline" && name === "final") {
+		return grade === "PASS" || grade === "FAIL";
+	}
+
+	return stageLetterGradeSchema.safeParse(grade).success;
+}
+
+function addReportIssue(
+	context: ReportRefinementContext,
+	path: readonly PropertyKey[],
+	message: string,
+): void {
+	context.addIssue({ code: "custom", message, path: [...path] });
+}
+
+function validateArm(
+	report: CurrentComparisonReport,
+	arm: CurrentReportArm,
+	path: readonly PropertyKey[],
+	context: ReportRefinementContext,
+): void {
+	if (arm.source.reps.length !== report.reps) {
+		addReportIssue(
+			context,
+			[...path, "source", "reps"],
+			"rep count must match report reps",
+		);
+	}
+
+	const repIds = arm.source.reps.map(({ repId }) => repId);
+	if (new Set(repIds).size !== repIds.length) {
+		addReportIssue(
+			context,
+			[...path, "source", "reps"],
+			"rep IDs must be unique",
+		);
+	}
+
+	const ordinals = arm.source.reps.map(({ ordinal }) => ordinal);
+	const expectedOrdinals = Array.from(
+		{ length: report.reps },
+		(_value, index) => index + 1,
+	);
+	if (!sameStrings(ordinals.map(String), expectedOrdinals.map(String))) {
+		addReportIssue(
+			context,
+			[...path, "source", "reps"],
+			"rep ordinals must cover report reps in order",
+		);
+	}
+
+	const names = expectedOutcomeNames(report);
+	if (
+		!sameStrings(
+			arm.quality.map(({ name }) => name),
+			names,
+		)
+	) {
+		addReportIssue(
+			context,
+			[...path, "quality"],
+			"quality names must match report measures",
+		);
+	}
+
+	for (const [repIndex, rep] of arm.source.reps.entries()) {
+		if (
+			!sameStrings(
+				rep.outcomes.map(({ name }) => name),
+				names,
+			)
+		) {
+			addReportIssue(
+				context,
+				[...path, "source", "reps", repIndex, "outcomes"],
+				"outcome names must match report measures",
+			);
+		}
+
+		for (const [outcomeIndex, outcome] of rep.outcomes.entries()) {
+			if (
+				outcome.status === "JUDGED" &&
+				!gradeMatchesMode(report, outcome.name, outcome.grade)
+			) {
+				addReportIssue(
+					context,
+					[
+						...path,
+						"source",
+						"reps",
+						repIndex,
+						"outcomes",
+						outcomeIndex,
+						"grade",
+					],
+					"grade must match the comparison mode and measure",
+				);
+			}
+		}
+	}
+
+	for (const [qualityIndex, summary] of arm.quality.entries()) {
+		const outcomes = arm.source.reps
+			.map((rep) => rep.outcomes[qualityIndex])
+			.filter((outcome) => outcome !== undefined);
+		const attempted = outcomes.filter(
+			({ status }) => status !== "NOT_REACHED",
+		).length;
+		const successful = outcomes.filter((outcome) => outcome.successful).length;
+		const gradeDistribution: Record<string, number> = {};
+		for (const outcome of outcomes) {
+			if (outcome.status === "JUDGED") {
+				gradeDistribution[outcome.grade] =
+					(gradeDistribution[outcome.grade] ?? 0) + 1;
+			}
+		}
+		const successRate = successful / report.reps;
+		const expected = {
+			requested: report.reps,
+			attempted,
+			notReached: report.reps - attempted,
+			failed: attempted - successful,
+			successful,
+			gradeDistribution,
+			successRate,
+			standardError: Math.sqrt((successRate * (1 - successRate)) / report.reps),
+			passK: successRate ** report.reps,
+		};
+		const summaryPath = [...path, "quality", qualityIndex];
+
+		for (const key of [
+			"requested",
+			"attempted",
+			"notReached",
+			"failed",
+			"successful",
+			"successRate",
+			"standardError",
+			"passK",
+		] as const) {
+			if (summary[key] !== expected[key]) {
+				addReportIssue(
+					context,
+					[...summaryPath, key],
+					`${key} must match per-rep outcomes`,
+				);
+			}
+		}
+
+		if (
+			!sameDistribution(summary.gradeDistribution, expected.gradeDistribution)
+		) {
+			addReportIssue(
+				context,
+				[...summaryPath, "gradeDistribution"],
+				"grade distribution must match per-rep outcomes",
+			);
+		}
+	}
+}
+
+export const comparisonReportSchema = currentComparisonReportSchema.superRefine(
+	(report, context) => {
+		for (const [caseIndex, benchmarkCase] of report.cases.entries()) {
+			for (const role of COMPARISON_ARMS) {
+				validateArm(
+					report,
+					benchmarkCase.arms[role],
+					["cases", caseIndex, "arms", role],
+					context,
+				);
+			}
+		}
+	},
+);
+
 export type ComparisonReport = Immutable<
-	| z.infer<typeof comparisonReportSchema>
-	| z.infer<typeof sessionComparisonReportSchema>
+	z.infer<typeof comparisonReportSchema>
 >;
 export type LegacyComparisonReport = Immutable<
-	z.infer<typeof legacyComparisonReportSchema>
+	| z.infer<typeof legacyComparisonReportSchema>
+	| z.infer<typeof versionTwoComparisonReportSchema>
+	| z.infer<typeof versionThreeSessionComparisonReportSchema>
 >;
 
 export function parseComparisonReport(
 	text: string,
 ): ComparisonReport | LegacyComparisonReport {
 	return z
-		.discriminatedUnion("schemaVersion", [
+		.union([
 			legacyComparisonReportSchema,
+			versionTwoComparisonReportSchema,
+			versionThreeSessionComparisonReportSchema,
 			comparisonReportSchema,
-			sessionComparisonReportSchema,
 		])
 		.parse(JSON.parse(text));
 }
@@ -403,10 +736,7 @@ export function parseComparisonReport(
 export function serializeComparisonReport(
 	report: Immutable<ComparisonReport>,
 ): string {
-	const parsed =
-		report.schemaVersion === 3
-			? sessionComparisonReportSchema.parse(report)
-			: comparisonReportSchema.parse(report);
+	const parsed = comparisonReportSchema.parse(report);
 
 	return `${JSON.stringify(parsed, null, 2)}\n`;
 }

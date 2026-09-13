@@ -49,17 +49,24 @@ export function reliabilitySummaryNamed(
 	return summary;
 }
 
-interface ReliabilityObservation {
-	readonly attempted: boolean;
-	readonly successful: boolean;
-	readonly grade?: string | undefined;
-}
+export type ReliabilityOutcome =
+	| {
+			readonly name: string;
+			readonly status: "JUDGED";
+			readonly grade: StageLetterGrade | "PASS" | "FAIL";
+			readonly successful: boolean;
+	  }
+	| {
+			readonly name: string;
+			readonly status: "EXECUTION_FAILED" | "METRICS_MISSING" | "NOT_REACHED";
+			readonly successful: false;
+	  };
 
 function summarize(
 	name: string,
-	observations: readonly ReliabilityObservation[],
+	outcomes: readonly ReliabilityOutcome[],
 ): ReliabilitySummary {
-	const requested = observations.length;
+	const requested = outcomes.length;
 	if (requested === 0) {
 		throw new Error("A confirmation report requires at least one rep");
 	}
@@ -67,16 +74,16 @@ function summarize(
 	let attempted = 0;
 	let successful = 0;
 	const gradeDistribution: Record<string, number> = {};
-	for (const observation of observations) {
-		if (observation.attempted) {
+	for (const outcome of outcomes) {
+		if (outcome.status !== "NOT_REACHED") {
 			attempted += 1;
 		}
-		if (observation.successful) {
+		if (outcome.successful) {
 			successful += 1;
 		}
-		if (observation.grade !== undefined) {
-			gradeDistribution[observation.grade] =
-				(gradeDistribution[observation.grade] ?? 0) + 1;
+		if (outcome.status === "JUDGED") {
+			gradeDistribution[outcome.grade] =
+				(gradeDistribution[outcome.grade] ?? 0) + 1;
 		}
 	}
 
@@ -98,18 +105,20 @@ function summarize(
 }
 
 function stageObservation(
+	name: string,
 	outcome: ConfirmationStageOutcome,
 	metricsComplete: boolean,
-): ReliabilityObservation {
+): ReliabilityOutcome {
 	if (outcome.status === "NOT_REACHED") {
-		return { attempted: false, successful: false };
+		return { name, status: outcome.status, successful: false };
 	}
 	if (outcome.status !== "JUDGED") {
-		return { attempted: true, successful: false };
+		return { name, status: outcome.status, successful: false };
 	}
 
 	return {
-		attempted: true,
+		name,
+		status: outcome.status,
 		successful:
 			metricsComplete &&
 			outcome.verdict === "CONTINUE" &&
@@ -121,50 +130,60 @@ function stageObservation(
 function finalObservation(
 	outcome: ConfirmationFinalOutcome,
 	metricsComplete: boolean,
-): ReliabilityObservation {
+): ReliabilityOutcome {
 	if (outcome.status === "NOT_REACHED") {
-		return { attempted: false, successful: false };
+		return { name: "final", status: outcome.status, successful: false };
 	}
 	if (outcome.status !== "JUDGED") {
-		return { attempted: true, successful: false };
+		return { name: "final", status: outcome.status, successful: false };
 	}
 
 	return {
-		attempted: true,
+		name: "final",
+		status: outcome.status,
 		successful: metricsComplete && outcome.verdict === "PASS",
 		grade: outcome.verdict,
 	};
+}
+
+export function buildReliabilityOutcomes(
+	declaredStages: readonly string[],
+	rep: ConfirmationReliabilityRep,
+): readonly ReliabilityOutcome[] {
+	const stages = declaredStages.map((stage) => {
+		const outcome = rep.stages.find((candidate) => candidate.stage === stage);
+		if (outcome === undefined) {
+			throw new Error(`Rep is missing the declared ${stage} stage`);
+		}
+
+		return stageObservation(stage, outcome, rep.metricsComplete);
+	});
+
+	return [...stages, finalObservation(rep.finalOutcome, rep.metricsComplete)];
 }
 
 export function buildReliabilityReport(
 	declaredStages: readonly string[],
 	reps: readonly ConfirmationReliabilityRep[],
 ): readonly ReliabilitySummary[] {
-	const stages = declaredStages.map((stage) =>
+	const outcomes = reps.map((rep) =>
+		buildReliabilityOutcomes(declaredStages, rep),
+	);
+	const names = [...declaredStages, "final"];
+
+	return names.map((name, index) =>
 		summarize(
-			stage,
-			reps.map((rep) => {
-				const outcome = rep.stages.find(
-					(candidate) => candidate.stage === stage,
-				);
+			name,
+			outcomes.map((rep) => {
+				const outcome = rep[index];
 				if (outcome === undefined) {
-					throw new Error(`Rep is missing the declared ${stage} stage`);
+					throw new Error(`Rep is missing the declared ${name} outcome`);
 				}
 
-				return stageObservation(outcome, rep.metricsComplete);
+				return outcome;
 			}),
 		),
 	);
-
-	return [
-		...stages,
-		summarize(
-			"final",
-			reps.map((rep) =>
-				finalObservation(rep.finalOutcome, rep.metricsComplete),
-			),
-		),
-	];
 }
 
 const CALL_ROLES = [
