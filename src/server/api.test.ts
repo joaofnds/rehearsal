@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { CorpusRoot } from "#benchmark/corpus-file";
+import { CASES_DIRECTORY } from "#benchmark/case";
 import {
 	directorySource,
 	RecordedRunsFixture,
@@ -133,6 +134,56 @@ describe(createApiApp.name, () => {
 			expect(body.rows.some((row) => row.run === fixture.replayableRun)).toBe(
 				true,
 			);
+		});
+
+		it("keeps healthy rows when one run's current settings are unavailable", async () => {
+			const fixture = await writtenFixture();
+			const corpus = await corpusDirectory();
+			const brokenRun = "2026-09-07T00-00-00.000Z";
+			const caseId = "zz-api-settings-missing";
+			const caseDirectory = join(CONTROL_DIR, CASES_DIRECTORY, caseId);
+			roots.push(caseDirectory);
+			await mkdir(caseDirectory, { recursive: true });
+			await Bun.write(
+				join(caseDirectory, "case.json"),
+				JSON.stringify({
+					id: caseId,
+					kind: "pipeline",
+					title: "Missing settings",
+					task: "task.md",
+					productBrief: "brief.md",
+					finalRubric: "rubric.md",
+					pipeline: "pipeline.json",
+					rubrics: "rubrics",
+					target: { path: "/target" },
+					settingsFile: "settings.json",
+				}),
+			);
+			await fixture.writePipelineRun(brokenRun, caseId, {
+				path: `cases/${caseId}/settings.json`,
+				sha256: "0".repeat(64),
+			});
+			await fixture.recordCorpusFrom(directorySource(corpus));
+			await fixture.recordCorpusFrom(directorySource(corpus), brokenRun);
+			const app = createApiApp({
+				runsDirectory: fixture.runsDirectory,
+				corpusSource: directorySource(corpus),
+			});
+
+			const response = await app.request("/api/runs");
+			const body = await runHistoryResponseFrom(response);
+
+			expect(response.status).toBe(200);
+			expect(
+				body.rows.find(({ run }) => run === fixture.replayableRun)?.stale,
+			).toBe(false);
+			expect(body.rows.find(({ run }) => run === brokenRun)).toMatchObject({
+				stale: true,
+				staleCauses: expect.arrayContaining([
+					expect.stringContaining(`cases/${caseId}/settings.json`),
+				]),
+			});
+			assertDoesNotLeak(JSON.stringify(body), CONTROL_DIR);
 		});
 
 		it("renders an empty runs directory as no rows, not an error", async () => {

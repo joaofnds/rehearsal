@@ -121,6 +121,26 @@ describe(runStale.name, () => {
 		expect(recorder.stdout).toEqual([]);
 	});
 
+	it("names an initial-only stopped run when its settings are stale", async () => {
+		const corpus = await corpusDirectory("build skill\n");
+		const fixture = await fixtureRecordedAgainst(corpus);
+		await fixture.writeStoppedRun();
+		await fixture.writeInitialCheckpoint(fixture.stoppedRun, {
+			path: "stage-settings.json",
+			sha256: "0".repeat(64),
+		});
+		const recorder = recordOutput();
+
+		await runStale(
+			{ corpus, runsDirectory: fixture.runsDirectory },
+			{ output: recorder.output },
+		);
+
+		expect(recorder.stdout.join("").trimEnd().split("\n")).toEqual([
+			`checkpoint:${fixture.stoppedRun}/initial\tstage settings file stage-settings.json changed`,
+		]);
+	});
+
 	it("names a stale session case beside the stale checkpoints", async () => {
 		const fixture = await fixtureRecordedAgainst(
 			await corpusDirectory("build skill\n"),
