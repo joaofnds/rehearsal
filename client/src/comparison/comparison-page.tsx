@@ -3,11 +3,14 @@ import type { InferResponseType } from "hono/client";
 import { useState } from "react";
 import { apiClient } from "#client/api-client";
 import { EmptyState } from "#client/system/components/empty-state";
-import { PlannedFeatureBlock } from "#client/system/components/planned-feature-block";
 import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
-import { armPairLabel } from "#server/comparison-arm-pair";
+import { armPairLabel, armPairNames } from "#server/comparison-arm-pair";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
+import type {
+	QualityInterval,
+	QualityReading,
+} from "#server/comparison-quality-reading";
 import "./comparison-page.css";
 
 const PRESENTATIONS = ["Attempt pairs", "What moved"] as const;
@@ -61,6 +64,12 @@ function GradeDistribution({
 }
 
 const COLUMNS = ["Case", "Baseline", "Candidate", "Control"] as const;
+const QUALITY_COLUMNS = [
+	"Comparison",
+	"Measure",
+	"Intervals",
+	"Reading",
+] as const;
 
 function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 	return [
@@ -69,6 +78,95 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 		<GradeDistribution key="candidate" arm={benchmarkCase.arms.candidate} />,
 		<GradeDistribution key="control" arm={benchmarkCase.arms.control} />,
 	];
+}
+
+function intervalLabel(
+	armName: string,
+	interval: QualityInterval | undefined,
+): string {
+	if (interval === undefined) {
+		return `${armName} not reached`;
+	}
+
+	return `${armName} ${interval.low} to ${interval.high}`;
+}
+
+function strongerRangeLabel(arm: string): string {
+	const sentenceCaseArm = arm.replace(/^./u, (letter) => letter.toUpperCase());
+
+	return `${sentenceCaseArm} has the stronger separated range`;
+}
+
+function verdictLabel(reading: QualityReading): string {
+	if (reading.verdict.kind === "insideRerunNoise") {
+		return "Inside rerun noise";
+	}
+
+	if (reading.verdict.kind === "unchangedAlreadyClear") {
+		return "Unchanged, already clear";
+	}
+
+	return strongerRangeLabel(reading.verdict.arm);
+}
+
+function QualityIntervals({
+	pairKey,
+	reading,
+}: {
+	readonly pairKey: string;
+	readonly reading: QualityReading;
+}): React.JSX.Element {
+	const names = armPairNames(pairKey);
+
+	return (
+		<div className="rh-comparison__quality-intervals">
+			<span>{intervalLabel(names.minuend, reading.interval.minuend)}</span>
+			<span>
+				{intervalLabel(names.subtrahend, reading.interval.subtrahend)}
+			</span>
+		</div>
+	);
+}
+
+function qualityRowsFor(
+	readings: Readonly<Record<string, Readonly<Record<string, QualityReading>>>>,
+): readonly (readonly React.ReactNode[])[] {
+	return Object.entries(readings).flatMap(([pairKey, measures]) =>
+		Object.entries(measures).map(([measureName, reading]) => [
+			armPairLabel(pairKey),
+			measureName,
+			<QualityIntervals
+				key={`${pairKey}-${measureName}`}
+				pairKey={pairKey}
+				reading={reading}
+			/>,
+			verdictLabel(reading),
+		]),
+	);
+}
+
+function QualityReadingTables({
+	readings,
+}: {
+	readonly readings: Readonly<
+		Record<
+			string,
+			Readonly<Record<string, Readonly<Record<string, QualityReading>>>>
+		>
+	>;
+}): React.JSX.Element {
+	return (
+		<div className="rh-comparison__quality-tables">
+			{Object.entries(readings).map(([caseId, caseReadings]) => (
+				<TableShell
+					key={caseId}
+					caption={`WHAT MOVED · ${caseId}`}
+					columns={QUALITY_COLUMNS}
+					rows={qualityRowsFor(caseReadings)}
+				/>
+			))}
+		</div>
+	);
 }
 
 function AttributionCard({
@@ -209,12 +307,7 @@ export function ComparisonPage({
 			) : null}
 
 			{query.isSuccess && presentation === "What moved" ? (
-				<PlannedFeatureBlock heading="What moved">
-					<p>
-						Needs a per-measure interval and a reading verdict a paired estimate
-						cannot supply yet.
-					</p>
-				</PlannedFeatureBlock>
+				<QualityReadingTables readings={query.data.qualityReadings} />
 			) : null}
 		</main>
 	);

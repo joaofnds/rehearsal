@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComparisonReport } from "#benchmark/comparison-record";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
+import type { QualityReading } from "#server/comparison-quality-reading";
 import { stubFetchByPath } from "#client/test-support/fetch-stub";
 import { ComparisonPage } from "./comparison-page";
 
@@ -78,6 +79,12 @@ interface ComparisonResponseFixture {
 	readonly attribution: Readonly<
 		Record<string, Readonly<Record<string, ComparisonAttribution>>>
 	>;
+	readonly qualityReadings: Readonly<
+		Record<
+			string,
+			Readonly<Record<string, Readonly<Record<string, QualityReading>>>>
+		>
+	>;
 }
 
 function comparisonResponseBody(): ComparisonResponseFixture {
@@ -135,6 +142,66 @@ function comparisonResponseBody(): ComparisonResponseFixture {
 				},
 			},
 		},
+		qualityReadings: {
+			"case-1": {
+				candidateMinusBaseline: {
+					checks: {
+						interval: {
+							minuend: { low: "A", high: "A" },
+							subtrahend: { low: "A", high: "F" },
+						},
+						verdict: { kind: "insideRerunNoise" },
+					},
+				},
+				candidateMinusControl: {
+					checks: {
+						interval: {
+							minuend: { low: "A", high: "A" },
+							subtrahend: { low: "F", high: "F" },
+						},
+						verdict: { kind: "separated", arm: "candidate" },
+					},
+				},
+				baselineMinusControl: {
+					final: {
+						interval: {
+							minuend: { low: "PASS", high: "PASS" },
+							subtrahend: { low: "PASS", high: "PASS" },
+						},
+						verdict: { kind: "unchangedAlreadyClear" },
+					},
+				},
+			},
+			"case-2": {
+				candidateMinusBaseline: {
+					checks: {
+						interval: {
+							minuend: undefined,
+							subtrahend: { low: "D", high: "F" },
+						},
+						verdict: { kind: "insideRerunNoise" },
+					},
+				},
+				candidateMinusControl: {
+					checks: {
+						interval: {
+							minuend: { low: "A", high: "F" },
+							subtrahend: { low: "F", high: "F" },
+						},
+						verdict: { kind: "insideRerunNoise" },
+					},
+				},
+				baselineMinusControl: {
+					checks: {
+						interval: {
+							minuend: { low: "A", high: "A" },
+							subtrahend: { low: "F", high: "F" },
+						},
+						verdict: { kind: "separated", arm: "baseline" },
+					},
+				},
+			},
+		},
 	};
 }
 
@@ -188,7 +255,7 @@ describe(ComparisonPage.name, () => {
 		).toBeInTheDocument();
 	});
 
-	it("renders the planned-feature block instead of a working tab when What moved is selected", async () => {
+	it("renders every served quality reading grouped by case", async () => {
 		renderPage();
 
 		await waitFor(() => {
@@ -196,8 +263,38 @@ describe(ComparisonPage.name, () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "What moved" }));
 
-		expect(screen.getByText("PLANNED")).toBeInTheDocument();
-		expect(screen.queryByRole("table")).not.toBeInTheDocument();
+		const caseOne = screen.getByRole("table", {
+			name: "WHAT MOVED · case-1",
+		});
+		const caseTwo = screen.getByRole("table", {
+			name: "WHAT MOVED · case-2",
+		});
+		expect(within(caseOne).getAllByRole("row")).toHaveLength(4);
+		expect(within(caseTwo).getAllByRole("row")).toHaveLength(4);
+		expect(
+			within(caseOne).getByText("candidate vs baseline"),
+		).toBeInTheDocument();
+		expect(within(caseOne).getAllByText("checks")).toHaveLength(2);
+		expect(within(caseOne).getByText("final")).toBeInTheDocument();
+		expect(within(caseOne).getAllByText("candidate A to A")).toHaveLength(2);
+		expect(within(caseOne).getByText("baseline A to F")).toBeInTheDocument();
+		expect(within(caseOne).getByText("Inside rerun noise")).toBeInTheDocument();
+		expect(
+			within(caseOne).getByText("Unchanged, already clear"),
+		).toBeInTheDocument();
+		expect(
+			within(caseOne).getByText("Candidate has the stronger separated range"),
+		).toBeInTheDocument();
+		expect(
+			within(caseTwo).getByText("candidate not reached"),
+		).toBeInTheDocument();
+		expect(
+			within(caseTwo).getByText("Baseline has the stronger separated range"),
+		).toBeInTheDocument();
+		expect(screen.queryByText("PLANNED")).not.toBeInTheDocument();
+		expect(
+			screen.queryByText(/needs a per-measure interval/iu),
+		).not.toBeInTheDocument();
 	});
 
 	it("associates each case with its own attribution reading", async () => {

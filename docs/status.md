@@ -29,8 +29,9 @@ An implemented path can still have missing real-provider validation. Session
 comparison uses frozen records and a provider-free integration path. Its saved
 Attempt-pairs view has been verified through the built browser route: each case
 shows the recorded arm distributions, and corpus attribution distinguishes zero,
-one, and multiple differing layout paths. The What moved presentation remains
-planned.
+one, and multiple differing layout paths. Its What moved view groups the served
+per-measure quality readings by case, including both arm intervals and the reading
+verdict.
 
 ## Known limitations
 
@@ -77,12 +78,12 @@ planned.
 
 ## Browser UI
 
-| Route                   | Available today                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------- |
-| `/`                     | Run-history report, including empty and error states                                  |
-| `/corpus`               | Live corpus inventory; instruction editing is marked planned                          |
-| `/comparisons/<digest>` | Saved case/arm distributions and per-case attribution; “What moved” is marked planned |
-| `/system`               | Design tokens and reusable component gallery                                          |
+| Route                   | Available today                                                          |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `/`                     | Run-history report, including empty and error states                     |
+| `/corpus`               | Live corpus inventory; instruction editing is marked planned             |
+| `/comparisons/<digest>` | Saved case/arm distributions, attribution, and per-case quality readings |
+| `/system`               | Design tokens and reusable component gallery                             |
 
 Run launch, live monitor, full run detail, task/case management, calibration
 screens, settings, and first-run setup are design targets. The SSE API already
@@ -96,8 +97,7 @@ instruction improvement from noise, watch a run's spend, and read a comparison
 well enough to decide whether an edit helped. The remaining work follows those
 goals, with context visibility added to help explain resource use:
 
-1. Complete the saved comparison's What moved presentation and add reproducible
-   public pipeline case inputs.
+1. Add reproducible public pipeline case inputs.
 2. Deliver isolated session skill variants, generated fixtures, and preserved
    post-session state so realistic skill outcomes can be graded.
 3. Make context use inspectable alongside outcomes. Begin with saved-session

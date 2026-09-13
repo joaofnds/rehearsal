@@ -1,5 +1,10 @@
 import type { ComparisonArm } from "#benchmark/comparison-record";
 
+export interface ArmPairNames {
+	readonly minuend: string;
+	readonly subtrahend: string;
+}
+
 export function pairKey(
 	minuend: ComparisonArm,
 	subtrahend: ComparisonArm,
@@ -13,14 +18,21 @@ export function pairKey(
  * compile time), so the client imports it directly instead of re-deriving
  * the `Minus` convention on its own.
  */
-export function armPairLabel(pair: string): string {
-	const [minuend, subtrahend] = pair.split("Minus");
-	const lowercasedSubtrahend =
-		subtrahend === undefined
-			? undefined
-			: `${subtrahend[0]?.toLowerCase()}${subtrahend.slice(1)}`;
+export function armPairNames(pair: string): ArmPairNames {
+	const separator = "Minus";
+	const separatorIndex = pair.indexOf(separator);
+	const subtrahend = pair.slice(separatorIndex + separator.length);
 
-	return `${minuend} vs ${lowercasedSubtrahend}`;
+	return {
+		minuend: pair.slice(0, separatorIndex),
+		subtrahend: subtrahend.replace(/^./u, (letter) => letter.toLowerCase()),
+	};
+}
+
+export function armPairLabel(pair: string): string {
+	const names = armPairNames(pair);
+
+	return `${names.minuend} vs ${names.subtrahend}`;
 }
 
 /**
