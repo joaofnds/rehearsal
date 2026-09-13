@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { jsonObjectSchema, jsonValueSchema } from "./json-value";
 import type { JsonObject, JsonValue } from "./json-value";
 import { contextEvidenceSchema } from "./context-evidence-contract";
 import type {
@@ -17,57 +19,75 @@ export type {
 	ContextRateCatalog,
 } from "./context-evidence-contract";
 
-function objectValue(record: JsonObject, key: string): JsonObject | undefined {
-	const value = record[key];
+const stringSchema = z.string();
+const numberSchema = z.number();
+const nullableStringSchema = z.string().nullable();
+const jsonArraySchema = z.array(jsonValueSchema);
+const coverageStateSchema = z.enum(["complete", "partial", "unavailable"]);
 
-	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? (value as JsonObject)
-		: undefined;
+function asObject(value: JsonValue): JsonObject | undefined {
+	const parsed = jsonObjectSchema.safeParse(value);
+
+	return parsed.success ? parsed.data : undefined;
 }
 
-function stringValue(record: JsonObject, key: string): string | undefined {
-	const value = record[key];
-
-	return typeof value === "string" ? value : undefined;
+function objectValue(
+	record: Readonly<JsonObject>,
+	key: string,
+): JsonObject | undefined {
+	return asObject(record[key] ?? null);
 }
 
-function numberValue(record: JsonObject, key: string): number | undefined {
-	const value = record[key];
+function stringValue(
+	record: Readonly<JsonObject>,
+	key: string,
+): string | undefined {
+	const parsed = stringSchema.safeParse(record[key]);
 
-	return typeof value === "number" ? value : undefined;
+	return parsed.success ? parsed.data : undefined;
+}
+
+function numberValue(
+	record: Readonly<JsonObject>,
+	key: string,
+): number | undefined {
+	const parsed = numberSchema.safeParse(record[key]);
+
+	return parsed.success ? parsed.data : undefined;
 }
 
 function nullableStringValue(
-	record: JsonObject,
+	record: Readonly<JsonObject>,
 	key: string,
 ): string | null | undefined {
-	const value = record[key];
+	const parsed = nullableStringSchema.safeParse(record[key]);
 
-	return value === null || typeof value === "string" ? value : undefined;
+	return parsed.success ? parsed.data : undefined;
 }
 
-function arrayValue(record: JsonObject, key: string): readonly JsonValue[] {
-	const value = record[key];
+function arrayValue(
+	record: Readonly<JsonObject>,
+	key: string,
+): readonly JsonValue[] {
+	const parsed = jsonArraySchema.safeParse(record[key]);
 
-	return Array.isArray(value) ? value : [];
+	return parsed.success ? parsed.data : [];
 }
 
 function canonicalJson(value: JsonValue): string {
-	if (Array.isArray(value)) {
-		return "[" + value.map((entry) => canonicalJson(entry)).join(",") + "]";
+	const array = jsonArraySchema.safeParse(value);
+	if (array.success) {
+		return `[${array.data.map((entry) => canonicalJson(entry)).join(",")}]`;
 	}
-	if (value !== null && typeof value === "object") {
-		return (
-			"{" +
-			Object.entries(value)
-				.toSorted(([left], [right]) => left.localeCompare(right))
-				.map(([key, entry]) => JSON.stringify(key) + ":" + canonicalJson(entry))
-				.join(",") +
-			"}"
-		);
+	const object = jsonObjectSchema.safeParse(value);
+	if (object.success) {
+		return `{${Object.entries(object.data)
+			.toSorted(([left], [right]) => left.localeCompare(right))
+			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+			.join(",")}}`;
 	}
 
-	return JSON.stringify(value);
+	return JSON.stringify(value) ?? "null";
 }
 
 interface TranscriptIndexes {
@@ -81,6 +101,27 @@ interface TranscriptIndexes {
 	readonly agentToolOwner: ReadonlyMap<string, string>;
 }
 
+type AgentLineageState =
+	ContextEvidence["projection"]["agents"][number]["lineageState"];
+
+function agentLineageState(
+	conflict: boolean,
+	sourceCount: number,
+	parentAgentId: string | null,
+): AgentLineageState {
+	if (conflict) {
+		return "conflict";
+	}
+	if (sourceCount > 1 || (sourceCount === 1 && parentAgentId === "main")) {
+		return "complete";
+	}
+	if (sourceCount === 1) {
+		return "single-source";
+	}
+
+	return "missing";
+}
+
 function transcriptIndexes(
 	files: ContextEvidenceSource["files"],
 ): TranscriptIndexes {
@@ -88,11 +129,14 @@ function transcriptIndexes(
 		["transcripts/main.jsonl", "main"],
 	]);
 	for (const hook of files.hooks) {
-		if (stringValue(hook, "hook_event_name") !== "SubagentStop") continue;
+		if (stringValue(hook, "hook_event_name") !== "SubagentStop") {
+			continue;
+		}
 		const path = stringValue(hook, "agent_transcript_path");
 		const agentId = stringValue(hook, "agent_id");
-		if (path !== undefined && agentId !== undefined)
+		if (path !== undefined && agentId !== undefined) {
 			agentByPath.set(path, agentId);
+		}
 	}
 
 	const byUuid = new Map<string, { path: string; row: JsonObject }>();
@@ -100,10 +144,12 @@ function transcriptIndexes(
 	const agentCandidatesByRequest = new Map<string, Set<string>>();
 	const agentToolOwner = new Map<string, string>();
 	for (const [path, rows] of Object.entries(files.transcripts)) {
-		const agentId = agentByPath.get(path) ?? "orphan:" + path;
+		const agentId = agentByPath.get(path) ?? `orphan:${path}`;
 		for (const row of rows) {
 			const uuid = stringValue(row, "uuid");
-			if (uuid !== undefined) byUuid.set(uuid, { path, row });
+			if (uuid !== undefined) {
+				byUuid.set(uuid, { path, row });
+			}
 			const requestId = stringValue(row, "requestId");
 			if (requestId !== undefined) {
 				byRequest.set(requestId, [...(byRequest.get(requestId) ?? []), row]);
@@ -115,20 +161,20 @@ function transcriptIndexes(
 			for (const content of message === undefined
 				? []
 				: arrayValue(message, "content")) {
-				if (
-					content === null ||
-					typeof content !== "object" ||
-					Array.isArray(content)
-				)
+				const block = asObject(content);
+				if (block === undefined) {
 					continue;
-				const block = content as JsonObject;
+				}
 				if (
 					stringValue(block, "type") !== "tool_use" ||
 					stringValue(block, "name") !== "Agent"
-				)
+				) {
 					continue;
+				}
 				const toolUseId = stringValue(block, "id");
-				if (toolUseId !== undefined) agentToolOwner.set(toolUseId, agentId);
+				if (toolUseId !== undefined) {
+					agentToolOwner.set(toolUseId, agentId);
+				}
 			}
 		}
 	}
@@ -150,8 +196,9 @@ function normalizedAgents(
 	for (const row of files.stream) {
 		const uuid = stringValue(row, "uuid");
 		const parentTool = nullableStringValue(row, "parent_tool_use_id");
-		if (uuid === undefined || parentTool === undefined || parentTool === null)
+		if (uuid === undefined || parentTool === undefined || parentTool === null) {
 			continue;
+		}
 		const transcript = indexes.byUuid.get(uuid);
 		const child = transcript && indexes.agentByPath.get(transcript.path);
 		const parent = indexes.agentToolOwner.get(parentTool);
@@ -166,14 +213,20 @@ function normalizedAgents(
 	const agentIds = new Set<string>();
 	for (const hook of files.hooks) {
 		const agentId = stringValue(hook, "agent_id");
-		if (agentId !== undefined) agentIds.add(agentId);
+		if (agentId !== undefined) {
+			agentIds.add(agentId);
+		}
 	}
 	for (const span of files.otelSpans) {
 		const attributes = objectValue(span, "attributes");
-		if (attributes === undefined) continue;
+		if (attributes === undefined) {
+			continue;
+		}
 		const agentId = stringValue(attributes, "agent_id");
 		const parentId = stringValue(attributes, "parent_agent_id");
-		if (agentId !== undefined) agentIds.add(agentId);
+		if (agentId !== undefined) {
+			agentIds.add(agentId);
+		}
 		if (agentId !== undefined && parentId !== undefined) {
 			const candidates = traceParents.get(agentId) ?? new Set();
 			candidates.add(parentId);
@@ -181,34 +234,33 @@ function normalizedAgents(
 		}
 	}
 
-	return [...agentIds].sort().map((agentId) => {
+	return [...agentIds].toSorted().map((agentId) => {
 		const streamCandidates = streamParents.get(agentId) ?? new Set<string>();
 		const traceCandidates = traceParents.get(agentId) ?? new Set<string>();
 		const parentCandidates = new Set([...streamCandidates, ...traceCandidates]);
 		const conflict = parentCandidates.size > 1;
-		const sources = [
-			streamCandidates.size === 0 ? undefined : ("stream" as const),
-			traceCandidates.size === 0 ? undefined : ("trace" as const),
-		].filter((source): source is "stream" | "trace" => source !== undefined);
+		const sources: ("stream" | "trace")[] = [];
+		if (streamCandidates.size > 0) {
+			sources.push("stream");
+		}
+		if (traceCandidates.size > 0) {
+			sources.push("trace");
+		}
 		const parentAgentId = conflict
 			? null
 			: (parentCandidates.values().next().value ?? null);
-		const lineageState = conflict
-			? ("conflict" as const)
-			: sources.length > 1
-				? ("complete" as const)
-				: sources.length === 1
-					? parentAgentId === "main"
-						? ("complete" as const)
-						: ("single-source" as const)
-					: ("missing" as const);
+		const lineageState = agentLineageState(
+			conflict,
+			sources.length,
+			parentAgentId,
+		);
 
 		return { agentId, parentAgentId, lineageState, sources };
 	});
 }
 
 function usageFrom(
-	attributes: JsonObject,
+	attributes: Readonly<JsonObject>,
 ): ContextEvidence["projection"]["requests"][number]["usage"] | undefined {
 	const inputTokens = numberValue(attributes, "input_tokens");
 	const outputTokens = numberValue(attributes, "output_tokens");
@@ -219,39 +271,48 @@ function usageFrom(
 		outputTokens === undefined ||
 		cacheReadTokens === undefined ||
 		cacheWriteTokens === undefined
-	)
+	) {
 		return undefined;
+	}
 
 	return { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens };
 }
 
 function ttlSplit(
-	rows: readonly JsonObject[],
+	rows: readonly Readonly<JsonObject>[],
 ): { readonly five: number; readonly one: number } | undefined {
 	for (const row of rows) {
 		const message = objectValue(row, "message");
 		const usage = message && objectValue(message, "usage");
 		const cache = usage && objectValue(usage, "cache_creation");
-		if (cache === undefined) continue;
+		if (cache === undefined) {
+			continue;
+		}
 		const five = numberValue(cache, "ephemeral_5m_input_tokens");
 		const one = numberValue(cache, "ephemeral_1h_input_tokens");
-		if (five !== undefined && one !== undefined) return { five, one };
+		if (five !== undefined && one !== undefined) {
+			return { five, one };
+		}
 	}
 
 	return undefined;
 }
 
 function requestModel(
-	log: JsonObject | undefined,
-	transcripts: readonly JsonObject[],
+	log: Readonly<JsonObject> | undefined,
+	transcripts: readonly Readonly<JsonObject>[],
 ): string | null {
 	const attributes = log && objectValue(log, "attributes");
 	const fromLog = attributes && stringValue(attributes, "model");
-	if (fromLog !== undefined) return fromLog;
+	if (fromLog !== undefined) {
+		return fromLog;
+	}
 	for (const row of transcripts) {
 		const message = objectValue(row, "message");
 		const model = message && stringValue(message, "model");
-		if (model !== undefined) return model;
+		if (model !== undefined) {
+			return model;
+		}
 	}
 
 	return null;
@@ -263,22 +324,28 @@ function requestPricing(
 	model: string | null,
 	rates: ContextRateCatalog | undefined,
 ): ContextEvidence["projection"]["requests"][number]["pricing"] {
-	if (usageState === "conflict") return { state: "usage-conflict" };
-	if (usageState !== "complete" || usage === undefined)
+	if (usageState === "conflict") {
+		return { state: "usage-conflict" };
+	}
+	if (usageState !== "complete" || usage === undefined) {
 		return { state: "usage-missing" };
+	}
 	if (
 		usage.cacheWrite5mTokens === undefined ||
 		usage.cacheWrite1hTokens === undefined
-	)
+	) {
 		return { state: "ttl-split-missing" };
+	}
 	if (
 		usage.cacheWrite5mTokens + usage.cacheWrite1hTokens !==
 		usage.cacheWriteTokens
-	)
+	) {
 		return { state: "ttl-split-conflict" };
+	}
 	const rate = rates?.models.find((entry) => entry.model === model);
-	if (rates === undefined || rate === undefined)
+	if (rates === undefined || rate === undefined) {
 		return { state: "rates-missing" };
+	}
 
 	return {
 		state: "complete",
@@ -295,6 +362,104 @@ function requestPricing(
 	};
 }
 
+type RequestEvidence = ContextEvidence["projection"]["requests"][number];
+type RequestUsage = NonNullable<RequestEvidence["usage"]>;
+
+function usageWithSplit(
+	baseUsage: RequestUsage | undefined,
+	split: { readonly five: number; readonly one: number } | undefined,
+): RequestUsage | undefined {
+	if (baseUsage === undefined) {
+		return undefined;
+	}
+	const usage = { ...baseUsage };
+	if (split !== undefined) {
+		Object.assign(usage, {
+			cacheWrite5mTokens: split.five,
+			cacheWrite1hTokens: split.one,
+		});
+	}
+
+	return usage;
+}
+
+function requestUsageState(
+	logCount: number,
+	distinctCount: number,
+	baseUsage: RequestUsage | undefined,
+): RequestEvidence["usageState"] {
+	if (logCount === 0) {
+		return "missing";
+	}
+	if (distinctCount > 1) {
+		return "conflict";
+	}
+
+	return baseUsage === undefined ? "partial" : "complete";
+}
+
+function uniqueRequestLogs(
+	logs: readonly Readonly<JsonObject>[],
+): readonly JsonObject[] {
+	const unique = new Map<string, JsonObject>();
+	for (const log of logs) {
+		const attributes = objectValue(log, "attributes");
+		if (attributes !== undefined) {
+			unique.set(canonicalJson(attributes), log);
+		}
+	}
+
+	return [...unique.values()];
+}
+
+function normalizedRequest(
+	requestId: string,
+	logs: readonly Readonly<JsonObject>[],
+	transcriptRows: readonly Readonly<JsonObject>[],
+	candidateSet: ReadonlySet<string>,
+	rates: ContextRateCatalog | undefined,
+): RequestEvidence {
+	const distinct = uniqueRequestLogs(logs);
+	const candidates = [...candidateSet];
+	const [onlyCandidate] = candidates;
+	const agentId = candidates.length === 1 ? (onlyCandidate ?? null) : null;
+	const [firstDistinct] = distinct;
+	const attributes =
+		distinct.length === 1 && firstDistinct !== undefined
+			? objectValue(firstDistinct, "attributes")
+			: undefined;
+	const baseUsage =
+		attributes === undefined ? undefined : usageFrom(attributes);
+	const usage = usageWithSplit(baseUsage, ttlSplit(transcriptRows));
+	const usageState = requestUsageState(logs.length, distinct.length, baseUsage);
+	const providerCostUsd =
+		attributes === undefined ? undefined : numberValue(attributes, "cost_usd");
+	const model = requestModel(firstDistinct, transcriptRows);
+	const request = {
+		requestId,
+		agentId,
+		model,
+		usageState,
+		pricing: requestPricing(usageState, usage, model, rates),
+		otelOccurrences: logs.length,
+		uniqueOtelOccurrences: distinct.length,
+		transcriptOccurrences: transcriptRows.length,
+	};
+	if (candidates.length === 0) {
+		Object.assign(request, { attributionState: "missing" as const });
+	} else if (candidates.length > 1) {
+		Object.assign(request, { attributionState: "conflict" as const });
+	}
+	if (usage !== undefined) {
+		Object.assign(request, { usage });
+	}
+	if (providerCostUsd !== undefined) {
+		Object.assign(request, { providerCostUsd });
+	}
+
+	return request;
+}
+
 function normalizedRequests(
 	files: ContextEvidenceSource["files"],
 	indexes: TranscriptIndexes,
@@ -305,19 +470,18 @@ function normalizedRequests(
 > {
 	const byRequest = new Map<string, JsonObject[]>();
 	const keyless: JsonObject[] = [];
-	const agentCandidates = new Map(
-		[...indexes.agentCandidatesByRequest].map(([requestId, values]) => [
-			requestId,
-			new Set(values),
-		]),
-	);
+	const agentCandidates = new Map<string, Set<string>>();
+	for (const [requestId, values] of indexes.agentCandidatesByRequest) {
+		agentCandidates.set(requestId, new Set(values));
+	}
 	for (const log of files.otelLogs) {
 		const attributes = objectValue(log, "attributes");
 		if (
 			attributes === undefined ||
 			stringValue(attributes, "event.name") !== "api_request"
-		)
+		) {
 			continue;
+		}
 		const requestId =
 			stringValue(attributes, "request_id") ??
 			stringValue(attributes, "client_request_id");
@@ -329,7 +493,9 @@ function normalizedRequests(
 	}
 	for (const span of files.otelSpans) {
 		const attributes = objectValue(span, "attributes");
-		if (attributes === undefined) continue;
+		if (attributes === undefined) {
+			continue;
+		}
 		const requestId = stringValue(attributes, "request_id");
 		const agentId = stringValue(attributes, "agent_id");
 		if (requestId !== undefined && agentId !== undefined) {
@@ -343,72 +509,23 @@ function normalizedRequests(
 		...byRequest.keys(),
 		...indexes.byRequest.keys(),
 	]);
-	const requests = [...requestIds].sort().map((requestId) => {
+	const requests = [...requestIds].toSorted().map((requestId) => {
 		const logs = byRequest.get(requestId) ?? [];
-		const unique = new Map<string, JsonObject>();
-		for (const log of logs) {
-			const attributes = objectValue(log, "attributes");
-			if (attributes !== undefined) unique.set(canonicalJson(attributes), log);
-		}
-		const distinct = [...unique.values()];
 		const transcriptRows = indexes.byRequest.get(requestId) ?? [];
-		const candidates = [...(agentCandidates.get(requestId) ?? [])];
-		const agentId = candidates.length === 1 ? (candidates[0] ?? null) : null;
-		const attributionState =
-			candidates.length === 0
-				? ("missing" as const)
-				: candidates.length > 1
-					? ("conflict" as const)
-					: undefined;
-		const attributes =
-			distinct.length === 1
-				? objectValue(distinct[0] ?? {}, "attributes")
-				: undefined;
-		const baseUsage = attributes && usageFrom(attributes);
-		const split = ttlSplit(transcriptRows);
-		const usage =
-			baseUsage === undefined
-				? undefined
-				: {
-						...baseUsage,
-						...(split === undefined
-							? {}
-							: {
-									cacheWrite5mTokens: split.five,
-									cacheWrite1hTokens: split.one,
-								}),
-					};
-		const usageState =
-			logs.length === 0
-				? ("missing" as const)
-				: distinct.length > 1
-					? ("conflict" as const)
-					: baseUsage === undefined
-						? ("partial" as const)
-						: ("complete" as const);
-		const providerCostUsd = attributes && numberValue(attributes, "cost_usd");
-		const model = requestModel(distinct[0], transcriptRows);
 
-		return {
+		return normalizedRequest(
 			requestId,
-			agentId,
-			...(attributionState === undefined ? {} : { attributionState }),
-			model,
-			usageState,
-			...(usage === undefined ? {} : { usage }),
-			...(providerCostUsd === undefined ? {} : { providerCostUsd }),
-			pricing: requestPricing(usageState, usage, model, rates),
-			otelOccurrences: logs.length,
-			uniqueOtelOccurrences: distinct.length,
-			transcriptOccurrences: transcriptRows.length,
-		};
+			logs,
+			transcriptRows,
+			agentCandidates.get(requestId) ?? new Set(),
+			rates,
+		);
 	});
 
 	return {
 		requests,
 		keylessRequests: keyless.map((record) => ({
-			occurrenceId:
-				"otel-log:" + String(numberValue(record, "capture_ordinal")),
+			occurrenceId: `otel-log:${String(numberValue(record, "capture_ordinal"))}`,
 			state: "identity-missing-no-dedup" as const,
 		})),
 		accountingState:
@@ -420,8 +537,9 @@ function normalizedLoads(
 	files: ContextEvidenceSource["files"],
 ): ContextEvidence["projection"]["instructionLoads"] {
 	return files.hooks.flatMap((hook) => {
-		if (stringValue(hook, "hook_event_name") !== "InstructionsLoaded")
+		if (stringValue(hook, "hook_event_name") !== "InstructionsLoaded") {
 			return [];
+		}
 		const sourceOrdinal = numberValue(hook, "capture_ordinal");
 		const filePath = stringValue(hook, "file_path");
 		const memoryType = stringValue(hook, "memory_type");
@@ -431,29 +549,37 @@ function normalizedLoads(
 			filePath === undefined ||
 			memoryType === undefined ||
 			loadReason === undefined
-		)
+		) {
 			return [];
+		}
 		const promptId = nullableStringValue(hook, "prompt_id") ?? null;
 		const agentId = stringValue(hook, "agent_id") ?? "main";
 		const triggerFilePath = stringValue(hook, "trigger_file_path");
 		const parentFilePath = stringValue(hook, "parent_file_path");
-		const globs = arrayValue(hook, "globs").filter(
-			(value): value is string => typeof value === "string",
-		);
+		const globs = arrayValue(hook, "globs").flatMap((value) => {
+			const parsed = stringSchema.safeParse(value);
 
-		return [
-			{
-				sourceOrdinal,
-				agentId,
-				promptId,
-				filePath,
-				memoryType,
-				loadReason,
-				...(triggerFilePath === undefined ? {} : { triggerFilePath }),
-				...(parentFilePath === undefined ? {} : { parentFilePath }),
-				...(globs.length === 0 ? {} : { globs }),
-			},
-		];
+			return parsed.success ? [parsed.data] : [];
+		});
+		const load = {
+			sourceOrdinal,
+			agentId,
+			promptId,
+			filePath,
+			memoryType,
+			loadReason,
+		};
+		if (triggerFilePath !== undefined) {
+			Object.assign(load, { triggerFilePath });
+		}
+		if (parentFilePath !== undefined) {
+			Object.assign(load, { parentFilePath });
+		}
+		if (globs.length > 0) {
+			Object.assign(load, { globs });
+		}
+
+		return [load];
 	});
 }
 
@@ -462,27 +588,65 @@ function normalizedCompactions(
 ): ContextEvidence["projection"]["compactions"] {
 	return files.hooks.flatMap((hook) => {
 		const event = stringValue(hook, "hook_event_name");
-		if (event !== "PreCompact" && event !== "PostCompact") return [];
+		if (event !== "PreCompact" && event !== "PostCompact") {
+			return [];
+		}
 		const sourceOrdinal = numberValue(hook, "capture_ordinal");
 		const trigger = stringValue(hook, "trigger");
-		if (sourceOrdinal === undefined || trigger === undefined) return [];
+		if (sourceOrdinal === undefined || trigger === undefined) {
+			return [];
+		}
+		const compaction = {
+			sourceOrdinal,
+			agentId: stringValue(hook, "agent_id") ?? "main",
+			promptId: nullableStringValue(hook, "prompt_id") ?? null,
+			phase: event === "PreCompact" ? ("pre" as const) : ("post" as const),
+			trigger,
+		};
+		if (event === "PostCompact") {
+			Object.assign(compaction, {
+				summaryAvailable: stringValue(hook, "compact_summary") !== undefined,
+			});
+		}
 
-		return [
-			{
-				sourceOrdinal,
-				agentId: stringValue(hook, "agent_id") ?? "main",
-				promptId: nullableStringValue(hook, "prompt_id") ?? null,
-				phase: event === "PreCompact" ? ("pre" as const) : ("post" as const),
-				trigger,
-				...(event === "PostCompact"
-					? {
-							summaryAvailable:
-								stringValue(hook, "compact_summary") !== undefined,
-						}
-					: {}),
-			},
-		];
+		return [compaction];
 	});
+}
+
+function normalizedRawBody(
+	record: Readonly<JsonObject>,
+): ContextEvidence["projection"]["rawApiBodies"] {
+	const sourceOrdinal = numberValue(record, "capture_ordinal");
+	const bodyRef = stringValue(record, "body_ref");
+	if (sourceOrdinal === undefined || bodyRef === undefined) {
+		return [];
+	}
+
+	return [
+		{
+			sourceOrdinal,
+			bodyRef,
+			requestId: null,
+			state: "unassigned-no-documented-key",
+		},
+	];
+}
+
+function normalizedCoverage(
+	record: Readonly<JsonObject>,
+): ContextEvidence["projection"]["coverage"] {
+	const stream = stringValue(record, "stream");
+	const state = coverageStateSchema.safeParse(record["state"]);
+	if (stream === undefined || !state.success) {
+		return [];
+	}
+	const coverage = { stream, state: state.data };
+	const reason = stringValue(record, "reason");
+	if (reason !== undefined) {
+		Object.assign(coverage, { reason });
+	}
+
+	return [coverage];
 }
 
 export function normalizeContextEvidence(
@@ -496,31 +660,8 @@ export function normalizeContextEvidence(
 		...requests,
 		instructionLoads: normalizedLoads(source.files),
 		compactions: normalizedCompactions(source.files),
-		rawApiBodies: source.files.rawApiBodies.flatMap((record) => {
-			const sourceOrdinal = numberValue(record, "capture_ordinal");
-			const bodyRef = stringValue(record, "body_ref");
-			return sourceOrdinal === undefined || bodyRef === undefined
-				? []
-				: [
-						{
-							sourceOrdinal,
-							bodyRef,
-							requestId: null,
-							state: "unassigned-no-documented-key" as const,
-						},
-					];
-		}),
-		coverage: source.files.coverage.flatMap((record) => {
-			const stream = stringValue(record, "stream");
-			const state = stringValue(record, "state");
-			if (
-				stream === undefined ||
-				(state !== "complete" && state !== "partial" && state !== "unavailable")
-			)
-				return [];
-			const reason = stringValue(record, "reason");
-			return [{ stream, state, ...(reason === undefined ? {} : { reason }) }];
-		}),
+		rawApiBodies: source.files.rawApiBodies.flatMap(normalizedRawBody),
+		coverage: source.files.coverage.flatMap(normalizedCoverage),
 	};
 
 	return contextEvidenceSchema.parse({ schemaVersion: 1, source, projection });

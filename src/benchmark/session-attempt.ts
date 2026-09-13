@@ -35,11 +35,11 @@ import {
 	toolUses,
 } from "./transcript";
 import { SessionInvocationError } from "./session-invocation-error";
-import {
-	normalizeContextEvidence,
-	type ContextEvidence,
-	type ContextEvidenceSource,
-	type ContextRateCatalog,
+import { normalizeContextEvidence } from "./context-evidence";
+import type {
+	ContextEvidence,
+	ContextEvidenceSource,
+	ContextRateCatalog,
 } from "./context-evidence";
 
 export type ClaudeRunner = (
@@ -447,17 +447,33 @@ function invocationError(
 	metrics?: ClaudeCallMetrics,
 	contextEvidence?: ContextEvidence,
 ): SessionInvocationError {
-	return new SessionInvocationError(message, {
-		attemptDirectory,
-		reply: undefined,
-		transcriptFile,
-		metrics,
-		outcome: "EXECUTION_FAILED",
-		checks: [],
-		contextManifest: undefined,
-		transcriptDiagnostics: diagnostics,
-		...(contextEvidence === undefined ? {} : { contextEvidence }),
-	});
+	return new SessionInvocationError(
+		message,
+		preserveContextEvidence(
+			{
+				attemptDirectory,
+				reply: undefined,
+				transcriptFile,
+				metrics,
+				outcome: "EXECUTION_FAILED",
+				checks: [],
+				contextManifest: undefined,
+				transcriptDiagnostics: diagnostics,
+			},
+			contextEvidence,
+		),
+	);
+}
+
+function preserveContextEvidence(
+	attempt: SessionAttempt,
+	contextEvidence: ContextEvidence | undefined,
+): SessionAttempt {
+	if (contextEvidence === undefined) {
+		return attempt;
+	}
+
+	return { ...attempt, contextEvidence };
 }
 
 async function recordAttempt(
@@ -488,19 +504,19 @@ async function recordAttempt(
 	}
 	const reply = envelope.result;
 	if (reply === undefined) {
-		return {
-			attemptDirectory,
-			reply,
-			transcriptFile: transcript.file,
-			metrics,
-			outcome: "NO_REPLY",
-			checks: [],
-			contextManifest: undefined,
-			transcriptDiagnostics: diagnostics,
-			...(attempt.contextEvidence === undefined
-				? {}
-				: { contextEvidence: attempt.contextEvidence }),
-		};
+		return preserveContextEvidence(
+			{
+				attemptDirectory,
+				reply,
+				transcriptFile: transcript.file,
+				metrics,
+				outcome: "NO_REPLY",
+				checks: [],
+				contextManifest: undefined,
+				transcriptDiagnostics: diagnostics,
+			},
+			attempt.contextEvidence,
+		);
 	}
 
 	const cut = request.sessionCase.declaration.transcript?.cut ?? 0;
@@ -510,23 +526,23 @@ async function recordAttempt(
 		toolUses: toolUses(turn),
 	});
 
-	return {
-		attemptDirectory,
-		reply,
-		transcriptFile: transcript.file,
-		metrics,
-		outcome: result.outcome,
-		checks: result.results,
-		contextManifest: observedManifest(
-			toolUses(turn),
-			outputStyles(turn),
-			request.sessionCase.projectFiles,
-		),
-		transcriptDiagnostics: diagnostics,
-		...(attempt.contextEvidence === undefined
-			? {}
-			: { contextEvidence: attempt.contextEvidence }),
-	};
+	return preserveContextEvidence(
+		{
+			attemptDirectory,
+			reply,
+			transcriptFile: transcript.file,
+			metrics,
+			outcome: result.outcome,
+			checks: result.results,
+			contextManifest: observedManifest(
+				toolUses(turn),
+				outputStyles(turn),
+				request.sessionCase.projectFiles,
+			),
+			transcriptDiagnostics: diagnostics,
+		},
+		attempt.contextEvidence,
+	);
 }
 
 /**

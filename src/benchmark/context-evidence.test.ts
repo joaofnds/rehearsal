@@ -4,20 +4,21 @@ import {
 	contextRateCatalogSchema,
 	normalizeContextEvidence,
 } from "#benchmark/context-evidence";
+import { jsonObjectSchema } from "#benchmark/json-value";
 import type { JsonObject } from "#benchmark/json-value";
 
-async function sourceFixture(): Promise<unknown> {
-	return Bun.file(
-		new URL("./__fixtures__/context-evidence-source.json", import.meta.url),
-	).json();
+async function sourceFixture(): Promise<
+	ReturnType<typeof contextEvidenceSourceSchema.parse>
+> {
+	return contextEvidenceSourceSchema.parse(
+		await Bun.file(
+			new URL("__fixtures__/context-evidence-source.json", import.meta.url),
+		).json(),
+	);
 }
 
-function objectAt(record: JsonObject, key: string): JsonObject {
-	const value = record[key];
-	if (value === null || typeof value !== "object" || Array.isArray(value))
-		throw new Error("fixture has no object at " + key);
-
-	return value as JsonObject;
+function objectAt(record: Readonly<JsonObject>, key: string): JsonObject {
+	return jsonObjectSchema.parse(record[key]);
 }
 
 const rates = contextRateCatalogSchema.parse({
@@ -47,7 +48,7 @@ const rates = contextRateCatalogSchema.parse({
 
 describe(normalizeContextEvidence.name, () => {
 	it("derives joined requests, nested lineage and explicit loss states from provider-shaped sources", async () => {
-		const source = contextEvidenceSourceSchema.parse(await sourceFixture());
+		const source = await sourceFixture();
 
 		const evidence = normalizeContextEvidence(source);
 
@@ -123,7 +124,7 @@ describe(normalizeContextEvidence.name, () => {
 					usage: {
 						inputTokens: 3,
 						outputTokens: 18,
-						cacheReadTokens: 5_000,
+						cacheReadTokens: 5000,
 						cacheWriteTokens: 0,
 						cacheWrite5mTokens: 0,
 						cacheWrite1hTokens: 0,
@@ -204,10 +205,11 @@ describe(normalizeContextEvidence.name, () => {
 	});
 
 	it("marks conflicting stream parent identities instead of keeping the last one", async () => {
-		const source = contextEvidenceSourceSchema.parse(await sourceFixture());
-		const childMessage = source.files.stream[1];
-		if (childMessage === undefined)
+		const source = await sourceFixture();
+		const [, childMessage] = source.files.stream;
+		if (childMessage === undefined) {
 			throw new Error("fixture has no child message");
+		}
 		source.files.stream.push({
 			...childMessage,
 			capture_ordinal: 99,
@@ -229,7 +231,7 @@ describe(normalizeContextEvidence.name, () => {
 	});
 
 	it("prices each request from its model and reconciled cache TTL categories", async () => {
-		const source = contextEvidenceSourceSchema.parse(await sourceFixture());
+		const source = await sourceFixture();
 
 		const evidence = normalizeContextEvidence(source, rates);
 
@@ -293,19 +295,35 @@ describe(normalizeContextEvidence.name, () => {
 	])(
 		"keeps a $name cache TTL split incomplete",
 		async ({ cache, expected }) => {
-			const source = contextEvidenceSourceSchema.parse(await sourceFixture());
-			const child =
-				source.files.transcripts[
-					"transcripts/subagents/agent-agent-review-1.jsonl"
-				]?.[0];
-			if (child === undefined)
+			const source = await sourceFixture();
+			const transcriptPath = "transcripts/subagents/agent-agent-review-1.jsonl";
+			const [child, ...remainingRows] =
+				source.files.transcripts[transcriptPath] ?? [];
+			if (child === undefined) {
 				throw new Error("fixture has no child transcript");
+			}
 			const message = objectAt(child, "message");
 			const usage = objectAt(message, "usage");
-			if (cache === undefined) Reflect.deleteProperty(usage, "cache_creation");
-			else Object.assign(usage, { cache_creation: cache });
+			const { cache_creation: _cacheCreation, ...usageWithoutCache } = usage;
+			const revisedUsage =
+				cache === undefined
+					? usageWithoutCache
+					: { ...usageWithoutCache, cache_creation: cache };
+			const revisedSource = contextEvidenceSourceSchema.parse({
+				...source,
+				files: {
+					...source.files,
+					transcripts: {
+						...source.files.transcripts,
+						[transcriptPath]: [
+							{ ...child, message: { ...message, usage: revisedUsage } },
+							...remainingRows,
+						],
+					},
+				},
+			});
 
-			const evidence = normalizeContextEvidence(source, rates);
+			const evidence = normalizeContextEvidence(revisedSource, rates);
 
 			expect(
 				evidence.projection.requests.find(

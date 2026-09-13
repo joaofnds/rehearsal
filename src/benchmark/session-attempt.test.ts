@@ -1320,7 +1320,7 @@ describe(runSessionAttempt.name, () => {
 		const records = await recordDirectory();
 		const contextEvidenceSource = contextEvidenceSourceSchema.parse(
 			await Bun.file(
-				new URL("./__fixtures__/context-evidence-source.json", import.meta.url),
+				new URL("__fixtures__/context-evidence-source.json", import.meta.url),
 			).json(),
 		);
 

@@ -8,7 +8,7 @@ const captureSchema = z
 	.object({
 		provider: z.string().min(1),
 		cliVersion: z.string().min(1),
-		capturedAt: z.string().datetime(),
+		capturedAt: z.iso.datetime(),
 		flags: z.array(z.string()),
 		telemetry: jsonObjectSchema,
 	})
