@@ -212,7 +212,9 @@ describe("sessionAttemptRecordSchema", () => {
 			JSON.stringify({ ...record(), contextEvidence }),
 		);
 
-		expect(parsed.contextEvidence).toEqual(contextEvidence);
+		expect(parsed.contextEvidence).toEqual(
+			JSON.parse(JSON.stringify(contextEvidence)),
+		);
 	});
 
 	it("keeps the persisted transcript cut without consulting a current case declaration", () => {

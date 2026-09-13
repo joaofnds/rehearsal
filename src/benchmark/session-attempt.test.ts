@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import { CommandError } from "#benchmark/command";
 import type { Immutable } from "#benchmark/contracts";
+import { contextEvidenceSourceSchema } from "#benchmark/context-evidence";
 import { projectSlug } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
@@ -1317,12 +1318,18 @@ describe(runSessionAttempt.name, () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "partial reply");
 		const records = await recordDirectory();
+		const contextEvidenceSource = contextEvidenceSourceSchema.parse(
+			await Bun.file(
+				new URL("./__fixtures__/context-evidence-source.json", import.meta.url),
+			).json(),
+		);
 
 		const failure = await failureOf(
 			runSessionAttempt(
 				request({
 					projectsDirectory: projects,
 					recordDirectory: records,
+					contextEvidenceSource,
 					runClaude: async (command, cwd) => {
 						await claude.run(command, cwd);
 
@@ -1352,6 +1359,10 @@ describe(runSessionAttempt.name, () => {
 			attempt: {
 				outcome: "EXECUTION_FAILED",
 				metrics: { costUsd: 0.0012, turns: 2 },
+				contextEvidence: {
+					schemaVersion: 1,
+					source: contextEvidenceSource,
+				},
 			},
 		});
 		expect(await Bun.file(join(records, "transcript.jsonl")).text()).toContain(

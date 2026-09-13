@@ -35,6 +35,10 @@ import { UsageError } from "#cli/commands";
 import { corpusRefusal } from "#cli/corpus-failures";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
+import type {
+	ContextEvidenceSource,
+	ContextRateCatalog,
+} from "#benchmark/context-evidence";
 
 export const runClaudeCommand: ClaudeRunner = (command, cwd) =>
 	runCommand(command, cwd, { timeoutMs: CLAUDE_TIMEOUT_MS });
@@ -46,6 +50,8 @@ export interface SessionRunRequest {
 	readonly runClaude: ClaudeRunner;
 	readonly projectsDirectory: string;
 	readonly resolveCorpus?: CorpusSourceResolver | undefined;
+	readonly contextEvidenceSource?: ContextEvidenceSource | undefined;
+	readonly contextRateCatalog?: ContextRateCatalog | undefined;
 }
 
 function settingsOf(config: SessionRunConfig): SessionSettings {
@@ -210,6 +216,8 @@ export async function runSessionDebugAttempt(
 			recordDirectory,
 			runClaude: request.runClaude,
 			corpusSnapshot: corpus.snapshot,
+			contextEvidenceSource: request.contextEvidenceSource,
+			contextRateCatalog: request.contextRateCatalog,
 		});
 	} catch (error) {
 		if (!(error instanceof SessionInvocationError)) {

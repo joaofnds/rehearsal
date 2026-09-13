@@ -22,6 +22,10 @@ import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
 import { runSessionDebugAttempt } from "#cli/session-run-command";
 import { CorpusConfigurationError } from "#benchmark/corpus-file";
+import {
+	contextEvidenceSourceSchema,
+	contextRateCatalogSchema,
+} from "#benchmark/context-evidence";
 
 const testResources = TestResources.forEachTest();
 
@@ -277,6 +281,61 @@ describe(runSessionDebugAttempt.name, () => {
 			await Bun.file(outcome.recordFile).text(),
 		);
 		expect(written).toEqual(outcome.record);
+	});
+
+	it("persists provider context evidence through the saved attempt boundary", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+		const contextEvidenceSource = contextEvidenceSourceSchema.parse(
+			await Bun.file(
+				new URL(
+					"../benchmark/__fixtures__/context-evidence-source.json",
+					import.meta.url,
+				),
+			).json(),
+		);
+		const contextRateCatalog = contextRateCatalogSchema.parse({
+			schemaVersion: 1,
+			source: "synthetic-rate-card",
+			version: "2026-09-13",
+			currency: "USD",
+			models: [
+				{
+					model: "claude-sonnet-5",
+					inputUsdPerMillion: 3,
+					outputUsdPerMillion: 15,
+					cacheReadUsdPerMillion: 0.3,
+					cacheWrite5mUsdPerMillion: 3.75,
+					cacheWrite1hUsdPerMillion: 6,
+				},
+			],
+		});
+
+		const outcome = await runSessionDebugAttempt({
+			sessionCase: sessionCase(),
+			config,
+			runsDirectory: runs,
+			runClaude: fakeClaude(projects, "OK"),
+			projectsDirectory: projects,
+			contextEvidenceSource,
+			contextRateCatalog,
+		});
+		const written = parseSessionAttemptRecord(
+			await Bun.file(outcome.recordFile).text(),
+		);
+
+		expect(written.contextEvidence?.source).toEqual(contextEvidenceSource);
+		expect(
+			written.contextEvidence?.projection.requests.find(
+				(request) => request.requestId === "req-child-1",
+			)?.pricing,
+		).toEqual({
+			state: "complete",
+			calculatedCostUsd: 0.005712,
+			rateSource: "synthetic-rate-card",
+			rateVersion: "2026-09-13",
+			currency: "USD",
+		});
 	});
 
 	it("persists exact tool diagnostics in the parsed attempt record", async () => {

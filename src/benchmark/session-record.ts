@@ -239,6 +239,7 @@ interface MutableSessionAttemptRecord {
 	error?: string;
 	transcriptFile: string;
 	transcriptDiagnostics: SessionAttempt["transcriptDiagnostics"];
+	contextEvidence?: SessionAttempt["contextEvidence"];
 	metrics?: SessionAttempt["metrics"];
 	outcome: SessionAttempt["outcome"];
 	checks: SessionAttempt["checks"];
@@ -277,6 +278,11 @@ export function buildSessionAttemptRecord(
 	}
 	if (attempt.metrics !== undefined) {
 		record.metrics = { ...attempt.metrics };
+	}
+	if (attempt.contextEvidence !== undefined) {
+		record.contextEvidence = contextEvidenceSchema.parse(
+			attempt.contextEvidence,
+		);
 	}
 	if (attempt.contextManifest !== undefined) {
 		record.contextManifest = {

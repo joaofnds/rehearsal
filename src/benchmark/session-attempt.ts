@@ -35,6 +35,12 @@ import {
 	toolUses,
 } from "./transcript";
 import { SessionInvocationError } from "./session-invocation-error";
+import {
+	normalizeContextEvidence,
+	type ContextEvidence,
+	type ContextEvidenceSource,
+	type ContextRateCatalog,
+} from "./context-evidence";
 
 export type ClaudeRunner = (
 	command: readonly string[],
@@ -48,6 +54,8 @@ export interface SessionAttemptRequest {
 	readonly recordDirectory: string;
 	readonly runClaude: ClaudeRunner;
 	readonly corpusSnapshot?: SessionCorpusSnapshot | undefined;
+	readonly contextEvidenceSource?: ContextEvidenceSource | undefined;
+	readonly contextRateCatalog?: ContextRateCatalog | undefined;
 }
 
 /**
@@ -69,6 +77,7 @@ export interface SessionAttempt {
 	readonly checks: readonly CheckResult[];
 	readonly contextManifest: ContextManifest | undefined;
 	readonly transcriptDiagnostics: Immutable<TranscriptDiagnostics>;
+	readonly contextEvidence?: ContextEvidence | undefined;
 }
 
 /**
@@ -296,6 +305,13 @@ export async function runSessionAttempt(
 		const slug = join(request.projectsDirectory, projectSlug(attemptDirectory));
 		const session = await prepareSession(sessionCase, slug);
 		const transcriptPath = join(slug, `${session.sessionId}.jsonl`);
+		const contextEvidence =
+			request.contextEvidenceSource === undefined
+				? undefined
+				: normalizeContextEvidence(
+						request.contextEvidenceSource,
+						request.contextRateCatalog,
+					);
 
 		try {
 			let output: string;
@@ -312,12 +328,14 @@ export async function runSessionAttempt(
 					attemptDirectory,
 					transcriptPath,
 					failure,
+					contextEvidence,
 				);
 			}
 
 			return await recordAttempt(request, attemptDirectory, {
 				output,
 				writtenTranscript: transcriptPath,
+				contextEvidence,
 			});
 		} finally {
 			await removeAttemptFiles(attemptDirectory, slug, transcriptPath);
@@ -331,6 +349,7 @@ export async function runSessionAttempt(
 interface AttemptOutput {
 	readonly output: string;
 	readonly writtenTranscript: string;
+	readonly contextEvidence?: ContextEvidence | undefined;
 }
 
 interface PreservedTranscript {
@@ -372,6 +391,7 @@ async function failedInvocation(
 	attemptDirectory: string,
 	writtenTranscript: string,
 	error: Readonly<Error>,
+	contextEvidence: ContextEvidence | undefined,
 ): Promise<SessionInvocationError> {
 	const transcript = await preservedTranscript(
 		request.recordDirectory,
@@ -397,6 +417,7 @@ async function failedInvocation(
 				transcript.file,
 				diagnostics,
 				readClaudeCallMetrics(parsed.data),
+				contextEvidence,
 			);
 		}
 	}
@@ -406,6 +427,8 @@ async function failedInvocation(
 		attemptDirectory,
 		transcript.file,
 		diagnostics,
+		undefined,
+		contextEvidence,
 	);
 }
 
@@ -422,6 +445,7 @@ function invocationError(
 	transcriptFile: string,
 	diagnostics: Immutable<TranscriptDiagnostics>,
 	metrics?: ClaudeCallMetrics,
+	contextEvidence?: ContextEvidence,
 ): SessionInvocationError {
 	return new SessionInvocationError(message, {
 		attemptDirectory,
@@ -432,6 +456,7 @@ function invocationError(
 		checks: [],
 		contextManifest: undefined,
 		transcriptDiagnostics: diagnostics,
+		...(contextEvidence === undefined ? {} : { contextEvidence }),
 	});
 }
 
@@ -458,6 +483,7 @@ async function recordAttempt(
 			transcript.file,
 			diagnostics,
 			metrics,
+			attempt.contextEvidence,
 		);
 	}
 	const reply = envelope.result;
@@ -471,6 +497,9 @@ async function recordAttempt(
 			checks: [],
 			contextManifest: undefined,
 			transcriptDiagnostics: diagnostics,
+			...(attempt.contextEvidence === undefined
+				? {}
+				: { contextEvidence: attempt.contextEvidence }),
 		};
 	}
 
@@ -494,6 +523,9 @@ async function recordAttempt(
 			request.sessionCase.projectFiles,
 		),
 		transcriptDiagnostics: diagnostics,
+		...(attempt.contextEvidence === undefined
+			? {}
+			: { contextEvidence: attempt.contextEvidence }),
 	};
 }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonObjectSchema } from "./json-value";
 import type { JsonObject, JsonValue } from "./json-value";
+import type { Immutable } from "./contracts";
 
 const rawRecordSchema = jsonObjectSchema;
 
@@ -179,9 +180,13 @@ export const contextEvidenceSchema = z
 	})
 	.strict();
 
-export type ContextEvidenceSource = z.infer<typeof contextEvidenceSourceSchema>;
-export type ContextEvidence = z.infer<typeof contextEvidenceSchema>;
-export type ContextRateCatalog = z.infer<typeof contextRateCatalogSchema>;
+export type ContextEvidenceSource = Immutable<
+	z.infer<typeof contextEvidenceSourceSchema>
+>;
+export type ContextEvidence = Immutable<z.infer<typeof contextEvidenceSchema>>;
+export type ContextRateCatalog = Immutable<
+	z.infer<typeof contextRateCatalogSchema>
+>;
 
 function objectValue(record: JsonObject, key: string): JsonObject | undefined {
 	const value = record[key];
