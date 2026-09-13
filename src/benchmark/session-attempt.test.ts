@@ -709,6 +709,12 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(await Bun.file(attempt.transcriptFile).text()).toContain("PLUMBAGO");
+		expect(attempt.transcriptDiagnostics).toMatchObject({
+			state: "complete",
+			prefixLinesExcluded: 1,
+			sourceLineCount: 2,
+			measuredLineCount: 1,
+		});
 	});
 
 	it("scores a tool-calls check against the turn under test, not the seeded transcript prefix", async () => {

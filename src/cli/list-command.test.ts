@@ -227,6 +227,21 @@ describe(runList.name, () => {
 		]);
 	});
 
+	it("reads an attempt whose exact-repeat evidence has a maximum-length preview", async () => {
+		const fixture = await writtenFixture();
+		const recorder = recordOutput();
+
+		await runList(
+			{ kind: "attempts", runsDirectory: fixture.runsDirectory },
+			recorder.output,
+		);
+
+		expect(lines(recorder.stdout)).toContain(
+			`attempt:session:${fixture.sessionAttempt.caseId}/${fixture.sessionAttempt.uuid}\tsmoke\tSUCCESSFUL\tsonnet`,
+		);
+		expect(recorder.stderr).toEqual([]);
+	});
+
 	it.each([...LIST_KINDS])(
 		"prints ids show accepts back for %s",
 		async (kind) => {

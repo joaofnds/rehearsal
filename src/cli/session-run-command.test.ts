@@ -106,6 +106,122 @@ function fakeClaude(projects: string, reply: string): ClaudeRunner {
 	};
 }
 
+function diagnosticClaude(projects: string): ClaudeRunner {
+	return async (command, cwd) => {
+		const sessionId = command[command.indexOf("--session-id") + 1] ?? "";
+		const slug = join(projects, projectSlug(await realpath(cwd)));
+		await mkdir(slug, { recursive: true });
+		const blocks = [
+			{
+				type: "assistant",
+				message: {
+					content: [
+						{
+							type: "tool_use",
+							id: "bash-1",
+							name: "Bash",
+							input: { command: "ls" },
+						},
+					],
+				},
+			},
+			{
+				type: "user",
+				message: {
+					content: [{ type: "tool_result", tool_use_id: "bash-1" }],
+				},
+			},
+			{
+				type: "assistant",
+				message: {
+					content: [
+						{
+							type: "tool_use",
+							id: "read-1",
+							name: "Read",
+							input: { file_path: "/tmp/x.md" },
+						},
+					],
+				},
+			},
+			{
+				type: "user",
+				message: {
+					content: [{ type: "tool_result", tool_use_id: "read-1" }],
+				},
+			},
+			{
+				type: "assistant",
+				message: {
+					content: [
+						{
+							type: "tool_use",
+							id: "bash-2",
+							name: "Bash",
+							input: { command: "ls" },
+						},
+					],
+				},
+			},
+			{
+				type: "user",
+				message: {
+					content: [
+						{ type: "tool_result", tool_use_id: "bash-2", is_error: true },
+					],
+				},
+			},
+			{
+				type: "assistant",
+				message: {
+					content: [
+						{
+							type: "tool_use",
+							id: "bash-3",
+							name: "Bash",
+							input: { command: "ls " },
+						},
+					],
+				},
+			},
+			{
+				type: "user",
+				message: {
+					content: [{ type: "tool_result", tool_use_id: "bash-3" }],
+				},
+			},
+			{
+				type: "assistant",
+				message: { content: [{ type: "text", text: "OK" }] },
+			},
+		];
+		await writeFile(
+			join(slug, `${sessionId}.jsonl`),
+			`${blocks.map((block) => JSON.stringify(block)).join("\n")}\n`,
+		);
+
+		return fakeClaudeEnvelope(sessionId, "OK");
+	};
+}
+
+function fakeClaudeEnvelope(sessionId: string, reply: string): string {
+	return JSON.stringify({
+		session_id: sessionId,
+		is_error: false,
+		result: reply,
+		total_cost_usd: 0.0011,
+		num_turns: 1,
+		duration_ms: 800,
+		duration_api_ms: 700,
+		usage: {
+			input_tokens: 10,
+			output_tokens: 2,
+			cache_read_input_tokens: 0,
+			cache_creation_input_tokens: 0,
+		},
+	});
+}
+
 async function temporary(prefix: string): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), prefix));
 	testResources.track(directory);
@@ -167,6 +283,58 @@ describe(runSessionDebugAttempt.name, () => {
 			await Bun.file(outcome.recordFile).text(),
 		);
 		expect(written).toEqual(outcome.record);
+	});
+
+	it("persists exact tool diagnostics in the parsed attempt record", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+
+		const outcome = await runSessionDebugAttempt({
+			sessionCase: sessionCase(),
+			config,
+			runsDirectory: runs,
+			runClaude: diagnosticClaude(projects),
+			projectsDirectory: projects,
+		});
+		const written = parseSessionAttemptRecord(
+			await Bun.file(outcome.recordFile).text(),
+		);
+
+		expect(written.transcriptDiagnostics).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 9,
+			measuredLineCount: 9,
+			toolUseOccurrences: {
+				total: 4,
+				byName: [
+					{ name: "Bash", count: 3 },
+					{ name: "Read", count: 1 },
+				],
+			},
+			toolErrors: [
+				{
+					toolUseId: "bash-2",
+					toolName: "Bash",
+					call: { line: 5, block: 1 },
+					result: { line: 6, block: 1 },
+				},
+			],
+			repeatedBashCommands: [
+				{
+					commandSha256:
+						"c7b68ac37f364473e922936708e7f43c293dd07b295171566c07ff5fe024fab9",
+					commandCharacters: 2,
+					preview: "ls",
+					previewTruncated: false,
+					occurrences: [
+						{ toolUseId: "bash-1", location: { line: 1, block: 1 } },
+						{ toolUseId: "bash-2", location: { line: 5, block: 1 } },
+					],
+				},
+			],
+			issues: [],
+		});
 	});
 
 	it("reports the attempt unsuccessful when a check fails", async () => {

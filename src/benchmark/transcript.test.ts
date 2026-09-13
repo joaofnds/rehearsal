@@ -324,6 +324,59 @@ describe(transcriptDiagnostics.name, () => {
 		});
 	});
 
+	it("does not fabricate joins or repeats from missing tool identities", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith(
+					{ type: "tool_use", name: "Bash", input: { command: "pwd" } },
+					{ type: "tool_use", name: "Bash", input: { command: "pwd" } },
+				),
+				line({
+					type: "user",
+					message: {
+						content: [{ type: "tool_result", is_error: true }],
+					},
+				}),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 2,
+			measuredLineCount: 2,
+			toolUseOccurrences: {
+				total: 2,
+				byName: [{ name: "Bash", count: 2 }],
+			},
+			toolErrors: [{ result: { line: 2, block: 1 } }],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "missing-tool-use-id",
+					occurrences: 2,
+					locations: [
+						{ line: 1, block: 1 },
+						{ line: 1, block: 2 },
+					],
+					locationsTruncated: false,
+				},
+				{
+					kind: "missing-tool-result-id",
+					occurrences: 1,
+					locations: [{ line: 2, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
 	it("bounds the persisted repeated-command preview", () => {
 		const command = "x".repeat(161);
 		const transcript = parseTranscript(

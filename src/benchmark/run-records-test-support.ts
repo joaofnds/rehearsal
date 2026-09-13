@@ -288,6 +288,31 @@ function sessionAttempt(caseId: string): SessionAttemptRecord {
 		prompt: "write the reply",
 		reply: "the reply",
 		transcriptFile: "transcript.jsonl",
+		transcriptDiagnostics: {
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 4,
+			measuredLineCount: 4,
+			toolUseOccurrences: {
+				total: 2,
+				byName: [{ name: "Bash", count: 2 }],
+			},
+			toolErrors: [],
+			repeatedBashCommands: [
+				{
+					commandSha256:
+						"fdb7f3c40645e79ca4c5d1638753243ccb283f5dd126ceb21de5fa7d40953c65",
+					commandCharacters: 161,
+					preview: "x".repeat(160),
+					previewTruncated: true,
+					occurrences: [
+						{ toolUseId: "bash-1", location: { line: 1, block: 1 } },
+						{ toolUseId: "bash-2", location: { line: 3, block: 1 } },
+					],
+				},
+			],
+			issues: [],
+		},
 		metrics: {
 			costUsd: 0.5,
 			inputTokens: 10,
