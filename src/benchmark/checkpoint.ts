@@ -666,12 +666,26 @@ export function rootLineage(inputs: RootLineageInputs): string {
 	);
 }
 
-export interface StalenessRequest {
+interface StalenessInputs {
 	readonly model: string;
 	readonly effort?: Effort | undefined;
-	readonly settingsFile?: HashedFile | undefined;
-	readonly settingsFileRefusal?: string | undefined;
 }
+
+type SettingsComparison =
+	| {
+			readonly settingsFile?: undefined;
+			readonly settingsFileRefusal?: undefined;
+	  }
+	| {
+			readonly settingsFile: HashedFile;
+			readonly settingsFileRefusal?: never;
+	  }
+	| {
+			readonly settingsFile?: never;
+			readonly settingsFileRefusal: string;
+	  };
+
+export type StalenessRequest = StalenessInputs & SettingsComparison;
 
 export interface CheckpointStaleness {
 	readonly stage: string;

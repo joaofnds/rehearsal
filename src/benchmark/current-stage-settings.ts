@@ -76,8 +76,14 @@ export async function loadCurrentStageSettings(
 }
 
 export type CurrentStageSettingsComparison =
-	| { readonly settingsFile: HashedFile }
-	| { readonly settingsFileRefusal: string };
+	| {
+			readonly settingsFile: HashedFile;
+			readonly settingsFileRefusal?: never;
+	  }
+	| {
+			readonly settingsFile?: never;
+			readonly settingsFileRefusal: string;
+	  };
 
 /**
  * Reporting cannot make one unreadable settings file hide every other run.

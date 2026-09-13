@@ -11,7 +11,12 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CheckpointRecord, HashedFile, StageCorpus } from "./checkpoint";
+import type {
+	CheckpointRecord,
+	HashedFile,
+	StageCorpus,
+	StalenessRequest,
+} from "./checkpoint";
 import {
 	captureStageCorpus,
 	corpusDifferences,
@@ -36,6 +41,14 @@ import { failureOf } from "#cli/cli-test-support";
 import { TestResources } from "./test-support";
 
 const testResources = TestResources.forEachTest();
+
+// @ts-expect-error current settings cannot be both available and unavailable
+const contradictorySettingsRequest: StalenessRequest = {
+	model: "sonnet",
+	settingsFile: { path: "stage-settings.json", sha256: "a".repeat(64) },
+	settingsFileRefusal: "stage settings are unavailable",
+};
+void contradictorySettingsRequest;
 
 function corpusSources(roots: readonly string[]): readonly CorpusRoot[] {
 	return roots.map((root) => ({ kind: "directory", root }));
