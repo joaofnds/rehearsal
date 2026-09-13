@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
-import type { CheckpointRecord } from "./checkpoint";
+import type { CheckpointRecord, HashedFile } from "./checkpoint";
 import { captureStageCorpus, stageCorpusRoots } from "./checkpoint";
 import type { CorpusRoot } from "./corpus-file";
 import { hashCorpusFiles, resolveCorpusFile } from "./corpus-file";
@@ -21,6 +21,12 @@ import { groupReportSummarySchema, runSummarySchema } from "./record-summary";
 import type { SessionAttemptRecord } from "./session-record";
 import { sessionAttemptRecordSchema } from "./session-record";
 import { replayRecordSchema } from "./replay";
+import { CONTROL_DIR } from "./config";
+import {
+	DEFAULT_STAGE_SETTINGS_FILE,
+	loadStageSettings,
+} from "./stage-settings";
+import { join } from "node:path";
 import type { SessionAttemptId, StageAttemptId } from "./run-layout";
 import {
 	benchmarkRunPaths,
@@ -112,7 +118,11 @@ export function corpusPath(stage: string): string {
 	return `skills/${stage}/SKILL.md`;
 }
 
-function checkpoint(stage: string, layoutPath: string): CheckpointRecord {
+function checkpoint(
+	stage: string,
+	layoutPath: string,
+	settingsFile?: HashedFile,
+): CheckpointRecord {
 	return {
 		stage,
 		targetSha: "2".repeat(40),
@@ -122,7 +132,14 @@ function checkpoint(stage: string, layoutPath: string): CheckpointRecord {
 		corpusFiles: [{ path: layoutPath, sha256: CORPUS_DIGEST }],
 		artifacts: [],
 		workflowState: [],
+		settingsFile,
 	};
+}
+
+async function currentSettingsFile(): Promise<HashedFile> {
+	return (
+		await loadStageSettings(join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE))
+	).hashed;
 }
 
 /**
@@ -317,13 +334,17 @@ export class RecordedRunsFixture {
 			resolveCorpusFile(source, "CLAUDE.md"),
 		).text();
 		const roots = stageCorpusRoots(source, this.sourceRoot);
+		const settingsFile = await currentSettingsFile();
 
 		for (const stage of this.stages) {
 			const corpusFiles = await captureStageCorpus(stage, instructions, roots);
 			const directory = paths.checkpointDirectory(stage);
 			await Bun.write(
 				checkpointRecordFile(directory),
-				serialize({ ...checkpoint(stage, corpusPath(stage)), corpusFiles }),
+				serialize({
+					...checkpoint(stage, corpusPath(stage), settingsFile),
+					corpusFiles,
+				}),
 			);
 		}
 	}
@@ -579,12 +600,13 @@ export class RecordedRunsFixture {
 			manifest(this.replayableRun, this.sourceRoot),
 		);
 
+		const settingsFile = await currentSettingsFile();
 		for (const stage of this.stages) {
 			const directory = paths.checkpointDirectory(stage);
 			await mkdir(directory, { recursive: true });
 			await Bun.write(
 				checkpointRecordFile(directory),
-				serialize(checkpoint(stage, corpusPath(stage))),
+				serialize(checkpoint(stage, corpusPath(stage), settingsFile)),
 			);
 		}
 
