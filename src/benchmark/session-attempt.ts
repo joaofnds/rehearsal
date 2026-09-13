@@ -14,7 +14,7 @@ import type { SessionCase, TranscriptPrefix } from "./case";
 import { readClaudeCallMetrics } from "./claude";
 import type { SessionSettings } from "./claude";
 import { CommandError } from "./command";
-import type { ClaudeCallMetrics } from "./contracts";
+import type { ClaudeCallMetrics, Immutable } from "./contracts";
 import { claudeEnvelopeSchema } from "./contracts";
 import { terminatedFileLines } from "./file-lines";
 import { projectSlug } from "./session-capture";
@@ -68,7 +68,7 @@ export interface SessionAttempt {
 		| "EXECUTION_FAILED";
 	readonly checks: readonly CheckResult[];
 	readonly contextManifest: ContextManifest | undefined;
-	readonly transcriptDiagnostics: TranscriptDiagnostics;
+	readonly transcriptDiagnostics: Immutable<TranscriptDiagnostics>;
 }
 
 /**
@@ -336,7 +336,7 @@ interface AttemptOutput {
 interface PreservedTranscript {
 	readonly file: string;
 	readonly sourceAvailable: boolean;
-	readonly lines: readonly TranscriptLine[];
+	readonly lines: Immutable<readonly TranscriptLine[]>;
 }
 
 async function preservedTranscript(
@@ -357,12 +357,12 @@ async function preservedTranscript(
 }
 
 function diagnosticsFor(
-	request: SessionAttemptRequest,
+	prefixLinesExcluded: number,
 	transcript: Readonly<PreservedTranscript>,
 ): TranscriptDiagnostics {
 	return transcriptDiagnostics({
 		lines: transcript.lines,
-		prefixLinesExcluded: request.sessionCase.declaration.transcript?.cut ?? 0,
+		prefixLinesExcluded,
 		sourceAvailable: transcript.sourceAvailable,
 	});
 }
@@ -377,7 +377,10 @@ async function failedInvocation(
 		request.recordDirectory,
 		writtenTranscript,
 	);
-	const diagnostics = diagnosticsFor(request, transcript);
+	const diagnostics = diagnosticsFor(
+		request.sessionCase.declaration.transcript?.cut ?? 0,
+		transcript,
+	);
 
 	if (error instanceof CommandError && error.stdout !== "") {
 		let document: unknown;
@@ -417,7 +420,7 @@ function invocationError(
 	message: string,
 	attemptDirectory: string,
 	transcriptFile: string,
-	transcriptDiagnostics: TranscriptDiagnostics,
+	diagnostics: Immutable<TranscriptDiagnostics>,
 	metrics?: ClaudeCallMetrics,
 ): SessionInvocationError {
 	return new SessionInvocationError(message, {
@@ -428,7 +431,7 @@ function invocationError(
 		outcome: "EXECUTION_FAILED",
 		checks: [],
 		contextManifest: undefined,
-		transcriptDiagnostics,
+		transcriptDiagnostics: diagnostics,
 	});
 }
 
@@ -441,7 +444,10 @@ async function recordAttempt(
 		request.recordDirectory,
 		attempt.writtenTranscript,
 	);
-	const diagnostics = diagnosticsFor(request, transcript);
+	const diagnostics = diagnosticsFor(
+		request.sessionCase.declaration.transcript?.cut ?? 0,
+		transcript,
+	);
 
 	const envelope = claudeEnvelopeSchema.parse(JSON.parse(attempt.output));
 	const metrics = readClaudeCallMetrics(envelope);

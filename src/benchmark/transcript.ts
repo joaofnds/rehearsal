@@ -184,8 +184,26 @@ interface LocatedDiagnosticIssue {
 
 interface IdentifiedToolUse {
 	readonly toolUseId: string;
-	readonly use: ToolUse;
 	readonly location: TranscriptLocation;
+}
+
+interface DiagnosticGrouping<Entry> {
+	readonly byId: ReadonlyMap<string, Immutable<readonly Entry[]>>;
+	readonly issues: readonly LocatedDiagnosticIssue[];
+}
+
+type LocatedToolUseMap = ReadonlyMap<
+	string,
+	Immutable<readonly LocatedToolUse[]>
+>;
+type LocatedToolResultMap = ReadonlyMap<
+	string,
+	Immutable<readonly LocatedToolResult[]>
+>;
+
+interface RepeatedBashDiagnostics {
+	readonly commands: z.infer<typeof repeatedBashCommandSchema>[];
+	readonly issues: readonly LocatedDiagnosticIssue[];
 }
 
 export interface TranscriptLine {
@@ -381,17 +399,24 @@ export function transcriptDiagnostics(
 		});
 	}
 
-	const usesById = groupUsesById(uses, issues);
-	const resultsById = groupResultsById(results, issues);
-	joinIssues(usesById, resultsById, issues);
+	const groupedUses = groupUsesById(uses);
+	const groupedResults = groupResultsById(results);
+	const joiningIssues = joinIssues(groupedUses.byId, groupedResults.byId);
+	const repeated = repeatedBashCommands(uses, groupedUses.byId);
+	issues.push(
+		...groupedUses.issues,
+		...groupedResults.issues,
+		...joiningIssues,
+		...repeated.issues,
+	);
 
 	const observations = {
 		prefixLinesExcluded: input.prefixLinesExcluded,
 		sourceLineCount,
 		measuredLineCount: measured.length,
 		toolUseOccurrences: countToolUses(uses),
-		toolErrors: observedErrors(results, usesById),
-		repeatedBashCommands: repeatedBashCommands(uses, usesById, issues),
+		toolErrors: observedErrors(results, groupedUses.byId),
+		repeatedBashCommands: repeated.commands,
 		issues: summarizeIssues(issues),
 	};
 
@@ -402,10 +427,10 @@ export function transcriptDiagnostics(
 }
 
 function groupUsesById(
-	uses: readonly LocatedToolUse[],
-	issues: LocatedDiagnosticIssue[],
-): ReadonlyMap<string, readonly LocatedToolUse[]> {
+	uses: Immutable<readonly LocatedToolUse[]>,
+): DiagnosticGrouping<LocatedToolUse> {
 	const grouped = new Map<string, LocatedToolUse[]>();
+	const issues: LocatedDiagnosticIssue[] = [];
 	for (const use of uses) {
 		const { id } = use.use;
 		if (id === undefined) {
@@ -428,14 +453,14 @@ function groupUsesById(
 		}
 	}
 
-	return grouped;
+	return { byId: grouped, issues };
 }
 
 function groupResultsById(
-	results: readonly LocatedToolResult[],
-	issues: LocatedDiagnosticIssue[],
-): ReadonlyMap<string, readonly LocatedToolResult[]> {
+	results: Immutable<readonly LocatedToolResult[]>,
+): DiagnosticGrouping<LocatedToolResult> {
 	const grouped = new Map<string, LocatedToolResult[]>();
+	const issues: LocatedDiagnosticIssue[] = [];
 	for (const result of results) {
 		if (result.toolUseId === undefined) {
 			issues.push({
@@ -460,14 +485,14 @@ function groupResultsById(
 		}
 	}
 
-	return grouped;
+	return { byId: grouped, issues };
 }
 
 function joinIssues(
-	usesById: ReadonlyMap<string, readonly LocatedToolUse[]>,
-	resultsById: ReadonlyMap<string, readonly LocatedToolResult[]>,
-	issues: LocatedDiagnosticIssue[],
-): void {
+	usesById: LocatedToolUseMap,
+	resultsById: LocatedToolResultMap,
+): readonly LocatedDiagnosticIssue[] {
+	const issues: LocatedDiagnosticIssue[] = [];
 	for (const [id, uses] of usesById) {
 		if (!resultsById.has(id)) {
 			issues.push(
@@ -488,10 +513,12 @@ function joinIssues(
 			);
 		}
 	}
+
+	return issues;
 }
 
 function countToolUses(
-	uses: readonly LocatedToolUse[],
+	uses: Immutable<readonly LocatedToolUse[]>,
 ): z.infer<typeof observedToolUseCountsSchema> {
 	const byName = new Map<string, number>();
 	for (const { use } of uses) {
@@ -505,69 +532,85 @@ function countToolUses(
 }
 
 function observedErrors(
-	results: readonly LocatedToolResult[],
-	usesById: ReadonlyMap<string, readonly LocatedToolUse[]>,
+	results: Immutable<readonly LocatedToolResult[]>,
+	usesById: LocatedToolUseMap,
 ): z.infer<typeof toolErrorSchema>[] {
-	return results
-		.filter(({ isError }) => isError)
-		.map((result) => {
-			const matches =
-				result.toolUseId === undefined
-					? []
-					: (usesById.get(result.toolUseId) ?? []);
-			const [match] = matches.length === 1 ? matches : [];
+	const errors: z.infer<typeof toolErrorSchema>[] = [];
+	for (const result of results) {
+		if (!result.isError) {
+			continue;
+		}
 
-			return {
-				...(result.toolUseId === undefined
-					? {}
-					: { toolUseId: result.toolUseId }),
-				...(match === undefined
-					? {}
-					: { toolName: match.use.name, call: match.location }),
-				result: result.location,
-			};
-		});
+		const matches =
+			result.toolUseId === undefined
+				? []
+				: (usesById.get(result.toolUseId) ?? []);
+		const [match] = matches.length === 1 ? matches : [];
+		const observed: z.infer<typeof toolErrorSchema> = {
+			result: result.location,
+		};
+		if (result.toolUseId !== undefined) {
+			observed.toolUseId = result.toolUseId;
+		}
+		if (match !== undefined) {
+			observed.toolName = match.use.name;
+			observed.call = match.location;
+		}
+		errors.push(observed);
+	}
+
+	return errors;
 }
 
 function repeatedBashCommands(
-	uses: readonly LocatedToolUse[],
-	usesById: ReadonlyMap<string, readonly LocatedToolUse[]>,
-	issues: LocatedDiagnosticIssue[],
-): z.infer<typeof repeatedBashCommandSchema>[] {
+	uses: Immutable<readonly LocatedToolUse[]>,
+	usesById: LocatedToolUseMap,
+): RepeatedBashDiagnostics {
 	const grouped = new Map<string, IdentifiedToolUse[]>();
+	const issues: LocatedDiagnosticIssue[] = [];
 	for (const use of uses) {
 		if (use.use.name !== "Bash") {
 			continue;
 		}
 
-		const command = use.use.input.command;
+		const { command } = use.use.input;
 		if (command === undefined) {
 			issues.push({ kind: "invalid-bash-command", location: use.location });
 			continue;
 		}
 
-		const id = use.use.id;
+		const { id } = use.use;
 		if (id === undefined || usesById.get(id)?.length !== 1) {
 			continue;
 		}
 
 		const occurrences = grouped.get(command) ?? [];
-		occurrences.push({ toolUseId: id, use: use.use, location: use.location });
+		occurrences.push({ toolUseId: id, location: use.location });
 		grouped.set(command, occurrences);
 	}
 
-	return [...grouped]
-		.filter(([_command, occurrences]) => occurrences.length > 1)
-		.map(([command, occurrences]) =>
-			describeRepeatedCommand(command, occurrences),
-		);
+	return {
+		commands: [...grouped]
+			.filter(([_command, occurrences]) => occurrences.length > 1)
+			.map(([command, occurrences]) =>
+				describeRepeatedCommand(command, occurrences),
+			),
+		issues,
+	};
 }
+
+const COMMAND_SEGMENTER = new Intl.Segmenter(undefined, {
+	granularity: "grapheme",
+});
 
 function describeRepeatedCommand(
 	command: string,
-	occurrences: readonly IdentifiedToolUse[],
+	occurrences: Immutable<readonly IdentifiedToolUse[]>,
 ): z.infer<typeof repeatedBashCommandSchema> {
-	const characters = [...command];
+	const characters = Array.from(
+		COMMAND_SEGMENTER.segment(command),
+		({ segment }) => segment,
+	);
 	const preview = characters.slice(0, MAX_PREVIEW_CHARACTERS).join("");
 
 	return {
@@ -583,7 +626,7 @@ function describeRepeatedCommand(
 }
 
 function summarizeIssues(
-	issues: readonly LocatedDiagnosticIssue[],
+	issues: Immutable<readonly LocatedDiagnosticIssue[]>,
 ): z.infer<typeof diagnosticIssueSchema>[] {
 	const grouped = new Map<
 		LocatedDiagnosticIssue["kind"],
