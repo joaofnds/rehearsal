@@ -12,18 +12,19 @@ still requires environment-specific setup.
 
 ## Implemented
 
-| Capability                  | Current boundary                                                                                                               | Source                                                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Data-declared cases         | Session and pipeline kinds; bundled inputs have differing portability                                                          | [Case loader](../src/benchmark/case.ts)                                                                                            |
-| Session attempts            | Fixture/prefix support and deterministic reply/transcript checks                                                               | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
-| Session confirmation        | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight                     | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
-| Pipeline execution          | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration                 | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
-| Checkpoint replay           | One stage in a host worktree, including explicit corpus variants                                                               | [Replay command](../src/cli/replay-command.ts)                                                                                     |
-| Pipeline/stage confirmation | Repetitions with shared frozen inputs and resource/reliability reports                                                         | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
-| Comparison reports          | At least two cases with baseline/candidate/control arms; stage, pipeline, and browser-validated provider-free session evidence | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
-| Record inspection           | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                                | [CLI commands](../src/cli/commands.ts)                                                                                             |
-| Session context manifests   | Deduplicated Read/Skill/style observations, corpus/project classification, and declared-input reconciliation; no timeline      | [Manifest construction](../src/benchmark/context-manifest.ts)                                                                      |
-| Local read UI and event API | Partial browser views and server-side event streaming                                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
+| Capability                     | Current boundary                                                                                                               | Source                                                                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Data-declared cases            | Session and pipeline kinds; bundled inputs have differing portability                                                          | [Case loader](../src/benchmark/case.ts)                                                                                            |
+| Session attempts               | Fixture/prefix support and deterministic reply/transcript checks                                                               | [Session execution](../src/benchmark/session-attempt.ts)                                                                           |
+| Session confirmation           | Repeated frozen inputs, retained failures, per-attempt checks, projected ceiling including model preflight                     | [Session confirmation](../src/benchmark/session-confirmation.ts)                                                                   |
+| Pipeline execution             | Configured stages, portable private-board setup, dynamic PO, Judges, baseline checks, calibration, restoration                 | [Run orchestration](../src/benchmark/run.ts)                                                                                       |
+| Checkpoint replay              | One stage in a host worktree, including explicit corpus variants                                                               | [Replay command](../src/cli/replay-command.ts)                                                                                     |
+| Pipeline/stage confirmation    | Repetitions with shared frozen inputs and resource/reliability reports                                                         | [Pipeline confirmation](../src/benchmark/pipeline-confirmation.ts), [replay confirmation](../src/benchmark/replay-confirmation.ts) |
+| Comparison reports             | At least two cases with baseline/candidate/control arms; stage, pipeline, and browser-validated provider-free session evidence | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
+| Record inspection              | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                                | [CLI commands](../src/cli/commands.ts)                                                                                             |
+| Session context manifests      | Deduplicated Read/Skill/style observations, corpus/project classification, and declared-input reconciliation; no timeline      | [Manifest construction](../src/benchmark/context-manifest.ts)                                                                      |
+| Session transcript diagnostics | Post-cut tool occurrences, explicit tool-result errors, exact repeated Bash inputs, source locators, and evidence completeness | [Transcript projection](../src/benchmark/transcript.ts)                                                                            |
+| Local read UI and event API    | Partial browser views and server-side event streaming                                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
 An implemented path can still have missing real-provider validation. Session
 comparison uses frozen records and a provider-free integration path. Its saved
@@ -68,8 +69,11 @@ verdict.
 - **Context visibility is incomplete.** Session manifests retain names, not
   load timing, repeated deliveries, or bytes observed. Pipeline raw transcript
   capture, per-request context measurements, nested-agent accounting, and
-  context visualizations are unfinished. Missing session transcripts can become
-  empty saved files, so absence of observations is not proof of zero activity.
+  context visualizations are unfinished. Session transcript diagnostics report
+  raw post-cut tool occurrences, explicit errors, and exact command repetition;
+  they do not attribute phase, tokens, cost, causality, or waste. Their evidence
+  state distinguishes a complete observed zero from partial or unavailable
+  evidence.
 - **Progress events are not a resource timeline.** They contain no token/load
   events, and spend changes scope between worker turns, stage completion, and
   run completion. Aggregate provider usage cannot establish active context size

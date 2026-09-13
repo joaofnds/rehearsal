@@ -374,6 +374,19 @@ See [current state](docs/status.md) for implementation coverage and
   `.benchmark-runs/cases/<case>/`, verifies the declared digest, and includes it
   in lineage. Committing a declaration or a reference copy elsewhere does not
   populate that local store.
+- **Transcript diagnostics** — the compact projection saved on each new session
+  attempt record from transcript records at and after its captured cut. It
+  records source and measured line counts; raw tool-use occurrences; explicit
+  `is_error: true` tool results; and exact repeated `Bash.input.command` values
+  on distinct unique tool-use IDs. Locations use 1-based JSONL lines and content
+  blocks in the whole retained transcript. Repeated commands keep a digest,
+  character count, bounded preview, truncation flag, and ordered locations; the
+  complete input stays in the raw transcript. `complete`, `partial`, and
+  `unavailable` distinguish an observed zero from incomplete or missing
+  evidence. Repetition does not mean waste and carries no phase, token, cost,
+  or causal attribution. An absent field on a historical record means the
+  projection was not recorded; readers do not reconstruct it from today's case
+  declaration.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
 - **Workflow state** — the `backlog/` and `.boris/` trees copied independently
   of Git to carry workflow artifacts across stage materialization and target

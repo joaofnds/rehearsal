@@ -162,6 +162,36 @@ turn or budget limit records `NO_REPLY` without evaluating checks. Confirmation
 counts that rep as unsuccessful; it also records execution failures and missing
 metrics explicitly.
 
+Each new session attempt record carries `transcriptDiagnostics`, derived from
+the retained transcript records at and after the case's cut. The projection
+keeps `prefixLinesExcluded`, `sourceLineCount`, and `measuredLineCount`; every
+call or result locator is a 1-based JSONL line and 1-based content-block
+position in the whole retained file. Changing the case declaration later does
+not change that recorded boundary.
+
+`toolUseOccurrences` counts recognized `tool_use` blocks, in total and by tool
+name. These are raw observed occurrences, not deduplicated executions or lower
+bounds. `toolErrors` contains only `tool_result` blocks whose `is_error` is
+`true`; a result gains its tool name and call locator only when
+`tool_use_id` identifies one unique call. `repeatedBashCommands` groups the
+exact full `Bash.input.command` string on two or more distinct unique tool-use
+IDs, whether or not the calls are adjacent. Whitespace remains significant.
+The record stores a SHA-256 digest, character count, at most 160 preview
+characters, a truncation flag, and ordered call locators. The complete command
+remains in `transcriptFile`. A repeated command is an observation, not a claim
+about waste, phase, tokens, cost, or causality.
+
+The diagnostic `state` is `complete`, `partial`, or `unavailable`. Complete
+means the measured JSONL uses the supported message, tool-use, and tool-result
+shapes; valid string user content and metadata records can therefore produce a
+complete zero. Empty or malformed measured evidence, unsupported content
+blocks, invalid tool blocks, missing results, and missing, duplicate, or
+unmatched IDs produce `partial` with named `issues` while preserving any raw
+observations that were possible. `unavailable` means the provider transcript
+did not exist and carries no numeric observations. Historical attempt records
+may omit `transcriptDiagnostics`; omission means not recorded, and readers do
+not recompute it from the current case cut.
+
 `case capture <id> --session <id-or-prefix> --cut <N>` copies records `[0, N)`
 from a local Claude transcript, updates the declaration's digest/source/cut,
 and writes the prefix under `.benchmark-runs/cases/<id>/`. The cut is a positive
@@ -447,7 +477,8 @@ run-event store supports live UI updates and is derived state.
 `list cases|runs|checkpoints|attempts|groups|comparisons` prints IDs usable by
 `show`. Empty history is valid on a fresh clone. A malformed record is reported
 without hiding readable neighbors. Stopped runs are visible through the same
-commands as completed runs.
+commands as completed runs. `list attempts` validates attempt diagnostics, and
+`show attempt:session:<case>/<uuid> --json` exposes the recorded projection.
 
 Confirmation groups retain frozen inputs, rep records, and `report.json` beside
 `group.json`. Reps run concurrently in separate directories. Reports include
