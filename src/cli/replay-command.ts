@@ -1,6 +1,5 @@
 import type { CorpusRoot } from "#benchmark/corpus-file";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import {
 	loadAttempts,
 	LineageMismatchError,
@@ -25,7 +24,6 @@ import {
 } from "#benchmark/checks";
 import {
 	CaseDeclarationError,
-	declaredSettingsFilePath,
 	readCaseDeclaration,
 } from "#benchmark/case";
 import { runCommand } from "#benchmark/command";
@@ -41,6 +39,7 @@ import { loadRunManifest } from "#benchmark/manifest";
 import { readCorpusInstructions } from "#benchmark/corpus-file";
 import type { CorpusSourceResolver } from "#benchmark/corpus-source";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
+import { loadCurrentStageSettings } from "#benchmark/current-stage-settings";
 import { runReplay } from "#benchmark/replay";
 import type { ReplayDependencies, ReplayRequest } from "#benchmark/replay";
 import type { ReplayStageOutcome } from "#benchmark/replay-command";
@@ -54,10 +53,6 @@ import {
 	recordedRunNames,
 } from "#benchmark/run-layout";
 import { loadStageRubric, runStageJudge } from "#benchmark/stage-grading";
-import {
-	DEFAULT_STAGE_SETTINGS_FILE,
-	loadStageSettings,
-} from "#benchmark/stage-settings";
 import type { LoadedStageSettings } from "#benchmark/stage-settings";
 import {
 	addWorktree,
@@ -183,18 +178,8 @@ export async function replaySettingsFile(
 	manifestFile: string,
 ): Promise<LoadedStageSettings> {
 	const manifest = await loadRunManifest(manifestFile);
-	try {
-		const declaration = await readCaseDeclaration(manifest.caseId);
-		if (declaration.kind === "pipeline") {
-			return await loadStageSettings(declaredSettingsFilePath(declaration));
-		}
-	} catch (error) {
-		if (!(error instanceof CaseDeclarationError)) {
-			throw error;
-		}
-	}
 
-	return loadStageSettings(join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE));
+	return loadCurrentStageSettings(manifest.caseId);
 }
 
 /**
