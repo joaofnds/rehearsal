@@ -14,6 +14,7 @@ import type { SessionCase } from "#benchmark/case";
 import { CommandError } from "#benchmark/command";
 import type { Immutable } from "#benchmark/contracts";
 import { contextEvidenceSourceSchema } from "#benchmark/context-evidence";
+import type { ContextEvidenceSource } from "#benchmark/context-evidence";
 import { projectSlug } from "#benchmark/session-capture";
 import { failureOf } from "#cli/cli-test-support";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
@@ -31,6 +32,14 @@ const resources = TestResources.forEachTest();
 
 const SOURCE_SESSION = "11111111-1111-1111-1111-111111111111";
 const WRITTEN_SESSION = "99999999-9999-9999-9999-999999999999";
+
+async function contextEvidenceSource(): Promise<ContextEvidenceSource> {
+	return contextEvidenceSourceSchema.parse(
+		await Bun.file(
+			new URL("__fixtures__/context-evidence-source.json", import.meta.url),
+		).json(),
+	);
+}
 
 function envelope(result: string): string {
 	return JSON.stringify({
@@ -1114,6 +1123,24 @@ describe(runSessionAttempt.name, () => {
 		expect(attempt.transcriptDiagnostics.state).toBe("complete");
 	});
 
+	it("preserves supplied context evidence when the provider returns no reply", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+		const source = await contextEvidenceSource();
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				contextEvidenceSource: source,
+				runClaude: replylessClaude(claude.run),
+			}),
+		);
+
+		expect(attempt.outcome).toBe("NO_REPLY");
+		expect(attempt.contextEvidence?.source).toEqual(source);
+	});
+
 	it("evaluates no check when the session produced no reply", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "OK");
@@ -1267,6 +1294,33 @@ describe(runSessionAttempt.name, () => {
 		);
 	});
 
+	it("preserves supplied context evidence when the provider runner throws", async () => {
+		const projects = await projectsRoot();
+		const claude = new FakeClaude(projects, "OK");
+		const source = await contextEvidenceSource();
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					projectsDirectory: projects,
+					recordDirectory: await recordDirectory(),
+					contextEvidenceSource: source,
+					runClaude: async (command, cwd) => {
+						await claude.run(command, cwd);
+						throw new Error("provider unavailable");
+					},
+				}),
+			),
+		);
+
+		expect(failure).toMatchObject({
+			attempt: {
+				outcome: "EXECUTION_FAILED",
+				contextEvidence: { source },
+			},
+		});
+	});
+
 	it("retains metrics from a rejected command's valid provider envelope", async () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "partial reply");
@@ -1318,18 +1372,14 @@ describe(runSessionAttempt.name, () => {
 		const projects = await projectsRoot();
 		const claude = new FakeClaude(projects, "partial reply");
 		const records = await recordDirectory();
-		const contextEvidenceSource = contextEvidenceSourceSchema.parse(
-			await Bun.file(
-				new URL("__fixtures__/context-evidence-source.json", import.meta.url),
-			).json(),
-		);
+		const source = await contextEvidenceSource();
 
 		const failure = await failureOf(
 			runSessionAttempt(
 				request({
 					projectsDirectory: projects,
 					recordDirectory: records,
-					contextEvidenceSource,
+					contextEvidenceSource: source,
 					runClaude: async (command, cwd) => {
 						await claude.run(command, cwd);
 
@@ -1361,7 +1411,7 @@ describe(runSessionAttempt.name, () => {
 				metrics: { costUsd: 0.0012, turns: 2 },
 				contextEvidence: {
 					schemaVersion: 1,
-					source: contextEvidenceSource,
+					source,
 				},
 			},
 		});

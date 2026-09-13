@@ -198,14 +198,18 @@ captured provider bundle. The version-1 evidence stores the source bundle
 unchanged beside a normalized projection of agents, parentage, requests,
 instruction loads, compactions, raw API body references, and capture coverage.
 The normalizer joins records by documented request and agent identifiers. It
+partitions reused identifiers by session, retains client/server request aliases,
 collapses canonically equivalent OTel request duplicates, keeps occurrences
 without a request identifier separate, and records missing or conflicting joins
-instead of assigning them by timestamp.
+instead of assigning them by timestamp. Recognized malformed records downgrade
+their stream coverage rather than disappearing from the completeness result.
 
 Request evidence separates provider-reported cost from calculated cost. A
-calculation uses the supplied model rate catalog and retains its source,
-version, and currency. Missing rates, usage, or cache-write TTL splits leave a
-named incomplete pricing state. Historical records and attempts whose caller
+calculation uses the supplied model rate catalog and retains the complete
+selected rate plus the catalog's source, version, and USD currency. Missing or
+conflicting model, usage, rates, or cache-write TTL splits leave a named
+incomplete pricing state. The projection also names each reason its aggregate
+accounting state is incomplete. Historical records and attempts whose caller
 supplied no bundle omit `contextEvidence`; omission means the evidence was not
 collected, not that the attempt used zero context or cost.
 

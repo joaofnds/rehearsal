@@ -128,10 +128,11 @@ See [current state](docs/status.md) for implementation coverage and
 - **Context evidence** — an optional, versioned attempt-record field containing
   an unchanged provider capture and the harness's normalized projection. The
   projection joins request usage, model, provider cost, agent parentage,
-  instruction loads, and compactions when documented identifiers support the
-  join. It keeps missing identifiers and conflicts explicit. Calculated request
-  cost names the frozen rate source and version; omission of the field means no
-  provider bundle was supplied.
+  instruction loads, and compactions when documented, session-scoped
+  identifiers support the join. It retains client/server request aliases and
+  keeps missing identifiers, malformed records, and conflicts explicit.
+  Calculated request cost retains the selected rate and its frozen catalog;
+  omission of the field means no provider bundle was supplied.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, the agent
   definitions, and the rulebook. A case names the ones it reads in corpus

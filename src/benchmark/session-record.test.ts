@@ -201,6 +201,12 @@ describe("sessionAttemptRecordSchema", () => {
 		).toBeUndefined();
 	});
 
+	it("treats omitted context evidence as unavailable rather than zero", () => {
+		const parsed = sessionAttemptRecordSchema.parse(record());
+
+		expect(parsed.contextEvidence).toBeUndefined();
+	});
+
 	it("reopens the normalized context evidence saved with an attempt", async () => {
 		const source = contextEvidenceSourceSchema.parse(
 			await Bun.file(

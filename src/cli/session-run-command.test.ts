@@ -335,7 +335,16 @@ describe(runSessionDebugAttempt.name, () => {
 			rateSource: "synthetic-rate-card",
 			rateVersion: "2026-09-13",
 			currency: "USD",
+			selectedRate: {
+				model: "claude-sonnet-5",
+				inputUsdPerMillion: 3,
+				outputUsdPerMillion: 15,
+				cacheReadUsdPerMillion: 0.3,
+				cacheWrite5mUsdPerMillion: 3.75,
+				cacheWrite1hUsdPerMillion: 6,
+			},
 		});
+		expect(written.contextEvidence?.rateCatalog).toEqual(contextRateCatalog);
 	});
 
 	it("persists exact tool diagnostics in the parsed attempt record", async () => {
