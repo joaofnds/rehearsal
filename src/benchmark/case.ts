@@ -210,14 +210,25 @@ export async function readCaseDeclaration(
 	}
 
 	const path = caseDeclarationPath(id, root);
-	const file = Bun.file(path);
-	if (!(await file.exists())) {
+	let text: string;
+	try {
+		const file = Bun.file(path);
+		if (!(await file.exists())) {
+			throw new CaseDeclarationError(
+				`Unknown case ${id}: no declaration at ${relative(CONTROL_DIR, path)}`,
+			);
+		}
+		text = await file.text();
+	} catch (error) {
+		if (error instanceof CaseDeclarationError) {
+			throw error;
+		}
 		throw new CaseDeclarationError(
-			`Unknown case ${id}: no declaration at ${relative(CONTROL_DIR, path)}`,
+			`Cannot read case ${id} declaration at ${relative(CONTROL_DIR, path)}: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
 
-	return parseCaseDeclaration(id, await file.text());
+	return parseCaseDeclaration(id, text);
 }
 
 export interface UnreadableCase {

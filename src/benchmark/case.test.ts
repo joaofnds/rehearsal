@@ -7,6 +7,7 @@ import {
 	listCases,
 	loadCase,
 	parseCaseDeclaration,
+	readCaseDeclaration,
 	requirePipelineCase,
 	requireSessionCase,
 	transcriptPrefixPath,
@@ -14,7 +15,7 @@ import {
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import type { Immutable } from "#benchmark/contracts";
 import type { JsonObject } from "#benchmark/json-value";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
@@ -153,6 +154,28 @@ describe(listCases.name, () => {
 					"Unknown case zz-stray-probe: no declaration at cases/zz-stray-probe/case.json",
 			},
 		]);
+	});
+});
+
+describe(readCaseDeclaration.name, () => {
+	const resources = TestResources.forEachTest();
+
+	it("translates an unreadable declaration into a case error", async () => {
+		const caseId = "zz-unreadable-case";
+		const directory = join(CONTROL_DIR, CASES_DIRECTORY, caseId);
+		const path = join(directory, "case.json");
+		resources.track(directory);
+		await mkdir(directory, { recursive: true });
+		await Bun.write(path, "{}");
+		await chmod(path, 0);
+
+		try {
+			await expect(readCaseDeclaration(caseId)).rejects.toBeInstanceOf(
+				CaseDeclarationError,
+			);
+		} finally {
+			await chmod(path, 0o600);
+		}
 	});
 });
 
