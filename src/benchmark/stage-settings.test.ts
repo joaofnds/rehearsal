@@ -99,7 +99,7 @@ describe(loadStageSettings.name, () => {
 		testResources.track(directory);
 		const path = join(directory, "missing.json");
 
-			expect(loadStageSettings(path)).rejects.toThrow(
+		expect(loadStageSettings(path)).rejects.toThrow(
 			new RegExp(`No stage settings file at ${path}.*settingsFile`, "u"),
 		);
 	});
