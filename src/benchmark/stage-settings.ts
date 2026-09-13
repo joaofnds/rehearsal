@@ -58,7 +58,14 @@ export async function loadStageSettings(
 		);
 	}
 
-	const bytes = await file.bytes();
+	let bytes: Uint8Array;
+	try {
+		bytes = await file.bytes();
+	} catch (error) {
+		throw new StageSettingsError(
+			`Cannot read stage settings file ${path}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 
 	let document: unknown;
 	try {

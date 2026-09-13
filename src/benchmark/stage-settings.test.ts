@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { chmod, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTROL_DIR } from "./config";
@@ -99,8 +99,24 @@ describe(loadStageSettings.name, () => {
 		testResources.track(directory);
 		const path = join(directory, "missing.json");
 
-		expect(loadStageSettings(path)).rejects.toThrow(
+			expect(loadStageSettings(path)).rejects.toThrow(
 			new RegExp(`No stage settings file at ${path}.*settingsFile`, "u"),
 		);
+	});
+
+	it("translates an unreadable file into a settings refusal", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		testResources.track(directory);
+		const path = join(directory, "settings.json");
+		await Bun.write(path, "{}");
+		await chmod(path, 0);
+
+		try {
+			await expect(loadStageSettings(path)).rejects.toThrow(
+				new RegExp(`Cannot read stage settings file ${path}`, "u"),
+			);
+		} finally {
+			await chmod(path, 0o600);
+		}
 	});
 });
