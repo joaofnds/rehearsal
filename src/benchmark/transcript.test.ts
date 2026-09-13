@@ -9,6 +9,7 @@ import {
 	parseTranscript,
 	parseTranscriptFile,
 	skillsInvoked,
+	transcriptDiagnostics,
 	toolUses,
 } from "#benchmark/transcript";
 import { TestResources } from "#benchmark/test-support";
@@ -21,6 +22,28 @@ function line(record: JsonValue): string {
 
 function assistantWith(...blocks: readonly JsonValue[]): string {
 	return line({ type: "assistant", message: { content: blocks } });
+}
+
+function toolResult(id: string, isError = false): JsonValue {
+	return {
+		type: "tool_result",
+		tool_use_id: id,
+		content: "result",
+		is_error: isError,
+	};
+}
+
+function bashCall(id: string, command: string): JsonValue {
+	return { type: "tool_use", id, name: "Bash", input: { command } };
+}
+
+function readCall(id: string): JsonValue {
+	return {
+		type: "tool_use",
+		id,
+		name: "Read",
+		input: { file_path: "/tmp/x.md" },
+	};
 }
 
 const readBlock = {
@@ -70,6 +93,276 @@ describe(parseTranscript.name, () => {
 
 	it("ignores blank lines, including a trailing newline", () => {
 		expect(parseTranscript(`${assistantWith(readBlock)}\n\n`)).toHaveLength(1);
+	});
+});
+
+describe(transcriptDiagnostics.name, () => {
+	it("reports post-prefix tool occurrences, errors, and exact repeated Bash inputs", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith(bashCall("prefix", "ls")),
+				line({ type: "user", message: { content: [toolResult("prefix")] } }),
+				assistantWith(bashCall("bash-1", "ls")),
+				line({ type: "user", message: { content: [toolResult("bash-1")] } }),
+				assistantWith(readCall("read-1")),
+				line({ type: "user", message: { content: [toolResult("read-1")] } }),
+				assistantWith(bashCall("bash-2", "ls")),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-2", true)] },
+				}),
+				assistantWith(bashCall("bash-3", "ls ")),
+				line({ type: "user", message: { content: [toolResult("bash-3")] } }),
+			].join("\n"),
+		);
+
+		const diagnostics = transcriptDiagnostics({
+			lines: transcript,
+			prefixLinesExcluded: 2,
+			sourceAvailable: true,
+		});
+
+		expect(diagnostics).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 2,
+			sourceLineCount: 10,
+			measuredLineCount: 8,
+			toolUseOccurrences: {
+				total: 4,
+				byName: [
+					{ name: "Bash", count: 3 },
+					{ name: "Read", count: 1 },
+				],
+			},
+			toolErrors: [
+				{
+					toolUseId: "bash-2",
+					toolName: "Bash",
+					call: { line: 7, block: 1 },
+					result: { line: 8, block: 1 },
+				},
+			],
+			repeatedBashCommands: [
+				{
+					commandSha256:
+						"c7b68ac37f364473e922936708e7f43c293dd07b295171566c07ff5fe024fab9",
+					commandCharacters: 2,
+					preview: "ls",
+					previewTruncated: false,
+					occurrences: [
+						{ toolUseId: "bash-1", location: { line: 3, block: 1 } },
+						{ toolUseId: "bash-2", location: { line: 7, block: 1 } },
+					],
+				},
+			],
+			issues: [],
+		});
+	});
+
+	it("distinguishes complete zero observations from unavailable evidence", () => {
+		const transcript = parseTranscript(
+			[
+				line({ type: "user", message: { content: "hello" } }),
+				line({ type: "queue-operation", operation: "enqueue" }),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 2,
+			measuredLineCount: 2,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [],
+		});
+		expect(
+			transcriptDiagnostics({
+				lines: [],
+				prefixLinesExcluded: 7,
+				sourceAvailable: false,
+			}),
+		).toEqual({
+			state: "unavailable",
+			prefixLinesExcluded: 7,
+		});
+	});
+
+	it("marks malformed or empty measured evidence partial without hiding raw counts", () => {
+		const malformed = parseTranscript(
+			[
+				"not json",
+				assistantWith(bashCall("bash-1", "pwd")),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-1")] },
+				}),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: malformed,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 3,
+			measuredLineCount: 3,
+			toolUseOccurrences: {
+				total: 1,
+				byName: [{ name: "Bash", count: 1 }],
+			},
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "invalid-json",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+
+		expect(
+			transcriptDiagnostics({
+				lines: [],
+				prefixLinesExcluded: 3,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 3,
+			sourceLineCount: 0,
+			measuredLineCount: 0,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "empty-measured-transcript",
+					occurrences: 1,
+					locations: [{ line: 4, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
+	it("keeps ambiguous identities partial and out of repeated-command groups", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith(
+					bashCall("duplicate", "pwd"),
+					bashCall("duplicate", "pwd"),
+				),
+				line({
+					type: "user",
+					message: {
+						content: [
+							toolResult("duplicate", true),
+							toolResult("unmatched", true),
+						],
+					},
+				}),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 2,
+			measuredLineCount: 2,
+			toolUseOccurrences: {
+				total: 2,
+				byName: [{ name: "Bash", count: 2 }],
+			},
+			toolErrors: [
+				{
+					toolUseId: "duplicate",
+					result: { line: 2, block: 1 },
+				},
+				{
+					toolUseId: "unmatched",
+					result: { line: 2, block: 2 },
+				},
+			],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "duplicate-tool-use-id",
+					occurrences: 2,
+					locations: [
+						{ line: 1, block: 1 },
+						{ line: 1, block: 2 },
+					],
+					locationsTruncated: false,
+				},
+				{
+					kind: "unmatched-tool-result",
+					occurrences: 1,
+					locations: [{ line: 2, block: 2 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
+	it("bounds the persisted repeated-command preview", () => {
+		const command = "x".repeat(161);
+		const transcript = parseTranscript(
+			[
+				assistantWith(bashCall("bash-1", command)),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-1")] },
+				}),
+				assistantWith(bashCall("bash-2", command)),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-2")] },
+				}),
+			].join("\n"),
+		);
+
+		const diagnostics = transcriptDiagnostics({
+			lines: transcript,
+			prefixLinesExcluded: 0,
+			sourceAvailable: true,
+		});
+
+		expect(diagnostics.state).toBe("complete");
+		if (diagnostics.state !== "complete") {
+			throw new Error("Expected complete transcript diagnostics");
+		}
+		expect(diagnostics.repeatedBashCommands).toHaveLength(1);
+		expect(diagnostics.repeatedBashCommands[0]).toEqual({
+			commandSha256:
+				"fdb7f3c40645e79ca4c5d1638753243ccb283f5dd126ceb21de5fa7d40953c65",
+			commandCharacters: 161,
+			preview: "x".repeat(160),
+			previewTruncated: true,
+			occurrences: [
+				{ toolUseId: "bash-1", location: { line: 1, block: 1 } },
+				{ toolUseId: "bash-2", location: { line: 3, block: 1 } },
+			],
+		});
 	});
 });
 
