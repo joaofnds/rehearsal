@@ -137,7 +137,11 @@ This command does not inventory confirmation groups. With no prior measurement
 there is nothing to mark stale. It reads the current corpus and starts no session.
 
 For pipeline checkpoints, add `--model` or `--effort` to check those conditions
-as well. Without them, the command checks corpus changes only.
+as well. Without those flags, the command checks corpus changes and each run's
+current declared or default stage settings. A settings value change stales the
+initial checkpoint and carries forward through later checkpoints; changing only
+JSON whitespace does not. A missing or invalid settings file appears as a cause
+for the affected run while the command continues reporting the others.
 
 A corpus that cannot supply a file a record hashed, including a missing,
 unreadable, or escaping `CLAUDE.md`, is reported as that record's cause rather

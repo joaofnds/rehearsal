@@ -137,7 +137,10 @@ The default stage settings deny branch/worktree creation commands and disable
 bundled skills. The allowed settings schema covers a deny list and selected
 feature switches; it rejects arbitrary settings keys, including hook blocks.
 These settings are harness-owned data, independent of the operator's live
-settings file. Stage settings are included in recorded lineage where captured.
+settings file. Pipeline runs, confirmations, and replays pass the canonical JSON
+to stage sessions and record its digest in checkpoint or replay lineage. Records
+store a control-relative settings path, so moving the checkout does not change
+the recorded identity or expose the recording machine's path.
 
 ### Session cases
 
@@ -403,18 +406,24 @@ stop surviving children, restore the recorded Git state and workflow backup,
 verify recovery, and only then remove the marker. Server interruption detection
 does not perform that restoration for you.
 
-An initial checkpoint captures task setup; accepted stages create subsequent
-checkpoints with target SHA, workflow state, artifacts, and lineage. Replay
-materializes the upstream state for the named stage. It can inspect a stale
-checkpoint for exploration, while confirmation/comparison require compatible
-frozen evidence. Replay permits an uncommitted control repository and records
-its SHA with a dirty marker.
+An initial checkpoint captures task setup and the stage-settings digest;
+accepted stages create subsequent checkpoints with target SHA, workflow state,
+artifacts, settings, and lineage. Replay materializes the upstream state for the
+named stage. It can inspect a stale checkpoint for exploration, while
+confirmation/comparison require compatible frozen evidence. Replay permits an
+uncommitted control repository and records its SHA with a dirty marker.
 
-`stale` compares recorded corpus inputs with live or supplied corpus files.
-Optional model/effort flags assert those intended replay settings as well;
-without them it checks the corpus alone. A session case with no prior attempt
-has no stale measurement. Missing files and changed inputs are evidence to
-inspect, not a substitute for running the revised case.
+`stale` compares recorded corpus inputs with live or supplied corpus files and
+compares each pipeline run with the stage settings its case declares today.
+The root `stage-settings.json` applies when a case declares no override or no
+longer loads as a pipeline case. The comparison uses canonical JSON, so
+whitespace-only edits and checkout relocation remain fresh. A missing or invalid
+current settings file stales that run by name without hiding other runs. The
+initial checkpoint participates, including for runs that stopped before an
+accepted stage. Optional model/effort flags assert those intended replay
+settings as well. A session case with no prior attempt has no stale measurement.
+Missing files and changed inputs are evidence to inspect, not a substitute for
+running the revised case.
 
 ## Record locations and IDs
 

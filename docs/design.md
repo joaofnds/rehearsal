@@ -40,9 +40,11 @@ Run events  → SQLite store → SSE endpoint
 A debug pipeline runs directly on the target's clean `main`. It seeds a task,
 records an initial checkpoint, runs the declared stages, and records further
 checkpoints after accepted stages. The default pipeline is `shape → build`.
-Each stage starts a fresh worker session. A shared Product Owner session answers
-questions from the task and product brief. Stage Judges see frozen evidence and
-rubrics, and the final Judge evaluates the delivered candidate.
+Preflight loads the case's declared stage settings, or the root default, once.
+Each fresh worker session receives that canonical JSON, and the initial and
+accepted-stage checkpoints record its digest. A shared Product Owner session
+answers questions from the task and product brief. Stage Judges see frozen
+evidence and rubrics, and the final Judge evaluates the delivered candidate.
 
 The target owns its project instructions. The harness no longer installs this
 repository's `CLAUDE.md` into the target. Normal cleanup restores the original
@@ -68,11 +70,11 @@ evaluation comes from `~/.claude` or an explicit directory in corpus layout.
 A target's own instructions are separate project inputs.
 
 Checkpoints record source commits, workflow state, artifacts, corpus digests,
-and lineage. A changed upstream input, model, or effort changes the conditions
-under which a result was produced. `stale` reports mismatches for recorded
-checkpoints and session debug attempts. Comparison loading checks compatible
-inputs and derives its statistics from rep records rather than trusting a saved
-summary.
+the canonical stage-settings digest, and lineage. A changed upstream input,
+model, effort, or stage-settings value changes the conditions under which a
+result was produced. `stale` reports mismatches for recorded checkpoints and
+session debug attempts. Comparison loading checks compatible inputs and derives
+its statistics from rep records rather than trusting a saved summary.
 
 Corpus hashing and delivery are distinct responsibilities. A live debug session
 can retain a reference to installed files rather than a frozen copy; a session

@@ -229,7 +229,8 @@ See [current state](docs/status.md) for implementation coverage and
   recording its returned payload, call cost, and whether harness validation
   accepted or rejected it.
 - **Lineage** — hash of everything that produced a checkpoint: upstream
-  checkpoint, corpus files feeding the stage, model, effort.
+  checkpoint, corpus files feeding the stage, model, effort, and canonical
+  stage settings.
 - **Materialize** — write a checkpoint's frozen state into a directory,
   byte-faithfully, so a stage can run from it.
 - **Model family** — a named Claude model line — Opus, Sonnet, or Haiku —
@@ -348,8 +349,8 @@ See [current state](docs/status.md) for implementation coverage and
   rather than on the skill a stage invoked. A case with no attempt is not
   stale, because nothing was invalidated.
 - **Stale checkpoint** — a checkpoint whose recorded inputs (corpus files,
-  model, effort, or an upstream checkpoint) no longer match the current
-  state; still replayable for exploration, refused in comparisons.
+  stage settings, model, effort, or an upstream checkpoint) no longer match
+  the current state; still replayable for exploration, refused in comparisons.
 - **Stage kind** — which validation and evidence strategy a stage uses:
   planning or delivery. Declared per stage, independent of the stage's name.
 - **Stage mode** — running one stage against frozen upstream artifacts. This
