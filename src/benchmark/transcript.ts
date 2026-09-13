@@ -182,6 +182,12 @@ interface LocatedDiagnosticIssue {
 	readonly location: TranscriptLocation;
 }
 
+interface IdentifiedToolUse {
+	readonly toolUseId: string;
+	readonly use: ToolUse;
+	readonly location: TranscriptLocation;
+}
+
 export interface TranscriptLine {
 	readonly line: number;
 	readonly toolUses: readonly ToolUse[];
@@ -528,7 +534,7 @@ function repeatedBashCommands(
 	usesById: ReadonlyMap<string, readonly LocatedToolUse[]>,
 	issues: LocatedDiagnosticIssue[],
 ): z.infer<typeof repeatedBashCommandSchema>[] {
-	const grouped = new Map<string, LocatedToolUse[]>();
+	const grouped = new Map<string, IdentifiedToolUse[]>();
 	for (const use of uses) {
 		if (use.use.name !== "Bash") {
 			continue;
@@ -546,7 +552,7 @@ function repeatedBashCommands(
 		}
 
 		const occurrences = grouped.get(command) ?? [];
-		occurrences.push(use);
+		occurrences.push({ toolUseId: id, use: use.use, location: use.location });
 		grouped.set(command, occurrences);
 	}
 
@@ -559,7 +565,7 @@ function repeatedBashCommands(
 
 function describeRepeatedCommand(
 	command: string,
-	occurrences: readonly LocatedToolUse[],
+	occurrences: readonly IdentifiedToolUse[],
 ): z.infer<typeof repeatedBashCommandSchema> {
 	const characters = [...command];
 	const preview = characters.slice(0, MAX_PREVIEW_CHARACTERS).join("");
@@ -569,8 +575,8 @@ function describeRepeatedCommand(
 		commandCharacters: characters.length,
 		preview,
 		previewTruncated: characters.length > MAX_PREVIEW_CHARACTERS,
-		occurrences: occurrences.map(({ use, location }) => ({
-			toolUseId: use.id ?? "",
+		occurrences: occurrences.map(({ toolUseId, location }) => ({
+			toolUseId,
 			location,
 		})),
 	};

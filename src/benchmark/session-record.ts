@@ -256,7 +256,9 @@ export function buildSessionAttemptRecord(
 		corpusOrigin: inputs.corpusOrigin,
 		prompt: sessionCase.prompt,
 		transcriptFile: attempt.transcriptFile,
-		transcriptDiagnostics: attempt.transcriptDiagnostics,
+		transcriptDiagnostics: transcriptDiagnosticsSchema.parse(
+			attempt.transcriptDiagnostics,
+		),
 		outcome: attempt.outcome,
 		checks: attempt.checks.map((check) => ({ ...check })),
 		elapsedMs: inputs.elapsedMs,

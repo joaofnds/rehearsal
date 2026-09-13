@@ -377,6 +377,49 @@ describe(transcriptDiagnostics.name, () => {
 		});
 	});
 
+	it("marks an unsupported tool-bearing block and a missing result partial", () => {
+		const transcript = parseTranscript(
+			assistantWith(bashCall("bash-1", "pwd"), {
+				type: "server_tool_use",
+				name: "future-tool",
+				input: {},
+			}),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: {
+				total: 1,
+				byName: [{ name: "Bash", count: 1 }],
+			},
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "unsupported-content-block",
+					occurrences: 1,
+					locations: [{ line: 1, block: 2 }],
+					locationsTruncated: false,
+				},
+				{
+					kind: "missing-tool-result",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
 	it("bounds the persisted repeated-command preview", () => {
 		const command = "x".repeat(161);
 		const transcript = parseTranscript(

@@ -88,21 +88,7 @@ function fakeClaude(projects: string, reply: string): ClaudeRunner {
 			})}\n`,
 		);
 
-		return JSON.stringify({
-			session_id: sessionId,
-			is_error: false,
-			result: reply,
-			total_cost_usd: 0.0011,
-			num_turns: 1,
-			duration_ms: 800,
-			duration_api_ms: 700,
-			usage: {
-				input_tokens: 10,
-				output_tokens: 2,
-				cache_read_input_tokens: 0,
-				cache_creation_input_tokens: 0,
-			},
-		});
+		return fakeClaudeEnvelope(sessionId, reply);
 	};
 }
 
