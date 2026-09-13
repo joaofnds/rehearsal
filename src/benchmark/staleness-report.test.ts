@@ -91,6 +91,60 @@ describe(staleCheckpoints.name, () => {
 		expect(stale).toEqual([]);
 	});
 
+	it("stales the initial checkpoint and its downstream chain when settings change", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await fixture.recordSettingsFile({
+			path: "stage-settings.json",
+			sha256: "0".repeat(64),
+		});
+
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		expect(stale).toEqual([
+			{
+				id: `checkpoint:${fixture.replayableRun}/initial`,
+				causes: ["stage settings file stage-settings.json changed"],
+			},
+			{
+				id: `checkpoint:${fixture.replayableRun}/discuss`,
+				causes: [
+					"upstream stage initial is stale",
+					"stage settings file stage-settings.json changed",
+				],
+			},
+			{
+				id: `checkpoint:${fixture.replayableRun}/build`,
+				causes: [
+					"upstream stage initial is stale",
+					"stage settings file stage-settings.json changed",
+				],
+			},
+		]);
+	});
+
+	it("treats checkpoints without settings evidence as stale", async () => {
+		const fixture = await writtenFixture();
+		const corpus = await corpusDirectory("build skill\n");
+		await fixture.recordCorpusFrom(directorySource(corpus));
+		await fixture.recordSettingsFile(undefined);
+
+		const stale = await staleCheckpoints(
+			fixture.runsDirectory,
+			directorySource(corpus),
+		);
+
+		expect(stale.map(({ id }) => id)).toEqual([
+			`checkpoint:${fixture.replayableRun}/initial`,
+			`checkpoint:${fixture.replayableRun}/discuss`,
+			`checkpoint:${fixture.replayableRun}/build`,
+		]);
+	});
+
 	it("keeps a checkpoint fresh with linked files in the captured live backing tree", async () => {
 		const fixture = await writtenFixture();
 		const root = await corpusDirectory("build skill\n");

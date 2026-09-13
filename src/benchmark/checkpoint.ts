@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { z } from "zod";
 import type { Effort } from "./config";
 import { effortSchema } from "./config";
@@ -812,8 +812,9 @@ export function deriveStaleness(
 			);
 		}
 		if (record.settingsFile?.sha256 !== request.settingsFile?.sha256) {
-			const path =
-				record.settingsFile?.path ?? request.settingsFile?.path ?? "none";
+			const candidate =
+				request.settingsFile?.path ?? record.settingsFile?.path ?? "none";
+			const path = isAbsolute(candidate) ? basename(candidate) : candidate;
 			causes.push(`stage settings file ${path} changed`);
 		}
 

@@ -862,6 +862,25 @@ describe(deriveStaleness.name, () => {
 		]);
 	});
 
+	it("uses the current settings identity instead of a foreign recorded path", () => {
+		const recorded = checkpoint("initial", "root-key", [], {
+			path: "/Users/alice/old-checkout/stage-settings.json",
+			sha256: "0".repeat(64),
+		});
+
+		const [staleness] = deriveStaleness([recorded], new Map(), {
+			...request,
+			settingsFile: {
+				path: "stage-settings.json",
+				sha256: "1".repeat(64),
+			},
+		});
+
+		expect(staleness?.causes).toEqual([
+			"stage settings file stage-settings.json changed",
+		]);
+	});
+
 	it("blames the first stale stage, not the nearest, further down the chain", () => {
 		const review = checkpoint("review", build.lineage, [
 			claudeMd,
