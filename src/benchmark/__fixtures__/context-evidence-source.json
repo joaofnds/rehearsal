@@ -1,0 +1,413 @@
+{
+	"schemaVersion": 1,
+	"kind": "context-evidence-source-shaped-synthetic",
+	"capture": {
+		"provider": "claude-code",
+		"cliVersion": "2.1.270",
+		"capturedAt": "2026-09-13T00:00:00Z",
+		"flags": [
+			"--output-format",
+			"stream-json",
+			"--forward-subagent-text",
+			"--include-hook-events"
+		],
+		"telemetry": {
+			"logs": true,
+			"tracesBeta": true,
+			"rawApiBodies": "local-file"
+		}
+	},
+	"files": {
+		"stream": [
+			{
+				"capture_ordinal": 1,
+				"type": "assistant",
+				"session_id": "session-1",
+				"uuid": "message-main-1",
+				"requestId": "req-main-1",
+				"parent_tool_use_id": null,
+				"message": {
+					"model": "claude-sonnet-5",
+					"content": [
+						{
+							"type": "tool_use",
+							"id": "tool-agent-1",
+							"name": "Agent",
+							"input": { "subagent_type": "reviewer" }
+						}
+					]
+				}
+			},
+			{
+				"capture_ordinal": 2,
+				"type": "assistant",
+				"session_id": "session-1",
+				"uuid": "message-child-1",
+				"requestId": "req-child-1",
+				"parent_tool_use_id": "tool-agent-1",
+				"message": {
+					"model": "claude-sonnet-5",
+					"content": [
+						{
+							"type": "tool_use",
+							"id": "tool-agent-2",
+							"name": "Agent",
+							"input": { "subagent_type": "explorer" }
+						}
+					]
+				}
+			},
+			{
+				"capture_ordinal": 3,
+				"type": "assistant",
+				"session_id": "session-1",
+				"uuid": "message-nested-1",
+				"requestId": "req-nested-1",
+				"parent_tool_use_id": "tool-agent-2",
+				"message": {
+					"model": "claude-haiku-5",
+					"content": [{ "type": "text", "text": "synthetic" }]
+				}
+			},
+			{
+				"capture_ordinal": 4,
+				"type": "result",
+				"session_id": "session-1",
+				"subtype": "success",
+				"total_cost_usd": 0.07,
+				"usage": {
+					"input_tokens": 9,
+					"output_tokens": 108,
+					"cache_read_input_tokens": 15000,
+					"cache_creation_input_tokens": 12400
+				}
+			}
+		],
+		"hooks": [
+			{
+				"capture_ordinal": 1,
+				"hook_event_name": "InstructionsLoaded",
+				"session_id": "session-1",
+				"prompt_id": null,
+				"file_path": "/redacted/project/CLAUDE.md",
+				"memory_type": "Project",
+				"load_reason": "session_start"
+			},
+			{
+				"capture_ordinal": 2,
+				"hook_event_name": "SubagentStart",
+				"session_id": "session-1",
+				"prompt_id": "prompt-1",
+				"agent_id": "agent-review-1",
+				"agent_type": "reviewer"
+			},
+			{
+				"capture_ordinal": 3,
+				"hook_event_name": "InstructionsLoaded",
+				"session_id": "session-1",
+				"prompt_id": "prompt-child-1",
+				"agent_id": "agent-review-1",
+				"agent_type": "reviewer",
+				"file_path": "/redacted/project/.claude/rules/review.md",
+				"memory_type": "Project",
+				"load_reason": "path_glob_match",
+				"trigger_file_path": "/redacted/project/src/a.ts",
+				"globs": ["src/**"]
+			},
+			{
+				"capture_ordinal": 4,
+				"hook_event_name": "SubagentStart",
+				"session_id": "session-1",
+				"prompt_id": "prompt-child-1",
+				"agent_id": "agent-explore-1",
+				"agent_type": "explorer"
+			},
+			{
+				"capture_ordinal": 5,
+				"hook_event_name": "SubagentStop",
+				"session_id": "session-1",
+				"prompt_id": "prompt-child-1",
+				"agent_id": "agent-explore-1",
+				"agent_type": "explorer",
+				"agent_transcript_path": "transcripts/subagents/agent-agent-explore-1.jsonl"
+			},
+			{
+				"capture_ordinal": 6,
+				"hook_event_name": "PreCompact",
+				"session_id": "session-1",
+				"prompt_id": "prompt-child-1",
+				"agent_id": "agent-review-1",
+				"agent_type": "reviewer",
+				"trigger": "auto"
+			},
+			{
+				"capture_ordinal": 7,
+				"hook_event_name": "PostCompact",
+				"session_id": "session-1",
+				"prompt_id": "prompt-child-1",
+				"agent_id": "agent-review-1",
+				"agent_type": "reviewer",
+				"trigger": "auto",
+				"compact_summary": "synthetic redacted summary"
+			},
+			{
+				"capture_ordinal": 8,
+				"hook_event_name": "SubagentStop",
+				"session_id": "session-1",
+				"prompt_id": "prompt-1",
+				"agent_id": "agent-review-1",
+				"agent_type": "reviewer",
+				"agent_transcript_path": "transcripts/subagents/agent-agent-review-1.jsonl"
+			}
+		],
+		"otelLogs": [
+			{
+				"capture_ordinal": 1,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-1",
+					"event.sequence": 4,
+					"request_id": "req-main-1",
+					"model": "claude-sonnet-5",
+					"input_tokens": 2,
+					"output_tokens": 40,
+					"cache_read_tokens": 0,
+					"cache_creation_tokens": 12000,
+					"cost_usd": 0.04
+				}
+			},
+			{
+				"capture_ordinal": 2,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-child-1",
+					"event.sequence": 11,
+					"request_id": "req-child-1",
+					"model": "claude-sonnet-5",
+					"input_tokens": 4,
+					"output_tokens": 50,
+					"cache_read_tokens": 10000,
+					"cache_creation_tokens": 400,
+					"cost_usd": 0.02
+				}
+			},
+			{
+				"capture_ordinal": 3,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-child-1",
+					"event.sequence": 11,
+					"request_id": "req-child-1",
+					"model": "claude-sonnet-5",
+					"input_tokens": 4,
+					"output_tokens": 50,
+					"cache_read_tokens": 10000,
+					"cache_creation_tokens": 400,
+					"cost_usd": 0.02
+				}
+			},
+			{
+				"capture_ordinal": 4,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-nested-1",
+					"event.sequence": 17,
+					"request_id": "req-nested-1",
+					"model": "claude-haiku-5",
+					"input_tokens": 3,
+					"output_tokens": 18,
+					"cache_read_tokens": 5000,
+					"cache_creation_tokens": 0,
+					"cost_usd": 0.01
+				}
+			},
+			{
+				"capture_ordinal": 5,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-child-1",
+					"event.sequence": 18,
+					"model": "claude-sonnet-5",
+					"input_tokens": 1,
+					"output_tokens": 7,
+					"cache_read_tokens": 0,
+					"cache_creation_tokens": 0,
+					"cost_usd": 0.001
+				}
+			},
+			{
+				"capture_ordinal": 6,
+				"body": "claude_code.api_request",
+				"attributes": {
+					"event.name": "api_request",
+					"session.id": "session-1",
+					"prompt.id": "prompt-child-1",
+					"event.sequence": 19,
+					"model": "claude-sonnet-5",
+					"input_tokens": 1,
+					"output_tokens": 7,
+					"cache_read_tokens": 0,
+					"cache_creation_tokens": 0,
+					"cost_usd": 0.001
+				}
+			}
+		],
+		"otelSpans": [
+			{
+				"capture_ordinal": 1,
+				"name": "claude_code.llm_request",
+				"span_id": "span-main",
+				"parent_span_id": null,
+				"attributes": {
+					"session.id": "session-1",
+					"request_id": "req-main-1",
+					"model": "claude-sonnet-5"
+				}
+			},
+			{
+				"capture_ordinal": 2,
+				"name": "claude_code.llm_request",
+				"span_id": "span-child",
+				"parent_span_id": "span-agent-tool-1",
+				"attributes": {
+					"session.id": "session-1",
+					"request_id": "req-child-1",
+					"agent_id": "agent-review-1",
+					"model": "claude-sonnet-5"
+				}
+			},
+			{
+				"capture_ordinal": 3,
+				"name": "claude_code.llm_request",
+				"span_id": "span-nested",
+				"parent_span_id": "span-agent-tool-2",
+				"attributes": {
+					"session.id": "session-1",
+					"request_id": "req-nested-1",
+					"agent_id": "agent-explore-1",
+					"parent_agent_id": "agent-review-1",
+					"model": "claude-haiku-5"
+				}
+			}
+		],
+		"transcripts": {
+			"transcripts/main.jsonl": [
+				{
+					"type": "assistant",
+					"sessionId": "session-1",
+					"uuid": "message-main-1",
+					"requestId": "req-main-1",
+					"message": {
+						"model": "claude-sonnet-5",
+						"usage": {
+							"input_tokens": 2,
+							"output_tokens": 40,
+							"cache_read_input_tokens": 0,
+							"cache_creation_input_tokens": 12000,
+							"cache_creation": {
+								"ephemeral_5m_input_tokens": 12000,
+								"ephemeral_1h_input_tokens": 0
+							}
+						},
+						"content": [
+							{ "type": "tool_use", "id": "tool-agent-1", "name": "Agent" }
+						]
+					}
+				}
+			],
+			"transcripts/subagents/agent-agent-review-1.jsonl": [
+				{
+					"type": "assistant",
+					"sessionId": "session-1",
+					"uuid": "message-child-1",
+					"requestId": "req-child-1",
+					"message": {
+						"model": "claude-sonnet-5",
+						"usage": {
+							"input_tokens": 4,
+							"output_tokens": 50,
+							"cache_read_input_tokens": 10000,
+							"cache_creation_input_tokens": 400,
+							"cache_creation": {
+								"ephemeral_5m_input_tokens": 200,
+								"ephemeral_1h_input_tokens": 200
+							}
+						},
+						"content": [
+							{ "type": "tool_use", "id": "tool-agent-2", "name": "Agent" }
+						]
+					}
+				},
+				{
+					"type": "assistant",
+					"sessionId": "session-1",
+					"uuid": "message-child-missing",
+					"requestId": "req-child-missing",
+					"message": {
+						"model": "claude-sonnet-5",
+						"content": [{ "type": "text", "text": "synthetic" }]
+					}
+				}
+			],
+			"transcripts/subagents/agent-agent-explore-1.jsonl": [
+				{
+					"type": "assistant",
+					"sessionId": "session-1",
+					"uuid": "message-nested-1",
+					"requestId": "req-nested-1",
+					"message": {
+						"model": "claude-haiku-5",
+						"usage": {
+							"input_tokens": 3,
+							"output_tokens": 18,
+							"cache_read_input_tokens": 5000,
+							"cache_creation_input_tokens": 0,
+							"cache_creation": {
+								"ephemeral_5m_input_tokens": 0,
+								"ephemeral_1h_input_tokens": 0
+							}
+						},
+						"content": [{ "type": "text", "text": "synthetic" }]
+					}
+				}
+			]
+		},
+		"rawApiBodies": [
+			{
+				"capture_ordinal": 1,
+				"kind": "request",
+				"sequence": 1,
+				"model": "claude-sonnet-5",
+				"query_source": "repl_main_thread",
+				"body_ref": "api-bodies/request-0001.json"
+			},
+			{
+				"capture_ordinal": 2,
+				"kind": "request",
+				"sequence": 2,
+				"model": "claude-sonnet-5",
+				"query_source": "reviewer",
+				"body_ref": "api-bodies/request-0002.json"
+			}
+		],
+		"coverage": [
+			{
+				"stream": "hooks",
+				"state": "partial",
+				"reason": "synthetic-truncated-tail"
+			},
+			{ "stream": "otelLogs", "state": "complete" },
+			{ "stream": "stream", "state": "complete" }
+		]
+	}
+}
