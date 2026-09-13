@@ -7,10 +7,6 @@ import { Switcher } from "#client/system/components/switcher";
 import { TableShell } from "#client/system/components/table-shell";
 import { armPairLabel, armPairNames } from "#server/comparison-arm-pair";
 import type { ComparisonAttribution } from "#server/comparison-attribution";
-import type {
-	QualityInterval,
-	QualityReading,
-} from "#server/comparison-quality-reading";
 import "./comparison-page.css";
 
 const PRESENTATIONS = ["Attempt pairs", "What moved"] as const;
@@ -23,6 +19,9 @@ type ComparisonResponse = InferResponseType<
 type ComparisonReport = ComparisonResponse["report"];
 type ComparisonCase = ComparisonReport["cases"][number];
 type ComparisonArm = ComparisonCase["arms"]["baseline"];
+type QualityReadings = ComparisonResponse["qualityReadings"];
+type CaseQualityReadings = QualityReadings[string];
+type QualityReading = CaseQualityReadings[string][string];
 
 export class ComparisonNotFoundError extends Error {
 	public override name = "ComparisonNotFoundError";
@@ -82,7 +81,7 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 
 function intervalLabel(
 	armName: string,
-	interval: QualityInterval | undefined,
+	interval: QualityReading["interval"]["minuend"],
 ): string {
 	if (interval === undefined) {
 		return `${armName} not reached`;
@@ -129,7 +128,7 @@ function QualityIntervals({
 }
 
 function qualityRowsFor(
-	readings: Readonly<Record<string, Readonly<Record<string, QualityReading>>>>,
+	readings: CaseQualityReadings,
 ): readonly (readonly React.ReactNode[])[] {
 	return Object.entries(readings).flatMap(([pairKey, measures]) =>
 		Object.entries(measures).map(([measureName, reading]) => [
@@ -148,12 +147,7 @@ function qualityRowsFor(
 function QualityReadingTables({
 	readings,
 }: {
-	readonly readings: Readonly<
-		Record<
-			string,
-			Readonly<Record<string, Readonly<Record<string, QualityReading>>>>
-		>
-	>;
+	readonly readings: QualityReadings;
 }): React.JSX.Element {
 	return (
 		<div className="rh-comparison__quality-tables">
