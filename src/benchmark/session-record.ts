@@ -12,6 +12,7 @@ import type { ResolvedCorpusFile } from "./corpus-file";
 import { checkResultSchema } from "./session-check";
 import type { SessionAttempt } from "./session-attempt";
 import { transcriptDiagnosticsSchema } from "./transcript";
+import { contextEvidenceSchema } from "./context-evidence";
 
 /**
  * Where the attempt's corpus bytes were read from, recorded beside the digests
@@ -155,6 +156,7 @@ const legacySessionAttemptRecordSchema = z
 		reply: z.string().optional(),
 		transcriptFile: z.string().min(1),
 		transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
+		contextEvidence: contextEvidenceSchema.optional(),
 		metrics: claudeCallMetricsSchema.optional(),
 		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
 		checks: z.array(checkResultSchema),
@@ -188,6 +190,7 @@ const executionFailedSessionAttemptRecordSchema = z
 		error: z.string().min(1),
 		transcriptFile: z.string().min(1),
 		transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
+		contextEvidence: contextEvidenceSchema.optional(),
 		metrics: claudeCallMetricsSchema.optional(),
 		outcome: z.literal("EXECUTION_FAILED"),
 		checks: z.array(checkResultSchema).length(0),

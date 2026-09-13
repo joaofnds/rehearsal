@@ -8,6 +8,10 @@ import {
 	parseSessionAttemptRecord,
 	sessionAttemptRecordSchema,
 } from "#benchmark/session-record";
+import {
+	contextEvidenceSourceSchema,
+	normalizeContextEvidence,
+} from "#benchmark/context-evidence";
 
 function record(
 	overrides: Immutable<Partial<LegacySessionAttemptRecord>> = {},
@@ -194,6 +198,21 @@ describe("sessionAttemptRecordSchema", () => {
 		expect(
 			sessionAttemptRecordSchema.parse(record()).transcriptDiagnostics,
 		).toBeUndefined();
+	});
+
+	it("reopens the normalized context evidence saved with an attempt", async () => {
+		const source = contextEvidenceSourceSchema.parse(
+			await Bun.file(
+				new URL("./__fixtures__/context-evidence-source.json", import.meta.url),
+			).json(),
+		);
+		const contextEvidence = normalizeContextEvidence(source);
+
+		const parsed = parseSessionAttemptRecord(
+			JSON.stringify({ ...record(), contextEvidence }),
+		);
+
+		expect(parsed.contextEvidence).toEqual(contextEvidence);
 	});
 
 	it("keeps the persisted transcript cut without consulting a current case declaration", () => {
