@@ -79,3 +79,9 @@
 	font-family: var(--font-mono);
 	font-size: var(--font-size-11-5);
 }
+
+.rh-comparison__quality-verdict {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--space-4);
+}

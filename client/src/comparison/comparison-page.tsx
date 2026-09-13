@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
 import { useState } from "react";
+import type { ComparisonArm as ComparisonArmRole } from "#benchmark/comparison-record";
 import { apiClient } from "#client/api-client";
 import { EmptyState } from "#client/system/components/empty-state";
 import { Switcher } from "#client/system/components/switcher";
@@ -18,7 +19,7 @@ type ComparisonResponse = InferResponseType<
 >;
 type ComparisonReport = ComparisonResponse["report"];
 type ComparisonCase = ComparisonReport["cases"][number];
-type ComparisonArm = ComparisonCase["arms"]["baseline"];
+type ComparisonArmReport = ComparisonCase["arms"]["baseline"];
 type QualityReadings = ComparisonResponse["qualityReadings"];
 type CaseQualityReadings = QualityReadings[string];
 type QualityReading = CaseQualityReadings[string][string];
@@ -44,7 +45,7 @@ async function fetchComparison(digest: string): Promise<ComparisonResponse> {
 function GradeDistribution({
 	arm,
 }: {
-	readonly arm: ComparisonArm;
+	readonly arm: ComparisonArmReport;
 }): React.JSX.Element {
 	return (
 		<div className="rh-comparison__arm">
@@ -80,7 +81,7 @@ function rowFor(benchmarkCase: ComparisonCase): readonly React.ReactNode[] {
 }
 
 function intervalLabel(
-	armName: string,
+	armName: ComparisonArmRole,
 	interval: QualityReading["interval"]["minuend"],
 ): string {
 	if (interval === undefined) {
@@ -90,22 +91,36 @@ function intervalLabel(
 	return `${armName} ${interval.low} to ${interval.high}`;
 }
 
-function strongerRangeLabel(arm: string): string {
-	const sentenceCaseArm = arm.replace(/^./u, (letter) => letter.toUpperCase());
-
-	return `${sentenceCaseArm} has the stronger separated range`;
+interface VerdictPresentation {
+	readonly glyph: "~" | "=" | "↑";
+	readonly label: string;
 }
 
-function verdictLabel(reading: QualityReading): string {
+function verdictPresentation(reading: QualityReading): VerdictPresentation {
 	if (reading.verdict.kind === "insideRerunNoise") {
-		return "Inside rerun noise";
+		return { glyph: "~", label: "inside rerun noise" };
 	}
 
 	if (reading.verdict.kind === "unchangedAlreadyClear") {
-		return "Unchanged, already clear";
+		return { glyph: "=", label: "unchanged, already clear" };
 	}
 
-	return strongerRangeLabel(reading.verdict.arm);
+	return { glyph: "↑", label: `${reading.verdict.arm} separates` };
+}
+
+function QualityVerdict({
+	reading,
+}: {
+	readonly reading: QualityReading;
+}): React.JSX.Element {
+	const verdict = verdictPresentation(reading);
+
+	return (
+		<span className="rh-comparison__quality-verdict">
+			<span aria-hidden="true">{verdict.glyph}</span>
+			<span>{verdict.label}</span>
+		</span>
+	);
 }
 
 function QualityIntervals({
@@ -139,7 +154,10 @@ function qualityRowsFor(
 				pairKey={pairKey}
 				reading={reading}
 			/>,
-			verdictLabel(reading),
+			<QualityVerdict
+				key={`${pairKey}-${measureName}-verdict`}
+				reading={reading}
+			/>,
 		]),
 	);
 }

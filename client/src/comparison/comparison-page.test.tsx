@@ -166,7 +166,7 @@ function comparisonResponseBody(): ComparisonResponseFixture {
 					final: {
 						interval: {
 							minuend: { low: "PASS", high: "PASS" },
-							subtrahend: { low: "PASS", high: "PASS" },
+							subtrahend: { low: "PASS", high: "FAIL" },
 						},
 						verdict: { kind: "unchangedAlreadyClear" },
 					},
@@ -217,6 +217,48 @@ function renderPage(): void {
 			<ComparisonPage digest={DIGEST} />
 		</QueryClientProvider>,
 	);
+}
+
+function qualityRow(
+	tableName: string,
+	pair: string,
+	measure: string,
+): HTMLElement {
+	const table = screen.getByRole("table", { name: tableName });
+	const row = within(table)
+		.getAllByRole("row")
+		.slice(1)
+		.find(
+			(candidate) =>
+				within(candidate).queryByRole("cell", { name: pair }) !== null &&
+				within(candidate).queryByRole("cell", { name: measure }) !== null,
+		);
+
+	if (row === undefined) {
+		throw new Error(`Missing quality row for ${pair} and ${measure}`);
+	}
+
+	return row;
+}
+
+function expectQualityRow(
+	tableName: string,
+	expected: Readonly<{
+		readonly pair: string;
+		readonly measure: string;
+		readonly intervals: readonly [string, string];
+		readonly verdict: string;
+		readonly glyph: string;
+	}>,
+): void {
+	const row = qualityRow(tableName, expected.pair, expected.measure);
+	for (const interval of expected.intervals) {
+		expect(within(row).getByText(interval)).toBeInTheDocument();
+	}
+	const verdictCell = within(row).getByRole("cell", {
+		name: expected.verdict,
+	});
+	expect(within(verdictCell).getByText(expected.glyph)).toBeInTheDocument();
 }
 
 describe(ComparisonPage.name, () => {
@@ -271,26 +313,48 @@ describe(ComparisonPage.name, () => {
 		});
 		expect(within(caseOne).getAllByRole("row")).toHaveLength(4);
 		expect(within(caseTwo).getAllByRole("row")).toHaveLength(4);
-		expect(
-			within(caseOne).getByText("candidate vs baseline"),
-		).toBeInTheDocument();
-		expect(within(caseOne).getAllByText("checks")).toHaveLength(2);
-		expect(within(caseOne).getByText("final")).toBeInTheDocument();
-		expect(within(caseOne).getAllByText("candidate A to A")).toHaveLength(2);
-		expect(within(caseOne).getByText("baseline A to F")).toBeInTheDocument();
-		expect(within(caseOne).getByText("Inside rerun noise")).toBeInTheDocument();
-		expect(
-			within(caseOne).getByText("Unchanged, already clear"),
-		).toBeInTheDocument();
-		expect(
-			within(caseOne).getByText("Candidate has the stronger separated range"),
-		).toBeInTheDocument();
-		expect(
-			within(caseTwo).getByText("candidate not reached"),
-		).toBeInTheDocument();
-		expect(
-			within(caseTwo).getByText("Baseline has the stronger separated range"),
-		).toBeInTheDocument();
+		expectQualityRow("WHAT MOVED · case-1", {
+			pair: "candidate vs baseline",
+			measure: "checks",
+			intervals: ["candidate A to A", "baseline A to F"],
+			verdict: "inside rerun noise",
+			glyph: "~",
+		});
+		expectQualityRow("WHAT MOVED · case-1", {
+			pair: "candidate vs control",
+			measure: "checks",
+			intervals: ["candidate A to A", "control F to F"],
+			verdict: "candidate separates",
+			glyph: "↑",
+		});
+		expectQualityRow("WHAT MOVED · case-1", {
+			pair: "baseline vs control",
+			measure: "final",
+			intervals: ["baseline PASS to PASS", "control PASS to FAIL"],
+			verdict: "unchanged, already clear",
+			glyph: "=",
+		});
+		expectQualityRow("WHAT MOVED · case-2", {
+			pair: "candidate vs baseline",
+			measure: "checks",
+			intervals: ["candidate not reached", "baseline D to F"],
+			verdict: "inside rerun noise",
+			glyph: "~",
+		});
+		expectQualityRow("WHAT MOVED · case-2", {
+			pair: "candidate vs control",
+			measure: "checks",
+			intervals: ["candidate A to F", "control F to F"],
+			verdict: "inside rerun noise",
+			glyph: "~",
+		});
+		expectQualityRow("WHAT MOVED · case-2", {
+			pair: "baseline vs control",
+			measure: "checks",
+			intervals: ["baseline A to A", "control F to F"],
+			verdict: "baseline separates",
+			glyph: "↑",
+		});
 		expect(screen.queryByText("PLANNED")).not.toBeInTheDocument();
 		expect(
 			screen.queryByText(/needs a per-measure interval/iu),

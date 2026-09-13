@@ -1,8 +1,8 @@
 import type { ComparisonArm } from "#benchmark/comparison-record";
 
 export interface ArmPairNames {
-	readonly minuend: string;
-	readonly subtrahend: string;
+	readonly minuend: ComparisonArm;
+	readonly subtrahend: ComparisonArm;
 }
 
 export function pairKey(
@@ -19,14 +19,14 @@ export function pairKey(
  * the `Minus` convention on its own.
  */
 export function armPairNames(pair: string): ArmPairNames {
-	const separator = "Minus";
-	const separatorIndex = pair.indexOf(separator);
-	const subtrahend = pair.slice(separatorIndex + separator.length);
+	const names = armPairs().find(
+		({ minuend, subtrahend }) => pairKey(minuend, subtrahend) === pair,
+	);
+	if (names === undefined) {
+		throw new Error(`Unknown comparison arm pair: ${pair}`);
+	}
 
-	return {
-		minuend: pair.slice(0, separatorIndex),
-		subtrahend: subtrahend.replace(/^./u, (letter) => letter.toLowerCase()),
-	};
+	return names;
 }
 
 export function armPairLabel(pair: string): string {

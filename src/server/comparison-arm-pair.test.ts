@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { armPairLabel, armPairs, pairKey } from "./comparison-arm-pair";
+import {
+	armPairLabel,
+	armPairNames,
+	armPairs,
+	pairKey,
+} from "./comparison-arm-pair";
 
 describe(pairKey.name, () => {
 	it("builds a PascalCase-subtrahend key from two arm names", () => {
@@ -14,6 +19,18 @@ describe(armPairLabel.name, () => {
 		["candidateMinusControl", "candidate vs control"],
 	])("decodes %s into %s", (pair, label) => {
 		expect(armPairLabel(pair)).toBe(label);
+	});
+});
+
+describe(armPairNames.name, () => {
+	it("decodes only canonical arm pairs", () => {
+		expect(armPairNames("candidateMinusBaseline")).toEqual({
+			minuend: "candidate",
+			subtrahend: "baseline",
+		});
+		expect(() => armPairNames("candidateMinusUnknown")).toThrow(
+			"Unknown comparison arm pair: candidateMinusUnknown",
+		);
 	});
 });
 
