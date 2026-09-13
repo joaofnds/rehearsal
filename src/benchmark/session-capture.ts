@@ -102,7 +102,7 @@ export interface CapturedPrefix {
 async function countLines(path: string): Promise<number> {
 	let lines = 0;
 	for await (const line of fileLines(path)) {
-		lines += line === "" ? 0 : 1;
+		lines += line.trim() === "" ? 0 : 1;
 	}
 
 	return lines;
@@ -133,7 +133,7 @@ export async function captureTranscriptPrefix(
 		const bytes = new TextEncoder().encode(`${line}\n`);
 		hasher.update(bytes);
 		await writer.write(bytes);
-		written += 1;
+		written += line.trim() === "" ? 0 : 1;
 	}
 	await writer.end();
 

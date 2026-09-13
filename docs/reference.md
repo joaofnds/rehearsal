@@ -176,10 +176,11 @@ bounds. `toolErrors` contains only `tool_result` blocks whose `is_error` is
 `tool_use_id` identifies one unique call. `repeatedBashCommands` groups the
 exact full `Bash.input.command` string on two or more distinct unique tool-use
 IDs, whether or not the calls are adjacent. Whitespace remains significant.
-The record stores a SHA-256 digest, character count, at most 160 preview
-characters, a truncation flag, and ordered call locators. The complete command
-remains in `transcriptFile`. A repeated command is an observation, not a claim
-about waste, phase, tokens, cost, or causality.
+The record stores a SHA-256 digest, character count, a preview of at most 160
+UTF-16 code units without splitting a Unicode code point, a truncation flag, and
+ordered call locators. The complete command remains in `transcriptFile`. A
+repeated command is an observation, not a claim about waste, phase, tokens,
+cost, or causality.
 
 The diagnostic `state` is `complete`, `partial`, or `unavailable`. Complete
 means the measured JSONL uses the supported message, tool-use, and tool-result

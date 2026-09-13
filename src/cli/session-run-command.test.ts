@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	realpath,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
@@ -8,6 +15,7 @@ import type { SessionRunConfig } from "#benchmark/config";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { projectSlug } from "#benchmark/session-capture";
 import type { ClaudeRunner } from "#benchmark/session-attempt";
+import { SessionInvocationError } from "#benchmark/session-invocation-error";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
 import { UsageError } from "#cli/commands";
@@ -320,6 +328,47 @@ describe(runSessionDebugAttempt.name, () => {
 				},
 			],
 			issues: [],
+		});
+	});
+
+	it("persists retained diagnostics when a direct provider attempt fails", async () => {
+		const runs = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearsal-projects-");
+		const writesTranscript = diagnosticClaude(projects);
+
+		const failure = await failureOf(
+			runSessionDebugAttempt({
+				sessionCase: sessionCase(),
+				config,
+				runsDirectory: runs,
+				projectsDirectory: projects,
+				runClaude: async (command, cwd) => {
+					await writesTranscript(command, cwd);
+					throw new Error("provider rejected the session");
+				},
+			}),
+		);
+		const [attemptId] = await readdir(join(runs, "sessions", "smoke"));
+		const record = parseSessionAttemptRecord(
+			await Bun.file(
+				join(runs, "sessions", "smoke", attemptId ?? "", "attempt.json"),
+			).text(),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInvocationError);
+		expect(record).toMatchObject({
+			schemaVersion: 2,
+			outcome: "EXECUTION_FAILED",
+			error: "provider rejected the session",
+			transcriptDiagnostics: {
+				state: "complete",
+				prefixLinesExcluded: 0,
+				sourceLineCount: 9,
+				measuredLineCount: 9,
+				toolUseOccurrences: { total: 4 },
+				toolErrors: [{ toolUseId: "bash-2" }],
+				repeatedBashCommands: [{ preview: "ls" }],
+			},
 		});
 	});
 

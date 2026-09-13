@@ -22,11 +22,24 @@ const toolUseSchema = z.looseObject({
 });
 
 const transcriptRecordSchema = z.looseObject({
+	type: z.string().optional(),
 	message: z
 		.looseObject({
-			content: z.union([z.string(), z.array(z.unknown())]).optional(),
+			content: z.unknown().optional(),
 		})
 		.optional(),
+});
+
+const assistantRecordSchema = z.looseObject({
+	type: z.literal("assistant"),
+	message: z.looseObject({ content: z.array(z.unknown()) }),
+});
+
+const userRecordSchema = z.looseObject({
+	type: z.literal("user"),
+	message: z.looseObject({
+		content: z.union([z.string(), z.array(z.unknown())]),
+	}),
 });
 
 const toolResultSchema = z.looseObject({
@@ -103,6 +116,8 @@ const observedToolUseCountsSchema = z
 	})
 	.strict();
 
+const MAX_PREVIEW_CODE_UNITS = 160;
+
 const toolErrorSchema = z
 	.object({
 		toolUseId: z.string().min(1).optional(),
@@ -118,7 +133,7 @@ const repeatedBashCommandSchema = z
 			.string()
 			.regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
 		commandCharacters: z.number().int().nonnegative(),
-		preview: z.string(),
+		preview: z.string().max(MAX_PREVIEW_CODE_UNITS),
 		previewTruncated: z.boolean(),
 		occurrences: z
 			.array(
@@ -133,47 +148,135 @@ const repeatedBashCommandSchema = z
 	})
 	.strict();
 
-const transcriptObservationsSchema = {
+const transcriptObservationFields = {
 	prefixLinesExcluded: z.number().int().nonnegative(),
 	sourceLineCount: z.number().int().nonnegative(),
 	measuredLineCount: z.number().int().nonnegative(),
 	toolUseOccurrences: observedToolUseCountsSchema,
 	toolErrors: z.array(toolErrorSchema),
 	repeatedBashCommands: z.array(repeatedBashCommandSchema),
-	issues: z.array(diagnosticIssueSchema),
 };
 
-export const transcriptDiagnosticsSchema = z.discriminatedUnion("state", [
-	z
-		.object({
-			state: z.literal("complete"),
-			...transcriptObservationsSchema,
-		})
-		.strict(),
-	z
-		.object({
-			state: z.literal("partial"),
-			...transcriptObservationsSchema,
-		})
-		.strict(),
-	z
-		.object({
-			state: z.literal("unavailable"),
-			prefixLinesExcluded: z.number().int().nonnegative(),
-		})
-		.strict(),
-]);
+export const transcriptDiagnosticsSchema = z
+	.discriminatedUnion("state", [
+		z
+			.object({
+				state: z.literal("complete"),
+				...transcriptObservationFields,
+				issues: z.array(diagnosticIssueSchema).length(0),
+			})
+			.strict(),
+		z
+			.object({
+				state: z.literal("partial"),
+				...transcriptObservationFields,
+				issues: z.array(diagnosticIssueSchema).min(1),
+			})
+			.strict(),
+		z
+			.object({
+				state: z.literal("unavailable"),
+				prefixLinesExcluded: z.number().int().nonnegative(),
+			})
+			.strict(),
+	])
+	.superRefine((diagnostics, context) => {
+		if (diagnostics.state === "unavailable") {
+			return;
+		}
+
+		const namedTotal = diagnostics.toolUseOccurrences.byName.reduce(
+			(total, tool) => total + tool.count,
+			0,
+		);
+		if (namedTotal !== diagnostics.toolUseOccurrences.total) {
+			context.addIssue({
+				code: "custom",
+				message: "Per-tool occurrence counts must sum to the total",
+				path: ["toolUseOccurrences"],
+			});
+		}
+		const names = diagnostics.toolUseOccurrences.byName.map(({ name }) => name);
+		if (new Set(names).size !== names.length) {
+			context.addIssue({
+				code: "custom",
+				message: "Per-tool occurrence names must be unique",
+				path: ["toolUseOccurrences", "byName"],
+			});
+		}
+
+		let previousGroup: TranscriptLocation | undefined;
+		for (const [
+			groupIndex,
+			group,
+		] of diagnostics.repeatedBashCommands.entries()) {
+			const ids = group.occurrences.map(({ toolUseId }) => toolUseId);
+			if (new Set(ids).size !== ids.length) {
+				context.addIssue({
+					code: "custom",
+					message: "Repeated commands require distinct tool-use IDs",
+					path: ["repeatedBashCommands", groupIndex, "occurrences"],
+				});
+			}
+
+			for (let index = 1; index < group.occurrences.length; index += 1) {
+				const previous = group.occurrences[index - 1];
+				const current = group.occurrences[index];
+				if (
+					previous !== undefined &&
+					current !== undefined &&
+					!locationPrecedes(previous.location, current.location)
+				) {
+					context.addIssue({
+						code: "custom",
+						message: "Repeated-command occurrences must follow source order",
+						path: ["repeatedBashCommands", groupIndex, "occurrences", index],
+					});
+				}
+			}
+
+			const first = group.occurrences[0]?.location;
+			if (
+				previousGroup !== undefined &&
+				first !== undefined &&
+				!locationPrecedes(previousGroup, first)
+			) {
+				context.addIssue({
+					code: "custom",
+					message: "Repeated-command groups must follow source order",
+					path: ["repeatedBashCommands", groupIndex],
+				});
+			}
+			previousGroup = first;
+		}
+	});
 
 export type TranscriptDiagnostics = z.infer<typeof transcriptDiagnosticsSchema>;
 
+function locationPrecedes(
+	left: Readonly<TranscriptLocation>,
+	right: Readonly<TranscriptLocation>,
+): boolean {
+	return (
+		left.line < right.line ||
+		(left.line === right.line && left.block < right.block)
+	);
+}
+
 interface LocatedToolUse {
 	readonly use: ToolUse;
+	readonly toolUseId: string | undefined;
 	readonly location: TranscriptLocation;
 }
 
 interface LocatedToolResult {
 	readonly toolUseId: string | undefined;
 	readonly isError: boolean;
+	readonly location: TranscriptLocation;
+}
+
+interface LocatedToolIdentity {
+	readonly toolUseId: string | undefined;
 	readonly location: TranscriptLocation;
 }
 
@@ -187,8 +290,8 @@ interface IdentifiedToolUse {
 	readonly location: TranscriptLocation;
 }
 
-interface DiagnosticGrouping<Entry> {
-	readonly byId: ReadonlyMap<string, Immutable<readonly Entry[]>>;
+interface DiagnosticGrouping<Entry extends Immutable<LocatedToolIdentity>> {
+	readonly byId: ReadonlyMap<string, readonly Entry[]>;
 	readonly issues: readonly LocatedDiagnosticIssue[];
 }
 
@@ -246,8 +349,24 @@ function readLine(line: string, lineNumber: number): TranscriptLine {
 		return emptyTranscriptLine(lineNumber, "invalid-message-content");
 	}
 
-	const content = record.data.message?.content;
-	const blocks = Array.isArray(content) ? content : [];
+	let blocks: readonly unknown[] = [];
+	if (record.data.type === "assistant") {
+		const assistant = assistantRecordSchema.safeParse(parsed);
+		if (!assistant.success) {
+			return emptyTranscriptLine(lineNumber, "invalid-message-content");
+		}
+		blocks = assistant.data.message.content;
+	} else if (record.data.type === "user") {
+		const user = userRecordSchema.safeParse(parsed);
+		if (!user.success) {
+			return emptyTranscriptLine(lineNumber, "invalid-message-content");
+		}
+		blocks = Array.isArray(user.data.message.content)
+			? user.data.message.content
+			: [];
+	} else if (record.data.message !== undefined) {
+		return emptyTranscriptLine(lineNumber, "invalid-message-content");
+	}
 	const locatedToolUses: LocatedToolUse[] = [];
 	const locatedToolResults: LocatedToolResult[] = [];
 	const diagnosticIssues: LocatedDiagnosticIssue[] = [];
@@ -266,7 +385,11 @@ function readLine(line: string, lineNumber: number): TranscriptLine {
 		if (typed.data.type === "tool_use") {
 			const use = toolUseSchema.safeParse(block);
 			if (use.success) {
-				locatedToolUses.push({ use: use.data, location });
+				locatedToolUses.push({
+					use: use.data,
+					toolUseId: use.data.id,
+					location,
+				});
 			} else {
 				diagnosticIssues.push({ kind: "invalid-tool-use", location });
 			}
@@ -369,7 +492,6 @@ export interface TranscriptDiagnosticsInput {
 	readonly sourceAvailable: boolean;
 }
 
-const MAX_PREVIEW_CHARACTERS = 160;
 const MAX_ISSUE_LOCATIONS = 20;
 
 export function transcriptDiagnostics(
@@ -399,8 +521,16 @@ export function transcriptDiagnostics(
 		});
 	}
 
-	const groupedUses = groupUsesById(uses);
-	const groupedResults = groupResultsById(results);
+	const groupedUses = groupByToolUseId(
+		uses,
+		"missing-tool-use-id",
+		"duplicate-tool-use-id",
+	);
+	const groupedResults = groupByToolUseId(
+		results,
+		"missing-tool-result-id",
+		"duplicate-tool-result",
+	);
 	const joiningIssues = joinIssues(groupedUses.byId, groupedResults.byId);
 	const repeated = repeatedBashCommands(uses, groupedUses.byId);
 	issues.push(
@@ -426,59 +556,28 @@ export function transcriptDiagnostics(
 	});
 }
 
-function groupUsesById(
-	uses: Immutable<readonly LocatedToolUse[]>,
-): DiagnosticGrouping<LocatedToolUse> {
-	const grouped = new Map<string, LocatedToolUse[]>();
+function groupByToolUseId<Entry extends Immutable<LocatedToolIdentity>>(
+	entries: readonly Entry[],
+	missingKind: LocatedDiagnosticIssue["kind"],
+	duplicateKind: LocatedDiagnosticIssue["kind"],
+): DiagnosticGrouping<Entry> {
+	const grouped = new Map<string, Entry[]>();
 	const issues: LocatedDiagnosticIssue[] = [];
-	for (const use of uses) {
-		const { id } = use.use;
-		if (id === undefined) {
-			issues.push({ kind: "missing-tool-use-id", location: use.location });
+	for (const entry of entries) {
+		if (entry.toolUseId === undefined) {
+			issues.push({ kind: missingKind, location: entry.location });
 			continue;
 		}
 
-		const occurrences = grouped.get(id) ?? [];
-		occurrences.push(use);
-		grouped.set(id, occurrences);
+		const occurrences = grouped.get(entry.toolUseId) ?? [];
+		occurrences.push(entry);
+		grouped.set(entry.toolUseId, occurrences);
 	}
 	for (const occurrences of grouped.values()) {
 		if (occurrences.length > 1) {
 			issues.push(
 				...occurrences.map(({ location }) => ({
-					kind: "duplicate-tool-use-id" as const,
-					location,
-				})),
-			);
-		}
-	}
-
-	return { byId: grouped, issues };
-}
-
-function groupResultsById(
-	results: Immutable<readonly LocatedToolResult[]>,
-): DiagnosticGrouping<LocatedToolResult> {
-	const grouped = new Map<string, LocatedToolResult[]>();
-	const issues: LocatedDiagnosticIssue[] = [];
-	for (const result of results) {
-		if (result.toolUseId === undefined) {
-			issues.push({
-				kind: "missing-tool-result-id",
-				location: result.location,
-			});
-			continue;
-		}
-
-		const occurrences = grouped.get(result.toolUseId) ?? [];
-		occurrences.push(result);
-		grouped.set(result.toolUseId, occurrences);
-	}
-	for (const occurrences of grouped.values()) {
-		if (occurrences.length > 1) {
-			issues.push(
-				...occurrences.map(({ location }) => ({
-					kind: "duplicate-tool-result" as const,
+					kind: duplicateKind,
 					location,
 				})),
 			);
@@ -579,13 +678,13 @@ function repeatedBashCommands(
 			continue;
 		}
 
-		const { id } = use.use;
-		if (id === undefined || usesById.get(id)?.length !== 1) {
+		const { toolUseId } = use;
+		if (toolUseId === undefined || usesById.get(toolUseId)?.length !== 1) {
 			continue;
 		}
 
 		const occurrences = grouped.get(command) ?? [];
-		occurrences.push({ toolUseId: id, location: use.location });
+		occurrences.push({ toolUseId, location: use.location });
 		grouped.set(command, occurrences);
 	}
 
@@ -599,25 +698,30 @@ function repeatedBashCommands(
 	};
 }
 
-const COMMAND_SEGMENTER = new Intl.Segmenter(undefined, {
-	granularity: "grapheme",
-});
-
 function describeRepeatedCommand(
 	command: string,
 	occurrences: Immutable<readonly IdentifiedToolUse[]>,
 ): z.infer<typeof repeatedBashCommandSchema> {
-	const characters = Array.from(
-		COMMAND_SEGMENTER.segment(command),
-		({ segment }) => segment,
-	);
-	const preview = characters.slice(0, MAX_PREVIEW_CHARACTERS).join("");
+	let commandCharacters = 0;
+	let preview = "";
+	let previewComplete = true;
+	for (const character of command) {
+		commandCharacters += 1;
+		if (
+			!previewComplete ||
+			preview.length + character.length > MAX_PREVIEW_CODE_UNITS
+		) {
+			previewComplete = false;
+			continue;
+		}
+		preview += character;
+	}
 
 	return {
 		commandSha256: new Bun.CryptoHasher("sha256").update(command).digest("hex"),
-		commandCharacters: characters.length,
+		commandCharacters,
 		preview,
-		previewTruncated: characters.length > MAX_PREVIEW_CHARACTERS,
+		previewTruncated: !previewComplete,
 		occurrences: occurrences.map(({ toolUseId, location }) => ({
 			toolUseId,
 			location,

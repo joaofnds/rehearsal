@@ -4,7 +4,10 @@ import type {
 	LegacySessionAttemptRecord,
 	SessionAttemptRecord,
 } from "#benchmark/session-record";
-import { sessionAttemptRecordSchema } from "#benchmark/session-record";
+import {
+	parseSessionAttemptRecord,
+	sessionAttemptRecordSchema,
+} from "#benchmark/session-record";
 
 function record(
 	overrides: Immutable<Partial<LegacySessionAttemptRecord>> = {},
@@ -191,6 +194,27 @@ describe("sessionAttemptRecordSchema", () => {
 		expect(
 			sessionAttemptRecordSchema.parse(record()).transcriptDiagnostics,
 		).toBeUndefined();
+	});
+
+	it("keeps the persisted transcript cut without consulting a current case declaration", () => {
+		const parsed = parseSessionAttemptRecord(
+			JSON.stringify(
+				record({
+					transcriptDiagnostics: {
+						state: "complete",
+						prefixLinesExcluded: 2,
+						sourceLineCount: 5,
+						measuredLineCount: 3,
+						toolUseOccurrences: { total: 0, byName: [] },
+						toolErrors: [],
+						repeatedBashCommands: [],
+						issues: [],
+					},
+				}),
+			),
+		);
+
+		expect(parsed.transcriptDiagnostics?.prefixLinesExcluded).toBe(2);
 	});
 
 	it("refuses a divergence naming a kind that does not exist", () => {

@@ -120,6 +120,21 @@ describe(captureTranscriptPrefix.name, () => {
 		expect(written).toBe(`${original.split("\n").slice(0, 3).join("\n")}\n`);
 	});
 
+	it("counts JSONL records rather than blank physical lines at the cut", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
+		testResources.track(directory);
+		const path = join(directory, "source.jsonl");
+		await writeFile(path, '{"ordinal":0}\n\n{"ordinal":1}\n{"ordinal":2}\n');
+		const target = await destination();
+
+		const captured = await captureTranscriptPrefix(path, target, 2);
+
+		expect(captured.lines).toBe(2);
+		expect(await Bun.file(target).text()).toBe(
+			'{"ordinal":0}\n\n{"ordinal":1}\n',
+		);
+	});
+
 	it("writes a prefix byte-identical to the source's first lines when the source exceeds one read buffer", async () => {
 		const path = await source(400);
 		const target = await destination();

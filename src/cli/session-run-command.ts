@@ -22,6 +22,7 @@ import {
 	runSessionAttempt,
 	SessionInputError,
 } from "#benchmark/session-attempt";
+import { SessionInvocationError } from "#benchmark/session-invocation-error";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import { snapshotSessionCorpus } from "#benchmark/session-corpus";
 import { sessionAttemptPaths } from "#benchmark/run-layout";
@@ -180,28 +181,46 @@ export async function runSessionDebugAttempt(
 	const lineage = await lineageOf(sessionCase, corpusFiles, settings);
 
 	const startedAt = Date.now();
-	const attempt = await attempted({
-		sessionCase,
-		settings,
-		projectsDirectory: request.projectsDirectory,
-		recordDirectory,
-		runClaude: request.runClaude,
-		corpusSnapshot: corpus.snapshot,
-	});
-
-	const record = buildSessionAttemptRecord({
-		sessionCase,
-		settings,
-		lineage,
-		corpusFiles,
-		corpusOrigin: corpus.snapshot.origin,
-		attempt,
-		elapsedMs: Date.now() - startedAt,
-	});
 	const { recordFile } = attemptPaths;
-	await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
+	const persist = async (
+		attempt: Immutable<SessionAttempt>,
+		error?: string,
+	): Promise<SessionRunOutcome> => {
+		const record = buildSessionAttemptRecord({
+			sessionCase,
+			settings,
+			lineage,
+			corpusFiles,
+			corpusOrigin: corpus.snapshot.origin,
+			attempt,
+			elapsedMs: Date.now() - startedAt,
+			error,
+		});
+		await Bun.write(recordFile, `${JSON.stringify(record, null, 2)}\n`);
 
-	return { recordFile, record };
+		return { recordFile, record };
+	};
+
+	let attempt: SessionAttempt;
+	try {
+		attempt = await attempted({
+			sessionCase,
+			settings,
+			projectsDirectory: request.projectsDirectory,
+			recordDirectory,
+			runClaude: request.runClaude,
+			corpusSnapshot: corpus.snapshot,
+		});
+	} catch (error) {
+		if (!(error instanceof SessionInvocationError)) {
+			throw error;
+		}
+
+		await persist(error.attempt, error.message);
+		throw error;
+	}
+
+	return persist(attempt);
 }
 
 /**

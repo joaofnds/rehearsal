@@ -10,6 +10,7 @@ import {
 	parseTranscriptFile,
 	skillsInvoked,
 	transcriptDiagnostics,
+	transcriptDiagnosticsSchema,
 	toolUses,
 } from "#benchmark/transcript";
 import { TestResources } from "#benchmark/test-support";
@@ -192,6 +193,161 @@ describe(transcriptDiagnostics.name, () => {
 		).toEqual({
 			state: "unavailable",
 			prefixLinesExcluded: 7,
+		});
+	});
+
+	it("rejects contradictory persisted completeness states", () => {
+		const complete = transcriptDiagnostics({
+			lines: parseTranscript(
+				line({ type: "user", message: { content: "hello" } }),
+			),
+			prefixLinesExcluded: 0,
+			sourceAvailable: true,
+		});
+		const issue = {
+			kind: "invalid-json" as const,
+			occurrences: 1,
+			locations: [{ line: 1, block: 1 }],
+			locationsTruncated: false,
+		};
+
+		expect(
+			transcriptDiagnosticsSchema.safeParse({ ...complete, issues: [issue] })
+				.success,
+		).toBe(false);
+		expect(
+			transcriptDiagnosticsSchema.safeParse({
+				...complete,
+				state: "partial",
+				issues: [],
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects contradictory persisted counts, repeat identities, order, and preview bounds", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith(bashCall("bash-1", "pwd")),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-1")] },
+				}),
+				assistantWith(bashCall("bash-2", "pwd")),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-2")] },
+				}),
+			].join("\n"),
+		);
+		const complete = transcriptDiagnostics({
+			lines: transcript,
+			prefixLinesExcluded: 0,
+			sourceAvailable: true,
+		});
+		if (complete.state !== "complete") {
+			throw new Error("Expected complete transcript diagnostics");
+		}
+		const [repeat] = complete.repeatedBashCommands;
+		if (repeat === undefined) {
+			throw new Error("Expected repeated Bash command evidence");
+		}
+
+		expect(
+			transcriptDiagnosticsSchema.safeParse({
+				...complete,
+				toolUseOccurrences: { ...complete.toolUseOccurrences, total: 1 },
+			}).success,
+		).toBe(false);
+		expect(
+			transcriptDiagnosticsSchema.safeParse({
+				...complete,
+				repeatedBashCommands: [
+					{
+						...repeat,
+						occurrences: repeat.occurrences.map((occurrence) => ({
+							...occurrence,
+							toolUseId: "duplicate",
+						})),
+					},
+				],
+			}).success,
+		).toBe(false);
+		expect(
+			transcriptDiagnosticsSchema.safeParse({
+				...complete,
+				repeatedBashCommands: [
+					{ ...repeat, occurrences: repeat.occurrences.toReversed() },
+				],
+			}).success,
+		).toBe(false);
+		expect(
+			transcriptDiagnosticsSchema.safeParse({
+				...complete,
+				repeatedBashCommands: [{ ...repeat, preview: "x".repeat(161) }],
+			}).success,
+		).toBe(false);
+	});
+
+	it("treats string-valued assistant content as malformed evidence", () => {
+		const transcript = parseTranscript(
+			line({ type: "assistant", message: { content: "not block content" } }),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "invalid-message-content",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
+	it("does not accept tool-shaped message content from an unknown record kind", () => {
+		const transcript = parseTranscript(
+			line({
+				type: "future-assistant",
+				message: { content: [bashCall("bash-1", "pwd")] },
+			}),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "invalid-message-content",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
 		});
 	});
 
@@ -420,6 +576,166 @@ describe(transcriptDiagnostics.name, () => {
 		});
 	});
 
+	it("names invalid tool blocks and duplicate result identities", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith({
+					type: "tool_use",
+					id: "invalid-use",
+					name: "Bash",
+					input: "not an object",
+				}),
+				line({
+					type: "user",
+					message: {
+						content: [
+							{
+								type: "tool_result",
+								tool_use_id: "invalid-result",
+								is_error: "yes",
+							},
+						],
+					},
+				}),
+				assistantWith(readCall("read-1")),
+				line({
+					type: "user",
+					message: {
+						content: [toolResult("read-1"), toolResult("read-1")],
+					},
+				}),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 4,
+			measuredLineCount: 4,
+			toolUseOccurrences: {
+				total: 1,
+				byName: [{ name: "Read", count: 1 }],
+			},
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "invalid-tool-use",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+				{
+					kind: "invalid-tool-result",
+					occurrences: 1,
+					locations: [{ line: 2, block: 1 }],
+					locationsTruncated: false,
+				},
+				{
+					kind: "duplicate-tool-result",
+					occurrences: 2,
+					locations: [
+						{ line: 4, block: 1 },
+						{ line: 4, block: 2 },
+					],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
+	it("marks a Bash call without a string command partial", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith({
+					type: "tool_use",
+					id: "bash-1",
+					name: "Bash",
+					input: {},
+				}),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-1")] },
+				}),
+			].join("\n"),
+		);
+
+		expect(
+			transcriptDiagnostics({
+				lines: transcript,
+				prefixLinesExcluded: 0,
+				sourceAvailable: true,
+			}),
+		).toEqual({
+			state: "partial",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 2,
+			measuredLineCount: 2,
+			toolUseOccurrences: {
+				total: 1,
+				byName: [{ name: "Bash", count: 1 }],
+			},
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [
+				{
+					kind: "invalid-bash-command",
+					occurrences: 1,
+					locations: [{ line: 1, block: 1 }],
+					locationsTruncated: false,
+				},
+			],
+		});
+	});
+
+	it("orders repeat groups and their calls by first source occurrence", () => {
+		const transcript = parseTranscript(
+			[
+				assistantWith(bashCall("pwd-1", "pwd")),
+				assistantWith(bashCall("ls-1", "ls")),
+				line({
+					type: "user",
+					message: {
+						content: [toolResult("pwd-1"), toolResult("ls-1")],
+					},
+				}),
+				assistantWith(bashCall("ls-2", "ls")),
+				assistantWith(bashCall("pwd-2", "pwd")),
+				line({
+					type: "user",
+					message: {
+						content: [toolResult("ls-2"), toolResult("pwd-2")],
+					},
+				}),
+			].join("\n"),
+		);
+		const diagnostics = transcriptDiagnostics({
+			lines: transcript,
+			prefixLinesExcluded: 0,
+			sourceAvailable: true,
+		});
+
+		expect(diagnostics.state).toBe("complete");
+		if (diagnostics.state !== "complete") {
+			throw new Error("Expected complete transcript diagnostics");
+		}
+		expect(
+			diagnostics.repeatedBashCommands.map(({ preview, occurrences }) => ({
+				preview,
+				lines: occurrences.map(({ location }) => location.line),
+			})),
+		).toEqual([
+			{ preview: "pwd", lines: [1, 5] },
+			{ preview: "ls", lines: [2, 4] },
+		]);
+	});
+
 	it("bounds the persisted repeated-command preview", () => {
 		const command = "x".repeat(161);
 		const transcript = parseTranscript(
@@ -459,6 +775,39 @@ describe(transcriptDiagnostics.name, () => {
 				{ toolUseId: "bash-2", location: { line: 3, block: 1 } },
 			],
 		});
+	});
+
+	it("bounds a repeated command containing an unbounded combining sequence", () => {
+		const command = `a${"\u0301".repeat(10_000)}`;
+		const transcript = parseTranscript(
+			[
+				assistantWith(bashCall("bash-1", command)),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-1")] },
+				}),
+				assistantWith(bashCall("bash-2", command)),
+				line({
+					type: "user",
+					message: { content: [toolResult("bash-2")] },
+				}),
+			].join("\n"),
+		);
+		const diagnostics = transcriptDiagnostics({
+			lines: transcript,
+			prefixLinesExcluded: 0,
+			sourceAvailable: true,
+		});
+
+		expect(diagnostics.state).toBe("complete");
+		if (diagnostics.state !== "complete") {
+			throw new Error("Expected complete transcript diagnostics");
+		}
+		expect(diagnostics.repeatedBashCommands[0]).toMatchObject({
+			commandCharacters: 10_001,
+			previewTruncated: true,
+		});
+		expect(diagnostics.repeatedBashCommands[0]?.preview).toHaveLength(160);
 	});
 });
 

@@ -69,6 +69,29 @@ function toolUseLine(sessionId: string): string {
 	});
 }
 
+function bashToolUseLine(
+	sessionId: string,
+	id: string,
+	command: string,
+): string {
+	return JSON.stringify({
+		type: "assistant",
+		sessionId,
+		message: {
+			content: [{ type: "tool_use", id, name: "Bash", input: { command } }],
+		},
+	});
+}
+
+function toolResultLine(id: string, isError = false): string {
+	return JSON.stringify({
+		type: "user",
+		message: {
+			content: [{ type: "tool_result", tool_use_id: id, is_error: isError }],
+		},
+	});
+}
+
 function readFileLine(sessionId: string, filePath: string): string {
 	return JSON.stringify({
 		type: "assistant",
@@ -717,6 +740,66 @@ describe(runSessionAttempt.name, () => {
 		});
 	});
 
+	it("keeps the first post-cut call when the captured prefix contains a blank physical line", async () => {
+		const prefix = await writtenPrefix(
+			`${transcriptLine(SOURCE_SESSION, "first")}\n\n${transcriptLine(SOURCE_SESSION, "second")}\n`,
+		);
+		const projects = await projectsRoot();
+		const base = resumingCase(prefix.path, prefix.sha256);
+		const resumed = {
+			...base,
+			declaration: {
+				...base.declaration,
+				transcript: {
+					file: "prefix.jsonl",
+					sha256: prefix.sha256,
+					sourceSession: SOURCE_SESSION,
+					cut: 2,
+				},
+			},
+		};
+
+		const attempt = await runSessionAttempt(
+			request({
+				sessionCase: resumed,
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: async (command, cwd) => {
+					const sessionId = command[command.indexOf("--resume") + 1] ?? "";
+					const slug = join(projects, projectSlug(await realpath(cwd)));
+					const file = join(slug, `${sessionId}.jsonl`);
+					await writeFile(
+						file,
+						`${await Bun.file(file).text()}${bashToolUseLine(sessionId, "bash-1", "pwd")}\n${toolResultLine("bash-1", true)}\n${transcriptLine(sessionId, "OK")}\n`,
+					);
+
+					return envelope("OK");
+				},
+			}),
+		);
+
+		expect(attempt.transcriptDiagnostics).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 2,
+			sourceLineCount: 6,
+			measuredLineCount: 3,
+			toolUseOccurrences: {
+				total: 1,
+				byName: [{ name: "Bash", count: 1 }],
+			},
+			toolErrors: [
+				{
+					toolUseId: "bash-1",
+					toolName: "Bash",
+					call: { line: 4, block: 1 },
+					result: { line: 5, block: 1 },
+				},
+			],
+			repeatedBashCommands: [],
+			issues: [],
+		});
+	});
+
 	it("scores a tool-calls check against the turn under test, not the seeded transcript prefix", async () => {
 		const prefix = await writtenPrefix(`${toolUseLine(SOURCE_SESSION)}\n`);
 		const projects = await projectsRoot();
@@ -1043,6 +1126,37 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(attempt.checks).toEqual([]);
+	});
+
+	it("retains nonzero tool diagnostics when the session produced no reply", async () => {
+		const projects = await projectsRoot();
+		const run = claudeWriting(
+			projects,
+			(sessionId) => [
+				bashToolUseLine(sessionId, "bash-1", "pwd"),
+				toolResultLine("bash-1"),
+			],
+			"OK",
+		);
+
+		const attempt = await runSessionAttempt(
+			request({
+				projectsDirectory: projects,
+				recordDirectory: await recordDirectory(),
+				runClaude: replylessClaude(run),
+			}),
+		);
+
+		expect(attempt).toMatchObject({
+			outcome: "NO_REPLY",
+			transcriptDiagnostics: {
+				state: "complete",
+				toolUseOccurrences: {
+					total: 1,
+					byName: [{ name: "Bash", count: 1 }],
+				},
+			},
+		});
 	});
 
 	it("records no context manifest when the session produced no reply", async () => {
