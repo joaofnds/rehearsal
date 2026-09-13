@@ -118,12 +118,15 @@ export type RunOutcome =
 export interface RunCommandDependencies {
 	readonly output: CommandOutput;
 	readonly requireCase: (caseId: string) => Promise<LoadedCase>;
-	readonly assertPreflight: (inputs: PipelinePreflightInputs) => Promise<void>;
+	readonly assertPreflight: (
+		inputs: PipelinePreflightInputs,
+	) => Promise<LoadedStageSettings>;
 	readonly probeModel: (model: string) => Promise<ModelPreflightEvidence>;
 	readonly execute: (
 		config: BenchmarkConfig,
 		output: CommandOutput,
 		benchmarkCase: BenchmarkCase,
+		loadedSettings: LoadedStageSettings,
 	) => Promise<RunOutcome>;
 	readonly executeSession: (
 		config: SessionRunConfig,
@@ -174,7 +177,7 @@ export async function runRunCommand(
 	const selected = await asRefusedPrecondition(() =>
 		selectedCase(benchmarkCase, config),
 	);
-	await dependencies.assertPreflight({
+	const loadedSettings = await dependencies.assertPreflight({
 		sourceDir: config.sourceDir,
 		settingsFilePath: selected.settingsFilePath,
 		model: config.model,
@@ -184,6 +187,7 @@ export async function runRunCommand(
 		config,
 		dependencies.output,
 		selected,
+		loadedSettings,
 	);
 
 	await writeRecord(dependencies.output, outcome.recordFile, request.json);

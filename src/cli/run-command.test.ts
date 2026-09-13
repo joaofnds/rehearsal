@@ -34,8 +34,13 @@ const args = [
 const neverASession: RunCommandDependencies["executeSession"] = () =>
 	Promise.reject(new Error("a session attempt must not start"));
 
+const loadedStageSettings = {
+	json: '{"disableAllHooks":true}',
+	hashed: { path: "stage-settings.json", sha256: "b".repeat(64) },
+};
+
 const passingPreflight: RunCommandDependencies["assertPreflight"] = () =>
-	Promise.resolve();
+	Promise.resolve(loadedStageSettings);
 
 const missingPreflight = {
 	status: "MISSING",
@@ -292,10 +297,11 @@ describe(runRunCommand.name, () => {
 		expect(targets).toEqual(["/declared/target"]);
 	});
 
-	it("preflights the case's target, settings file, and model before the run starts", async () => {
+	it("passes the settings loaded by preflight into the run", async () => {
 		const preflighted: Parameters<
 			RunCommandDependencies["assertPreflight"]
 		>[0][] = [];
+		const executedWith: unknown[] = [];
 		const { output } = recordOutput();
 
 		await runRunCommand(
@@ -306,15 +312,18 @@ describe(runRunCommand.name, () => {
 				assertPreflight: (inputs) => {
 					preflighted.push(inputs);
 
-					return Promise.resolve();
+					return Promise.resolve(loadedStageSettings);
 				},
 				probeModel: passingProbe,
 				executeSession: neverASession,
-				execute: () =>
-					Promise.resolve({
+				execute: (_config, _output, _case, settings) => {
+					executedWith.push(settings);
+
+					return Promise.resolve({
 						kind: "debug" as const,
 						recordFile: "/runs/2026.json",
-					}),
+					});
+				},
 			},
 		);
 
@@ -325,6 +334,7 @@ describe(runRunCommand.name, () => {
 				model: "sonnet",
 			},
 		]);
+		expect(executedWith).toEqual([loadedStageSettings]);
 	});
 
 	it("hands the run the case it loaded, with the case's own pipeline", async () => {

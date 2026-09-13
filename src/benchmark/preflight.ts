@@ -226,15 +226,17 @@ const defaultPipelinePreflightDependencies: PipelinePreflightDependencies = {
 export async function assertPipelinePreflight(
 	inputs: PipelinePreflightInputs,
 	dependencies: PipelinePreflightDependencies = defaultPipelinePreflightDependencies,
-): Promise<void> {
+): Promise<LoadedStageSettings> {
 	await asTargetPrecondition(() => dependencies.assertControlReady());
 	await asTargetPrecondition(() =>
 		dependencies.assertSourceReady(inputs.sourceDir),
 	);
-	await asRefusedPrecondition(() =>
+	const loadedSettings = await asRefusedPrecondition(() =>
 		dependencies.loadStageSettings(inputs.settingsFilePath),
 	);
 	await dependencies.probeModel(inputs.model);
+
+	return loadedSettings;
 }
 
 /**
