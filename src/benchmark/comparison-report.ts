@@ -56,7 +56,7 @@ function reportResourceCase(
 	return benchmarkCase;
 }
 
-export interface BuildReportArmRequest {
+interface BuildReportArmRequest {
 	readonly evidence: ComparisonArmEvidence;
 	readonly contract: ComparisonProjectionInput["contract"];
 	readonly quality: readonly ReliabilitySummary[];

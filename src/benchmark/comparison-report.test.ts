@@ -136,6 +136,42 @@ function changeFirstSummary(
 	};
 }
 
+function markFirstOutcomeSuccessful(
+	arm: ReportArm,
+	name: string,
+	grade: string,
+	gradeDistribution: Readonly<Record<string, number>>,
+): MalformedReportArm {
+	return {
+		...arm,
+		source: {
+			...arm.source,
+			reps: Array.from(arm.source.reps, (rep, repIndex) => ({
+				...rep,
+				outcomes: Array.from(rep.outcomes, (outcome) =>
+					repIndex === 0 && outcome.name === name
+						? { ...outcome, grade, successful: true }
+						: outcome,
+				),
+			})),
+		},
+		quality: Array.from(arm.quality, (summary) =>
+			summary.name === name ? { ...summary, gradeDistribution } : summary,
+		),
+	};
+}
+
+function currentComparisonReport(): ComparisonReport {
+	return buildComparisonReport(comparisonEvidenceFixture(), {
+		skippedCalibrations: 0,
+		baselines: [],
+	});
+}
+
+function expectReportRejected(candidate: MalformedComparisonReport): void {
+	expect(() => parseComparisonReport(JSON.stringify(candidate))).toThrow();
+}
+
 describe(buildComparisonReport.name, () => {
 	it("keeps each repetition's outcomes when aggregate distributions match", () => {
 		const fixture = comparisonEvidenceFixture();
@@ -439,6 +475,50 @@ describe(buildComparisonReport.name, () => {
 		]);
 	});
 
+	it.each([
+		["error", "EXECUTION_FAILED"],
+		["metrics-missing", "METRICS_MISSING"],
+	] as const)("preserves a pipeline-final %s outcome", (final, status) => {
+		const fixture = comparisonEvidenceFixture();
+		const [firstCase] = fixture.cases;
+		if (firstCase === undefined) {
+			throw new Error("fixture has no first case");
+		}
+		const [replacement] = comparisonReps("case-1", "baseline", [
+			{ discussion: "pass", build: "pass", final },
+		]);
+		if (replacement === undefined) {
+			throw new Error("fixture has no replacement rep");
+		}
+		const evidence = {
+			...fixture,
+			cases: [
+				{
+					...firstCase,
+					arms: {
+						...firstCase.arms,
+						baseline: {
+							...firstCase.arms.baseline,
+							reps: Array.from(firstCase.arms.baseline.reps, (rep, index) =>
+								index === 0 ? { ...rep, record: replacement } : rep,
+							),
+						},
+					},
+				},
+				...fixture.cases.slice(1),
+			],
+		};
+
+		const report = buildComparisonReport(evidence, {
+			skippedCalibrations: 0,
+			baselines: [],
+		});
+		const outcome = report.cases[0]?.arms.baseline.source.reps[0]?.outcomes[2];
+
+		expect(outcome).toEqual({ name: "final", status, successful: false });
+		expect(outcome).not.toHaveProperty("grade");
+	});
+
 	it("parses persisted version-one and version-two reports strictly", () => {
 		const current = buildComparisonReport(comparisonEvidenceFixture(), {
 			skippedCalibrations: 0,
@@ -498,130 +578,232 @@ describe(buildComparisonReport.name, () => {
 		).toThrow();
 	});
 
-	it("rejects version-four reports whose outcomes disagree with their arm", () => {
-		const report = buildComparisonReport(comparisonEvidenceFixture(), {
-			skippedCalibrations: 0,
-			baselines: [],
-		});
-		const rejects = (candidate: MalformedComparisonReport): void => {
-			expect(() => parseComparisonReport(JSON.stringify(candidate))).toThrow();
-		};
+	it("rejects a source rep count that disagrees with report reps", () => {
+		const report = currentComparisonReport();
+		const successRate = 2 / 3;
+		const candidate = changeFirstBaseline(report, (arm) => ({
+			...arm,
+			source: { ...arm.source, reps: arm.source.reps.slice(0, -1) },
+			quality: Array.from(arm.quality, (summary) => ({
+				...summary,
+				requested: 3,
+				attempted: 3,
+				notReached: 0,
+				failed: 1,
+				successful: 2,
+				gradeDistribution:
+					summary.name === "final"
+						? { PASS: 2, FAIL: 1 }
+						: Object.fromEntries([
+								["A", 2],
+								["D", 1],
+							]),
+				successRate,
+				standardError: Math.sqrt((successRate * (1 - successRate)) / 3),
+				passK: successRate ** 3,
+			})),
+		}));
 
-		rejects(
-			changeFirstBaseline(report, (arm) => ({
-				...arm,
-				source: { ...arm.source, reps: arm.source.reps.slice(1) },
+		expectReportRejected(candidate);
+	});
+
+	it("rejects a source rep with no ordinal", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstRep(arm, (rep) => {
+				const { ordinal: _ordinal, ...withoutOrdinal } = rep;
+
+				return withoutOrdinal;
+			}),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it("rejects duplicate source rep ordinals", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeSecondRep(arm, (rep) => ({ ...rep, ordinal: 1 })),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it("rejects a source rep with no ID", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstRep(arm, (rep) => {
+				const { repId: _repId, ...withoutRepId } = rep;
+
+				return withoutRepId;
+			}),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it("rejects duplicate source rep IDs", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeSecondRep(arm, (rep) => ({
+				...rep,
+				repId: arm.source.reps[0]?.repId,
 			})),
 		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstRep(arm, (rep) => {
-					const { ordinal: _ordinal, ...withoutOrdinal } = rep;
 
-					return withoutOrdinal;
-				}),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeSecondRep(arm, (rep) => ({ ...rep, ordinal: 1 })),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstRep(arm, (rep) => {
-					const { repId: _repId, ...withoutRepId } = rep;
+		expectReportRejected(candidate);
+	});
 
-					return withoutRepId;
-				}),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeSecondRep(arm, (rep) => ({
+	it("rejects outcomes whose order disagrees with report measures", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstRep(arm, (rep) => {
+				const [firstOutcome, secondOutcome, ...remainingOutcomes] =
+					rep.outcomes;
+				if (firstOutcome === undefined || secondOutcome === undefined) {
+					throw new Error("comparison rep has fewer than two outcomes");
+				}
+
+				return {
 					...rep,
-					repId: arm.source.reps[0]?.repId,
-				})),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstRep(arm, (rep) => {
-					const [firstOutcome, secondOutcome, ...remainingOutcomes] =
-						rep.outcomes;
-					if (firstOutcome === undefined || secondOutcome === undefined) {
-						throw new Error("comparison rep has fewer than two outcomes");
-					}
-
-					return {
-						...rep,
-						outcomes: [secondOutcome, firstOutcome, ...remainingOutcomes],
-					};
-				}),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstOutcome(arm, (outcome) => ({
-					...outcome,
-					name: "wrong-measure",
-				})),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstOutcome(arm, (outcome) => ({
-					...outcome,
-					grade: "PASS",
-				})),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstRep(arm, (rep) => ({
-					...rep,
-					outcomes: Array.from(rep.outcomes, (outcome) =>
-						outcome.name === "final" ? { ...outcome, grade: "A" } : outcome,
-					),
-				})),
-			),
-		);
-		rejects(
-			changeFirstBaseline(report, (arm) =>
-				changeFirstSummary(arm, (summary) => ({
-					...summary,
-					name: "wrong-measure",
-				})),
-			),
+					outcomes: [secondOutcome, firstOutcome, ...remainingOutcomes],
+				};
+			}),
 		);
 
-		for (const field of [
-			"requested",
-			"attempted",
-			"notReached",
-			"failed",
-			"successful",
-			"successRate",
-			"standardError",
-			"passK",
-		] as const) {
-			rejects(
-				changeFirstBaseline(report, (arm) =>
-					changeFirstSummary(arm, (summary) => ({
-						...summary,
-						[field]: summary[field] + 0.01,
-					})),
-				),
+		expectReportRejected(candidate);
+	});
+
+	it("rejects an outcome name that disagrees with report measures", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstOutcome(arm, (outcome) => ({
+				...outcome,
+				name: "wrong-measure",
+			})),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it.each([
+		[
+			"stage",
+			"discuss",
+			"PASS",
+			Object.fromEntries([
+				["A", 1],
+				["D", 2],
+				["PASS", 1],
+			]),
+		],
+		[
+			"pipeline final",
+			"final",
+			"A",
+			Object.fromEntries([
+				["PASS", 1],
+				["FAIL", 2],
+				["A", 1],
+			]),
+		],
+	] as const)(
+		"rejects a grade outside the %s domain",
+		(_domain, name, grade, distribution) => {
+			const report = currentComparisonReport();
+			const candidate = changeFirstBaseline(report, (arm) =>
+				markFirstOutcomeSuccessful(arm, name, grade, distribution),
 			);
-		}
 
-		rejects(
-			changeFirstBaseline(report, (arm) =>
+			expectReportRejected(candidate);
+		},
+	);
+
+	it.each([
+		[
+			"stage",
+			"discuss",
+			"D",
+			Object.fromEntries([
+				["A", 1],
+				["D", 3],
+			]),
+		],
+		[
+			"pipeline final",
+			"final",
+			"FAIL",
+			Object.fromEntries([
+				["PASS", 1],
+				["FAIL", 3],
+			]),
+		],
+	] as const)(
+		"rejects a successful judged %s failure",
+		(_measure, name, grade, distribution) => {
+			const report = currentComparisonReport();
+			const candidate = changeFirstBaseline(report, (arm) =>
+				markFirstOutcomeSuccessful(arm, name, grade, distribution),
+			);
+
+			expectReportRejected(candidate);
+		},
+	);
+
+	it("rejects a quality name that disagrees with report measures", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstSummary(arm, (summary) => ({
+				...summary,
+				name: "wrong-measure",
+			})),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it.each([
+		"requested",
+		"attempted",
+		"notReached",
+		"failed",
+		"successful",
+	] as const)("rejects a changed %s count", (field) => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstSummary(arm, (summary) => ({
+				...summary,
+				[field]: summary[field] + 1,
+			})),
+		);
+
+		expectReportRejected(candidate);
+	});
+
+	it.each(["successRate", "standardError", "passK"] as const)(
+		"rejects a changed %s estimate",
+		(field) => {
+			const report = currentComparisonReport();
+			const candidate = changeFirstBaseline(report, (arm) =>
 				changeFirstSummary(arm, (summary) => ({
 					...summary,
-					gradeDistribution: Object.fromEntries([["A", 999]]),
+					[field]: summary[field] + 0.01,
 				})),
-			),
+			);
+
+			expectReportRejected(candidate);
+		},
+	);
+
+	it("rejects a changed grade distribution", () => {
+		const report = currentComparisonReport();
+		const candidate = changeFirstBaseline(report, (arm) =>
+			changeFirstSummary(arm, (summary) => ({
+				...summary,
+				gradeDistribution: Object.fromEntries([["A", 999]]),
+			})),
 		);
+
+		expectReportRejected(candidate);
 	});
 });

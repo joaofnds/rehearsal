@@ -10,10 +10,8 @@ import {
 	parseConfirmationRepRecord,
 } from "./confirmation-record";
 import type { SessionConfirmationGroupRecord } from "./confirmation-record";
-import { comparisonReliabilityRep } from "./comparison-quality";
 import { parseComparisonReport } from "./comparison-record";
 import { writeComparisonReport } from "./comparison-command";
-import { buildReliabilityOutcomes } from "./confirmation-report";
 import type { Immutable } from "./contracts";
 import { runSessionConfirmation } from "./session-confirmation";
 import type {
@@ -235,7 +233,12 @@ async function expectedSessionSource(
 		path: string;
 		sha256: string;
 		attempt: { path: string; sha256: string };
-		outcomes: ReturnType<typeof buildReliabilityOutcomes>;
+		outcomes: {
+			name: "checks";
+			status: "JUDGED";
+			grade: "A" | "F";
+			successful: boolean;
+		}[];
 	}[];
 }> {
 	const groupPath = sessionGroupFile(runsDirectory, caseId, role);
@@ -258,6 +261,9 @@ async function expectedSessionSource(
 			}
 			const attemptPath = join(dirname(repPath), stage.evidence.recordFile);
 			const attemptText = await Bun.file(attemptPath).text();
+			const successful =
+				role === "candidate" ||
+				(role === "baseline" && (caseId === "case-two" || ordinal === 1));
 
 			return {
 				repId,
@@ -268,13 +274,14 @@ async function expectedSessionSource(
 					path: relative(manifestDirectory, attemptPath),
 					sha256: digest(attemptText),
 				},
-				outcomes: buildReliabilityOutcomes(
-					["checks"],
-					comparisonReliabilityRep(
-						{ mode: "session", declaredStages: ["checks"], reps: group.reps },
-						rep,
-					),
-				).slice(0, 1),
+				outcomes: [
+					{
+						name: "checks",
+						status: "JUDGED",
+						grade: successful ? "A" : "F",
+						successful,
+					} as const,
+				],
 			};
 		}),
 	);
@@ -674,6 +681,34 @@ describe("session comparison", () => {
 		expect(report.cases[0]?.arms.candidate.quality[0]?.successRate).toBe(1);
 		expect(report.cases[0]?.arms.control.quality[0]?.successRate).toBe(0);
 		expect(
+			report.cases[0]?.arms.baseline.source.reps.map(
+				({ ordinal, outcomes }) => ({ ordinal, outcomes }),
+			),
+		).toEqual([
+			{
+				ordinal: 1,
+				outcomes: [
+					{
+						name: "checks",
+						status: "JUDGED",
+						grade: "A",
+						successful: true,
+					},
+				],
+			},
+			{
+				ordinal: 2,
+				outcomes: [
+					{
+						name: "checks",
+						status: "JUDGED",
+						grade: "F",
+						successful: false,
+					},
+				],
+			},
+		]);
+		expect(
 			report.contrasts.candidateMinusBaseline.quality[0]?.successRate.meanDelta,
 		).toBe(0.25);
 		expect(
@@ -937,47 +972,75 @@ describe("session comparison", () => {
 				successful: false,
 			},
 		]);
-		expect(() =>
-			parseComparisonReport(
-				JSON.stringify({
-					...report,
-					cases: Array.from(report.cases, (candidateCase, caseIndex) =>
-						caseIndex === 0
-							? {
-									...candidateCase,
-									arms: {
-										...candidateCase.arms,
-										baseline: {
-											...candidateCase.arms.baseline,
-											source: {
-												...candidateCase.arms.baseline.source,
-												reps: Array.from(
-													candidateCase.arms.baseline.source.reps,
-													(rep, repIndex) =>
-														repIndex === 0
-															? {
-																	...rep,
-																	outcomes: Array.from(
-																		rep.outcomes,
-																		(outcome) => ({
-																			...outcome,
-																			grade: "B",
-																		}),
-																	),
-																}
-															: rep,
-												),
-											},
-										},
-									},
-								}
-							: candidateCase,
-					),
-				}),
-			),
-		).toThrow();
 		expect(benchmarkCase.arms.baseline.resources.status).toBe("UNAVAILABLE");
 	});
+
+	it.each([
+		[
+			"B",
+			Object.fromEntries([
+				["B", 1],
+				["F", 1],
+			]),
+		],
+		["F", Object.fromEntries([["F", 2]])],
+	] as const)(
+		"rejects a session outcome graded %s while marked successful",
+		async (grade, gradeDistribution) => {
+			const runsDirectory = join(root, "runs");
+			const manifestPath = await writeManifest(root, runsDirectory);
+			const report = parseComparisonReport(
+				await Bun.file(
+					await writeComparisonReport({ manifestPath, runsDirectory }),
+				).text(),
+			);
+			if (report.schemaVersion !== 4 || report.mode !== "session") {
+				throw new Error("expected a version-4 session comparison report");
+			}
+			const candidate = {
+				...report,
+				cases: Array.from(report.cases, (benchmarkCase, caseIndex) =>
+					caseIndex === 0
+						? {
+								...benchmarkCase,
+								arms: {
+									...benchmarkCase.arms,
+									baseline: {
+										...benchmarkCase.arms.baseline,
+										quality: Array.from(
+											benchmarkCase.arms.baseline.quality,
+											(summary) => ({ ...summary, gradeDistribution }),
+										),
+										source: {
+											...benchmarkCase.arms.baseline.source,
+											reps: Array.from(
+												benchmarkCase.arms.baseline.source.reps,
+												(rep, repIndex) =>
+													repIndex === 0
+														? {
+																...rep,
+																outcomes: Array.from(
+																	rep.outcomes,
+																	(outcome) => ({
+																		...outcome,
+																		grade,
+																		successful: true,
+																	}),
+																),
+															}
+														: rep,
+											),
+										},
+									},
+								},
+							}
+						: benchmarkCase,
+				),
+			};
+
+			expect(() => parseComparisonReport(JSON.stringify(candidate))).toThrow();
+		},
+	);
 
 	it("refuses a changed shared prompt with its case and arms named", async () => {
 		const runsDirectory = join(root, "runs");

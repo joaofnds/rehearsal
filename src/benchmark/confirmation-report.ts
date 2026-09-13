@@ -62,7 +62,7 @@ export type ReliabilityOutcome =
 			readonly successful: false;
 	  };
 
-function summarize(
+export function summarizeReliabilityOutcomes(
 	name: string,
 	outcomes: readonly ReliabilityOutcome[],
 ): ReliabilitySummary {
@@ -172,7 +172,7 @@ export function buildReliabilityReport(
 	const names = [...declaredStages, "final"];
 
 	return names.map((name, index) =>
-		summarize(
+		summarizeReliabilityOutcomes(
 			name,
 			outcomes.map((rep) => {
 				const outcome = rep[index];

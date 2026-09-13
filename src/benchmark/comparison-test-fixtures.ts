@@ -19,7 +19,12 @@ type StageFixtureOutcome =
 	| "error"
 	| "metrics-missing"
 	| "not-reached";
-type FinalFixtureOutcome = "pass" | "fail" | "not-reached";
+type FinalFixtureOutcome =
+	| "pass"
+	| "fail"
+	| "error"
+	| "metrics-missing"
+	| "not-reached";
 
 export interface RepFixtureOutcomes {
 	readonly discussion: StageFixtureOutcome;
@@ -59,6 +64,12 @@ function finalOutcome(
 ): ConfirmationRepRecord["finalOutcome"] {
 	if (outcome === "not-reached") {
 		return { status: "NOT_REACHED", reason: "upstream stopped" };
+	}
+	if (outcome === "error") {
+		return { status: "EXECUTION_FAILED", error: "execution failed" };
+	}
+	if (outcome === "metrics-missing") {
+		return { status: "METRICS_MISSING", error: "metrics missing" };
 	}
 
 	return {

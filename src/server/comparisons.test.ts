@@ -11,6 +11,10 @@ import {
 	COMPARISON_ARMS,
 	parseComparisonReport,
 } from "#benchmark/comparison-record";
+import type {
+	ComparisonReport,
+	LegacyComparisonReport,
+} from "#benchmark/comparison-record";
 import { comparisonReportPaths } from "#benchmark/run-layout";
 import { createApiApp } from "./api";
 
@@ -41,13 +45,7 @@ const qualityReadingSchema = z.object({
 	]),
 });
 const comparisonResponseSchema = z.object({
-	report: z
-		.object({
-			schemaVersion: z.number(),
-			mode: z.enum(["stage", "pipeline", "session"]),
-			cases: z.array(z.object({ caseId: z.string() })),
-		})
-		.loose(),
+	report: z.unknown(),
 	attribution: z.record(z.string(), z.record(z.string(), attributionSchema)),
 	qualityReadings: z.record(
 		z.string(),
@@ -55,10 +53,22 @@ const comparisonResponseSchema = z.object({
 	),
 });
 
+type ComparisonResponse = Omit<
+	z.infer<typeof comparisonResponseSchema>,
+	"report"
+> & {
+	readonly report: ComparisonReport | LegacyComparisonReport;
+};
+
 async function comparisonResponseFrom(
 	response: Response,
-): Promise<z.infer<typeof comparisonResponseSchema>> {
-	return comparisonResponseSchema.parse(await response.json());
+): Promise<ComparisonResponse> {
+	const parsed = comparisonResponseSchema.parse(await response.json());
+
+	return {
+		...parsed,
+		report: parseComparisonReport(JSON.stringify(parsed.report)),
+	};
 }
 
 async function rewriteFixtureAsSession(
@@ -211,9 +221,34 @@ describe("GET /api/comparisons/:digest", () => {
 		const body = await comparisonResponseFrom(response);
 
 		expect(response.status).toBe(200);
+		if (body.report.schemaVersion !== 4) {
+			throw new Error("expected the public API to serve a version-4 report");
+		}
 		expect(body.report.cases.map(({ caseId }) => caseId)).toEqual([
 			"case-1",
 			"case-2",
+		]);
+		expect(
+			body.report.cases[0]?.arms.baseline.source.reps[0]?.outcomes,
+		).toEqual([
+			{
+				name: "discuss",
+				status: "JUDGED",
+				grade: "A",
+				successful: true,
+			},
+			{
+				name: "build",
+				status: "JUDGED",
+				grade: "A",
+				successful: true,
+			},
+			{
+				name: "final",
+				status: "JUDGED",
+				grade: "PASS",
+				successful: true,
+			},
 		]);
 		for (const caseId of ["case-1", "case-2"]) {
 			expect(Object.keys(body.attribution[caseId] ?? {}).toSorted()).toEqual([

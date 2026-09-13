@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Immutable } from "./contracts";
 import { stageLetterGradeSchema } from "./contracts";
+import { summarizeReliabilityOutcomes } from "./confirmation-report";
 import { judgeAgreementReportSchema } from "./judge-agreement";
 
 export const COMPARISON_ARMS = ["baseline", "candidate", "control"] as const;
@@ -490,6 +491,12 @@ type CurrentComparisonReport = Immutable<
 >;
 type CurrentReportArm =
 	CurrentComparisonReport["cases"][number]["arms"][ComparisonArm];
+type CurrentRepOutcome =
+	CurrentReportArm["source"]["reps"][number]["outcomes"][number];
+type CurrentJudgedRepOutcome = Extract<
+	CurrentRepOutcome,
+	{ readonly status: "JUDGED" }
+>;
 
 interface ReportRefinementContext {
 	readonly addIssue: z.RefinementCtx["addIssue"];
@@ -527,19 +534,27 @@ function expectedOutcomeNames(
 		: report.declaredStages;
 }
 
-function gradeMatchesMode(
+function judgedOutcomeMatchesMode(
 	report: CurrentComparisonReport,
-	name: string,
-	grade: string,
+	outcome: CurrentJudgedRepOutcome,
 ): boolean {
 	if (report.mode === "session") {
-		return grade === "A" || grade === "F";
+		return (
+			(outcome.grade === "A" || outcome.grade === "F") &&
+			(!outcome.successful || outcome.grade === "A")
+		);
 	}
-	if (report.mode === "pipeline" && name === "final") {
-		return grade === "PASS" || grade === "FAIL";
+	if (report.mode === "pipeline" && outcome.name === "final") {
+		return (
+			(outcome.grade === "PASS" || outcome.grade === "FAIL") &&
+			(!outcome.successful || outcome.grade === "PASS")
+		);
 	}
 
-	return stageLetterGradeSchema.safeParse(grade).success;
+	return (
+		stageLetterGradeSchema.safeParse(outcome.grade).success &&
+		(!outcome.successful || outcome.grade === "A" || outcome.grade === "B")
+	);
 }
 
 function addReportIssue(
@@ -575,7 +590,7 @@ function validateArm(
 
 	const ordinals = arm.source.reps.map(({ ordinal }) => ordinal);
 	const expectedOrdinals = Array.from(
-		{ length: report.reps },
+		{ length: arm.source.reps.length },
 		(_value, index) => index + 1,
 	);
 	if (!sameStrings(ordinals.map(String), expectedOrdinals.map(String))) {
@@ -617,7 +632,7 @@ function validateArm(
 		for (const [outcomeIndex, outcome] of rep.outcomes.entries()) {
 			if (
 				outcome.status === "JUDGED" &&
-				!gradeMatchesMode(report, outcome.name, outcome.grade)
+				!judgedOutcomeMatchesMode(report, outcome)
 			) {
 				addReportIssue(
 					context,
@@ -630,7 +645,7 @@ function validateArm(
 						outcomeIndex,
 						"grade",
 					],
-					"grade must match the comparison mode and measure",
+					"judged grade and success must match the comparison mode and measure",
 				);
 			}
 		}
@@ -640,29 +655,7 @@ function validateArm(
 		const outcomes = arm.source.reps
 			.map((rep) => rep.outcomes[qualityIndex])
 			.filter((outcome) => outcome !== undefined);
-		const attempted = outcomes.filter(
-			({ status }) => status !== "NOT_REACHED",
-		).length;
-		const successful = outcomes.filter((outcome) => outcome.successful).length;
-		const gradeDistribution: Record<string, number> = {};
-		for (const outcome of outcomes) {
-			if (outcome.status === "JUDGED") {
-				gradeDistribution[outcome.grade] =
-					(gradeDistribution[outcome.grade] ?? 0) + 1;
-			}
-		}
-		const successRate = successful / report.reps;
-		const expected = {
-			requested: report.reps,
-			attempted,
-			notReached: report.reps - attempted,
-			failed: attempted - successful,
-			successful,
-			gradeDistribution,
-			successRate,
-			standardError: Math.sqrt((successRate * (1 - successRate)) / report.reps),
-			passK: successRate ** report.reps,
-		};
+		const expected = summarizeReliabilityOutcomes(summary.name, outcomes);
 		const summaryPath = [...path, "quality", qualityIndex];
 
 		for (const key of [
