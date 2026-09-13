@@ -193,6 +193,22 @@ did not exist and carries no numeric observations. Historical attempt records
 may omit `transcriptDiagnostics`; omission means not recorded, and readers do
 not recompute it from the current case cut.
 
+An attempt record may also carry `contextEvidence` when its caller supplies a
+captured provider bundle. The version-1 evidence stores the source bundle
+unchanged beside a normalized projection of agents, parentage, requests,
+instruction loads, compactions, raw API body references, and capture coverage.
+The normalizer joins records by documented request and agent identifiers. It
+collapses canonically equivalent OTel request duplicates, keeps occurrences
+without a request identifier separate, and records missing or conflicting joins
+instead of assigning them by timestamp.
+
+Request evidence separates provider-reported cost from calculated cost. A
+calculation uses the supplied model rate catalog and retains its source,
+version, and currency. Missing rates, usage, or cache-write TTL splits leave a
+named incomplete pricing state. Historical records and attempts whose caller
+supplied no bundle omit `contextEvidence`; omission means the evidence was not
+collected, not that the attempt used zero context or cost.
+
 `case capture <id> --session <id-or-prefix> --cut <N>` copies records `[0, N)`
 from a local Claude transcript, updates the declaration's digest/source/cut,
 and writes the prefix under `.benchmark-runs/cases/<id>/`. The cut is a positive

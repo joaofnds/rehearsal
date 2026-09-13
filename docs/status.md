@@ -23,6 +23,7 @@ still requires environment-specific setup.
 | Comparison reports             | At least two cases with baseline/candidate/control arms; stage, pipeline, and browser-validated provider-free session evidence | [Comparison loader](../src/benchmark/comparison-loader.ts)                                                                         |
 | Record inspection              | Cases, runs including stopped stages, checkpoints, attempts, groups, comparisons, and staleness                                | [CLI commands](../src/cli/commands.ts)                                                                                             |
 | Session context manifests      | Deduplicated Read/Skill/style observations, corpus/project classification, and declared-input reconciliation; no timeline      | [Manifest construction](../src/benchmark/context-manifest.ts)                                                                      |
+| Provider context normalization | Versioned source bundle, request/agent joins, explicit loss states, frozen-rate pricing, and optional attempt persistence      | [Evidence normalization](../src/benchmark/context-evidence.ts)                                                                     |
 | Session transcript diagnostics | Post-cut tool occurrences, explicit tool-result errors, exact repeated Bash inputs, source locators, and evidence completeness | [Transcript projection](../src/benchmark/transcript.ts)                                                                            |
 | Local read UI and event API    | Partial browser views and server-side event streaming                                                                          | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
@@ -67,13 +68,15 @@ verdict.
 - **Pipeline progress can mix with JSON stdout.** Read the saved record or use
   `show <id> --json` when consuming pipeline evidence programmatically.
 - **Context visibility is incomplete.** Session manifests retain names, not
-  load timing, repeated deliveries, or bytes observed. Pipeline raw transcript
-  capture, per-request context measurements, nested-agent accounting, and
-  context visualizations are unfinished. Session transcript diagnostics report
-  raw post-cut tool occurrences, explicit errors, and exact command repetition;
-  they do not attribute phase, tokens, cost, causality, or waste. Their evidence
-  state distinguishes a complete observed zero from partial or unavailable
-  evidence.
+  load timing, repeated deliveries, or bytes observed. The harness can normalize
+  a supplied provider capture into request usage, nested-agent lineage,
+  instruction loads, compactions, and priced cost, then preserve it on an
+  attempt. The shipped run path does not collect that bundle, and the UI does
+  not render it. Pipeline collection and context visualizations are also
+  unfinished. Session transcript diagnostics report raw post-cut tool
+  occurrences, explicit errors, and exact command repetition; they do not
+  attribute phase, tokens, cost, causality, or waste. Their evidence state
+  distinguishes a complete observed zero from partial or unavailable evidence.
 - **Progress events are not a resource timeline.** They contain no token/load
   events, and spend changes scope between worker turns, stage completion, and
   run completion. Aggregate provider usage cannot establish active context size

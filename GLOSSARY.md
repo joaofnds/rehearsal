@@ -16,8 +16,9 @@ See [current state](docs/status.md) for implementation coverage and
 - **Attempt record** — the strict record a session attempt writes, including
   case, lineage, model, declared corpus digests, prompt, transcript evidence,
   checks, and provider metrics when available. A completed reply, no reply, and
-  an invocation failure have distinct outcomes. Older records may omit snapshot
-  provenance.
+  an invocation failure have distinct outcomes. The record may preserve a
+  supplied provider context evidence bundle and its normalized projection.
+  Older records may omit snapshot provenance and context evidence.
 - **Attempt directory** — the fresh temporary directory the harness creates and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
@@ -124,6 +125,13 @@ See [current state](docs/status.md) for implementation coverage and
   that the instruction was followed, and missing observations do not prove
   absence from context. The manifest deduplicates paths rather than retaining
   a load history. Full pipeline context observation is not yet wired.
+- **Context evidence** — an optional, versioned attempt-record field containing
+  an unchanged provider capture and the harness's normalized projection. The
+  projection joins request usage, model, provider cost, agent parentage,
+  instruction loads, and compactions when documented identifiers support the
+  join. It keeps missing identifiers and conflicts explicit. Calculated request
+  cost names the frozen rate source and version; omission of the field means no
+  provider bundle was supplied.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, the agent
   definitions, and the rulebook. A case names the ones it reads in corpus
