@@ -290,7 +290,7 @@ function normalizedAgents(
 	files: ContextEvidenceSource["files"],
 	indexes: TranscriptIndexes,
 ): ContextEvidence["projection"]["agents"] {
-	const streamParents = new Map<string, string>();
+	const streamParents = new Map<string, Set<string>>();
 	for (const row of files.stream) {
 		const uuid = stringValue(row, "uuid");
 		const parentTool = nullableStringValue(row, "parent_tool_use_id");
@@ -299,11 +299,14 @@ function normalizedAgents(
 		const transcript = indexes.byUuid.get(uuid);
 		const child = transcript && indexes.agentByPath.get(transcript.path);
 		const parent = indexes.agentToolOwner.get(parentTool);
-		if (child !== undefined && parent !== undefined)
-			streamParents.set(child, parent);
+		if (child !== undefined && parent !== undefined) {
+			const candidates = streamParents.get(child) ?? new Set();
+			candidates.add(parent);
+			streamParents.set(child, candidates);
+		}
 	}
 
-	const traceParents = new Map<string, string>();
+	const traceParents = new Map<string, Set<string>>();
 	const agentIds = new Set<string>();
 	for (const hook of files.hooks) {
 		const agentId = stringValue(hook, "agent_id");
@@ -315,30 +318,31 @@ function normalizedAgents(
 		const agentId = stringValue(attributes, "agent_id");
 		const parentId = stringValue(attributes, "parent_agent_id");
 		if (agentId !== undefined) agentIds.add(agentId);
-		if (agentId !== undefined && parentId !== undefined)
-			traceParents.set(agentId, parentId);
+		if (agentId !== undefined && parentId !== undefined) {
+			const candidates = traceParents.get(agentId) ?? new Set();
+			candidates.add(parentId);
+			traceParents.set(agentId, candidates);
+		}
 	}
 
 	return [...agentIds].sort().map((agentId) => {
-		const streamParent = streamParents.get(agentId);
-		const traceParent = traceParents.get(agentId);
-		const conflict =
-			streamParent !== undefined &&
-			traceParent !== undefined &&
-			streamParent !== traceParent;
+		const streamCandidates = streamParents.get(agentId) ?? new Set<string>();
+		const traceCandidates = traceParents.get(agentId) ?? new Set<string>();
+		const parentCandidates = new Set([...streamCandidates, ...traceCandidates]);
+		const conflict = parentCandidates.size > 1;
 		const sources = [
-			streamParent === undefined ? undefined : ("stream" as const),
-			traceParent === undefined ? undefined : ("trace" as const),
+			streamCandidates.size === 0 ? undefined : ("stream" as const),
+			traceCandidates.size === 0 ? undefined : ("trace" as const),
 		].filter((source): source is "stream" | "trace" => source !== undefined);
 		const parentAgentId = conflict
 			? null
-			: (traceParent ?? streamParent ?? null);
+			: (parentCandidates.values().next().value ?? null);
 		const lineageState = conflict
 			? ("conflict" as const)
 			: sources.length > 1
 				? ("complete" as const)
 				: sources.length === 1
-					? streamParent === "main"
+					? parentAgentId === "main"
 						? ("complete" as const)
 						: ("single-source" as const)
 					: ("missing" as const);

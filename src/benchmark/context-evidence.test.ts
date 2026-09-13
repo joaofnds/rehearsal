@@ -167,4 +167,29 @@ describe(normalizeContextEvidence.name, () => {
 			],
 		});
 	});
+
+	it("marks conflicting stream parent identities instead of keeping the last one", async () => {
+		const source = contextEvidenceSourceSchema.parse(await sourceFixture());
+		const childMessage = source.files.stream[1];
+		if (childMessage === undefined)
+			throw new Error("fixture has no child message");
+		source.files.stream.push({
+			...childMessage,
+			capture_ordinal: 99,
+			parent_tool_use_id: "tool-agent-2",
+		});
+
+		const evidence = normalizeContextEvidence(source);
+
+		expect(
+			evidence.projection.agents.find(
+				(agent) => agent.agentId === "agent-review-1",
+			),
+		).toEqual({
+			agentId: "agent-review-1",
+			parentAgentId: null,
+			lineageState: "conflict",
+			sources: ["stream"],
+		});
+	});
 });
