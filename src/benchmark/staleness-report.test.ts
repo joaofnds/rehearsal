@@ -55,6 +55,7 @@ describe(staleCheckpoints.name, () => {
 		const root = await temporaryDirectory("rehearsal-stale-");
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
+		await fixture.writeInitialCheckpoint();
 
 		return fixture;
 	}
@@ -235,6 +236,7 @@ describe(staleCheckpoints.name, () => {
 			);
 
 			expect(stale.map(({ id }) => id)).toEqual([
+				`checkpoint:${fixture.replayableRun}/initial`,
 				`checkpoint:${fixture.replayableRun}/discuss`,
 				`checkpoint:${fixture.replayableRun}/build`,
 			]);

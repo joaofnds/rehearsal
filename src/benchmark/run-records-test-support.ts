@@ -4,7 +4,12 @@ import { buildComparisonReport } from "./comparison-report";
 import { serializeComparisonReport } from "./comparison-record";
 import { comparisonEvidenceFixture } from "./comparison-test-fixtures";
 import type { CheckpointRecord, HashedFile } from "./checkpoint";
-import { captureStageCorpus, stageCorpusRoots } from "./checkpoint";
+import {
+	captureStageCorpus,
+	INITIAL_CHECKPOINT_STAGE,
+	parseCheckpointRecord,
+	stageCorpusRoots,
+} from "./checkpoint";
 import type { CorpusRoot } from "./corpus-file";
 import { hashCorpusFiles, resolveCorpusFile } from "./corpus-file";
 import type { Immutable } from "./contracts";
@@ -140,6 +145,20 @@ async function currentSettingsFile(): Promise<HashedFile> {
 	return (
 		await loadStageSettings(join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE))
 	).hashed;
+}
+
+function initialCheckpoint(settingsFile: HashedFile): CheckpointRecord {
+	return {
+		stage: INITIAL_CHECKPOINT_STAGE,
+		targetSha: "2".repeat(40),
+		lineage: "lineage-initial",
+		upstream: "root-lineage",
+		model: "sonnet",
+		corpusFiles: [],
+		artifacts: [],
+		workflowState: [],
+		settingsFile,
+	};
 }
 
 /**
@@ -346,6 +365,32 @@ export class RecordedRunsFixture {
 					corpusFiles,
 				}),
 			);
+		}
+	}
+
+	public async writeInitialCheckpoint(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+		const directory = paths.checkpointDirectory(INITIAL_CHECKPOINT_STAGE);
+		await mkdir(directory, { recursive: true });
+		await Bun.write(
+			checkpointRecordFile(directory),
+			serialize(initialCheckpoint(await currentSettingsFile())),
+		);
+	}
+
+	public async recordSettingsFile(
+		settingsFile: HashedFile | undefined,
+	): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.replayableRun);
+		for (const stage of [INITIAL_CHECKPOINT_STAGE, ...this.stages]) {
+			const file = Bun.file(
+				checkpointRecordFile(paths.checkpointDirectory(stage)),
+			);
+			if (!(await file.exists())) {
+				continue;
+			}
+			const record = parseCheckpointRecord(await file.text());
+			await Bun.write(file, serialize({ ...record, settingsFile }));
 		}
 	}
 

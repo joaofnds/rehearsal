@@ -238,7 +238,10 @@ export async function staleCheckpoints(
 		const chain = await checkpointChain(
 			runsDirectory,
 			run,
-			manifest.pipeline.stages.map(({ name }) => name),
+			[
+				INITIAL_CHECKPOINT_STAGE,
+				...manifest.pipeline.stages.map(({ name }) => name),
+			],
 		);
 		const current = await currentStageCorpus(
 			manifest,
