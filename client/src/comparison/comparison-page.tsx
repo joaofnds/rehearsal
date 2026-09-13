@@ -117,7 +117,11 @@ function QualityVerdict({
 
 	return (
 		<span className="rh-comparison__quality-verdict">
-			<span aria-hidden="true">{verdict.glyph}</span>
+			<span
+				aria-hidden="true"
+				className="rh-comparison__quality-verdict-glyph"
+				data-glyph={verdict.glyph}
+			/>
 			<span>{verdict.label}</span>
 		</span>
 	);

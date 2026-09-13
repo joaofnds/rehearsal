@@ -258,7 +258,9 @@ function expectQualityRow(
 	const verdictCell = within(row).getByRole("cell", {
 		name: expected.verdict,
 	});
-	expect(within(verdictCell).getByText(expected.glyph)).toBeInTheDocument();
+	expect(
+		verdictCell.querySelector(".rh-comparison__quality-verdict-glyph"),
+	).toHaveAttribute("data-glyph", expected.glyph);
 }
 
 describe(ComparisonPage.name, () => {
