@@ -146,9 +146,11 @@ function checkpoint(
 }
 
 async function currentSettingsFile(): Promise<HashedFile> {
-	return (
-		await loadStageSettings(join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE))
-	).hashed;
+	const loaded = await loadStageSettings(
+		join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
+	);
+
+	return loaded.hashed;
 }
 
 function initialCheckpoint(settingsFile: HashedFile): CheckpointRecord {

@@ -177,12 +177,11 @@ describe(createApiApp.name, () => {
 			expect(
 				body.rows.find(({ run }) => run === fixture.replayableRun)?.stale,
 			).toBe(false);
-			expect(body.rows.find(({ run }) => run === brokenRun)).toMatchObject({
-				stale: true,
-				staleCauses: expect.arrayContaining([
-					expect.stringContaining(`cases/${caseId}/settings.json`),
-				]),
-			});
+			const broken = body.rows.find(({ run }) => run === brokenRun);
+			expect(broken?.stale).toBe(true);
+			expect(broken?.staleCauses.join(" ")).toContain(
+				`cases/${caseId}/settings.json`,
+			);
 			assertDoesNotLeak(JSON.stringify(body), CONTROL_DIR);
 		});
 
