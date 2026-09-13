@@ -39,6 +39,11 @@ const metrics = {
 	turns: 1,
 };
 
+const unavailableTranscriptDiagnostics = {
+	state: "unavailable",
+	prefixLinesExcluded: 0,
+} as const;
+
 const roles = ["baseline", "candidate", "control"] as const;
 type Role = (typeof roles)[number];
 type AttemptVariant =
@@ -146,6 +151,7 @@ async function writeGroup(
 						},
 					],
 					contextManifest: undefined,
+					transcriptDiagnostics: unavailableTranscriptDiagnostics,
 				};
 				if (variant === "no-reply" || variant === "execution-failed") {
 					const failedAttempt: SessionAttempt = {

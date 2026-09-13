@@ -96,6 +96,11 @@ const sessionMetrics = {
 	turns: 1,
 };
 
+const unavailableTranscriptDiagnostics = {
+	state: "unavailable",
+	prefixLinesExcluded: 0,
+} as const;
+
 const testResources = TestResources.forEachTest();
 
 const pipeline: PipelineDefinition = {
@@ -929,6 +934,7 @@ describe("runRunCommand for a session case", () => {
 									{ kind: "word-band", status: "PASS", detail: "1 word" },
 								],
 								contextManifest: undefined,
+								transcriptDiagnostics: unavailableTranscriptDiagnostics,
 							};
 						},
 					}),

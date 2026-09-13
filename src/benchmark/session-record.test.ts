@@ -187,6 +187,12 @@ describe("sessionAttemptRecordSchema", () => {
 		expect(parsed.divergences).toBeUndefined();
 	});
 
+	it("accepts a historical record with no transcript diagnostics", () => {
+		expect(
+			sessionAttemptRecordSchema.parse(record()).transcriptDiagnostics,
+		).toBeUndefined();
+	});
+
 	it("refuses a divergence naming a kind that does not exist", () => {
 		const parsed = sessionAttemptRecordSchema.safeParse({
 			...record({ contextManifest: { paths: [] } }),

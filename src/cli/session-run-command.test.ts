@@ -136,6 +136,16 @@ describe(runSessionDebugAttempt.name, () => {
 			checks: [{ kind: "word-band", status: "PASS" }],
 		});
 		expect(outcome.record.metrics?.costUsd).toBe(0.0011);
+		expect(outcome.record.transcriptDiagnostics).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [],
+		});
 		expect(await Bun.file(outcome.record.transcriptFile).text()).toContain(
 			"OK",
 		);

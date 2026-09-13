@@ -26,6 +26,11 @@ const metrics = {
 	turns: 1,
 };
 
+const unavailableTranscriptDiagnostics = {
+	state: "unavailable",
+	prefixLinesExcluded: 0,
+} as const;
+
 function requiredPath(path: string | undefined): string {
 	if (path === undefined) {
 		throw new Error("Expected a frozen session path");
@@ -220,6 +225,7 @@ describe(runSessionConfirmation.name, () => {
 							},
 						],
 						contextManifest: undefined,
+						transcriptDiagnostics: unavailableTranscriptDiagnostics,
 					};
 					if (plan.ordinal === 2) {
 						throw new SessionInvocationError("provider rejected rep 2", {
@@ -374,6 +380,7 @@ describe(runSessionConfirmation.name, () => {
 						transcriptFile,
 						metrics: plan.ordinal === 4 ? undefined : metrics,
 						contextManifest: undefined,
+						transcriptDiagnostics: unavailableTranscriptDiagnostics,
 					};
 					if (plan.ordinal === 1) {
 						return {
@@ -544,6 +551,7 @@ describe(runSessionConfirmation.name, () => {
 							{ kind: "word-band", status: "PASS", detail: "named pass" },
 						],
 						contextManifest: undefined,
+						transcriptDiagnostics: unavailableTranscriptDiagnostics,
 					};
 				},
 			},

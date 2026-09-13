@@ -666,6 +666,16 @@ describe(runSessionAttempt.name, () => {
 
 		expect(attempt.reply).toBe("OK");
 		expect(await Bun.file(attempt.transcriptFile).text()).toContain("OK");
+		expect(attempt.transcriptDiagnostics).toEqual({
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [],
+		});
 	});
 
 	it("leaves the projects slug directory holding no file the attempt created", async () => {
@@ -1011,6 +1021,7 @@ describe(runSessionAttempt.name, () => {
 		);
 
 		expect(attempt.outcome).toBe("NO_REPLY");
+		expect(attempt.transcriptDiagnostics.state).toBe("complete");
 	});
 
 	it("evaluates no check when the session produced no reply", async () => {
@@ -1127,6 +1138,7 @@ describe(runSessionAttempt.name, () => {
 				outcome: "EXECUTION_FAILED",
 				reply: undefined,
 				checks: [],
+				transcriptDiagnostics: { state: "complete" },
 			},
 		});
 		expect(await Bun.file(join(records, "transcript.jsonl")).text()).toContain(
@@ -1248,6 +1260,14 @@ describe(runSessionAttempt.name, () => {
 
 		expect(failure).toBeInstanceOf(SessionInvocationError);
 		expect(failure.message).toBe("Claude session failed");
+		expect(failure).toMatchObject({
+			attempt: {
+				transcriptDiagnostics: {
+					state: "unavailable",
+					prefixLinesExcluded: 0,
+				},
+			},
+		});
 	});
 
 	it("removes the slug directory itself once the attempt's files are gone", async () => {

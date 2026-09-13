@@ -27,7 +27,13 @@ import {
 import { evaluateChecks } from "./session-check";
 import type { ContextManifest } from "./context-manifest";
 import { observedManifest } from "./context-manifest";
-import { outputStyles, parseTranscriptFile, toolUses } from "./transcript";
+import type { TranscriptDiagnostics, TranscriptLine } from "./transcript";
+import {
+	outputStyles,
+	parseTranscriptFile,
+	transcriptDiagnostics,
+	toolUses,
+} from "./transcript";
 import { SessionInvocationError } from "./session-invocation-error";
 
 export type ClaudeRunner = (
@@ -62,6 +68,7 @@ export interface SessionAttempt {
 		| "EXECUTION_FAILED";
 	readonly checks: readonly CheckResult[];
 	readonly contextManifest: ContextManifest | undefined;
+	readonly transcriptDiagnostics: TranscriptDiagnostics;
 }
 
 /**
@@ -326,16 +333,38 @@ interface AttemptOutput {
 	readonly writtenTranscript: string;
 }
 
+interface PreservedTranscript {
+	readonly file: string;
+	readonly sourceAvailable: boolean;
+	readonly lines: readonly TranscriptLine[];
+}
+
 async function preservedTranscript(
 	recordDirectory: string,
 	writtenTranscript: string,
-): Promise<string> {
+): Promise<PreservedTranscript> {
 	const written = Bun.file(writtenTranscript);
+	const sourceAvailable = await written.exists();
 	const transcriptFile = join(recordDirectory, "transcript.jsonl");
 	await mkdir(recordDirectory, { recursive: true });
-	await Bun.write(transcriptFile, (await written.exists()) ? written : "");
+	await Bun.write(transcriptFile, sourceAvailable ? written : "");
 
-	return transcriptFile;
+	return {
+		file: transcriptFile,
+		sourceAvailable,
+		lines: await parseTranscriptFile(transcriptFile),
+	};
+}
+
+function diagnosticsFor(
+	request: SessionAttemptRequest,
+	transcript: Readonly<PreservedTranscript>,
+): TranscriptDiagnostics {
+	return transcriptDiagnostics({
+		lines: transcript.lines,
+		prefixLinesExcluded: request.sessionCase.declaration.transcript?.cut ?? 0,
+		sourceAvailable: transcript.sourceAvailable,
+	});
 }
 
 async function failedInvocation(
@@ -344,10 +373,11 @@ async function failedInvocation(
 	writtenTranscript: string,
 	error: Readonly<Error>,
 ): Promise<SessionInvocationError> {
-	const transcriptFile = await preservedTranscript(
+	const transcript = await preservedTranscript(
 		request.recordDirectory,
 		writtenTranscript,
 	);
+	const diagnostics = diagnosticsFor(request, transcript);
 
 	if (error instanceof CommandError && error.stdout !== "") {
 		let document: unknown;
@@ -361,13 +391,19 @@ async function failedInvocation(
 			return invocationError(
 				providerFailureMessage(parsed.data.result, error.message),
 				attemptDirectory,
-				transcriptFile,
+				transcript.file,
+				diagnostics,
 				readClaudeCallMetrics(parsed.data),
 			);
 		}
 	}
 
-	return invocationError(error.message, attemptDirectory, transcriptFile);
+	return invocationError(
+		error.message,
+		attemptDirectory,
+		transcript.file,
+		diagnostics,
+	);
 }
 
 function providerFailureMessage(
@@ -381,6 +417,7 @@ function invocationError(
 	message: string,
 	attemptDirectory: string,
 	transcriptFile: string,
+	transcriptDiagnostics: TranscriptDiagnostics,
 	metrics?: ClaudeCallMetrics,
 ): SessionInvocationError {
 	return new SessionInvocationError(message, {
@@ -391,6 +428,7 @@ function invocationError(
 		outcome: "EXECUTION_FAILED",
 		checks: [],
 		contextManifest: undefined,
+		transcriptDiagnostics,
 	});
 }
 
@@ -399,10 +437,11 @@ async function recordAttempt(
 	attemptDirectory: string,
 	attempt: AttemptOutput,
 ): Promise<SessionAttempt> {
-	const transcriptFile = await preservedTranscript(
+	const transcript = await preservedTranscript(
 		request.recordDirectory,
 		attempt.writtenTranscript,
 	);
+	const diagnostics = diagnosticsFor(request, transcript);
 
 	const envelope = claudeEnvelopeSchema.parse(JSON.parse(attempt.output));
 	const metrics = readClaudeCallMetrics(envelope);
@@ -410,7 +449,8 @@ async function recordAttempt(
 		throw invocationError(
 			providerFailureMessage(envelope.result, "Claude session failed"),
 			attemptDirectory,
-			transcriptFile,
+			transcript.file,
+			diagnostics,
 			metrics,
 		);
 	}
@@ -419,17 +459,17 @@ async function recordAttempt(
 		return {
 			attemptDirectory,
 			reply,
-			transcriptFile,
+			transcriptFile: transcript.file,
 			metrics,
 			outcome: "NO_REPLY",
 			checks: [],
 			contextManifest: undefined,
+			transcriptDiagnostics: diagnostics,
 		};
 	}
 
-	const transcript = await parseTranscriptFile(transcriptFile);
 	const cut = request.sessionCase.declaration.transcript?.cut ?? 0;
-	const turn = transcript.slice(cut);
+	const turn = transcript.lines.slice(cut);
 	const result = evaluateChecks(request.sessionCase.checks, {
 		reply,
 		toolUses: toolUses(turn),
@@ -438,7 +478,7 @@ async function recordAttempt(
 	return {
 		attemptDirectory,
 		reply,
-		transcriptFile,
+		transcriptFile: transcript.file,
 		metrics,
 		outcome: result.outcome,
 		checks: result.results,
@@ -447,6 +487,7 @@ async function recordAttempt(
 			outputStyles(turn),
 			request.sessionCase.projectFiles,
 		),
+		transcriptDiagnostics: diagnostics,
 	};
 }
 

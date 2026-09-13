@@ -11,6 +11,7 @@ import { claudeCallMetricsSchema } from "./contracts";
 import type { ResolvedCorpusFile } from "./corpus-file";
 import { checkResultSchema } from "./session-check";
 import type { SessionAttempt } from "./session-attempt";
+import { transcriptDiagnosticsSchema } from "./transcript";
 
 /**
  * Where the attempt's corpus bytes were read from, recorded beside the digests
@@ -153,6 +154,7 @@ const legacySessionAttemptRecordSchema = z
 		prompt: z.string().min(1),
 		reply: z.string().optional(),
 		transcriptFile: z.string().min(1),
+		transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
 		metrics: claudeCallMetricsSchema.optional(),
 		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
 		checks: z.array(checkResultSchema),
@@ -185,6 +187,7 @@ const executionFailedSessionAttemptRecordSchema = z
 		reply: z.undefined().optional(),
 		error: z.string().min(1),
 		transcriptFile: z.string().min(1),
+		transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
 		metrics: claudeCallMetricsSchema.optional(),
 		outcome: z.literal("EXECUTION_FAILED"),
 		checks: z.array(checkResultSchema).length(0),
@@ -232,6 +235,7 @@ interface MutableSessionAttemptRecord {
 	reply?: string;
 	error?: string;
 	transcriptFile: string;
+	transcriptDiagnostics: SessionAttempt["transcriptDiagnostics"];
 	metrics?: SessionAttempt["metrics"];
 	outcome: SessionAttempt["outcome"];
 	checks: SessionAttempt["checks"];
@@ -252,6 +256,7 @@ export function buildSessionAttemptRecord(
 		corpusOrigin: inputs.corpusOrigin,
 		prompt: sessionCase.prompt,
 		transcriptFile: attempt.transcriptFile,
+		transcriptDiagnostics: attempt.transcriptDiagnostics,
 		outcome: attempt.outcome,
 		checks: attempt.checks.map((check) => ({ ...check })),
 		elapsedMs: inputs.elapsedMs,
