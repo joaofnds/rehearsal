@@ -52,6 +52,7 @@ import {
 	buildRunArtifact,
 	captureRunBaseline,
 	completeRunArtifact,
+	ordinaryInitialCheckpointInputs,
 	retainedCheckpointRecorder,
 	runFinalJudge,
 	runGradedStages,
@@ -388,6 +389,38 @@ describe(assertStageGradePassed.name, () => {
 		expect(() => {
 			assertStageGradePassed(stageScorecard("FAIL"), "A");
 		}).toThrow("minimum grade is A");
+	});
+});
+
+describe(ordinaryInitialCheckpointInputs.name, () => {
+	it("writes settings evidence that the production parser accepts", async () => {
+		const targetDir = await mkdtemp(join(tmpdir(), "rehearsal-initial-run-"));
+		testResources.track(targetDir);
+		const checkpointDirectory = join(targetDir, "checkpoint");
+		await mkdir(join(targetDir, "backlog"), { recursive: true });
+		await Bun.write(join(targetDir, "backlog", "config.yml"), "statuses: []\n");
+		const loadedSettings = {
+			json: '{"disableAllHooks":true}',
+			hashed: { path: "stage-settings.json", sha256: "b".repeat(64) },
+		};
+		const inputs = ordinaryInitialCheckpointInputs(
+			{
+				taskSha: "task-sha",
+				task: "Task",
+				productBrief: "Brief",
+				workflowFiles: [],
+			},
+			"sonnet",
+			"high",
+			loadedSettings,
+		);
+
+		await recordCheckpoint(targetDir, checkpointDirectory, inputs);
+		const parsed = parseCheckpointRecord(
+			await Bun.file(join(checkpointDirectory, "checkpoint.json")).text(),
+		);
+
+		expect(parsed.settingsFile).toEqual(loadedSettings.hashed);
 	});
 });
 

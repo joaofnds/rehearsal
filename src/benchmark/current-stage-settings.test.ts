@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { CaseDeclarationError } from "./case";
 import type { CaseDeclaration } from "./case";
@@ -8,8 +9,11 @@ import {
 	currentStageSettingsReference,
 	loadCurrentStageSettings,
 } from "./current-stage-settings";
-import { StageSettingsError } from "./stage-settings";
+import { loadStageSettings, StageSettingsError } from "./stage-settings";
 import type { LoadedStageSettings } from "./stage-settings";
+import { TestResources } from "./test-support";
+
+const testResources = TestResources.forEachTest();
 
 const pipelineCase: CaseDeclaration = {
 	id: "audit-log",
@@ -77,6 +81,26 @@ describe(loadCurrentStageSettings.name, () => {
 		expect(paths).toEqual([
 			join(CONTROL_DIR, "cases", "audit-log", "settings/stage.json"),
 		]);
+	});
+
+	it("retains a successfully loaded case-declared settings identity", async () => {
+		const caseId = "zz-current-stage-settings";
+		const caseDirectory = join(CONTROL_DIR, "cases", caseId);
+		const settingsPath = join(caseDirectory, "settings", "stage.json");
+		testResources.track(caseDirectory);
+		await mkdir(join(caseDirectory, "settings"), { recursive: true });
+		await Bun.write(settingsPath, '{"disableAllHooks":true}');
+
+		const loaded = await loadCurrentStageSettings(caseId, {
+			readCaseDeclaration: () =>
+				Promise.resolve({
+					...pipelineCase,
+					id: caseId,
+				}),
+			loadStageSettings,
+		});
+
+		expect(loaded.hashed.path).toBe(`cases/${caseId}/settings/stage.json`);
 	});
 });
 

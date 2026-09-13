@@ -217,7 +217,7 @@ describe(assertPipelinePreflight.name, () => {
 	}
 
 	it("proceeds when every declared reference resolves", async () => {
-		await assertPipelinePreflight(
+		const loaded = await assertPipelinePreflight(
 			{
 				sourceDir: "/target",
 				settingsFilePath: "/settings.json",
@@ -225,6 +225,8 @@ describe(assertPipelinePreflight.name, () => {
 			},
 			dependencies(),
 		);
+
+		expect(loaded).toBe(passingSettings);
 	});
 
 	it("halts naming the missing target before checking anything else", () => {

@@ -170,9 +170,13 @@ describe(readCaseDeclaration.name, () => {
 		await chmod(path, 0);
 
 		try {
-			await expect(readCaseDeclaration(caseId)).rejects.toBeInstanceOf(
-				CaseDeclarationError,
-			);
+			let failure: unknown;
+			try {
+				await readCaseDeclaration(caseId);
+			} catch (error) {
+				failure = error;
+			}
+			expect(failure).toBeInstanceOf(CaseDeclarationError);
 		} finally {
 			await chmod(path, 0o600);
 		}

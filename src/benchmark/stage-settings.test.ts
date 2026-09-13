@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { chmod, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { CONTROL_DIR } from "./config";
 import { loadStageSettings, stageSettingsSchema } from "./stage-settings";
 import { TestResources } from "./test-support";
@@ -37,11 +37,14 @@ describe("stageSettingsSchema", () => {
 
 describe(loadStageSettings.name, () => {
 	it("records a control-relative settings identity", async () => {
-		const loaded = await loadStageSettings(
-			join(CONTROL_DIR, "stage-settings.json"),
-		);
+		const directory = await mkdtemp(join(CONTROL_DIR, ".rehearsal-settings-"));
+		testResources.track(directory);
+		const path = join(directory, "settings.json");
+		await Bun.write(path, "{}");
 
-		expect(loaded.hashed.path).toBe("stage-settings.json");
+		const loaded = await loadStageSettings(path);
+
+		expect(loaded.hashed.path).toBe(relative(CONTROL_DIR, path));
 	});
 
 	it("reads, hashes, and re-serializes the declared file's bytes", async () => {
@@ -112,18 +115,25 @@ describe(loadStageSettings.name, () => {
 		await chmod(path, 0);
 
 		try {
-			await expect(loadStageSettings(path)).rejects.toThrow(
-				new RegExp(`Cannot read stage settings file ${path}`, "u"),
+			let failure: unknown;
+			try {
+				await loadStageSettings(path);
+			} catch (error) {
+				failure = error;
+			}
+			expect(failure).toHaveProperty(
+				"message",
+				expect.stringMatching(`Cannot read stage settings file ${path}`),
 			);
 		} finally {
 			await chmod(path, 0o600);
 		}
 	});
 
-	it("translates an invalid filesystem path into a settings refusal", async () => {
-		const path = `settings${String.fromCharCode(0)}.json`;
+	it("translates an invalid filesystem path into a settings refusal", () => {
+		const path = `settings${String.fromCodePoint(0)}.json`;
 
-		await expect(loadStageSettings(path)).rejects.toThrow(
+		expect(loadStageSettings(path)).rejects.toThrow(
 			/Cannot read stage settings file/u,
 		);
 	});

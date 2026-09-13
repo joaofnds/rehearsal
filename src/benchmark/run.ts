@@ -10,7 +10,12 @@ import {
 } from "./backlog";
 import type { FinalCandidate, Questioner } from "./calibration";
 import { collectCalibration } from "./calibration";
-import type { CheckpointRecord, HashedFile } from "./checkpoint";
+import type {
+	CheckpointInputs,
+	CheckpointRecord,
+	HashedFile,
+	RootLineageInputs,
+} from "./checkpoint";
 import {
 	captureStageCorpus,
 	GLOBAL_SKILLS,
@@ -864,6 +869,15 @@ export async function captureRunBaseline(
 	return { baselineHashes, baselineContext, baselineChecks };
 }
 
+export function ordinaryInitialCheckpointInputs(
+	root: RootLineageInputs,
+	model: string,
+	effort: Effort | undefined,
+	loadedSettings: LoadedStageSettings,
+): CheckpointInputs {
+	return initialCheckpointInputs(root, model, effort, loadedSettings.hashed);
+}
+
 export async function runBenchmark(
 	config: BenchmarkConfig,
 	benchmarkCase: BenchmarkCase,
@@ -959,7 +973,7 @@ export async function runBenchmark(
 		const initialCheckpoint = await recordRetainedCheckpoint(
 			source.root,
 			runFiles.checkpointDirectory(INITIAL_CHECKPOINT_STAGE),
-			initialCheckpointInputs(
+			ordinaryInitialCheckpointInputs(
 				{
 					taskSha,
 					task,
@@ -968,7 +982,7 @@ export async function runBenchmark(
 				},
 				config.model,
 				config.effort,
-				loadedSettings.hashed,
+				loadedSettings,
 			),
 		);
 		const productOwner = createProductOwner({
