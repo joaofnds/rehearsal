@@ -51,17 +51,19 @@ export interface LoadedStageSettings {
 export async function loadStageSettings(
 	path: string,
 ): Promise<LoadedStageSettings> {
-	const file = Bun.file(path);
-	if (!(await file.exists())) {
-		throw new StageSettingsError(
-			`No stage settings file at ${path}; add it or correct the declared settingsFile`,
-		);
-	}
-
 	let bytes: Uint8Array;
 	try {
+		const file = Bun.file(path);
+		if (!(await file.exists())) {
+			throw new StageSettingsError(
+				`No stage settings file at ${path}; add it or correct the declared settingsFile`,
+			);
+		}
 		bytes = await file.bytes();
 	} catch (error) {
+		if (error instanceof StageSettingsError) {
+			throw error;
+		}
 		throw new StageSettingsError(
 			`Cannot read stage settings file ${path}: ${error instanceof Error ? error.message : String(error)}`,
 		);

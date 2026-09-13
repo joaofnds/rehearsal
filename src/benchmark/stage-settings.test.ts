@@ -119,4 +119,12 @@ describe(loadStageSettings.name, () => {
 			await chmod(path, 0o600);
 		}
 	});
+
+	it("translates an invalid filesystem path into a settings refusal", async () => {
+		const path = `settings${String.fromCharCode(0)}.json`;
+
+		await expect(loadStageSettings(path)).rejects.toThrow(
+			/Cannot read stage settings file/u,
+		);
+	});
 });
