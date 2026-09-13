@@ -786,7 +786,7 @@ function stageCorpusCauses(
  * Walks the chain in order, so an upstream stale checkpoint carries forward:
  * a checkpoint produced from state that can no longer be reproduced is stale
  * whatever its own corpus says. The initial checkpoint consumes no corpus, so
- * only a model or effort change can make it stale.
+ * model, effort, or stage settings can still make it stale.
  *
  * A stage absent from `current` is one the corpus no longer feeds; its own
  * corpus is left unjudged and only its upstream can make it stale.
