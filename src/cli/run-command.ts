@@ -69,7 +69,6 @@ import { runBenchmark } from "#benchmark/run";
 import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { runStageJudge } from "#benchmark/stage-grading";
 import type { LoadedStageSettings } from "#benchmark/stage-settings";
-import { loadStageSettings } from "#benchmark/stage-settings";
 import {
 	addWorktree,
 	assertBuildCommitted,
@@ -268,6 +267,7 @@ export async function executeRun(
 	config: BenchmarkConfig,
 	output: CommandOutput,
 	benchmarkCase: BenchmarkCase,
+	loadedSettings: LoadedStageSettings,
 ): Promise<RunOutcome> {
 	const questioner = terminalQuestioner();
 
@@ -282,9 +282,16 @@ export async function executeRun(
 					},
 					prompt: (message) => questioner.question(message),
 				},
-				runDebug: () => runBenchmark(config, benchmarkCase, questioner),
+				runDebug: () =>
+					runBenchmark(config, benchmarkCase, loadedSettings, questioner),
 				runConfirmed: (confirmation) =>
-					confirmRun(config, benchmarkCase, confirmation, output),
+					confirmRun(
+						config,
+						benchmarkCase,
+						loadedSettings,
+						confirmation,
+						output,
+					),
 			},
 		);
 		if (outcome.kind === "confirmation") {
@@ -363,15 +370,15 @@ export function buildConfirmationRequest(
 async function confirmRun(
 	config: BenchmarkConfig,
 	benchmarkCase: BenchmarkCase,
+	loadedSettings: LoadedStageSettings,
 	confirmation: ConfirmationApproval,
 	output: CommandOutput,
 ): Promise<Awaited<ReturnType<typeof runPipelineConfirmation>>> {
 	const corpusSource = liveCorpusSource();
-	const [controlSha, source, instructions, loadedSettings] = await Promise.all([
+	const [controlSha, source, instructions] = await Promise.all([
 		assertControlReady(),
 		assertSourceReady(config.sourceDir),
 		readCorpusInstructions(corpusSource),
-		loadStageSettings(benchmarkCase.settingsFilePath),
 	]);
 	validateRubricDefinition(benchmarkCase.finalRubric);
 

@@ -82,6 +82,7 @@ import {
 	loadStageRubric,
 	runStageJudge,
 } from "./stage-grading";
+import type { LoadedStageSettings } from "./stage-settings";
 import {
 	assertBuildCommitted,
 	assertControlReady,
@@ -477,6 +478,7 @@ export interface StageContext {
 	readonly taskId: string;
 	readonly taskSha: string;
 	readonly pipeline: PipelineDefinition;
+	readonly loadedSettings: LoadedStageSettings;
 	readonly stageFile: (stage: WorkflowStage) => string;
 	readonly checkpointDirectory: (stage: WorkflowStage) => string;
 	readonly writePendingStage: (pending: PendingStage) => Promise<void>;
@@ -704,6 +706,7 @@ export async function runGradedStages(
 				corpusRoots,
 				baselineSha,
 				commitSubjectPattern: context.pipeline.commitSubjectPattern,
+				settingsOverlay: context.loadedSettings.json,
 			},
 			definition,
 			stageArtifacts,
@@ -800,6 +803,7 @@ export async function runGradedStages(
 				effort: context.effort,
 				corpusFiles,
 				artifacts: hashArtifacts(input.artifact ? [input.artifact] : []),
+				settingsFile: context.loadedSettings.hashed,
 			},
 		);
 		checkpoints.push(checkpoint);
@@ -863,6 +867,7 @@ export async function captureRunBaseline(
 export async function runBenchmark(
 	config: BenchmarkConfig,
 	benchmarkCase: BenchmarkCase,
+	loadedSettings: LoadedStageSettings,
 	rl: Questioner,
 ): Promise<BenchmarkRunPaths> {
 	const { pipeline } = benchmarkCase;
@@ -963,6 +968,7 @@ export async function runBenchmark(
 				},
 				config.model,
 				config.effort,
+				loadedSettings.hashed,
 			),
 		);
 		const productOwner = createProductOwner({
@@ -1009,6 +1015,7 @@ export async function runBenchmark(
 					taskId,
 					taskSha,
 					pipeline,
+					loadedSettings,
 					stageFile: runFiles.stageFile,
 					checkpointDirectory: runFiles.checkpointDirectory,
 					writePendingStage: abort.writePendingStage,

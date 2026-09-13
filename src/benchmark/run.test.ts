@@ -7,6 +7,7 @@ import { z } from "zod";
 import { SymlinkedEntryError } from "./file-presence";
 import {
 	captureStageCorpus,
+	parseCheckpointRecord,
 	resolveSkillDirectory,
 	recordCheckpoint,
 } from "./checkpoint";
@@ -400,12 +401,14 @@ describe(runGradedStages.name, () => {
 		readonly judged: StageJudgeInput[];
 		readonly executed: string[];
 		readonly rubricsUsed: string[];
+		readonly settingsOverlays: (string | undefined)[];
 	}
 
 	function fakeStageDependencies(): StageHarness {
 		const judged: StageJudgeInput[] = [];
 		const executed: string[] = [];
 		const rubricsUsed: string[] = [];
+		const settingsOverlays: (string | undefined)[] = [];
 		const scorecardFor = (
 			input: StageJudgeInput,
 			verdict: "CONTINUE" | "STOP",
@@ -448,9 +451,11 @@ describe(runGradedStages.name, () => {
 			judged,
 			executed,
 			rubricsUsed,
+			settingsOverlays,
 			dependencies: {
-				runWorkflowStage: ({ stage, skill }) => {
+				runWorkflowStage: ({ stage, skill, settingsOverlay }) => {
 					executed.push(skill);
+					settingsOverlays.push(settingsOverlay);
 
 					return Promise.resolve({
 						stage,
@@ -566,6 +571,13 @@ describe(runGradedStages.name, () => {
 			taskId: "TASK-1",
 			taskSha: "task-sha",
 			pipeline: await loadDefaultPipeline(),
+			loadedSettings: {
+				json: "{}",
+				hashed: {
+					path: "stage-settings.json",
+					sha256: "a".repeat(64),
+				},
+			},
 			stageFile: (stage: string) => join(stageDirectory, `${stage}.json`),
 			checkpointDirectory: (stage: string) =>
 				join(stageDirectory, "checkpoints", stage),
@@ -1251,6 +1263,32 @@ describe(runGradedStages.name, () => {
 				).text(),
 			);
 			expect(written).toEqual(record);
+		}
+	});
+
+	it("delivers one settings value to every stage and records its evidence", async () => {
+		const { dependencies, settingsOverlays } = fakeStageDependencies();
+		const settings = {
+			json: '{"disableAllHooks":true}',
+			hashed: { path: "stage-settings.json", sha256: "b".repeat(64) },
+		};
+		const context = {
+			...(await stageContext()),
+			loadedSettings: settings,
+		};
+
+		const outcome = await runGradedStages(dependencies, context);
+
+		expect(settingsOverlays).toEqual([settings.json, settings.json]);
+		expect(outcome.checkpoints.map(({ settingsFile }) => settingsFile)).toEqual([
+			settings.hashed,
+			settings.hashed,
+		]);
+		for (const checkpoint of outcome.checkpoints) {
+			const written = await Bun.file(
+				join(context.checkpointDirectory(checkpoint.stage), "checkpoint.json"),
+			).text();
+			expect(parseCheckpointRecord(written)).toEqual(checkpoint);
 		}
 	});
 
