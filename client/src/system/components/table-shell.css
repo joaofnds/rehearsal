@@ -9,7 +9,7 @@
 	font-size: var(--font-size-10);
 	text-transform: uppercase;
 	letter-spacing: var(--letter-spacing-section-label);
-	color: var(--color-text-dim);
+	color: var(--color-text-secondary);
 	padding-bottom: var(--space-9);
 }
 
@@ -25,7 +25,7 @@
 	font-size: var(--font-size-10);
 	text-transform: uppercase;
 	letter-spacing: var(--letter-spacing-table-header);
-	color: var(--color-text-dim);
+	color: var(--color-text-secondary);
 	font-weight: 500;
 	padding: var(--space-9) var(--space-12);
 }
