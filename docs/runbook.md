@@ -142,6 +142,8 @@ current declared or default stage settings. A settings value change stales the
 initial checkpoint and carries forward through later checkpoints; changing only
 JSON whitespace does not. A missing or invalid settings file appears as a cause
 for the affected run while the command continues reporting the others.
+Ordinary checkpoints from before settings evidence was recorded also appear
+stale, because they cannot establish which settings their stages received.
 
 A corpus that cannot supply a file a record hashed, including a missing,
 unreadable, or escaping `CLAUDE.md`, is reported as that record's cause rather

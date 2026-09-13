@@ -425,6 +425,10 @@ settings as well. A session case with no prior attempt has no stale measurement.
 Missing files and changed inputs are evidence to inspect, not a substitute for
 running the revised case.
 
+Ordinary checkpoints created before settings evidence was recorded appear stale
+even when the settings file has not changed. Their records cannot show that the
+currently declared settings applied to those stage sessions.
+
 ## Record locations and IDs
 
 The authoritative evidence lives under ignored `.benchmark-runs/`. The SQLite
