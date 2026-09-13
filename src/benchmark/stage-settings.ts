@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { HashedFile } from "./checkpoint";
+import { displayPath } from "./config";
 
 export class StageSettingsError extends Error {
 	public override name = "StageSettingsError";
@@ -82,7 +83,7 @@ export async function loadStageSettings(
 	return {
 		json,
 		hashed: {
-			path,
+			path: displayPath(path),
 			sha256: new Bun.CryptoHasher("sha256").update(json).digest("hex"),
 		},
 	};

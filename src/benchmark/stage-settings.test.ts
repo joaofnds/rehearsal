@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CONTROL_DIR } from "./config";
 import { loadStageSettings, stageSettingsSchema } from "./stage-settings";
 import { TestResources } from "./test-support";
 
@@ -35,6 +36,14 @@ describe("stageSettingsSchema", () => {
 });
 
 describe(loadStageSettings.name, () => {
+	it("records a control-relative settings identity", async () => {
+		const loaded = await loadStageSettings(
+			join(CONTROL_DIR, "stage-settings.json"),
+		);
+
+		expect(loaded.hashed.path).toBe("stage-settings.json");
+	});
+
 	it("reads, hashes, and re-serializes the declared file's bytes", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
 		testResources.track(directory);

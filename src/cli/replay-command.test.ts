@@ -346,9 +346,7 @@ describe(replaySettingsFile.name, () => {
 		try {
 			const settingsFile = await replaySettingsFile(manifestFile);
 
-			expect(settingsFile.hashed.path).toBe(
-				join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
-			);
+			expect(settingsFile.hashed.path).toBe(DEFAULT_STAGE_SETTINGS_FILE);
 		} finally {
 			await rm(manifestFile, { force: true });
 		}
