@@ -366,6 +366,16 @@ See [current state](docs/status.md) for implementation coverage and
 - **Stage scorecard** — persisted Judge result for one stage: its frozen input
   and rubric, citations, grade, prompt, and Judge cost; a rejected scorecard
   also carries its calibration.
+- **Stage settings** — the harness-owned JSON a stage session is started with,
+  holding a permissions deny list and a fixed set of boolean feature switches.
+  It is never a copy of the operator's live settings, and the schema refuses
+  every other key, a hooks block included. A pipeline case may name its own
+  file, and a case that names none gets the committed root
+  `stage-settings.json`. A checkpoint records the file's canonical digest, the
+  hash of the re-serialized JSON the session was given rather than of the file's
+  raw bytes. Staleness compares that digest alone, while lineage folds in the
+  recorded path beside it. See [the reference](docs/reference.md) for what a
+  record stores and when an edit stales a run.
 - **Stale case** — a session case whose most recent attempt recorded corpus
   file digests that the current corpus no longer matches. It is the session
   kind's counterpart to a stale checkpoint: the same "this measurement no
