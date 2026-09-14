@@ -237,6 +237,15 @@ describe(sessionHistoryReport.name, () => {
 				"attempt boundary unavailable",
 			],
 		});
+		expect(report.sources).toEqual([
+			expect.objectContaining({
+				measurement: {
+					state: "partial",
+					observedCharacters: 0,
+					reasons: ["unsupported text body"],
+				},
+			}),
+		]);
 	});
 
 	it("makes unsupported result content partial at report level", () => {

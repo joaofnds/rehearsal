@@ -955,17 +955,18 @@ function sourceMeasurement(
 		({ measurement }) => measurement.state === "unavailable",
 	);
 	if (partial.length > 0 || unavailable.length > 0) {
+		const reasons = new Set([
+			...partial.flatMap(({ measurement }) =>
+				measurement.state === "partial" ? measurement.reasons : [],
+			),
+			...unavailable.flatMap(({ measurement }) =>
+				measurement.state === "unavailable" ? measurement.reasons : [],
+			),
+		]);
 		return {
 			state: "partial",
 			observedCharacters: observed,
-			reasons: [
-				...partial.flatMap(({ measurement }) =>
-					measurement.state === "partial" ? measurement.reasons : [],
-				),
-				...unavailable.flatMap(({ measurement }) =>
-					measurement.state === "unavailable" ? measurement.reasons : [],
-				),
-			],
+			reasons: [...reasons],
 		};
 	}
 	if (measured.length === 0) {
