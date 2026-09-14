@@ -511,7 +511,10 @@ function parseRowEvents(
 				toolUseId: call.data.id,
 				toolName,
 				sourceId: source.id,
-				measurement: { state: "complete", characters: 0 },
+				measurement: {
+					state: "unavailable",
+					reasons: ["tool invocation carries no result content"],
+				},
 				source,
 				isDelivery: false,
 				input: inputRecord,

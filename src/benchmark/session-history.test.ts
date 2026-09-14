@@ -105,6 +105,10 @@ describe(sessionHistoryReport.name, () => {
 			{ id: "5:1", state: "invoked" },
 			{ id: "6:1", state: "delivered" },
 		]);
+		expect(report.attemptEvents[0]?.measurement).toEqual({
+			state: "unavailable",
+			reasons: ["tool invocation carries no result content"],
+		});
 		expect(
 			report.attemptEvents
 				.filter(({ state }) => state === "delivered")
