@@ -140,6 +140,12 @@ describe(confirmationGroupPaths.name, () => {
 		expect(rep).toMatchObject({
 			directory: join(paths.repsDirectory, "group-1-rep-2"),
 			recordFile: join(paths.repsDirectory, "group-1-rep-2", "rep.json"),
+			attemptFile: join(paths.repsDirectory, "group-1-rep-2", "attempt.json"),
+			transcriptFile: join(
+				paths.repsDirectory,
+				"group-1-rep-2",
+				"transcript.jsonl",
+			),
 			stagesDirectory: join(paths.repsDirectory, "group-1-rep-2", "stages"),
 			checkpointsDirectory: join(
 				paths.repsDirectory,
@@ -178,6 +184,14 @@ describe(sessionAttemptPaths.name, () => {
 				"smoke",
 				"uuid-1",
 				"attempt.json",
+			),
+			transcriptFile: join(
+				"/control",
+				".benchmark-runs",
+				"sessions",
+				"smoke",
+				"uuid-1",
+				"transcript.jsonl",
 			),
 			corpusDirectory: join(
 				"/control",

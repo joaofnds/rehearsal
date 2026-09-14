@@ -26,6 +26,8 @@ export interface BenchmarkRunPaths {
 export interface ConfirmationRepPaths {
 	readonly directory: string;
 	readonly recordFile: string;
+	readonly attemptFile: string;
+	readonly transcriptFile: string;
 	readonly finalFile: string;
 	readonly stagesDirectory: string;
 	readonly checkpointsDirectory: string;
@@ -136,6 +138,8 @@ export function confirmationGroupPaths(
 			return {
 				directory: repDirectory,
 				recordFile: join(repDirectory, "rep.json"),
+				attemptFile: join(repDirectory, ATTEMPT_FILE),
+				transcriptFile: join(repDirectory, "transcript.jsonl"),
 				finalFile: join(repDirectory, "final.json"),
 				stagesDirectory,
 				checkpointsDirectory,
@@ -166,6 +170,7 @@ export function sessionAttemptPaths(
 	return {
 		directory,
 		recordFile: join(directory, ATTEMPT_FILE),
+		transcriptFile: join(directory, "transcript.jsonl"),
 		corpusDirectory: join(directory, "corpus"),
 	};
 }
@@ -275,6 +280,7 @@ export interface SessionAttemptId {
 export interface SessionAttemptPaths {
 	readonly directory: string;
 	readonly recordFile: string;
+	readonly transcriptFile: string;
 	readonly corpusDirectory: string;
 }
 
