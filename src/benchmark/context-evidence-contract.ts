@@ -110,6 +110,55 @@ const requestPricingSchema = z.union([
 	incompleteRequestPricingSchema,
 ]);
 
+interface RequestUsageEvidence {
+	readonly usageState: "complete" | "missing" | "partial" | "conflict";
+	readonly usage?: unknown;
+	readonly usageRoute?: "otel" | "transcript" | undefined;
+	readonly otelOccurrences: number;
+	readonly transcriptOccurrences: number;
+}
+
+interface RequestRefinementContext {
+	readonly addIssue: z.RefinementCtx["addIssue"];
+}
+
+function refineRequestUsage(
+	request: Readonly<RequestUsageEvidence>,
+	context: Readonly<RequestRefinementContext>,
+): void {
+	if ((request.usageState === "complete") !== (request.usage !== undefined)) {
+		context.addIssue({
+			code: "custom",
+			message: "usage must exist exactly when usageState is complete",
+			path: ["usage"],
+		});
+	}
+
+	if (request.usageRoute === undefined) {
+		return;
+	}
+
+	if (request.usage === undefined) {
+		context.addIssue({
+			code: "custom",
+			message: "an evidence route requires the usage it supplied",
+			path: ["usageRoute"],
+		});
+	}
+
+	const observed =
+		request.usageRoute === "otel"
+			? request.otelOccurrences
+			: request.transcriptOccurrences;
+	if (observed === 0) {
+		context.addIssue({
+			code: "custom",
+			message: "an evidence route names a source the record never observed",
+			path: ["usageRoute"],
+		});
+	}
+}
+
 const requestEvidenceSchema = z
 	.object({
 		sessionId: z.string().min(1).nullable(),
@@ -122,6 +171,7 @@ const requestEvidenceSchema = z
 		modelState: z.enum(["complete", "single-source", "missing", "conflict"]),
 		usageState: z.enum(["complete", "missing", "partial", "conflict"]),
 		usage: tokenUsageSchema.optional(),
+		usageRoute: z.enum(["otel", "transcript"]).optional(),
 		providerCostUsd: z.number().nonnegative().optional(),
 		pricing: requestPricingSchema,
 		otelOccurrences: z.number().int().nonnegative(),
@@ -130,13 +180,7 @@ const requestEvidenceSchema = z
 	})
 	.strict()
 	.superRefine((request, context) => {
-		if ((request.usageState === "complete") !== (request.usage !== undefined)) {
-			context.addIssue({
-				code: "custom",
-				message: "usage must exist exactly when usageState is complete",
-				path: ["usage"],
-			});
-		}
+		refineRequestUsage(request, context);
 		if (
 			(request.agentId === null) !==
 			(request.attributionState !== undefined)

@@ -593,35 +593,69 @@ function usageWithSplit(
 	return usage;
 }
 
-function requestUsageState(
+type ResolvedRequestUsage =
+	| {
+			readonly state: "complete";
+			readonly usage: RequestUsage;
+			readonly route: NonNullable<RequestEvidence["usageRoute"]>;
+	  }
+	| {
+			readonly state: "missing" | "partial" | "conflict";
+			readonly usage?: undefined;
+			readonly route?: undefined;
+	  };
+
+function transcriptUsages(
+	transcriptRows: readonly Readonly<JsonObject>[],
+): readonly RequestUsage[] {
+	const byKey = new Map<string, RequestUsage>();
+	for (const row of transcriptRows) {
+		const usage = transcriptUsageFrom(row);
+		if (usage !== undefined) {
+			byKey.set(aggregateUsageKey(usage), usage);
+		}
+	}
+
+	return [...byKey.values()];
+}
+
+function resolveRequestUsage(
 	logCount: number,
 	distinctCount: number,
-	baseUsage: RequestUsage | undefined,
+	otelUsage: RequestUsage | undefined,
 	transcriptRows: readonly Readonly<JsonObject>[],
-): RequestEvidence["usageState"] {
-	if (logCount === 0) {
-		return "missing";
-	}
-	if (distinctCount > 1) {
-		return "conflict";
-	}
-	const transcriptUsages = new Set(
-		transcriptRows.flatMap((row) => {
-			const usage = transcriptUsageFrom(row);
+): ResolvedRequestUsage {
+	const fromTranscript = transcriptUsages(transcriptRows);
+	const [onlyTranscriptUsage] = fromTranscript;
 
-			return usage === undefined ? [] : [aggregateUsageKey(usage)];
-		}),
-	);
+	if (distinctCount > 1 || fromTranscript.length > 1) {
+		return { state: "conflict" };
+	}
+
+	if (otelUsage === undefined) {
+		if (logCount > 0) {
+			return { state: "partial" };
+		}
+
+		if (onlyTranscriptUsage === undefined) {
+			return { state: "missing" };
+		}
+
+		return {
+			state: "complete",
+			usage: onlyTranscriptUsage,
+			route: "transcript",
+		};
+	}
+
 	if (
-		transcriptUsages.size > 1 ||
-		(baseUsage !== undefined &&
-			transcriptUsages.size === 1 &&
-			!transcriptUsages.has(aggregateUsageKey(baseUsage)))
+		onlyTranscriptUsage !== undefined &&
+		aggregateUsageKey(onlyTranscriptUsage) !== aggregateUsageKey(otelUsage)
 	) {
-		return "conflict";
+		return { state: "conflict" };
 	}
 
-	return baseUsage === undefined ? "partial" : "complete";
+	return { state: "complete", usage: otelUsage, route: "otel" };
 }
 
 function aggregateUsageKey(usage: Readonly<RequestUsage>): string {
@@ -688,16 +722,16 @@ function normalizedRequest(
 		distinct.length === 1 && firstDistinct !== undefined
 			? objectValue(firstDistinct, "attributes")
 			: undefined;
-	const baseUsage =
+	const otelUsage =
 		attributes === undefined ? undefined : usageFrom(attributes);
 	const split = ttlSplit(transcriptRows);
-	const usage = usageWithSplit(baseUsage, split);
-	const usageState = requestUsageState(
+	const resolved = resolveRequestUsage(
 		logs.length,
 		distinct.length,
-		baseUsage,
+		otelUsage,
 		transcriptRows,
 	);
+	const usage = usageWithSplit(resolved.usage, split);
 	const providerCostUsd =
 		attributes === undefined ? undefined : numberValue(attributes, "cost_usd");
 	const modelEvidence = requestModel(distinct, transcriptRows, spans);
@@ -709,9 +743,9 @@ function normalizedRequest(
 		agentId,
 		model: modelEvidence.model,
 		modelState: modelEvidence.state,
-		usageState,
+		usageState: resolved.state,
 		pricing: requestPricing(
-			usageState,
+			resolved.state,
 			usage,
 			modelEvidence.state,
 			modelEvidence.model,
@@ -728,7 +762,7 @@ function normalizedRequest(
 		Object.assign(request, { attributionState: "conflict" as const });
 	}
 	if (usage !== undefined) {
-		Object.assign(request, { usage });
+		Object.assign(request, { usage, usageRoute: resolved.route });
 	}
 	if (providerCostUsd !== undefined) {
 		Object.assign(request, { providerCostUsd });

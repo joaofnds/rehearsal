@@ -93,6 +93,7 @@ describe(normalizeContextEvidence.name, () => {
 						cacheWrite5mTokens: 200,
 						cacheWrite1hTokens: 200,
 					},
+					usageRoute: "otel",
 					providerCostUsd: 0.02,
 					pricing: { state: "rates-missing" },
 					otelOccurrences: 2,
@@ -130,6 +131,7 @@ describe(normalizeContextEvidence.name, () => {
 						cacheWrite5mTokens: 12_000,
 						cacheWrite1hTokens: 0,
 					},
+					usageRoute: "otel",
 					providerCostUsd: 0.04,
 					pricing: { state: "rates-missing" },
 					otelOccurrences: 1,
@@ -153,6 +155,7 @@ describe(normalizeContextEvidence.name, () => {
 						cacheWrite5mTokens: 0,
 						cacheWrite1hTokens: 0,
 					},
+					usageRoute: "otel",
 					providerCostUsd: 0.01,
 					pricing: { state: "rates-missing" },
 					otelOccurrences: 1,
@@ -695,5 +698,249 @@ describe(normalizeContextEvidence.name, () => {
 				},
 			}).success,
 		).toBe(false);
+	});
+});
+
+describe("transcript-supplied request usage", () => {
+	function transcriptOnlySource(
+		usage: Readonly<JsonObject> | undefined,
+	): ReturnType<typeof contextEvidenceSourceSchema.parse> {
+		const message: JsonObject = { model: "claude-sonnet-5" };
+		if (usage !== undefined) {
+			message["usage"] = usage;
+		}
+
+		return contextEvidenceSourceSchema.parse({
+			schemaVersion: 1,
+			kind: "context-evidence-source",
+			capture: {
+				provider: "synthetic",
+				cliVersion: "0.0.0",
+				capturedAt: "2026-09-14T00:00:00.000Z",
+				flags: [],
+				telemetry: {},
+			},
+			files: {
+				stream: [],
+				hooks: [],
+				otelLogs: [],
+				otelSpans: [],
+				transcripts: {
+					"transcripts/main.jsonl": [
+						{
+							type: "assistant",
+							sessionId: "session-1",
+							uuid: "message-1",
+							requestId: "req-transcript-1",
+							message,
+						},
+					],
+				},
+				rawApiBodies: [],
+				coverage: [{ stream: "otelLogs", state: "unavailable" }],
+			},
+		});
+	}
+
+	const fullUsage = {
+		input_tokens: 11,
+		output_tokens: 22,
+		cache_read_input_tokens: 3300,
+		cache_creation_input_tokens: 440,
+		cache_creation: {
+			ephemeral_5m_input_tokens: 400,
+			ephemeral_1h_input_tokens: 40,
+		},
+	};
+
+	function alsoObservedByOtel(
+		tokenAttributes: Readonly<JsonObject>,
+	): ReturnType<typeof contextEvidenceSourceSchema.parse> {
+		const source = transcriptOnlySource(fullUsage);
+		source.files.otelLogs.push({
+			capture_ordinal: 1,
+			body: "claude_code.api_request",
+			attributes: {
+				"event.name": "api_request",
+				"session.id": "session-1",
+				"prompt.id": "prompt-1",
+				"event.sequence": 1,
+				request_id: "req-transcript-1",
+				model: "claude-sonnet-5",
+				cost_usd: 0.04,
+				...tokenAttributes,
+			},
+		});
+
+		return source;
+	}
+
+	it("reports complete usage with every category from a transcript carrying no otel rows", () => {
+		const evidence = normalizeContextEvidence(transcriptOnlySource(fullUsage));
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageState).toBe("complete");
+		expect(request?.usage).toEqual({
+			inputTokens: 11,
+			outputTokens: 22,
+			cacheReadTokens: 3300,
+			cacheWriteTokens: 440,
+			cacheWrite5mTokens: 400,
+			cacheWrite1hTokens: 40,
+		});
+	});
+
+	it("names the transcript as the route that supplied the usage", () => {
+		const evidence = normalizeContextEvidence(transcriptOnlySource(fullUsage));
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageRoute).toBe("transcript");
+	});
+
+	it("names otel as the route when otel supplied the usage", async () => {
+		const evidence = normalizeContextEvidence(await sourceFixture());
+
+		const otelSupplied = evidence.projection.requests.find(
+			(request) => request.requestId === "req-main-1",
+		);
+
+		expect(otelSupplied?.usageRoute).toBe("otel");
+	});
+
+	it("reports missing when the transcript row carries no usage", () => {
+		const evidence = normalizeContextEvidence(transcriptOnlySource(undefined));
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageState).toBe("missing");
+		expect(request?.usageRoute).toBeUndefined();
+	});
+
+	it("parses a record written before the route existed, without adding one", async () => {
+		const evidence = normalizeContextEvidence(await sourceFixture());
+		const legacyRequests = evidence.projection.requests.map((request) => {
+			const { usageRoute: _written, ...withoutRoute } = request;
+
+			return withoutRoute;
+		});
+
+		const parsed = contextEvidenceSchema.parse({
+			...evidence,
+			projection: { ...evidence.projection, requests: legacyRequests },
+		});
+
+		expect(
+			parsed.projection.requests.every(
+				(request) => request.usageRoute === undefined,
+			),
+		).toBe(true);
+	});
+
+	it("rejects a route naming evidence no usage came from", async () => {
+		const evidence = normalizeContextEvidence(await sourceFixture());
+		const [first, ...rest] = evidence.projection.requests;
+		const { usage: _dropped, ...withoutUsage } = required(
+			first,
+			"fixture has no requests",
+		);
+
+		expect(
+			contextEvidenceSchema.safeParse({
+				...evidence,
+				projection: {
+					...evidence.projection,
+					requests: [{ ...withoutUsage, usageState: "missing" }, ...rest],
+				},
+			}).success,
+		).toBe(false);
+	});
+
+	it("keeps agreeing duplicate transcript rows as one complete reading", () => {
+		const source = transcriptOnlySource(fullUsage);
+		const rows = source.files.transcripts["transcripts/main.jsonl"];
+		const first = required(rows?.[0], "fixture has no transcript row");
+		rows?.push({ ...first, uuid: "message-2" });
+
+		const evidence = normalizeContextEvidence(source);
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageState).toBe("complete");
+		expect(request?.usageRoute).toBe("transcript");
+	});
+
+	it("leaves a request unpriced when its otel row carried no tokens", () => {
+		const evidence = normalizeContextEvidence(alsoObservedByOtel({}));
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.otelOccurrences).toBe(1);
+		expect(request?.usageState).toBe("partial");
+		expect(request?.usage).toBeUndefined();
+		expect(request?.pricing).toEqual({ state: "usage-missing" });
+	});
+
+	it("reports conflict when otel and the transcript disagree on one request", () => {
+		const evidence = normalizeContextEvidence(
+			alsoObservedByOtel({
+				input_tokens: 99,
+				output_tokens: 22,
+				cache_read_tokens: 3300,
+				cache_creation_tokens: 440,
+			}),
+		);
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageState).toBe("conflict");
+		expect(request?.usage).toBeUndefined();
+		expect(request?.usageRoute).toBeUndefined();
+		expect(request?.pricing).toEqual({ state: "usage-conflict" });
+	});
+
+	it("rejects a route naming a source the record never observed", async () => {
+		const evidence = normalizeContextEvidence(await sourceFixture());
+		const [first, ...rest] = evidence.projection.requests;
+		const otelSupplied = required(first, "fixture has no requests");
+
+		expect(
+			contextEvidenceSchema.safeParse({
+				...evidence,
+				projection: {
+					...evidence.projection,
+					requests: [
+						{ ...otelSupplied, otelOccurrences: 0, uniqueOtelOccurrences: 0 },
+						...rest,
+					],
+				},
+			}).success,
+		).toBe(false);
+	});
+
+	it("reports conflict when two transcript rows disagree on one request", () => {
+		const source = transcriptOnlySource(fullUsage);
+		const rows = required(
+			source.files.transcripts["transcripts/main.jsonl"],
+			"fixture has no transcript file",
+		);
+		const first = required(rows[0], "fixture has no transcript row");
+		rows.push({
+			...first,
+			uuid: "message-2",
+			message: {
+				model: "claude-sonnet-5",
+				usage: { ...fullUsage, input_tokens: 99 },
+			},
+		});
+
+		const evidence = normalizeContextEvidence(source);
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.usageState).toBe("conflict");
+		expect(request?.usage).toBeUndefined();
+		expect(request?.usageRoute).toBeUndefined();
 	});
 });
