@@ -102,7 +102,9 @@ describe(readSessionAttemptHistory.name, () => {
 		expect(report.attempt.id).toBe(fixture.uuid);
 		expect(report.attempt.model).toBe("sonnet");
 		expect(report.attempt.outcome).toBe("SUCCESSFUL");
-		expect(report.attemptEvents.map(({ id, state }) => ({ id, state }))).toEqual([
+		expect(
+			report.attemptEvents.map(({ id, state }) => ({ id, state })),
+		).toEqual([
 			{ id: "1:1", state: "invoked" },
 			{ id: "2:1", state: "delivered" },
 		]);
