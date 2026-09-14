@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
 	claudeArgs,
+	modelsPricedAtList,
 	readClaudeCallMetrics,
 	readClaudeEnvelope,
 	readStructuredOutput,
 } from "./claude";
+import type { ClaudeModelUsage } from "./contracts";
 import {
 	claudeJsonSchema,
 	judgeGradeSchema,
@@ -257,5 +259,136 @@ describe(claudeArgs.name, () => {
 		});
 
 		expect(command).not.toContain("--settings");
+	});
+});
+
+describe("per-model usage", () => {
+	it("retains the provider's per-model usage block", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.029973,
+				num_turns: 1,
+				usage: {
+					input_tokens: 2,
+					output_tokens: 5,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 14_973,
+				},
+				modelUsage: {
+					"claude-haiku-4-5-20251001": {
+						inputTokens: 2,
+						outputTokens: 5,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 14_973,
+						costUSD: 0.029973,
+						contextWindow: 200_000,
+						maxOutputTokens: 32_000,
+						canonicalModel: "claude-haiku-4-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
+		expect(readClaudeCallMetrics(envelope)?.modelUsage).toEqual({
+			"claude-haiku-4-5-20251001": {
+				inputTokens: 2,
+				outputTokens: 5,
+				cacheReadInputTokens: 0,
+				cacheCreationInputTokens: 14_973,
+				costUSD: 0.029973,
+				contextWindow: 200_000,
+				maxOutputTokens: 32_000,
+				canonicalModel: "claude-haiku-4-5",
+				provider: "firstParty",
+				costBasis: "list",
+			},
+		});
+	});
+
+	it("reads the block past per-model fields the provider added", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.07976,
+				num_turns: 1,
+				usage: {
+					input_tokens: 2,
+					output_tokens: 4,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 19_929,
+				},
+				modelUsage: {
+					"claude-sonnet-5": {
+						inputTokens: 2,
+						outputTokens: 4,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 19_929,
+						webSearchRequests: 0,
+						costUSD: 0.07976,
+						contextWindow: 1_000_000,
+						maxOutputTokens: 64_000,
+						thinkingTokens: 0,
+						canonicalModel: "claude-sonnet-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
+		expect(
+			readClaudeCallMetrics(envelope)?.modelUsage?.["claude-sonnet-5"],
+		).toMatchObject({ webSearchRequests: 0, thinkingTokens: 0 });
+	});
+
+	it("preserves a missing per-model block as absence", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.5,
+				num_turns: 7,
+				usage: {
+					input_tokens: 100,
+					output_tokens: 20,
+					cache_read_input_tokens: 30,
+					cache_creation_input_tokens: 40,
+				},
+			}),
+		);
+
+		const metrics = readClaudeCallMetrics(envelope);
+
+		expect(metrics).toBeDefined();
+		expect(metrics && "modelUsage" in metrics).toBe(false);
+	});
+});
+
+describe(modelsPricedAtList.name, () => {
+	const usage = (costBasis: string): ClaudeModelUsage => ({
+		inputTokens: 2,
+		outputTokens: 5,
+		cacheReadInputTokens: 0,
+		cacheCreationInputTokens: 14_973,
+		costUSD: 0.029973,
+		contextWindow: 200_000,
+		maxOutputTokens: 32_000,
+		canonicalModel: "claude-haiku-4-5",
+		provider: "firstParty",
+		costBasis,
+	});
+
+	it("names the models whose cost the provider priced at list", () => {
+		expect(modelsPricedAtList({ "claude-haiku-4-5": usage("list") })).toEqual([
+			"claude-haiku-4-5",
+		]);
+	});
+
+	it("withholds a model priced on another basis", () => {
+		expect(
+			modelsPricedAtList({ "claude-haiku-4-5": usage("subscription") }),
+		).toEqual([]);
 	});
 });

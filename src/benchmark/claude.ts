@@ -1,6 +1,10 @@
 import type { z } from "zod";
 import type { Effort } from "./config";
-import type { ClaudeCallMetrics, ClaudeEnvelope } from "./contracts";
+import type {
+	ClaudeCallMetrics,
+	ClaudeEnvelope,
+	ClaudeModelUsage,
+} from "./contracts";
 import {
 	claudeCallMetricsSchema,
 	claudeEnvelopeSchema,
@@ -86,9 +90,43 @@ export function readClaudeCallMetrics(
 		turns: envelope.num_turns,
 		durationMs: envelope.duration_ms,
 		apiDurationMs: envelope.duration_api_ms,
+		modelUsage: envelope.modelUsage,
 	});
+	if (!metrics.success) {
+		return undefined;
+	}
 
-	return metrics.success ? metrics.data : undefined;
+	return withoutAbsentModelUsage(metrics.data);
+}
+
+/**
+ * A key carrying `undefined` would serialize into a saved record as an empty
+ * per-model block, which reads as a call that used no model rather than a CLI
+ * that reported none.
+ */
+function withoutAbsentModelUsage(
+	metrics: ClaudeCallMetrics,
+): ClaudeCallMetrics {
+	if (metrics.modelUsage !== undefined) {
+		return metrics;
+	}
+
+	const rest = { ...metrics };
+	delete rest.modelUsage;
+
+	return rest;
+}
+
+/**
+ * A rate catalog can only be checked against costs the provider priced at list.
+ * Another basis is retained and reported as spend, never re-derived.
+ */
+export function modelsPricedAtList(
+	modelUsage: Readonly<Record<string, ClaudeModelUsage>>,
+): string[] {
+	return Object.entries(modelUsage)
+		.filter(([, usage]) => usage.costBasis === "list")
+		.map(([model]) => model);
 }
 
 export function readStructuredOutput<T>(

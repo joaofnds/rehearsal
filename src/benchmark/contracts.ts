@@ -177,6 +177,27 @@ const claudeUsageSchema = z
 	})
 	.loose();
 
+/**
+ * Loose for the same reason as the usage object: the provider adds fields here
+ * between releases. Probed 2026-09-14 on CLI 2.1.270, a sonnet call reported
+ * webSearchRequests and thinkingTokens that a haiku call two hours earlier did
+ * not.
+ */
+const claudeModelUsageSchema = z
+	.object({
+		inputTokens: z.number().int().nonnegative(),
+		outputTokens: z.number().int().nonnegative(),
+		cacheReadInputTokens: z.number().int().nonnegative(),
+		cacheCreationInputTokens: z.number().int().nonnegative(),
+		costUSD: z.number().nonnegative(),
+		contextWindow: z.number().int().positive(),
+		maxOutputTokens: z.number().int().positive(),
+		canonicalModel: z.string().min(1),
+		provider: z.string().min(1),
+		costBasis: z.string().min(1),
+	})
+	.loose();
+
 export const claudeCallMetricsSchema = z
 	.object({
 		costUsd: z.number().nonnegative(),
@@ -187,6 +208,7 @@ export const claudeCallMetricsSchema = z
 		turns: z.number().int().nonnegative(),
 		durationMs: z.number().int().nonnegative().optional(),
 		apiDurationMs: z.number().int().nonnegative().optional(),
+		modelUsage: z.record(z.string(), claudeModelUsageSchema).optional(),
 	})
 	.strict();
 
@@ -198,6 +220,7 @@ export const claudeEnvelopeSchema = z
 		duration_ms: z.number().int().nonnegative().optional(),
 		duration_api_ms: z.number().int().nonnegative().optional(),
 		usage: claudeUsageSchema.optional(),
+		modelUsage: z.record(z.string(), claudeModelUsageSchema).optional(),
 		is_error: z.boolean().optional(),
 		result: z.string().optional(),
 		structured_output: z.unknown().optional(),
@@ -210,6 +233,9 @@ export type StageTurn = Immutable<z.infer<typeof stageTurnSchema>>;
 export type ClaudeEnvelope = Immutable<z.infer<typeof claudeEnvelopeSchema>>;
 export type ClaudeCallMetrics = Immutable<
 	z.infer<typeof claudeCallMetricsSchema>
+>;
+export type ClaudeModelUsage = Immutable<
+	z.infer<typeof claudeModelUsageSchema>
 >;
 export type StageLetterGrade = z.infer<typeof stageLetterGradeSchema>;
 export type StageRubric = Immutable<z.infer<typeof stageRubricSchema>>;

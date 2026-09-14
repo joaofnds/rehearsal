@@ -1,0 +1,71 @@
+{
+	"schemaVersion": 3,
+	"caseId": "brief-reply-92b2e8b0",
+	"lineage": "ffb87bd410838e8afaf79016d87bfda361e0c4f55d0de18361fa4586f6f1bab1",
+	"model": "sonnet",
+	"sessionBudgetUsd": 3,
+	"corpusFiles": [
+		{
+			"path": "output-styles/brief.md",
+			"resolvedPath": "/home/example/.claude/output-styles/brief.md",
+			"sha256": "9b9df36426848ffca62f7353d7250a4ea9a7aa868d7b96583086bee83ad54e94"
+		}
+	],
+	"corpusOrigin": {
+		"kind": "live"
+	},
+	"prompt": "Reply with the single word OK.",
+	"reply": "OK",
+	"transcriptFile": "/home/example/code/rehearsal/.benchmark-runs/sessions/brief-reply-92b2e8b0/e1af2c09-2c1e-4ef3-b1e6-97baf991211c/transcript.jsonl",
+	"transcriptDiagnostics": {
+		"state": "complete",
+		"prefixLinesExcluded": 1268,
+		"sourceLineCount": 1291,
+		"measuredLineCount": 23,
+		"toolUseOccurrences": {
+			"total": 0,
+			"byName": []
+		},
+		"toolErrors": [],
+		"repeatedBashCommands": [],
+		"issues": []
+	},
+	"metrics": {
+		"costUsd": 1.008294,
+		"inputTokens": 2,
+		"outputTokens": 151,
+		"cacheReadTokens": 0,
+		"cacheWriteTokens": 251695,
+		"turns": 1,
+		"durationMs": 6925,
+		"apiDurationMs": 6599
+	},
+	"outcome": "SUCCESSFUL",
+	"checks": [
+		{
+			"kind": "word-band",
+			"status": "PASS",
+			"detail": "69 words within at most 154"
+		},
+		{
+			"kind": "forbidden-text",
+			"status": "PASS",
+			"detail": "none of 1 forbidden strings present"
+		},
+		{
+			"kind": "tool-calls",
+			"status": "PASS",
+			"detail": "0 tool calls"
+		}
+	],
+	"elapsedMs": 7680,
+	"contextManifest": {
+		"paths": [
+			{
+				"path": "output-styles/brief.md",
+				"half": "corpus"
+			}
+		]
+	},
+	"divergences": []
+}

@@ -7,7 +7,7 @@ import {
 	filterJudgeAgreementReport,
 	loadJudgeAgreementReport,
 } from "./judge-agreement";
-import type { ClaudeCallMetrics, ProviderCall } from "./contracts";
+import type { ClaudeCallMetrics, Immutable, ProviderCall } from "./contracts";
 import type {
 	ConfirmationGroupRecord,
 	ConfirmationRepRecord,
@@ -198,7 +198,7 @@ export interface ConfirmationGroupOutcome {
 }
 
 export async function finalizeConfirmationGroup(
-	finalization: Readonly<ConfirmationGroupFinalization>,
+	finalization: Immutable<ConfirmationGroupFinalization>,
 ): Promise<ConfirmationGroupOutcome> {
 	const repRecordFiles = finalization.repResults.map(
 		({ recordFile }) => recordFile,

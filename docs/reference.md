@@ -508,6 +508,13 @@ outcomes, success rates and uncertainty, pass^k, and resource distributions;
 a failed or stopped rep remains part of that evidence. Session reports also
 record the model probe and missing provider metrics explicitly.
 
+An attempt's provider metrics retain the CLI's per-model usage block verbatim
+when the CLI reports one, giving each model's tokens, the cost charged for them,
+the model's context window, and the basis that cost was priced on. A record
+written from a CLI that reports no such block omits the field rather than
+recording an empty one. Only a cost the provider priced at list is re-derivable
+from a rate catalog; any other basis stays reported spend.
+
 ### Saved session context history
 
 The local browser can inspect standalone session attempts at

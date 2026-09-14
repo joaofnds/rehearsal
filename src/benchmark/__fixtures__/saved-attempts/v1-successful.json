@@ -1,0 +1,49 @@
+{
+	"schemaVersion": 1,
+	"caseId": "brief-reply-92b2e8b0",
+	"lineage": "3d551e4a268de06b839a76815990b9e532cb6f830dc0d4a4ee86e02f7b419620",
+	"model": "sonnet",
+	"sessionBudgetUsd": 3,
+	"corpusFiles": [
+		{
+			"path": "output-styles/brief.md",
+			"resolvedPath": "/home/example/.claude/output-styles/brief.md",
+			"sha256": "1d1bc829476042c99305e5ed77b4264aeab43a3888980a1b06cf59623019d2d7"
+		}
+	],
+	"corpusOrigin": {
+		"kind": "live"
+	},
+	"prompt": "Reply with the single word OK.",
+	"reply": "OK",
+	"transcriptFile": "/home/example/code/rehearsal/.benchmark-runs/sessions/brief-reply-92b2e8b0/936e9ee1-77e1-4bab-aad6-d990408439c8/transcript.jsonl",
+	"metrics": {
+		"costUsd": 1.0049367999999999,
+		"inputTokens": 2,
+		"outputTokens": 138,
+		"cacheReadTokens": 3304,
+		"cacheWriteTokens": 250723,
+		"turns": 1,
+		"durationMs": 8922,
+		"apiDurationMs": 7418
+	},
+	"outcome": "SUCCESSFUL",
+	"checks": [
+		{
+			"kind": "word-band",
+			"status": "PASS",
+			"detail": "66 words within at most 154"
+		},
+		{
+			"kind": "forbidden-text",
+			"status": "PASS",
+			"detail": "none of 1 forbidden strings present"
+		},
+		{
+			"kind": "tool-calls",
+			"status": "PASS",
+			"detail": "0 tool calls"
+		}
+	],
+	"elapsedMs": 9899
+}

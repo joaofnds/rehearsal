@@ -53,6 +53,53 @@ function withoutReply(
 	return rest;
 }
 
+function smokeCase(): SessionCase {
+	return {
+		kind: "session",
+		declaration: {
+			id: "smoke",
+			kind: "session",
+			title: "Smoke",
+			prompt: "Reply with the single word OK.",
+			tools: [],
+			corpusFiles: [],
+			projectFiles: [],
+			checks: [{ kind: "word-band", max: 1 }],
+		},
+		fixturePath: undefined,
+		transcriptPath: undefined,
+		prompt: "Reply with the single word OK.",
+		tools: [],
+		settings: undefined,
+		agents: undefined,
+		corpusFiles: [],
+		projectFiles: [],
+		checks: [{ kind: "word-band", max: 1 }],
+	};
+}
+
+function smokeAttempt(): SessionAttempt {
+	return {
+		attemptDirectory: "/runs/attempt",
+		metrics: undefined,
+		transcriptFile: "/runs/transcript.jsonl",
+		transcriptDiagnostics: {
+			state: "complete",
+			prefixLinesExcluded: 0,
+			sourceLineCount: 1,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [],
+		},
+		reply: "OK",
+		outcome: "SUCCESSFUL",
+		checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+		contextManifest: undefined,
+	};
+}
+
 describe("sessionAttemptRecordSchema", () => {
 	function failedRecord(): Immutable<
 		Extract<SessionAttemptRecord, { schemaVersion: 2 }>
@@ -488,6 +535,83 @@ describe("sessionAttemptRecordSchema", () => {
 			expect(roundtripped.contextManifest?.paths[0]?.half).toBe("corpus");
 			expect(roundtripped.contextManifest?.paths[1]?.half).toBe("project");
 		}
+	});
+
+	const savedAttempts: readonly {
+		readonly name: string;
+		readonly schemaVersion: 1 | 3;
+	}[] = [
+		{ name: "v1-successful.json", schemaVersion: 1 },
+		{ name: "v1-successful-with-manifest.json", schemaVersion: 1 },
+		{ name: "v1-unsuccessful.json", schemaVersion: 1 },
+		{ name: "v1-unsuccessful-with-manifest.json", schemaVersion: 1 },
+		{ name: "v3-successful-with-manifest.json", schemaVersion: 3 },
+	];
+
+	for (const { name, schemaVersion } of savedAttempts) {
+		it(`parses the saved attempt ${name} unchanged`, async () => {
+			const text = await Bun.file(
+				new URL(`__fixtures__/saved-attempts/${name}`, import.meta.url),
+			).text();
+
+			const parsed = parseSessionAttemptRecord(text);
+
+			expect(parsed.schemaVersion).toBe(schemaVersion);
+			expect(parsed.metrics?.modelUsage).toBeUndefined();
+		});
+	}
+
+	it("retains the provider's per-model usage block on a built record", () => {
+		const built = buildSessionAttemptRecord({
+			sessionCase: smokeCase(),
+			settings: { model: "haiku", budgetUsd: 0.2 },
+			lineage: "b".repeat(64),
+			corpusFiles: [],
+			corpusOrigin: { kind: "live" },
+			attempt: {
+				...smokeAttempt(),
+				metrics: {
+					costUsd: 0.029973,
+					inputTokens: 2,
+					outputTokens: 5,
+					cacheReadTokens: 0,
+					cacheWriteTokens: 14_973,
+					turns: 1,
+					modelUsage: {
+						"claude-haiku-4-5-20251001": {
+							inputTokens: 2,
+							outputTokens: 5,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 14_973,
+							costUSD: 0.029973,
+							contextWindow: 200_000,
+							maxOutputTokens: 32_000,
+							canonicalModel: "claude-haiku-4-5",
+							provider: "firstParty",
+							costBasis: "list",
+						},
+					},
+				},
+			},
+			elapsedMs: 123,
+		});
+
+		const roundtripped = parseSessionAttemptRecord(JSON.stringify(built));
+
+		expect(roundtripped.metrics?.modelUsage).toEqual({
+			"claude-haiku-4-5-20251001": {
+				inputTokens: 2,
+				outputTokens: 5,
+				cacheReadInputTokens: 0,
+				cacheCreationInputTokens: 14_973,
+				costUSD: 0.029973,
+				contextWindow: 200_000,
+				maxOutputTokens: 32_000,
+				canonicalModel: "claude-haiku-4-5",
+				provider: "firstParty",
+				costBasis: "list",
+			},
+		});
 	});
 
 	it("rejects manifest entries that are bare strings when building a session attempt record rather than spreading them into character indices", () => {

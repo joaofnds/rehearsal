@@ -435,11 +435,24 @@ See [current state](docs/status.md) for implementation coverage and
   sum `total_input_tokens`; no saved record carries the sum as a field, so the
   harness computes it. It excludes the request's own output tokens, which rejoin
   the prompt on the next request. It is not the active context window: no saved
-  record carries an occupancy figure or a model window limit to render one
-  against. The series across an attempt does not rise monotonically: a cache
-  re-warm moves tokens from `cache_read_input_tokens` to
+  record carries an occupancy figure to render it against, and the window limit
+  it would be rendered against comes from the per-model usage block rather than
+  from the transcript. The series across an attempt does not rise
+  monotonically: a cache re-warm moves tokens from `cache_read_input_tokens` to
   `cache_creation_input_tokens` and lowers the sum, observed in 6 of 54 saved
   attempts, and rows recording no model request report every category zero.
+- **Per-model usage block** — the provider's own account of one CLI call,
+  broken down by the models the call used. It carries each model's input,
+  output, cache-read and cache-creation tokens, the cost the provider charged
+  for them, the model's context window and maximum output tokens, and the basis
+  that cost was priced on. The harness retains it verbatim on an attempt's
+  metrics. A call made by a CLI that reports no such block records its absence,
+  which is not the same as a call that used no model.
+- **Cost basis** — what the provider priced a model's reported cost on. A cost
+  basis of `list` is public per-token rates, so the cost can be re-derived from
+  a rate catalog and checked. Any other basis is a discount or plan the catalog
+  does not describe: the cost remains the spend the provider reported, and it is
+  not evidence about rates.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
 - **Workflow state** — the `backlog/` and `.boris/` trees copied independently
   of Git to carry workflow artifacts across stage materialization and target
