@@ -37,9 +37,10 @@ const corpusFileSchema = z
 	})
 	.strict();
 
-const contextHalfSchema = z.enum(["corpus", "project"]);
+export const contextHalfSchema = z.enum(["corpus", "project"]);
+export type ContextHalf = z.infer<typeof contextHalfSchema>;
 
-const manifestEntrySchema = z
+export const manifestEntrySchema = z
 	.object({
 		path: z.string().min(1),
 		half: contextHalfSchema,
@@ -51,17 +52,37 @@ const manifestEntrySchema = z
  * never carries the corpus's own bytes, so an entry is a layout path and
  * nothing a hash could attach to.
  */
-const contextManifestSchema = z
+export const contextManifestSchema = z
 	.object({
 		paths: z.array(manifestEntrySchema),
 	})
 	.strict();
 
-const manifestDivergenceSchema = z
+export const manifestDivergenceSchema = z
 	.object({
 		kind: z.enum(["undeclared-file", "unloaded-file"]),
 		path: z.string().min(1),
 		half: contextHalfSchema,
+	})
+	.strict();
+
+/**
+ * Prior to ACT-61, context manifest entries were bare layout path strings,
+ * and divergences recorded only kind and path without tagging whether the
+ * expected file belonged to the corpus or project half.
+ */
+export const legacyManifestEntrySchema = z.string().min(1);
+
+export const legacyContextManifestSchema = z
+	.object({
+		paths: z.array(legacyManifestEntrySchema),
+	})
+	.strict();
+
+export const legacyManifestDivergenceSchema = z
+	.object({
+		kind: z.enum(["undeclared-file", "unloaded-file"]),
+		path: z.string().min(1),
 	})
 	.strict();
 
@@ -140,40 +161,66 @@ function checkedProblems(record: RecordedOutcome): readonly RecordProblem[] {
 	return problems;
 }
 
-const legacySessionAttemptRecordSchema = z
+interface AttemptRefinementContext {
+	readonly addIssue: z.RefinementCtx["addIssue"];
+}
+
+function refineSessionAttemptRecord(
+	record: RecordedOutcome,
+	context: Readonly<AttemptRefinementContext>,
+): void {
+	for (const problem of problemsWith(record)) {
+		context.addIssue({
+			code: "custom",
+			message: problem.message,
+			path: [problem.path],
+		});
+	}
+}
+
+const sessionAttemptRecordFields = {
+	caseId: z.string().min(1),
+	lineage: z.string().min(1),
+	model: z.string().min(1),
+	effort: effortSchema.optional(),
+	sessionBudgetUsd: z.number().positive(),
+	corpusFiles: z.array(corpusFileSchema),
+	corpusOrigin: corpusSnapshotOriginSchema.optional(),
+	prompt: z.string().min(1),
+	reply: z.string().optional(),
+	transcriptFile: z.string().min(1),
+	transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
+	contextEvidence: contextEvidenceSchema.optional(),
+	metrics: claudeCallMetricsSchema.optional(),
+	outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
+	checks: z.array(checkResultSchema),
+	elapsedMs: z.number().nonnegative(),
+};
+
+export const legacyUntaggedSessionAttemptRecordSchema = z
 	.object({
 		schemaVersion: z.literal(1),
-		caseId: z.string().min(1),
-		lineage: z.string().min(1),
-		model: z.string().min(1),
-		effort: effortSchema.optional(),
-		sessionBudgetUsd: z.number().positive(),
-		corpusFiles: z.array(corpusFileSchema),
-		corpusOrigin: corpusSnapshotOriginSchema.optional(),
-		contextManifest: contextManifestSchema.optional(),
-		divergences: z.array(manifestDivergenceSchema).optional(),
-		prompt: z.string().min(1),
-		reply: z.string().optional(),
-		transcriptFile: z.string().min(1),
-		transcriptDiagnostics: transcriptDiagnosticsSchema.optional(),
-		contextEvidence: contextEvidenceSchema.optional(),
-		metrics: claudeCallMetricsSchema.optional(),
-		outcome: z.enum(["SUCCESSFUL", "UNSUCCESSFUL", "NO_REPLY"]),
-		checks: z.array(checkResultSchema),
-		elapsedMs: z.number().nonnegative(),
+		...sessionAttemptRecordFields,
+		contextManifest: legacyContextManifestSchema,
+		divergences: z.array(legacyManifestDivergenceSchema).optional(),
 	})
 	.strict()
-	.superRefine((record, context) => {
-		for (const problem of problemsWith(record)) {
-			context.addIssue({
-				code: "custom",
-				message: problem.message,
-				path: [problem.path],
-			});
-		}
-	});
+	.superRefine(refineSessionAttemptRecord);
 
-const executionFailedSessionAttemptRecordSchema = z
+export const legacyTaggedSessionAttemptRecordSchema = z
+	.object({
+		schemaVersion: z.literal(1),
+		...sessionAttemptRecordFields,
+		contextManifest: contextManifestSchema.optional(),
+		divergences: z.array(manifestDivergenceSchema).optional(),
+	})
+	.strict()
+	.superRefine(refineSessionAttemptRecord);
+
+export const legacySessionAttemptRecordSchema =
+	legacyTaggedSessionAttemptRecordSchema;
+
+export const executionFailedSessionAttemptRecordSchema = z
 	.object({
 		schemaVersion: z.literal(2),
 		caseId: z.string().min(1),
@@ -198,13 +245,37 @@ const executionFailedSessionAttemptRecordSchema = z
 	})
 	.strict();
 
+export const sessionAttemptRecordV3Schema = z
+	.object({
+		schemaVersion: z.literal(3),
+		...sessionAttemptRecordFields,
+		contextManifest: contextManifestSchema.optional(),
+		divergences: z.array(manifestDivergenceSchema).optional(),
+	})
+	.strict()
+	.superRefine(refineSessionAttemptRecord);
+
+export const currentSessionAttemptRecordSchema = sessionAttemptRecordV3Schema;
+
 export const sessionAttemptRecordSchema = z.union([
-	legacySessionAttemptRecordSchema,
+	legacyUntaggedSessionAttemptRecordSchema,
+	legacyTaggedSessionAttemptRecordSchema,
 	executionFailedSessionAttemptRecordSchema,
+	sessionAttemptRecordV3Schema,
 ]);
 
-export type LegacySessionAttemptRecord = z.infer<
-	typeof legacySessionAttemptRecordSchema
+export type LegacyUntaggedSessionAttemptRecord = z.infer<
+	typeof legacyUntaggedSessionAttemptRecordSchema
+>;
+export type LegacyTaggedSessionAttemptRecord = z.infer<
+	typeof legacyTaggedSessionAttemptRecordSchema
+>;
+export type LegacySessionAttemptRecord = LegacyTaggedSessionAttemptRecord;
+export type ExecutionFailedSessionAttemptRecord = z.infer<
+	typeof executionFailedSessionAttemptRecordSchema
+>;
+export type SessionAttemptRecordV3 = z.infer<
+	typeof sessionAttemptRecordV3Schema
 >;
 export type SessionAttemptRecord = z.infer<typeof sessionAttemptRecordSchema>;
 
@@ -224,7 +295,7 @@ export interface SessionAttemptRecordInputs {
 }
 
 interface MutableSessionAttemptRecord {
-	schemaVersion: 1 | 2;
+	schemaVersion: 2 | 3;
 	caseId: string;
 	lineage: string;
 	model: string;
@@ -232,7 +303,7 @@ interface MutableSessionAttemptRecord {
 	sessionBudgetUsd: number;
 	corpusFiles: ResolvedCorpusFile[];
 	corpusOrigin: CorpusSnapshotOrigin;
-	contextManifest?: SessionAttempt["contextManifest"];
+	contextManifest?: z.infer<typeof contextManifestSchema>;
 	divergences?: ReturnType<typeof reconcileManifest>;
 	prompt: string;
 	reply?: string;
@@ -251,7 +322,7 @@ export function buildSessionAttemptRecord(
 ): SessionAttemptRecord {
 	const { attempt, sessionCase, settings } = inputs;
 	const record: MutableSessionAttemptRecord = {
-		schemaVersion: attempt.outcome === "EXECUTION_FAILED" ? 2 : 1,
+		schemaVersion: attempt.outcome === "EXECUTION_FAILED" ? 2 : 3,
 		caseId: sessionCase.declaration.id,
 		lineage: inputs.lineage,
 		model: settings.model,
@@ -285,10 +356,11 @@ export function buildSessionAttemptRecord(
 		);
 	}
 	if (attempt.contextManifest !== undefined) {
+		const manifest = contextManifestSchema.parse(attempt.contextManifest);
 		record.contextManifest = {
-			paths: attempt.contextManifest.paths.map((entry) => ({ ...entry })),
+			paths: manifest.paths.map((entry) => ({ ...entry })),
 		};
-		record.divergences = reconcileManifest(attempt.contextManifest, [
+		record.divergences = reconcileManifest(manifest, [
 			...corpusEntries(sessionCase.corpusFiles),
 			...projectEntries(sessionCase.projectFiles),
 		]);

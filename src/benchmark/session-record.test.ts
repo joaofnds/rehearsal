@@ -1,10 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import type { Immutable } from "#benchmark/contracts";
+import type { SessionCase } from "#benchmark/case";
+import type { SessionSettings } from "#benchmark/claude";
+import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
+import type { SessionAttempt } from "#benchmark/session-attempt";
 import type {
+	CorpusSnapshotOrigin,
 	LegacySessionAttemptRecord,
 	SessionAttemptRecord,
 } from "#benchmark/session-record";
 import {
+	buildSessionAttemptRecord,
 	parseSessionAttemptRecord,
 	sessionAttemptRecordSchema,
 } from "#benchmark/session-record";
@@ -348,5 +354,190 @@ describe("sessionAttemptRecordSchema", () => {
 				error: "cannot accompany success",
 			}).success,
 		).toBe(false);
+	});
+
+	it("parses a legacy pre-ACT-61 record whose manifest entries are bare strings and divergences carry no half, retaining exact bytes without adding or defaulting half", () => {
+		const legacyRaw = {
+			...record(),
+			schemaVersion: 1,
+			contextManifest: {
+				paths: ["output-styles/brief.md"],
+			},
+			divergences: [
+				{
+					kind: "unloaded-file",
+					path: "CLAUDE.md",
+				},
+			],
+		};
+		const parsed = parseSessionAttemptRecord(JSON.stringify(legacyRaw));
+
+		expect(parsed.schemaVersion).toBe(1);
+		expect(parsed.contextManifest).toEqual({
+			paths: ["output-styles/brief.md"],
+		});
+		expect(parsed.divergences).toEqual([
+			{
+				kind: "unloaded-file",
+				path: "CLAUDE.md",
+			},
+		]);
+		expect("half" in (parsed.divergences?.[0] ?? {})).toBe(false);
+	});
+
+	it("buildSessionAttemptRecord produces a schemaVersion 3 record that roundtrips with half on manifest and divergence entries", () => {
+		const sampleCase: SessionCase = {
+			kind: "session",
+			declaration: {
+				id: "smoke",
+				kind: "session",
+				title: "Smoke",
+				prompt: "Reply with the single word OK.",
+				tools: [],
+				corpusFiles: ["skills/verify/SKILL.md"],
+				projectFiles: ["NOTES.md"],
+				checks: [{ kind: "word-band", max: 1 }],
+			},
+			fixturePath: undefined,
+			transcriptPath: undefined,
+			prompt: "Reply with the single word OK.",
+			tools: [],
+			settings: undefined,
+			agents: undefined,
+			corpusFiles: ["skills/verify/SKILL.md"],
+			projectFiles: ["NOTES.md"],
+			checks: [{ kind: "word-band", max: 1 }],
+		};
+		const sampleSettings: SessionSettings = {
+			model: "haiku",
+			budgetUsd: 0.2,
+		};
+		const sampleCorpusFiles: readonly ResolvedCorpusFile[] = [
+			{
+				path: "skills/verify/SKILL.md",
+				resolvedPath: "/path/to/SKILL.md",
+				sha256: "a".repeat(64),
+			},
+		];
+		const sampleOrigin: CorpusSnapshotOrigin = { kind: "live" };
+		const sampleAttempt: SessionAttempt = {
+			attemptDirectory: "/runs/attempt",
+			metrics: undefined,
+			transcriptFile: "/runs/transcript.jsonl",
+			transcriptDiagnostics: {
+				state: "complete",
+				prefixLinesExcluded: 0,
+				sourceLineCount: 1,
+				measuredLineCount: 1,
+				toolUseOccurrences: { total: 0, byName: [] },
+				toolErrors: [],
+				repeatedBashCommands: [],
+				issues: [],
+			},
+			reply: "OK",
+			outcome: "SUCCESSFUL",
+			checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+			contextManifest: {
+				paths: [
+					{ path: "skills/verify/SKILL.md", half: "corpus" },
+					{ path: "NOTES.md", half: "project" },
+				],
+			},
+		};
+
+		const built = buildSessionAttemptRecord({
+			sessionCase: sampleCase,
+			settings: sampleSettings,
+			lineage: "b".repeat(64),
+			corpusFiles: sampleCorpusFiles,
+			corpusOrigin: sampleOrigin,
+			attempt: sampleAttempt,
+			elapsedMs: 123,
+		});
+
+		expect(built.schemaVersion).toBe(3);
+		expect(built.contextManifest?.paths).toEqual([
+			{ path: "skills/verify/SKILL.md", half: "corpus" },
+			{ path: "NOTES.md", half: "project" },
+		]);
+		expect(built.divergences).toEqual([]);
+
+		const roundtripped = parseSessionAttemptRecord(JSON.stringify(built));
+		expect(roundtripped).toEqual(built);
+		expect(roundtripped.schemaVersion).toBe(3);
+		if (roundtripped.schemaVersion === 3) {
+			expect(roundtripped.contextManifest?.paths[0]?.half).toBe("corpus");
+			expect(roundtripped.contextManifest?.paths[1]?.half).toBe("project");
+		}
+	});
+
+	it("rejects manifest entries that are bare strings when building a session attempt record rather than spreading them into character indices", () => {
+		const sampleCase: SessionCase = {
+			kind: "session",
+			declaration: {
+				id: "smoke",
+				kind: "session",
+				title: "Smoke",
+				prompt: "Reply with the single word OK.",
+				tools: [],
+				corpusFiles: [],
+				projectFiles: [],
+				checks: [{ kind: "word-band", max: 1 }],
+			},
+			fixturePath: undefined,
+			transcriptPath: undefined,
+			prompt: "Reply with the single word OK.",
+			tools: [],
+			settings: undefined,
+			agents: undefined,
+			corpusFiles: [],
+			projectFiles: [],
+			checks: [{ kind: "word-band", max: 1 }],
+		};
+		const sampleSettings: SessionSettings = {
+			model: "haiku",
+			budgetUsd: 0.2,
+		};
+		const sampleAttempt = {
+			attemptDirectory: "/runs/attempt",
+			metrics: undefined,
+			transcriptFile: "/runs/transcript.jsonl",
+			transcriptDiagnostics: {
+				state: "complete",
+				prefixLinesExcluded: 0,
+				sourceLineCount: 1,
+				measuredLineCount: 1,
+				toolUseOccurrences: { total: 0, byName: [] },
+				toolErrors: [],
+				repeatedBashCommands: [],
+				issues: [],
+			},
+			reply: "OK",
+			outcome: "SUCCESSFUL" as const,
+			checks: [
+				{
+					kind: "word-band" as const,
+					status: "PASS" as const,
+					detail: "1 word",
+				},
+			],
+			contextManifest: {
+				paths: ["output-styles/brief.md"],
+			},
+		};
+
+		expect(() =>
+			// SAFETY: Exercising runtime rejection when raw session attempt data carries legacy string paths
+			buildSessionAttemptRecord({
+				sessionCase: sampleCase,
+				settings: sampleSettings,
+				lineage: "b".repeat(64),
+				corpusFiles: [],
+				corpusOrigin: { kind: "live" },
+				// oxlint-disable-next-line anti-slop/no-chained-type-assertions, typescript/no-unsafe-type-assertion
+				attempt: sampleAttempt as unknown as SessionAttempt,
+				elapsedMs: 123,
+			}),
+		).toThrow();
 	});
 });

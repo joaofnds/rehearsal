@@ -241,7 +241,7 @@ describe(runSessionDebugAttempt.name, () => {
 		});
 
 		expect(outcome.record).toMatchObject({
-			schemaVersion: 1,
+			schemaVersion: 3,
 			caseId: "smoke",
 			model: "haiku",
 			effort: "low",

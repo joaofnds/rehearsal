@@ -135,6 +135,11 @@ See [current state](docs/status.md) for implementation coverage and
   shapes remain explicit. Calculated request cost retains the selected rate and
   its frozen catalog; omission of the field means no provider bundle was
   supplied.
+- **Context half** — whether an instruction/context path or divergence belongs
+  to the evaluated instruction corpus under test (`corpus`) or the fixture/target
+  repository being operated on (`project`). Keeping the two halves distinct
+  lets divergences name which side was expected without conflating a missing
+  fixture file with a missing skill.
 - **Context history** — the ordered, read-only browser projection of one saved
   session attempt's starting context, tool events, observed deliveries, results,
   and evidence gaps. It is derived from the colocated transcript and is not a
