@@ -1330,3 +1330,72 @@ export function sessionHistoryDetailFromLine(
 		relatedEventIds: event.relatedEventIds,
 	};
 }
+
+export interface SessionHistoryRequestUsage {
+	readonly inputTokens: number;
+	readonly outputTokens: number;
+	readonly cacheReadTokens: number;
+	readonly cacheWriteTokens: number;
+}
+
+export interface SessionHistoryRequestEntry {
+	readonly requestId: string | undefined;
+	readonly line: number;
+	readonly model: string | undefined;
+	readonly usage: SessionHistoryRequestUsage;
+}
+
+export interface SessionHistoryRequestSeries {
+	readonly entries: readonly SessionHistoryRequestEntry[];
+}
+
+const requestUsageSchema = z.looseObject({
+	input_tokens: z.number().int().nonnegative(),
+	output_tokens: z.number().int().nonnegative(),
+	cache_read_input_tokens: z.number().int().nonnegative(),
+	cache_creation_input_tokens: z.number().int().nonnegative(),
+});
+
+const requestRowSchema = z.looseObject({
+	type: z.literal("assistant"),
+	requestId: z.string().min(1).nullish(),
+	message: z.looseObject({
+		model: z.string().min(1).optional(),
+		usage: requestUsageSchema,
+	}),
+});
+
+export function sessionHistoryRequestSeries(
+	transcript: string,
+): SessionHistoryRequestSeries {
+	const entries: SessionHistoryRequestEntry[] = [];
+	for (const [index, text] of transcript.split("\n").entries()) {
+		if (text.trim() === "") {
+			continue;
+		}
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(text);
+		} catch {
+			continue;
+		}
+		const row = requestRowSchema.safeParse(parsed);
+		if (!row.success) {
+			continue;
+		}
+		const { usage } = row.data.message;
+		entries.push({
+			requestId: row.data.requestId ?? undefined,
+			line: index + 1,
+			model: row.data.message.model,
+			usage: {
+				inputTokens: usage.input_tokens,
+				outputTokens: usage.output_tokens,
+				cacheReadTokens: usage.cache_read_input_tokens,
+				cacheWriteTokens: usage.cache_creation_input_tokens,
+			},
+		});
+	}
+
+	return { entries };
+}

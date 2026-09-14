@@ -4,6 +4,7 @@ import {
 	MAX_EVENT_DETAIL_BYTES,
 	sessionHistoryDetail,
 	sessionHistoryReport,
+	sessionHistoryRequestSeries,
 } from "#benchmark/session-history";
 
 function row(record: JsonValue): string {
@@ -513,5 +514,83 @@ describe(sessionHistoryDetail.name, () => {
 			totalLineCount: 8,
 			coverage: "partial",
 		});
+	});
+});
+
+describe(sessionHistoryRequestSeries.name, () => {
+	function assistantRow(
+		line: string,
+		requestId: string | null,
+		model: string,
+		usage: Readonly<Record<string, number>>,
+	): JsonValue {
+		return {
+			type: "assistant",
+			timestamp: `2026-09-14T00:00:0${line}.000Z`,
+			cwd: "/work",
+			requestId,
+			message: {
+				model,
+				usage: {
+					input_tokens: usage.input ?? 0,
+					output_tokens: usage.output ?? 0,
+					cache_read_input_tokens: usage.cacheRead ?? 0,
+					cache_creation_input_tokens: usage.cacheWrite ?? 0,
+				},
+				content: [{ type: "text", text: "reply" }],
+			},
+		};
+	}
+
+	it("yields one entry per distinct request in transcript order", () => {
+		const transcript = [
+			row(
+				assistantRow("1", "req-b", "claude-opus-5", {
+					input: 2,
+					output: 10,
+					cacheRead: 100,
+					cacheWrite: 20,
+				}),
+			),
+			row(
+				assistantRow("2", "req-a", "claude-sonnet-5", {
+					input: 3,
+					output: 11,
+					cacheRead: 200,
+					cacheWrite: 30,
+				}),
+			),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries(transcript);
+
+		expect(
+			series.entries.map(({ requestId, model, usage }) => ({
+				requestId,
+				model,
+				usage,
+			})),
+		).toEqual([
+			{
+				requestId: "req-b",
+				model: "claude-opus-5",
+				usage: {
+					inputTokens: 2,
+					outputTokens: 10,
+					cacheReadTokens: 100,
+					cacheWriteTokens: 20,
+				},
+			},
+			{
+				requestId: "req-a",
+				model: "claude-sonnet-5",
+				usage: {
+					inputTokens: 3,
+					outputTokens: 11,
+					cacheReadTokens: 200,
+					cacheWriteTokens: 30,
+				},
+			},
+		]);
 	});
 });
