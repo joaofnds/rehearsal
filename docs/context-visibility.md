@@ -4,7 +4,10 @@ Assessed on **2026-09-11**, against implementation commit
 `abc6855a6860efe5e390d5c7a55db5e2bcb6049b`, maintained documentation, the design
 handoff, and the maintainer's roadmap. The product direction and delivery
 sequence are accepted. Implementation details still require shaping; the
-capabilities below remain planned.
+capabilities in that baseline remain an assessment of that revision. For current
+implementation, use [status](status.md). The accepted delivery map below also
+records the **2026-09-14** follow-on outcomes from the
+[context-analyzer study](context-analyzer-study.md).
 
 ## Product conclusion
 
@@ -267,27 +270,37 @@ The maintainer board holds related work. These identifiers are cross-references;
 the outcomes above are understandable without board access:
 
 Milestone **m-8: Explain context and cost while preserving quality** groups the
-eight delivery cards. Each slice can ship independently; the milestone groups
-progress without assigning a deadline or changing execution priority. Shared
-prerequisites retain their existing milestones.
+original eight delivery outcomes and their supporting work. Each slice can ship
+independently. Raw pipeline capture and shared transcript parsing now have an
+explicit home in this milestone; other prerequisites retain their milestone
+placement. Board dates express queue order, not delivery deadlines.
 
 | Delivery card | Accepted outcome                                                              |
 | ------------- | ----------------------------------------------------------------------------- |
 | ACT-155       | Saved instruction/file inspector, consuming ACT-148 diagnostics               |
+| ACT-155.1     | Shared transcript parsing for diagnostics and saved history                   |
 | ACT-156       | Bounded verification of provider collection signals and accounting boundaries |
-| ACT-157       | Per-request context, token usage, and model-priced cost timeline              |
+| ACT-157.1     | Provider-evidence normalization and optional attempt persistence              |
+| ACT-157       | Per-request total input tokens, usage, and model-priced cost timeline         |
 | ACT-158       | Pipeline-step and replay context inspection, after ACT-123 capture            |
 | ACT-159       | Reviewer trees and direct/descendant skill and subagent costs                 |
 | ACT-160       | Review-efficiency benchmark and linked quality/resource comparisons           |
 | ACT-161       | Live context and cost views, coordinated with ACT-154 monitor shaping         |
 | ACT-162       | Saved pipeline/replay reviewer-tree integration, before live monitoring       |
+| ACT-123       | Raw pipeline transcript capture with explicit unavailable evidence            |
 
-These cards enter shaping with sourced acceptance criteria. ACT-156 is a
-provider-free investigation; no provider budget is assigned to this stream.
-The first inspector follows ACT-148, while collection verification can proceed
-independently. ACT-123 retains its deferral until the pipeline slice is selected.
-ACT-162 joins pipeline inspection and session reviewer trees; ACT-161 follows
-that saved integration so it can reuse the same interpretation live.
+The saved inspector, provider investigation, and normalization/persistence seam
+have landed. The next saved-view work uses retained transcript request usage,
+including the transcript-only normalization correction, first-observed request
+order, source locators, and inherited-context boundaries. Its series is labeled
+total input tokens; it does not measure the provider's active context window.
+Richer hook and child collection remains later work where transcripts do not
+supply the required evidence. See [current limits](status.md).
+
+ACT-123 retains its deferral until the pipeline slice is selected. ACT-162 joins
+pipeline inspection and session reviewer trees; ACT-161 follows that saved
+integration so it can reuse the same interpretation live. Experiment spending
+requires its own recorded scope and budget; organizing this stream adds none.
 
 Existing scope reused by these cards:
 
@@ -310,6 +323,55 @@ card statuses, milestone order, or treating older Done cards as unfinished.
 Independent import of ordinary sessions outside Rehearsal may later make
 diagnosis more convenient; imported traces remain observational evidence until
 frozen into a reproducible case.
+
+### Integration and artifact investigation
+
+The context-analyzer study adds a follow-on stream under **m-9: Investigate task
+context through integrations and recorded artifacts**. The operator should be
+able to find any supported saved attempt, identify which integrations supplied
+its context, inspect the artifacts and diagnostic evidence, and query the same
+analysis from scripts or an agent. These outcomes were accepted for shaping on
+2026-09-14; their inclusion here does not claim implementation.
+
+| Card    | Accepted outcome                                                                                                                   | Required existing result                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| ACT-169 | One browser index into standalone attempts, confirmation repetitions, pipeline steps, and replays                                  | Saved session and pipeline/replay context views      |
+| ACT-170 | Integration breakdown for observed tools, MCP server/functions, skills, and agent calls, linked to exact deliveries                | Request timeline and saved task/reviewer identity    |
+| ACT-171 | Retained image/offload artifacts with bounded previews and separate full-file, delivered-preview, and subsequent-read observations | Saved history, pipeline capture, and child capture   |
+| ACT-172 | Rule-versioned diagnostic findings, content fingerprints, and observational cross-attempt charts with openable evidence            | Request measurements and task/reviewer evidence      |
+| ACT-173 | Common bounded context queries through browser/API and CLI, with matching units, provenance, and evidence states                   | Saved task/request projections and diagnostic report |
+| ACT-174 | Read-only MCP tools that expose the common queries without independent calculations                                                | Common query interface                               |
+| ACT-175 | Offline screening of a specified output transformation, preserving candidate identity and measurement assumptions                  | Diagnostic evidence and request measurements         |
+| ACT-176 | Explicit aggregate export excluding content, paths, and execution identities while retaining uncertainty                           | Common query interface                               |
+
+These cards have separate acceptance criteria and can deliver useful results
+independently of milestone completion. Discovery, integration/artifact views,
+and diagnostic findings provide the operator-facing exit; common queries and
+MCP provide the agent-facing exit; screening and aggregate export support a
+shareable hypothesis. m-9 follows m-8 in the existing queue order and does not
+reorder earlier milestones. Its lower-priority adapters and screening/export
+work do not block the first context timeline.
+
+Reuse the existing event/source workbench, verified readers, request pricing,
+and comparison resources. Content fingerprints must record their representation
+and method consistently across diagnostics, artifacts, and transformations.
+Derived indexes remain rebuildable from retained source evidence, with source
+and derivation-version changes invalidating cached results. Summaries and
+explicit detail retrieval share one interpretation across interfaces.
+
+Diagnostics produce hypotheses, not verdicts of wasted context. A repeated path
+can contain a different excerpt or version; a cache rebuild does not prove
+compaction; an absent keyword does not prove an instruction had no effect.
+Offline reductions remain modeled opportunity, including uncertainty about
+request exposure and cache effects. ACT-160 continues to own the controlled
+quality comparison, and ACT-175 is an optional source of candidates rather than
+a prerequisite to it.
+
+Global hook installation, automatic instruction pruning, inferred exact system
+prefixes, runtime nudges during collection, and a second-provider dependency
+are not adopted by this stream. The study's per-mechanism decisions retain the
+reasons and reconsideration conditions. Ordinary-session import and broad
+public protocol guarantees remain separate future choices.
 
 ## First proof using the review workflow
 

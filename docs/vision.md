@@ -58,6 +58,13 @@ context, which agents receive them, what gets read again, and where large tool
 results or compaction change the trajectory. A useful view connects each
 observation to its recorded source and exposes gaps in collection.
 
+The operator should be able to find that evidence from one index covering
+standalone attempts, confirmation repetitions, workflow steps, and replays.
+Within an attempt, group observed deliveries by tool, MCP integration, skill,
+and receiving agent. Keep images and offloaded outputs inspectable alongside
+text, distinguishing the full saved artifact from the preview or excerpt that
+actually entered context.
+
 Show content introduced, context at individual requests, cumulative token
 usage, cache usage, cost, and elapsed time as distinct readings. Each agent has
 its own context; a smaller parent session can still require more tokens across
@@ -70,11 +77,28 @@ tokens and cost, priced for the models and usage categories involved. Show
 direct work and work delegated to descendants without double counting, and
 label estimated or unallocated costs where the evidence is incomplete.
 
+The browser, command line, and read-only agent tools should query the same
+recorded evidence and return the same measurements for the same scope. Bounded
+summaries should lead to selected source details, so investigating an expensive
+run does not require loading its entire transcript into another agent's context.
+
+Diagnostics should identify observable investigation leads, such as identical
+content delivered repeatedly, large results, explicit failures, or expensive
+request intervals. Each finding should expose its evidence, measurement method,
+and uncertainty. Age, repeated filenames, lexical matches, or a health score
+alone cannot establish that content is useless or safe to remove.
+
 These views should help form a testable edit, such as reducing repeated evidence
 delivery in a review procedure. Confirm the edit against fixed quality criteria
 and repeated trials. Lower resource use is an improvement only when the outcome
 remains acceptable; an inconclusive quality comparison cannot establish that
 quality was preserved.
+
+An offline transformation of recorded output can screen a candidate before a
+new experiment, provided its assumptions and unsupported request exposure are
+visible. Its result is modeled opportunity, not measured savings. An explicit
+aggregate export should let the engineer share supported findings and outcome
+readings without sharing source content, paths, or execution identities.
 
 The [context assessment and accepted roadmap](context-visibility.md) separates
 existing evidence, prior plans, and the additional collection and visualization

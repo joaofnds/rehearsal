@@ -3,8 +3,9 @@
 Study dated **2026-09-14**. External source:
 [context-analyzer at `2c9e446`](https://github.com/manavgup/context-analyzer/tree/2c9e44682483531c8ba14df5f0d5d7703e4341a7).
 Rehearsal baseline: `3765612a39b84aea0cc4239b4a456ccd59114ab8`.
-This is a source-code assessment and a set of recommendations, not an accepted
-implementation plan. No external project code, hooks, installers, tests, or
+This is a source-code assessment and a set of recommendations. Their accepted
+delivery homes are recorded in the [context roadmap](context-visibility.md#integration-and-artifact-investigation);
+detailed implementation design remains on the delivery cards. No external project code, hooks, installers, tests, or
 compressors were executed. Runtime compatibility and achievable savings remain
 unverified. “Cloud code” in the request is interpreted as Claude Code, the
 integration implemented by the linked project.
