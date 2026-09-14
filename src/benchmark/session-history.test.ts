@@ -90,11 +90,10 @@ describe(sessionHistoryReport.name, () => {
 		});
 
 		expect(report.evidence).toEqual({ state: "complete" });
-		expect(report.startingContext.map(({ id }) => id)).toEqual([
-			"1:1",
-			"2:1",
-		]);
-		expect(report.attemptEvents.map(({ id, state }) => ({ id, state }))).toEqual([
+		expect(report.startingContext.map(({ id }) => id)).toEqual(["1:1", "2:1"]);
+		expect(
+			report.attemptEvents.map(({ id, state }) => ({ id, state })),
+		).toEqual([
 			{ id: "3:1", state: "invoked" },
 			{ id: "4:1", state: "delivered" },
 			{ id: "5:1", state: "invoked" },
@@ -181,6 +180,53 @@ describe(sessionHistoryReport.name, () => {
 				measurement: { state: "complete", characters: 21 },
 				observedDeliveryCount: 0,
 			}),
+		]);
+	});
+
+	it("distinguishes failed and missing Reads from absent and delivered Skills", () => {
+		const transcript = [
+			row(call("read-failed", "Read", { file_path: "/work/failure.md" })),
+			row(result("read-failed", "permission denied", { error: true })),
+			row(call("read-missing", "Read", { file_path: "/work/missing.md" })),
+			row(call("skill-missing", "Skill", { skill: "verify" })),
+			row(call("skill-done", "Skill", { skill: "build" })),
+			row(result("skill-done", "loading build")),
+			row({
+				type: "user",
+				sourceToolUseID: "skill-done",
+				message: { content: "build instructions" },
+			}),
+		].join("\n");
+
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [],
+			},
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(
+			report.attemptEvents.map(({ id, state }) => ({ id, state })),
+		).toEqual([
+			{ id: "1:1", state: "invoked" },
+			{ id: "2:1", state: "failed" },
+			{ id: "3:1", state: "unavailable" },
+			{ id: "4:1", state: "unavailable" },
+			{ id: "5:1", state: "invoked" },
+			{ id: "6:1", state: "recorded" },
+			{ id: "7:1", state: "delivered" },
+		]);
+		expect(report.sources.map(({ kind, name }) => ({ kind, name }))).toEqual([
+			{ kind: "project", name: "failure.md" },
+			{ kind: "project", name: "missing.md" },
+			{ kind: "skill", name: "skills/verify/SKILL.md" },
+			{ kind: "skill", name: "skills/build/SKILL.md" },
+			{ kind: "tool-output", name: "Skill result · 5:1" },
 		]);
 	});
 });

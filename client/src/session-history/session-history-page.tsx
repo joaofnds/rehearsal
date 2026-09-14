@@ -75,10 +75,10 @@ async function fetchDetail(
 
 function measurementLabel(measurement: TextMeasurement): string {
 	if (measurement.state === "complete") {
-		return `${measurement.characters} Unicode code points`;
+		return `${measurement.characters} recorded text characters — not tokens`;
 	}
 	if (measurement.state === "partial") {
-		return `${measurement.observedCharacters} observed Unicode code points · partial`;
+		return `${measurement.observedCharacters} observed recorded text characters — not tokens · partial`;
 	}
 
 	return `Unavailable · ${measurement.reasons.join(", ")}`;
@@ -88,6 +88,17 @@ function locatorLabel(event: SessionHistoryEvent): string {
 	return `${event.locator.line}:${event.locator.block}`;
 }
 
+function sortableCharacters(measurement: TextMeasurement): number {
+	if (measurement.state === "complete") {
+		return measurement.characters;
+	}
+	if (measurement.state === "partial") {
+		return measurement.observedCharacters;
+	}
+
+	return -1;
+}
+
 function sortedSources(
 	sources: readonly SessionHistorySource[],
 	sort: SourceSort,
@@ -95,9 +106,22 @@ function sortedSources(
 	return sources.toSorted((left, right) => {
 		if (sort === "repeated") {
 			const repeats =
-				(right.repeatDeliveryCount ?? -1) - (left.repeatDeliveryCount ?? -1);
+				(right.observedDeliveryCount ?? -1) -
+				(left.observedDeliveryCount ?? -1);
 			if (repeats !== 0) {
 				return repeats;
+			}
+		} else {
+			const rank = { complete: 2, partial: 1, unavailable: 0 } as const;
+			const leftCharacters = sortableCharacters(left.measurement);
+			const rightCharacters = sortableCharacters(right.measurement);
+			if (rightCharacters !== leftCharacters) {
+				return rightCharacters - leftCharacters;
+			}
+			const state =
+				rank[right.measurement.state] - rank[left.measurement.state];
+			if (state !== 0) {
+				return state;
 			}
 		}
 		const line = left.firstLocator.line - right.firstLocator.line;
@@ -150,6 +174,10 @@ function SourceList({
 					<span>
 						<strong>{source.name}</strong>
 						<small>{source.kind}</small>
+						<small>
+							{source.failedOccurrences} failed · {source.partialOccurrences}{" "}
+							partial · {source.unavailableOccurrences} unavailable
+						</small>
 					</span>
 					<span className="rh-history__count">
 						{source.repeatDeliveryCount === undefined
@@ -202,6 +230,7 @@ function EventLedger({
 					type="button"
 					role="option"
 					aria-selected={event.id === active}
+					aria-current={event.id === active ? "true" : undefined}
 					className="rh-history__event"
 					key={event.id}
 					onClick={() => {
@@ -210,12 +239,85 @@ function EventLedger({
 				>
 					<code>{locatorLabel(event)}</code>
 					<span>{event.label}</span>
-					<small>{event.state}</small>
+					<span className="rh-history__event-state">
+						<small>
+							<span aria-hidden="true">{stateGlyph(event.state)}</span>{" "}
+							{event.state}
+						</small>
+						{event.timestamp === undefined ? null : (
+							<time>{event.timestamp}</time>
+						)}
+					</span>
 				</button>
 			))}
 			{events.length === 0 ? <p>No events match this source.</p> : null}
 		</div>
 	);
+}
+
+function stateGlyph(state: SessionHistoryEvent["state"]): string {
+	if (state === "failed") {
+		return "×";
+	}
+	if (state === "partial") {
+		return "≈";
+	}
+	if (state === "unavailable") {
+		return "?";
+	}
+	if (state === "delivered") {
+		return "↓";
+	}
+
+	return "▶";
+}
+
+function diagnosticLocators(
+	report: SessionHistoryReport,
+): readonly { readonly id: string; readonly label: string }[] {
+	const { diagnostics } = report;
+	if (diagnostics === undefined || diagnostics.state === "unavailable") {
+		return [];
+	}
+	const entries: { readonly id: string; readonly label: string }[] = [];
+	for (const toolError of diagnostics.toolErrors) {
+		if (toolError.call !== undefined) {
+			entries.push({
+				id: `${toolError.call.line}:${toolError.call.block}`,
+				label: "Tool error call",
+			});
+		}
+		entries.push({
+			id: `${toolError.result.line}:${toolError.result.block}`,
+			label: "Tool error result",
+		});
+	}
+	for (const command of diagnostics.repeatedBashCommands) {
+		for (const { location } of command.occurrences) {
+			entries.push({
+				id: `${location.line}:${location.block}`,
+				label: "Repeated Bash command",
+			});
+		}
+	}
+	for (const issue of diagnostics.issues) {
+		for (const location of issue.locations) {
+			entries.push({
+				id: `${location.line}:${location.block}`,
+				label: issue.kind,
+			});
+		}
+	}
+	const seen = new Set<string>();
+
+	return entries.filter(({ id }) => {
+		if (seen.has(id)) {
+			return false;
+		}
+		seen.add(id);
+
+		return true;
+	});
 }
 
 function DetailPane({
@@ -274,7 +376,13 @@ export function SessionHistoryPage({
 		queryFn: () => fetchSummary(identity),
 	});
 	const events = useMemo(() => {
-		const all = summary.data?.attemptEvents ?? [];
+		let all: readonly SessionHistoryEvent[] = [];
+		if (summary.data !== undefined) {
+			all =
+				summary.data.boundaryUnknown.length > 0
+					? summary.data.boundaryUnknown
+					: summary.data.attemptEvents;
+		}
 		return sourceId === undefined
 			? all
 			: all.filter((event) => event.sourceId === sourceId);
@@ -287,6 +395,8 @@ export function SessionHistoryPage({
 		queryFn: () => fetchDetail(identity, activeEventId ?? ""),
 		enabled: activeEventId !== undefined,
 	});
+	const diagnostics =
+		summary.data === undefined ? [] : diagnosticLocators(summary.data);
 
 	return (
 		<main className="rh-history">
@@ -329,16 +439,23 @@ export function SessionHistoryPage({
 						className="rh-history__starting"
 						aria-label="Starting context"
 					>
-						<span>
-							{summary.data.evidence.state === "unavailable"
-								? "Boundary unknown"
-								: "Starting context"}
-						</span>
+						<div>
+							<span>
+								{summary.data.boundaryUnknown.length > 0 ||
+								summary.data.evidence.state === "unavailable"
+									? "Boundary unknown"
+									: "Starting context"}
+							</span>
+							{summary.data.startingContext.map((event) => (
+								<small key={event.id}>
+									<code>{locatorLabel(event)}</code> {event.label}
+								</small>
+							))}
+						</div>
 						<strong>
-							{summary.data.startingContext.length > 0
-								? summary.data.startingContext.length
-								: summary.data.boundaryUnknown.length}{" "}
-							recorded events
+							{summary.data.evidence.state === "unavailable"
+								? `Unavailable · ${summary.data.evidence.reasons.join(", ")}`
+								: `${summary.data.startingContext.length > 0 ? summary.data.startingContext.length : summary.data.boundaryUnknown.length} recorded events`}
 						</strong>
 					</section>
 					<div className="rh-history__toolbar">
@@ -362,6 +479,25 @@ export function SessionHistoryPage({
 							Most repeated
 						</button>
 					</div>
+					{diagnostics.length === 0 ? null : (
+						<nav
+							className="rh-history__diagnostics"
+							aria-label="Transcript diagnostics"
+						>
+							{diagnostics.map((entry) => (
+								<button
+									key={entry.id}
+									type="button"
+									onClick={() => {
+										setSourceId(undefined);
+										setSelectedEventId(entry.id);
+									}}
+								>
+									<code>{entry.id}</code> {entry.label}
+								</button>
+							))}
+						</nav>
+					)}
 					<div className="rh-history__workbench">
 						<SourceList
 							sources={summary.data.sources}
@@ -373,7 +509,11 @@ export function SessionHistoryPage({
 							}}
 						/>
 						<section className="rh-history__events" aria-label="Event ledger">
-							<h2>Attempt events</h2>
+							<h2>
+								{summary.data.boundaryUnknown.length > 0
+									? "Boundary-unknown events"
+									: "Attempt events"}
+							</h2>
 							<EventLedger
 								events={events}
 								selected={activeEventId}

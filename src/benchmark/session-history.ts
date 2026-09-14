@@ -300,7 +300,9 @@ function measureContent(value: JsonValue | undefined): MeasuredContent {
 function isContained(path: string, root: string): boolean {
 	const fromRoot = relative(root, path);
 
-	return fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..");
+	return (
+		fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..")
+	);
 }
 
 function sourceForCall(
@@ -351,7 +353,12 @@ function sourceForCall(
 	}
 	if (cwd === undefined) {
 		return isAbsolute(observed)
-			? { id: `external:${observed}`, kind: "external", name: observed, path: observed }
+			? {
+					id: `external:${observed}`,
+					kind: "external",
+					name: observed,
+					path: observed,
+				}
 			: {
 					id: `unclassified:${locatorId(location)}`,
 					kind: "unclassified",
@@ -380,7 +387,12 @@ function sourceForCall(
 		return { id: `project:${path}`, kind: "project", name: path, path };
 	}
 
-	return { id: `external:${normalized}`, kind: "external", name: normalized, path: normalized };
+	return {
+		id: `external:${normalized}`,
+		kind: "external",
+		name: normalized,
+		path: normalized,
+	};
 }
 
 function snapshotFor(row: Immutable<ParsedRow>): string | undefined {
@@ -391,7 +403,10 @@ function baseEvent(
 	row: Immutable<ParsedRow>,
 	block: number,
 	region: HistoryRegion,
-): Pick<MutableEvent, "id" | "locator" | "region" | "timestamp" | "relatedEventIds"> {
+): Pick<
+	MutableEvent,
+	"id" | "locator" | "region" | "timestamp" | "relatedEventIds"
+> {
 	const locator = { line: row.line, block };
 
 	return {
@@ -468,7 +483,8 @@ function parseEvents(
 			const companionId = row.value?.sourceToolUseID;
 			events.push({
 				...common,
-				kind: companionId === undefined ? "unclassified" : "instruction-delivery",
+				kind:
+					companionId === undefined ? "unclassified" : "instruction-delivery",
 				state: companionId === undefined ? "recorded" : "partial",
 				label:
 					companionId === undefined
@@ -517,7 +533,9 @@ function unclassifiedSource(): SourceIdentity {
 	};
 }
 
-function sourceForResult(call: Immutable<MutableEvent>): SourceIdentity | undefined {
+function sourceForResult(
+	call: Immutable<MutableEvent>,
+): SourceIdentity | undefined {
 	if (call.toolName !== "Skill") {
 		return call.source;
 	}
@@ -595,8 +613,7 @@ function joinUnmatchedEvent(
 			label: `${event.kind === "result" ? "Tool result" : "Skill delivery"} · partial`,
 			source,
 			sourceId: source.id,
-			relatedEventIds:
-				contextualCall === undefined ? [] : [contextualCall.id],
+			relatedEventIds: contextualCall === undefined ? [] : [contextualCall.id],
 		},
 		issues: [`unmatched or ambiguous result ${event.id}`],
 	};
@@ -699,7 +716,8 @@ function missingDeliveryIssues(
 	events: Immutable<readonly MutableEvent[]>,
 ): readonly string[] {
 	return events.flatMap((event) => {
-		const expectsDelivery = event.toolName === "Read" || event.toolName === "Skill";
+		const expectsDelivery =
+			event.toolName === "Read" || event.toolName === "Skill";
 		const key = joinKey(event);
 		if (event.kind !== "call" || !expectsDelivery || key === undefined) {
 			return [];
@@ -714,6 +732,34 @@ function missingDeliveryIssues(
 		)
 			? []
 			: [`missing delivery for ${event.id}`];
+	});
+}
+
+function markUnavailableDeliveries(
+	events: Immutable<readonly MutableEvent[]>,
+): readonly MutableEvent[] {
+	return events.map((event) => {
+		if (
+			event.kind !== "call" ||
+			(event.toolName !== "Read" && event.toolName !== "Skill")
+		) {
+			return event;
+		}
+		const related = events.filter((candidate) =>
+			event.relatedEventIds.includes(candidate.id),
+		);
+		if (
+			related.some(({ isDelivery }) => isDelivery) ||
+			related.some(({ state }) => state === "failed")
+		) {
+			return event;
+		}
+
+		return {
+			...event,
+			state: "unavailable",
+			label: `${event.toolName} invoked · delivery unavailable`,
+		};
 	});
 }
 
@@ -752,7 +798,8 @@ function joinEvents(state: Immutable<ProjectionState>): ProjectionState {
 			? joinCall(event, indices)
 			: joinNonCall(event, indices, state.events);
 	});
-	const events = numberDeliveries(joined.map(({ event }) => event));
+	const joinedEvents = joined.map(({ event }) => event);
+	const events = numberDeliveries(markUnavailableDeliveries(joinedEvents));
 
 	return {
 		events,
@@ -783,7 +830,9 @@ function sourceMeasurement(
 		(total, { measurement }) => total + observedCharacters(measurement),
 		0,
 	);
-	const partial = measured.filter(({ measurement }) => measurement.state === "partial");
+	const partial = measured.filter(
+		({ measurement }) => measurement.state === "partial",
+	);
 	const unavailable = measured.filter(
 		({ measurement }) => measurement.state === "unavailable",
 	);
@@ -839,7 +888,8 @@ function sourcesFor(
 				(event.toolName === "Read" || event.toolName === "Skill") &&
 				!sourceEvents.some(
 					(candidate) =>
-						candidate.isDelivery && candidate.relatedEventIds.includes(event.id),
+						candidate.isDelivery &&
+						candidate.relatedEventIds.includes(event.id),
 				),
 		).length;
 		const countsAvailable = region !== "boundary-unknown";
@@ -852,12 +902,17 @@ function sourcesFor(
 			region,
 			firstLocator: first.locator,
 			measurement: sourceMeasurement(sourceEvents),
-			observedDeliveryCount: countsAvailable ? observedDeliveryCount : undefined,
+			observedDeliveryCount: countsAvailable
+				? observedDeliveryCount
+				: undefined,
 			repeatDeliveryCount: countsAvailable
 				? Math.max(0, observedDeliveryCount - 1)
 				: undefined,
-			failedOccurrences: sourceEvents.filter(({ state }) => state === "failed").length,
-			partialOccurrences: sourceEvents.filter(({ state }) => state === "partial").length,
+			failedOccurrences: sourceEvents.filter(({ state }) => state === "failed")
+				.length,
+			partialOccurrences: sourceEvents.filter(
+				({ state }) => state === "partial",
+			).length,
 			unavailableOccurrences:
 				sourceEvents.filter(({ state }) => state === "unavailable").length +
 				missingDeliveries,
@@ -983,7 +1038,11 @@ function allocateDetailBodies(
 		(value): value is string => value !== undefined,
 	);
 	if (bodies.length === 0) {
-		return { deliveredText: undefined, sourceSnapshot: undefined, truncated: false };
+		return {
+			deliveredText: undefined,
+			sourceSnapshot: undefined,
+			truncated: false,
+		};
 	}
 	if (bodies.length === 1) {
 		const [body = ""] = bodies;

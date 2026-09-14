@@ -68,6 +68,23 @@
 	font-size: var(--font-size-11);
 }
 
+.rh-history__starting > div,
+.rh-history__event-state {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.rh-history__starting small {
+	color: var(--color-text-dim);
+}
+
+.rh-history__starting code,
+.rh-history__diagnostics code {
+	color: var(--color-accent-light);
+	font-family: var(--font-mono);
+}
+
 .rh-history__toolbar {
 	display: flex;
 	align-items: center;
@@ -89,6 +106,21 @@
 	border-color: var(--color-accent-border);
 	background: var(--color-accent-tint-14);
 	color: var(--color-accent-pale);
+}
+
+.rh-history__diagnostics {
+	display: flex;
+	gap: var(--space-6);
+	padding: 0 0 var(--space-10);
+	overflow-x: auto;
+}
+
+.rh-history__diagnostics button {
+	padding: var(--space-5) var(--space-8);
+	border: var(--border-width-hairline) solid var(--color-border-2);
+	background: var(--color-surface-alt);
+	color: var(--color-text-muted);
+	white-space: nowrap;
 }
 
 .rh-history__workbench {
@@ -191,6 +223,16 @@
 	color: var(--color-accent-light);
 	font-family: var(--font-mono);
 	font-size: var(--font-size-10-5);
+}
+
+.rh-history__event-state {
+	align-items: flex-end;
+}
+
+.rh-history__event time {
+	color: var(--color-text-dim);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-9);
 }
 
 .rh-history__detail-body > header {
