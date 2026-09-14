@@ -135,6 +135,8 @@ interface MutableEvent {
 	readonly deliveryOrdinal?: number | undefined;
 	readonly content?: string | undefined;
 	readonly snapshot?: string | undefined;
+	readonly snapshotMeasurement?: TextMeasurement | undefined;
+	readonly snapshotRange?: SourceSnapshotRange | undefined;
 	readonly source: SourceIdentity | undefined;
 	readonly isDelivery: boolean;
 	readonly input?: HistoryBlockInput | undefined;
@@ -153,7 +155,15 @@ const historyRecordSchema = z.looseObject({
 	message: z.looseObject({ content: historyContentSchema }).optional(),
 	toolUseResult: z
 		.looseObject({
-			file: z.looseObject({ content: z.string() }).optional(),
+			file: z
+				.looseObject({
+					content: z.string(),
+					filePath: z.string().optional(),
+					startLine: z.number().int().positive().optional(),
+					numLines: z.number().int().nonnegative().optional(),
+					totalLines: z.number().int().nonnegative().optional(),
+				})
+				.optional(),
 		})
 		.optional(),
 });
@@ -395,8 +405,55 @@ function sourceForCall(
 	};
 }
 
-function snapshotFor(row: Immutable<ParsedRow>): string | undefined {
-	return row.value?.toolUseResult?.file?.content;
+interface SnapshotEvidence {
+	readonly text: string | undefined;
+	readonly measurement: TextMeasurement;
+	readonly range: SourceSnapshotRange | undefined;
+}
+
+function snapshotFor(row: Immutable<ParsedRow>): SnapshotEvidence {
+	const file = row.value?.toolUseResult?.file;
+	if (file === undefined) {
+		return {
+			text: undefined,
+			measurement: {
+				state: "unavailable",
+				reasons: ["source snapshot unavailable"],
+			},
+			range: undefined,
+		};
+	}
+	const base = measureContent(file.content);
+	if (
+		file.startLine === undefined ||
+		file.numLines === undefined ||
+		file.totalLines === undefined
+	) {
+		return {
+			text: file.content,
+			measurement: base.measurement,
+			range: undefined,
+		};
+	}
+	const complete = file.startLine === 1 && file.numLines >= file.totalLines;
+
+	return {
+		text: file.content,
+		measurement:
+			complete || base.measurement.state !== "complete"
+				? base.measurement
+				: {
+						state: "partial",
+						observedCharacters: base.measurement.characters,
+						reasons: ["source snapshot is a partial line range"],
+					},
+		range: {
+			startLine: file.startLine,
+			deliveredLineCount: file.numLines,
+			totalLineCount: file.totalLines,
+			coverage: complete ? "complete" : "partial",
+		},
+	};
 }
 
 function baseEvent(
@@ -460,6 +517,7 @@ function parseEvents(
 			const result = historyToolResultSchema.safeParse(value);
 			if (result.success) {
 				const measured = measureContent(result.data.content);
+				const snapshot = snapshotFor(row);
 				events.push({
 					...common,
 					kind: "result",
@@ -471,7 +529,9 @@ function parseEvents(
 					toolUseId: result.data.tool_use_id,
 					measurement: measured.measurement,
 					content: measured.text,
-					snapshot: snapshotFor(row),
+					snapshot: snapshot.text,
+					snapshotMeasurement: snapshot.measurement,
+					snapshotRange: snapshot.range,
 					source: undefined,
 					isDelivery: false,
 				});
@@ -925,6 +985,8 @@ function publicEvent(event: Immutable<MutableEvent>): SessionHistoryEvent {
 	const {
 		content: _content,
 		snapshot: _snapshot,
+		snapshotMeasurement: _snapshotMeasurement,
+		snapshotRange: _snapshotRange,
 		source: _source,
 		isDelivery: _isDelivery,
 		input: _input,
@@ -1005,8 +1067,16 @@ export interface SessionHistoryDetail {
 	readonly sourceSnapshot?: string | undefined;
 	readonly deliveredMeasurement: TextMeasurement;
 	readonly snapshotMeasurement: TextMeasurement;
+	readonly sourceSnapshotRange?: SourceSnapshotRange | undefined;
 	readonly applicationTruncated: boolean;
 	readonly relatedEventIds: readonly string[];
+}
+
+export interface SourceSnapshotRange {
+	readonly startLine: number;
+	readonly deliveredLineCount: number;
+	readonly totalLineCount: number;
+	readonly coverage: "complete" | "partial";
 }
 
 function utf8Prefix(text: string, budget: number): string {
@@ -1097,7 +1167,9 @@ export function sessionHistoryDetail(
 		deliveredText: excerpts.deliveredText,
 		sourceSnapshot: excerpts.sourceSnapshot,
 		deliveredMeasurement: event.measurement,
-		snapshotMeasurement: measureContent(event.snapshot).measurement,
+		snapshotMeasurement:
+			event.snapshotMeasurement ?? measureContent(event.snapshot).measurement,
+		sourceSnapshotRange: event.snapshotRange,
 		applicationTruncated: excerpts.truncated,
 		relatedEventIds: event.relatedEventIds,
 	};

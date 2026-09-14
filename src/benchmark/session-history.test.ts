@@ -31,6 +31,9 @@ function result(
 	options: {
 		readonly error?: boolean;
 		readonly snapshot?: string;
+		readonly startLine?: number;
+		readonly numLines?: number;
+		readonly totalLines?: number;
 	} = {},
 ): JsonValue {
 	const base = {
@@ -58,9 +61,9 @@ function result(
 			file: {
 				filePath: "/work/CLAUDE.md",
 				content: options.snapshot,
-				numLines: 1,
-				startLine: 1,
-				totalLines: 1,
+				numLines: options.numLines ?? 1,
+				startLine: options.startLine ?? 1,
+				totalLines: options.totalLines ?? 1,
 			},
 		},
 	};
@@ -266,5 +269,45 @@ describe(sessionHistoryDetail.name, () => {
 		).toBeLessThanOrEqual(MAX_EVENT_DETAIL_BYTES);
 		expect(delivered.startsWith(detail.deliveredText ?? "missing")).toBe(true);
 		expect(snapshot.startsWith(detail.sourceSnapshot ?? "missing")).toBe(true);
+	});
+
+	it("marks an incomplete structured Read line range as partial coverage", () => {
+		const transcript = [
+			row(call("read-1", "Read", { file_path: "/work/CLAUDE.md" })),
+			row(
+				result("read-1", "delivered", {
+					snapshot: "middle line",
+					startLine: 3,
+					numLines: 1,
+					totalLines: 8,
+				}),
+			),
+		].join("\n");
+		const detail = sessionHistoryDetail(
+			{
+				attempt: {
+					caseId: "case-a",
+					id: "attempt-a",
+					model: "sonnet",
+					outcome: "SUCCESSFUL",
+					corpusFiles: [],
+				},
+				transcript,
+				prefixLinesExcluded: 0,
+			},
+			"2:1",
+		);
+
+		expect(detail?.snapshotMeasurement).toEqual({
+			state: "partial",
+			observedCharacters: 11,
+			reasons: ["source snapshot is a partial line range"],
+		});
+		expect(detail?.sourceSnapshotRange).toEqual({
+			startLine: 3,
+			deliveredLineCount: 1,
+			totalLineCount: 8,
+			coverage: "partial",
+		});
 	});
 });

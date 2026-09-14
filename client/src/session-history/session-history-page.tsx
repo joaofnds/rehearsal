@@ -347,6 +347,16 @@ function DetailPane({
 				<p className="rh-history__measurement">
 					{measurementLabel(detail.snapshotMeasurement)}
 				</p>
+				{detail.sourceSnapshotRange === undefined ? null : (
+					<p className="rh-history__measurement">
+						Lines {detail.sourceSnapshotRange.startLine}–
+						{detail.sourceSnapshotRange.startLine +
+							detail.sourceSnapshotRange.deliveredLineCount -
+							1}{" "}
+						of {detail.sourceSnapshotRange.totalLineCount} ·{" "}
+						{detail.sourceSnapshotRange.coverage}
+					</p>
+				)}
 				{detail.sourceSnapshot === undefined ? (
 					<p>Snapshot unavailable.</p>
 				) : (
