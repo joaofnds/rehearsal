@@ -1338,14 +1338,19 @@ export interface SessionHistoryRequestUsage {
 	readonly cacheWriteTokens: number;
 }
 
-export interface SessionHistoryRequestEntry {
+export type SessionHistoryRequestEntry = {
 	readonly requestId: string | undefined;
 	readonly line: number;
-	readonly model: string | undefined;
-	readonly usage: SessionHistoryRequestUsage;
-	readonly totalInputTokens: number;
-	readonly usageState: "complete" | "conflict";
-}
+	readonly model?: string | undefined;
+	readonly modelState?: "conflict";
+} & (
+	| {
+			readonly usageState: "complete";
+			readonly usage: SessionHistoryRequestUsage;
+			readonly totalInputTokens: number;
+	  }
+	| { readonly usageState: "conflict" }
+);
 
 export interface SessionHistoryRequestSeries {
 	readonly name: "total input tokens";
@@ -1356,7 +1361,7 @@ export interface SessionHistoryRequestSeries {
 
 const TOTAL_INPUT_TOKENS_OMITS = [
 	"the request's own output tokens",
-	"the model's context window limit, which no saved record carries",
+	"the model's context window limit, which the transcript does not carry",
 ] as const;
 
 const requestUsageSchema = z.looseObject({
@@ -1432,42 +1437,76 @@ function sameUsage(
 	);
 }
 
-function collapsedEntries(
+interface RequestDisagreements {
+	readonly usage: ReadonlySet<string>;
+	readonly model: ReadonlySet<string>;
+	readonly firstRowByRequestId: ReadonlyMap<string, Readonly<ParsedRequestRow>>;
+}
+
+function requestDisagreements(
 	rows: readonly Readonly<ParsedRequestRow>[],
-): readonly SessionHistoryRequestEntry[] {
-	const conflicting = new Set<string>();
-	const firstByRequestId = new Map<string, Readonly<ParsedRequestRow>>();
+): RequestDisagreements {
+	const usage = new Set<string>();
+	const model = new Set<string>();
+	const firstRowByRequestId = new Map<string, Readonly<ParsedRequestRow>>();
 	for (const row of rows) {
 		if (row.requestId === undefined) {
 			continue;
 		}
-		const first = firstByRequestId.get(row.requestId);
+		const first = firstRowByRequestId.get(row.requestId);
 		if (first === undefined) {
-			firstByRequestId.set(row.requestId, row);
-		} else if (!sameUsage(first.usage, row.usage)) {
-			conflicting.add(row.requestId);
+			firstRowByRequestId.set(row.requestId, row);
+			continue;
+		}
+		if (!sameUsage(first.usage, row.usage)) {
+			usage.add(row.requestId);
+		}
+		if (first.model !== row.model) {
+			model.add(row.requestId);
 		}
 	}
 
+	return { usage, model, firstRowByRequestId };
+}
+
+function collapsedEntry(
+	row: Readonly<ParsedRequestRow>,
+	disagreements: Readonly<RequestDisagreements>,
+): SessionHistoryRequestEntry {
+	const modelDisagrees =
+		row.requestId !== undefined && disagreements.model.has(row.requestId);
+	const identity = {
+		requestId: row.requestId,
+		line: row.line,
+		...(modelDisagrees
+			? { model: undefined, modelState: "conflict" as const }
+			: { model: row.model }),
+	};
+	if (row.requestId !== undefined && disagreements.usage.has(row.requestId)) {
+		return { ...identity, usageState: "conflict" };
+	}
+
+	return {
+		...identity,
+		usageState: "complete",
+		usage: row.usage,
+		totalInputTokens: totalInputTokens(row.usage),
+	};
+}
+
+function collapsedEntries(
+	rows: readonly Readonly<ParsedRequestRow>[],
+): readonly SessionHistoryRequestEntry[] {
+	const disagreements = requestDisagreements(rows);
 	const entries: SessionHistoryRequestEntry[] = [];
 	for (const row of rows) {
 		if (
 			row.requestId !== undefined &&
-			firstByRequestId.get(row.requestId) !== row
+			disagreements.firstRowByRequestId.get(row.requestId) !== row
 		) {
 			continue;
 		}
-		entries.push({
-			requestId: row.requestId,
-			line: row.line,
-			model: row.model,
-			usage: row.usage,
-			totalInputTokens: totalInputTokens(row.usage),
-			usageState:
-				row.requestId !== undefined && conflicting.has(row.requestId)
-					? "conflict"
-					: "complete",
-		});
+		entries.push(collapsedEntry(row, disagreements));
 	}
 
 	return entries;

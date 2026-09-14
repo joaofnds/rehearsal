@@ -519,8 +519,8 @@ describe(sessionHistoryDetail.name, () => {
 
 describe(sessionHistoryRequestSeries.name, () => {
 	function assistantRow(
-		line: string,
-		requestId: string | null,
+		second: string,
+		requestId: string | null | undefined,
 		model: string,
 		usage: {
 			readonly input: number;
@@ -529,22 +529,27 @@ describe(sessionHistoryRequestSeries.name, () => {
 			readonly cacheWrite: number;
 		},
 	): JsonValue {
-		return {
-			type: "assistant",
-			timestamp: `2026-09-14T00:00:0${line}.000Z`,
-			cwd: "/work",
-			requestId,
-			message: {
-				model,
-				usage: {
-					input_tokens: usage.input,
-					output_tokens: usage.output,
-					cache_read_input_tokens: usage.cacheRead,
-					cache_creation_input_tokens: usage.cacheWrite,
-				},
-				content: [{ type: "text", text: "reply" }],
+		const message = {
+			model,
+			usage: {
+				input_tokens: usage.input,
+				output_tokens: usage.output,
+				cache_read_input_tokens: usage.cacheRead,
+				cache_creation_input_tokens: usage.cacheWrite,
 			},
-		};
+			content: [{ type: "text", text: "reply" }],
+		} satisfies JsonValue;
+		const withoutRequestId = {
+			type: "assistant",
+			timestamp: `2026-09-14T00:00:0${second}.000Z`,
+			cwd: "/work",
+			message,
+		} satisfies JsonValue;
+		if (requestId === undefined) {
+			return withoutRequestId;
+		}
+
+		return { ...withoutRequestId, requestId };
 	}
 
 	it("yields one entry per distinct request in transcript order", () => {
@@ -570,10 +575,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 		const series = sessionHistoryRequestSeries(transcript);
 
 		expect(
-			series.entries.map(({ requestId, model, usage }) => ({
-				requestId,
-				model,
-				usage,
+			series.entries.map((entry) => ({
+				requestId: entry.requestId,
+				model: entry.model,
+				usage: entry.usageState === "complete" ? entry.usage : undefined,
 			})),
 		).toEqual([
 			{
@@ -617,30 +622,64 @@ describe(sessionHistoryRequestSeries.name, () => {
 		).toEqual([{ requestId: "req-a", line: 1, usageState: "complete" }]);
 	});
 
-	it("reports conflict when duplicates disagree on a usage value", () => {
+	it.each([
+		["input", { input: 5, output: 10, cacheRead: 100, cacheWrite: 20 }],
+		["output", { input: 2, output: 11, cacheRead: 100, cacheWrite: 20 }],
+		["cache read", { input: 2, output: 10, cacheRead: 101, cacheWrite: 20 }],
+		["cache write", { input: 2, output: 10, cacheRead: 100, cacheWrite: 21 }],
+	])(
+		"reports conflict when duplicates disagree on %s tokens",
+		(_category, second) => {
+			const transcript = [
+				row(
+					assistantRow("1", "req-a", "claude-opus-5", {
+						input: 2,
+						output: 10,
+						cacheRead: 100,
+						cacheWrite: 20,
+					}),
+				),
+				row(assistantRow("2", "req-a", "claude-opus-5", second)),
+			].join("\n");
+
+			const series = sessionHistoryRequestSeries(transcript);
+
+			expect(series.entries).toEqual([
+				{
+					requestId: "req-a",
+					line: 1,
+					model: "claude-opus-5",
+					usageState: "conflict",
+				},
+			]);
+		},
+	);
+
+	it("withholds the model when duplicates disagree on which one ran", () => {
+		const usage = { input: 2, output: 10, cacheRead: 100, cacheWrite: 20 };
 		const transcript = [
-			row(
-				assistantRow("1", "req-a", "claude-opus-5", {
-					input: 2,
-					output: 10,
-					cacheRead: 100,
-					cacheWrite: 20,
-				}),
-			),
-			row(
-				assistantRow("2", "req-a", "claude-opus-5", {
-					input: 2,
-					output: 11,
-					cacheRead: 100,
-					cacheWrite: 20,
-				}),
-			),
+			row(assistantRow("1", "req-a", "claude-opus-5", usage)),
+			row(assistantRow("2", "req-a", "claude-haiku-4-5", usage)),
 		].join("\n");
 
 		const series = sessionHistoryRequestSeries(transcript);
 
-		expect(series.entries).toHaveLength(1);
-		expect(series.entries[0]?.usageState).toBe("conflict");
+		expect(series.entries).toEqual([
+			{
+				requestId: "req-a",
+				line: 1,
+				model: undefined,
+				modelState: "conflict",
+				usage: {
+					inputTokens: 2,
+					outputTokens: 10,
+					cacheReadTokens: 100,
+					cacheWriteTokens: 20,
+				},
+				totalInputTokens: 122,
+				usageState: "complete",
+			},
+		]);
 	});
 	it("totals the three input categories as total input tokens", () => {
 		const transcript = row(
@@ -654,46 +693,61 @@ describe(sessionHistoryRequestSeries.name, () => {
 
 		const series = sessionHistoryRequestSeries(transcript);
 
-		expect(series.entries[0]?.totalInputTokens).toBe(281_697);
+		const [entry] = series.entries;
+
+		expect(entry?.usageState).toBe("complete");
+		expect(entry?.usageState === "complete" && entry.totalInputTokens).toBe(
+			281_697,
+		);
 	});
 
-	it("values a row recording no model request at zero rather than omitting it", () => {
-		const transcript = [
-			row(
-				assistantRow("1", null, "<synthetic>", {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-				}),
-			),
-			row(
-				assistantRow("2", "req-a", "claude-sonnet-5", {
-					input: 2,
-					output: 151,
-					cacheRead: 0,
-					cacheWrite: 251_695,
-				}),
-			),
-		].join("\n");
+	it.each([
+		["absent from the row", undefined],
+		["present and null", null],
+	])(
+		"values a row whose requestId is %s at zero rather than omitting it",
+		(_label, requestId) => {
+			const transcript = [
+				row(
+					assistantRow("1", requestId, "<synthetic>", {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+					}),
+				),
+				row(
+					assistantRow("2", "req-a", "claude-sonnet-5", {
+						input: 2,
+						output: 151,
+						cacheRead: 0,
+						cacheWrite: 251_695,
+					}),
+				),
+			].join("\n");
 
-		const series = sessionHistoryRequestSeries(transcript);
+			const series = sessionHistoryRequestSeries(transcript);
 
-		expect(
-			series.entries.map(({ requestId, model, totalInputTokens }) => ({
-				requestId,
-				model,
-				totalInputTokens,
-			})),
-		).toEqual([
-			{ requestId: undefined, model: "<synthetic>", totalInputTokens: 0 },
-			{
-				requestId: "req-a",
-				model: "claude-sonnet-5",
-				totalInputTokens: 251_697,
-			},
-		]);
-	});
+			expect(
+				series.entries.map((entry) => ({
+					requestId: entry.requestId,
+					model: entry.model,
+					totalInputTokens:
+						entry.usageState === "complete"
+							? entry.totalInputTokens
+							: undefined,
+				})),
+			).toEqual([
+				{ requestId: undefined, model: "<synthetic>", totalInputTokens: 0 },
+				{
+					requestId: "req-a",
+					model: "claude-sonnet-5",
+					totalInputTokens: 251_697,
+				},
+			]);
+		},
+	);
+
 	it("names what the total omits without claiming the categories overlap", () => {
 		const series = sessionHistoryRequestSeries(
 			row(
@@ -709,7 +763,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 		expect(series.name).toBe("total input tokens");
 		expect(series.omits).toEqual([
 			"the request's own output tokens",
-			"the model's context window limit, which no saved record carries",
+			"the model's context window limit, which the transcript does not carry",
 		]);
 		expect(series.measuresActiveContextWindow).toBe(false);
 	});
