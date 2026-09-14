@@ -421,6 +421,18 @@ See [current state](docs/status.md) for implementation coverage and
   or causal attribution. An absent field on a historical record means the
   projection was not recorded; readers do not reconstruct it from today's case
   declaration.
+- **Total input tokens** — one model request's reported
+  `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. The
+  three categories are disjoint in every saved transcript, so the sum
+  double-counts nothing. The provider's prompt-caching documentation names this
+  sum `total_input_tokens`; no saved record carries the sum as a field, so the
+  harness computes it. It excludes the request's own output tokens, which rejoin
+  the prompt on the next request. It is not the active context window: no saved
+  record carries an occupancy figure or a model window limit to render one
+  against. The series across an attempt does not rise monotonically: a cache
+  re-warm moves tokens from `cache_read_input_tokens` to
+  `cache_creation_input_tokens` and lowers the sum, observed in 6 of 54 saved
+  attempts, and rows recording no model request report every category zero.
 - **Variant** — a named configuration: corpus snapshot, model, and effort.
 - **Workflow state** — the `backlog/` and `.boris/` trees copied independently
   of Git to carry workflow artifacts across stage materialization and target
