@@ -1,12 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
 	claudeArgs,
-	modelsPricedAtList,
 	readClaudeCallMetrics,
 	readClaudeEnvelope,
 	readStructuredOutput,
 } from "./claude";
-import type { ClaudeModelUsage } from "./contracts";
 import {
 	claudeJsonSchema,
 	judgeGradeSchema,
@@ -344,6 +342,92 @@ describe("per-model usage", () => {
 		).toMatchObject({ webSearchRequests: 0, thinkingTokens: 0 });
 	});
 
+	it("retains one entry per model on a call that used more than one", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.1,
+				num_turns: 2,
+				usage: {
+					input_tokens: 4,
+					output_tokens: 9,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 100,
+				},
+				modelUsage: {
+					"claude-haiku-4-5-20251001": {
+						inputTokens: 2,
+						outputTokens: 5,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 40,
+						costUSD: 0.02,
+						contextWindow: 200_000,
+						maxOutputTokens: 32_000,
+						canonicalModel: "claude-haiku-4-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+					"claude-sonnet-5": {
+						inputTokens: 2,
+						outputTokens: 4,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 60,
+						costUSD: 0.08,
+						contextWindow: 1_000_000,
+						maxOutputTokens: 64_000,
+						canonicalModel: "claude-sonnet-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
+		const modelUsage = readClaudeCallMetrics(envelope)?.modelUsage;
+
+		expect(Object.keys(modelUsage ?? {})).toEqual([
+			"claude-haiku-4-5-20251001",
+			"claude-sonnet-5",
+		]);
+		expect(modelUsage?.["claude-haiku-4-5-20251001"]?.costUSD).toBe(0.02);
+		expect(modelUsage?.["claude-sonnet-5"]?.costUSD).toBe(0.08);
+	});
+
+	it("survives a per-model block the provider reports with a zero window", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.5,
+				num_turns: 1,
+				usage: {
+					input_tokens: 2,
+					output_tokens: 4,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 10,
+				},
+				modelUsage: {
+					"unknown-model": {
+						inputTokens: 2,
+						outputTokens: 4,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 10,
+						costUSD: 0.5,
+						contextWindow: 0,
+						maxOutputTokens: 0,
+						canonicalModel: "unknown-model",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
+		expect(
+			readClaudeCallMetrics(envelope)?.modelUsage?.["unknown-model"]
+				?.contextWindow,
+		).toBe(0);
+	});
+
 	it("preserves a missing per-model block as absence", () => {
 		const envelope = readClaudeEnvelope(
 			JSON.stringify({
@@ -366,29 +450,265 @@ describe("per-model usage", () => {
 	});
 });
 
-describe(modelsPricedAtList.name, () => {
-	const usage = (costBasis: string): ClaudeModelUsage => ({
-		inputTokens: 2,
-		outputTokens: 5,
-		cacheReadInputTokens: 0,
-		cacheCreationInputTokens: 14_973,
-		costUSD: 0.029973,
-		contextWindow: 200_000,
-		maxOutputTokens: 32_000,
-		canonicalModel: "claude-haiku-4-5",
-		provider: "firstParty",
-		costBasis,
+describe(readStructuredOutput.name, () => {
+	it("reads the structured output field", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				structured_output: { answer: "ship it" },
+			}),
+		);
+
+		const output = readStructuredOutput(envelope, productAnswerSchema);
+
+		expect(output.answer).toBe("ship it");
 	});
 
-	it("names the models whose cost the provider priced at list", () => {
-		expect(modelsPricedAtList({ "claude-haiku-4-5": usage("list") })).toEqual([
-			"claude-haiku-4-5",
+	it("parses the result text when structured output is absent", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				result: JSON.stringify({ answer: "ship it" }),
+			}),
+		);
+
+		const output = readStructuredOutput(envelope, productAnswerSchema);
+
+		expect(output.answer).toBe("ship it");
+	});
+
+	it("rejects an envelope with no output", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({ session_id: "session-1" }),
+		);
+
+		expect(() => readStructuredOutput(envelope, productAnswerSchema)).toThrow(
+			"did not contain structured output",
+		);
+	});
+});
+
+describe(claudeArgs.name, () => {
+	it("grants a workflow session native customizations without permission prompts", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", effort: "high", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
+
+		expect(command).toEqual([
+			"claude",
+			"-p",
+			"--model",
+			"sonnet",
+			"--effort",
+			"high",
+			"--max-budget-usd",
+			"5",
+			"--output-format",
+			"json",
+			"--json-schema",
+			claudeJsonSchema(stageTurnSchema),
+			"--dangerously-skip-permissions",
+			"--session-id",
+			"session-1",
 		]);
 	});
 
-	it("withholds a model priced on another basis", () => {
+	it("seals a judge session away from tools, skills, and persistence", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: judgeGradeSchema,
+			access: "sealed",
+			systemPrompt: "You are a judge.",
+		});
+
+		expect(command).toEqual([
+			"claude",
+			"-p",
+			"--safe-mode",
+			"--disable-slash-commands",
+			"--strict-mcp-config",
+			"--model",
+			"sonnet",
+			"--max-budget-usd",
+			"5",
+			"--output-format",
+			"json",
+			"--json-schema",
+			claudeJsonSchema(judgeGradeSchema),
+			"--tools",
+			"",
+			"--system-prompt",
+			"You are a judge.",
+			"--no-session-persistence",
+		]);
+	});
+
+	it("resumes an existing session", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: true },
+		});
+
+		expect(command).toContain("--resume");
+		expect(command).not.toContain("--session-id");
+	});
+
+	it("restricts a stage session to project-level settings", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+			settingSources: "project",
+		});
+
+		expect(command).toContain("--setting-sources");
+		expect(command[command.indexOf("--setting-sources") + 1]).toBe("project");
+	});
+
+	it("omits --setting-sources when the invocation does not restrict sources", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
+
+		expect(command).not.toContain("--setting-sources");
+	});
+
+	it("passes the declared settings JSON through --settings", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+			settingsOverlay: '{"disableAllHooks":true}',
+		});
+
+		expect(command).toContain("--settings");
+		expect(command[command.indexOf("--settings") + 1]).toBe(
+			'{"disableAllHooks":true}',
+		);
+	});
+
+	it("omits --settings when the invocation carries no settings overlay", () => {
+		const command = claudeArgs({
+			settings: { model: "sonnet", budgetUsd: 5 },
+			schema: stageTurnSchema,
+			access: "unrestricted",
+			session: { id: "session-1", resume: false },
+		});
+
+		expect(command).not.toContain("--settings");
+	});
+});
+
+describe("per-model usage", () => {
+	it("retains the provider's per-model usage block", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.029973,
+				num_turns: 1,
+				usage: {
+					input_tokens: 2,
+					output_tokens: 5,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 14_973,
+				},
+				modelUsage: {
+					"claude-haiku-4-5-20251001": {
+						inputTokens: 2,
+						outputTokens: 5,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 14_973,
+						costUSD: 0.029973,
+						contextWindow: 200_000,
+						maxOutputTokens: 32_000,
+						canonicalModel: "claude-haiku-4-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
+		expect(readClaudeCallMetrics(envelope)?.modelUsage).toEqual({
+			"claude-haiku-4-5-20251001": {
+				inputTokens: 2,
+				outputTokens: 5,
+				cacheReadInputTokens: 0,
+				cacheCreationInputTokens: 14_973,
+				costUSD: 0.029973,
+				contextWindow: 200_000,
+				maxOutputTokens: 32_000,
+				canonicalModel: "claude-haiku-4-5",
+				provider: "firstParty",
+				costBasis: "list",
+			},
+		});
+	});
+
+	it("reads the block past per-model fields the provider added", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.07976,
+				num_turns: 1,
+				usage: {
+					input_tokens: 2,
+					output_tokens: 4,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 19_929,
+				},
+				modelUsage: {
+					"claude-sonnet-5": {
+						inputTokens: 2,
+						outputTokens: 4,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 19_929,
+						webSearchRequests: 0,
+						costUSD: 0.07976,
+						contextWindow: 1_000_000,
+						maxOutputTokens: 64_000,
+						thinkingTokens: 0,
+						canonicalModel: "claude-sonnet-5",
+						provider: "firstParty",
+						costBasis: "list",
+					},
+				},
+			}),
+		);
+
 		expect(
-			modelsPricedAtList({ "claude-haiku-4-5": usage("subscription") }),
-		).toEqual([]);
+			readClaudeCallMetrics(envelope)?.modelUsage?.["claude-sonnet-5"],
+		).toMatchObject({ webSearchRequests: 0, thinkingTokens: 0 });
+	});
+
+	it("preserves a missing per-model block as absence", () => {
+		const envelope = readClaudeEnvelope(
+			JSON.stringify({
+				session_id: "session-1",
+				total_cost_usd: 0.5,
+				num_turns: 7,
+				usage: {
+					input_tokens: 100,
+					output_tokens: 20,
+					cache_read_input_tokens: 30,
+					cache_creation_input_tokens: 40,
+				},
+			}),
+		);
+
+		const metrics = readClaudeCallMetrics(envelope);
+
+		expect(metrics).toBeDefined();
+		expect(metrics && "modelUsage" in metrics).toBe(false);
 	});
 });
