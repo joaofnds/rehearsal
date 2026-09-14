@@ -135,6 +135,10 @@ See [current state](docs/status.md) for implementation coverage and
   shapes remain explicit. Calculated request cost retains the selected rate and
   its frozen catalog; omission of the field means no provider bundle was
   supplied.
+- **Context history** — the ordered, read-only browser projection of one saved
+  session attempt's starting context, tool events, observed deliveries, results,
+  and evidence gaps. It is derived from the colocated transcript and is not a
+  measurement of the provider's active context window.
 - **Corpus (instruction corpus)** — the instruction files under evaluation: the
   installed `CLAUDE.md`, the stage skills, the output styles, the agent
   definitions, and the rulebook. A case names the ones it reads in corpus
@@ -255,6 +259,9 @@ See [current state](docs/status.md) for implementation coverage and
   reply of zero words: no check is evaluated and none is recorded, so the
   attempt reads as a measurement that did not happen rather than one that
   passed.
+- **Observed delivery** — saved transcript evidence that a Read result or Skill
+  companion placed recorded text into session history. An invocation alone is
+  not a delivery, and delivery does not show that the model followed the text.
 - **Pause** — the interactive stop a run makes with the candidate still in the
   target, asking the reviewer to edit files and press Enter until the
   calibration validates. It is requested by `--pause` and needs a TTY, refused

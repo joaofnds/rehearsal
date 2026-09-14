@@ -25,6 +25,7 @@ still requires environment-specific setup.
 | Session context manifests      | Deduplicated Read/Skill/style observations, corpus/project classification, and declared-input reconciliation; no timeline                                    | [Manifest construction](../src/benchmark/context-manifest.ts)                                                                      |
 | Provider context normalization | Versioned source bundle, session-scoped request joins, agent lineage, explicit loss states, frozen-rate pricing provenance, and optional attempt persistence | [Evidence normalization](../src/benchmark/context-evidence.ts)                                                                     |
 | Session transcript diagnostics | Post-cut tool occurrences, explicit tool-result errors, exact repeated Bash inputs, source locators, and evidence completeness                               | [Transcript projection](../src/benchmark/transcript.ts)                                                                            |
+| Saved context history          | Read-only source/event workbench for standalone and confirmation session attempts, with bounded saved evidence detail and comparison provenance links        | [History projection](../src/benchmark/session-history.ts), [browser page](../client/src/session-history/session-history-page.tsx)  |
 | Local read UI and event API    | Partial browser views and server-side event streaming                                                                                                        | [Router](../client/src/router.tsx), [API](../src/server/api.ts)                                                                    |
 
 An implemented path can still have missing real-provider validation. Session
@@ -67,8 +68,11 @@ verdict.
   evidence that its implementation is correct.
 - **Pipeline progress can mix with JSON stdout.** Read the saved record or use
   `show <id> --json` when consuming pipeline evidence programmatically.
-- **Context visibility is incomplete.** Session manifests retain names, not
-  load timing, repeated deliveries, or bytes observed. The harness can normalize
+- **Context visibility is incomplete.** Session manifests still retain names
+  rather than a timeline. The saved-attempt browser derives recorded Read and
+  Skill deliveries, repeated loads, timestamps, content measurements, and
+  evidence gaps from a retained transcript. It does not measure the provider's
+  active context window. The harness can also normalize
   a supplied provider capture into request usage, nested-agent lineage,
   instruction loads, compactions, and priced cost, then preserve it on an
   attempt. The shipped run path does not collect that bundle, and the UI does
@@ -85,12 +89,14 @@ verdict.
 
 ## Browser UI
 
-| Route                   | Available today                                                          |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `/`                     | Run-history report, including empty and error states                     |
-| `/corpus`               | Live corpus inventory; instruction editing is marked planned             |
-| `/comparisons/<digest>` | Saved case/arm distributions, attribution, and per-case quality readings |
-| `/system`               | Design tokens and reusable component gallery                             |
+| Route                                | Available today                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `/`                                  | Run-history report, including empty and error states                                             |
+| `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                     |
+| `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links |
+| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history                                                         |
+| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history                                                           |
+| `/system`                            | Design tokens and reusable component gallery                                                     |
 
 Run launch, live monitor, full run detail, task/case management, calibration
 screens, settings, and first-run setup are design targets. The SSE API already
@@ -107,8 +113,8 @@ goals, with context visibility added to help explain resource use:
 1. Add reproducible public pipeline case inputs.
 2. Deliver isolated session skill variants, generated fixtures, and preserved
    post-session state so realistic skill outcomes can be graded.
-3. Make context use inspectable alongside outcomes. Begin with saved-session
-   event and source inspection, validate per-request collection, then extend
+3. Make context use inspectable alongside outcomes. Build on saved-session
+   event and source inspection by validating per-request collection, then extend
    to pipeline steps and reviewer trees. Use a review-efficiency comparison to
    demonstrate reduced tokens and cost with retained quality. Attribute both
    to skills and subagents using request-level model and pricing evidence. The
