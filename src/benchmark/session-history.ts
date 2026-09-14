@@ -1343,12 +1343,21 @@ export interface SessionHistoryRequestEntry {
 	readonly line: number;
 	readonly model: string | undefined;
 	readonly usage: SessionHistoryRequestUsage;
+	readonly totalInputTokens: number;
 	readonly usageState: "complete" | "conflict";
 }
 
 export interface SessionHistoryRequestSeries {
+	readonly name: "total input tokens";
+	readonly measuresActiveContextWindow: false;
+	readonly omits: readonly string[];
 	readonly entries: readonly SessionHistoryRequestEntry[];
 }
+
+const TOTAL_INPUT_TOKENS_OMITS = [
+	"the request's own output tokens",
+	"the model's context window limit, which no saved record carries",
+] as const;
 
 const requestUsageSchema = z.looseObject({
 	input_tokens: z.number().int().nonnegative(),
@@ -1407,6 +1416,12 @@ function parsedRequestRow(
 	};
 }
 
+function totalInputTokens(
+	usage: Readonly<SessionHistoryRequestUsage>,
+): number {
+	return usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+}
+
 function sameUsage(
 	left: Readonly<SessionHistoryRequestUsage>,
 	right: Readonly<SessionHistoryRequestUsage>,
@@ -1444,6 +1459,7 @@ function collapsedEntries(
 		)
 		.map((row) => ({
 			...row,
+			totalInputTokens: totalInputTokens(row.usage),
 			usageState:
 				row.requestId !== undefined && conflicting.has(row.requestId)
 					? ("conflict" as const)
@@ -1458,5 +1474,10 @@ export function sessionHistoryRequestSeries(
 		.split("\n")
 		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
-	return { entries: collapsedEntries(rows) };
+	return {
+		name: "total input tokens",
+		measuresActiveContextWindow: false,
+		omits: TOTAL_INPUT_TOKENS_OMITS,
+		entries: collapsedEntries(rows),
+	};
 }

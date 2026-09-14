@@ -637,4 +637,71 @@ describe(sessionHistoryRequestSeries.name, () => {
 		expect(series.entries).toHaveLength(1);
 		expect(series.entries[0]?.usageState).toBe("conflict");
 	});
+	it("totals the three input categories as total input tokens", () => {
+		const transcript = row(
+			assistantRow("1", "req-a", "claude-opus-5", {
+				input: 2,
+				output: 151,
+				cacheRead: 30000,
+				cacheWrite: 251695,
+			}),
+		);
+
+		const series = sessionHistoryRequestSeries(transcript);
+
+		expect(series.entries[0]?.totalInputTokens).toBe(281697);
+	});
+
+	it("values a row recording no model request at zero rather than omitting it", () => {
+		const transcript = [
+			row(
+				assistantRow("1", null, "<synthetic>", {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+				}),
+			),
+			row(
+				assistantRow("2", "req-a", "claude-sonnet-5", {
+					input: 2,
+					output: 151,
+					cacheRead: 0,
+					cacheWrite: 251695,
+				}),
+			),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries(transcript);
+
+		expect(
+			series.entries.map(({ requestId, model, totalInputTokens }) => ({
+				requestId,
+				model,
+				totalInputTokens,
+			})),
+		).toEqual([
+			{ requestId: undefined, model: "<synthetic>", totalInputTokens: 0 },
+			{ requestId: "req-a", model: "claude-sonnet-5", totalInputTokens: 251697 },
+		]);
+	});
+	it("names what the total omits without claiming the categories overlap", () => {
+		const series = sessionHistoryRequestSeries(
+			row(
+				assistantRow("1", "req-a", "claude-opus-5", {
+					input: 2,
+					output: 151,
+					cacheRead: 0,
+					cacheWrite: 251695,
+				}),
+			),
+		);
+
+		expect(series.name).toBe("total input tokens");
+		expect(series.omits).toEqual([
+			"the request's own output tokens",
+			"the model's context window limit, which no saved record carries",
+		]);
+		expect(series.measuresActiveContextWindow).toBe(false);
+	});
 });
