@@ -50,6 +50,38 @@ function renderPage(): void {
 					startingSources: [],
 					sources: [
 						{
+							id: "project:/work/early.md",
+							kind: "project",
+							name: "early.md",
+							path: "/work/early.md",
+							region: "attempt",
+							firstLocator: { line: 6, block: 1 },
+							measurement: { state: "complete", characters: 20 },
+							observedDeliveryCount: 0,
+							repeatDeliveryCount: 0,
+							failedOccurrences: 0,
+							partialOccurrences: 0,
+							missingOccurrences: 0,
+							unavailableOccurrences: 0,
+							eventIds: [],
+						},
+						{
+							id: "project:/work/late.md",
+							kind: "project",
+							name: "late.md",
+							path: "/work/late.md",
+							region: "attempt",
+							firstLocator: { line: 7, block: 1 },
+							measurement: { state: "complete", characters: 20 },
+							observedDeliveryCount: 0,
+							repeatDeliveryCount: 0,
+							failedOccurrences: 0,
+							partialOccurrences: 0,
+							missingOccurrences: 0,
+							unavailableOccurrences: 0,
+							eventIds: [],
+						},
+						{
 							id: "unclassified",
 							kind: "unclassified",
 							name: "Unclassified recorded content",
@@ -314,14 +346,16 @@ describe(SessionHistoryPage.name, () => {
 				.slice(1)
 				.map((button) => button.textContent ?? "");
 
-		expect(sourceNames()[0]).toContain("Unclassified recorded content");
-		expect(sourceNames()[1]).toContain("CLAUDE.md");
-		expect(sourceNames()[2]).toContain("Bash · 4:1");
-		expect(sourceNames()[3]).toContain("/outside.txt");
-		expect(sourceNames()[0]).toContain(
+		expect(sourceNames()[0]).toContain("early.md");
+		expect(sourceNames()[1]).toContain("late.md");
+		expect(sourceNames()[2]).toContain("Unclassified recorded content");
+		expect(sourceNames()[3]).toContain("CLAUDE.md");
+		expect(sourceNames()[4]).toContain("Bash · 4:1");
+		expect(sourceNames()[5]).toContain("/outside.txt");
+		expect(sourceNames()[2]).toContain(
 			"◐ Partial · 20 observed recorded text characters — not tokens · mixed body",
 		);
-		expect(sourceNames()[3]).toContain("? Unavailable · unsupported text body");
+		expect(sourceNames()[5]).toContain("? Unavailable · unsupported text body");
 
 		fireEvent.click(screen.getByRole("button", { name: "Most repeated" }));
 		expect(sourceNames()[0]).toContain("CLAUDE.md");
