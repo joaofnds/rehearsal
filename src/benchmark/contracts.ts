@@ -198,6 +198,11 @@ const claudeModelUsageSchema = z
 	})
 	.loose();
 
+const claudeModelUsageByModelSchema = z.record(
+	z.string(),
+	claudeModelUsageSchema,
+);
+
 export const claudeCallMetricsSchema = z
 	.object({
 		costUsd: z.number().nonnegative(),
@@ -208,7 +213,7 @@ export const claudeCallMetricsSchema = z
 		turns: z.number().int().nonnegative(),
 		durationMs: z.number().int().nonnegative().optional(),
 		apiDurationMs: z.number().int().nonnegative().optional(),
-		modelUsage: z.record(z.string(), claudeModelUsageSchema).optional(),
+		modelUsage: claudeModelUsageByModelSchema.optional(),
 	})
 	.strict();
 
@@ -220,7 +225,7 @@ export const claudeEnvelopeSchema = z
 		duration_ms: z.number().int().nonnegative().optional(),
 		duration_api_ms: z.number().int().nonnegative().optional(),
 		usage: claudeUsageSchema.optional(),
-		modelUsage: z.record(z.string(), claudeModelUsageSchema).optional(),
+		modelUsage: claudeModelUsageByModelSchema.optional(),
 		is_error: z.boolean().optional(),
 		result: z.string().optional(),
 		structured_output: z.unknown().optional(),
