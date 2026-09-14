@@ -1,29 +1,30 @@
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
-import {
-	basename,
-	dirname,
-	isAbsolute,
-	relative,
-	resolve,
-	sep,
-} from "node:path";
+import type { FileHandle } from "node:fs/promises";
+import { z } from "zod";
+import { basename, isAbsolute, relative, resolve } from "node:path";
 import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
 } from "#benchmark/confirmation-record";
+import { pathIsWithin } from "#benchmark/path-containment";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import {
-	sessionHistoryDetail,
+	sessionHistoryDetailFromLine,
 	sessionHistoryReport,
+	sessionHistoryReportFromLines,
 } from "#benchmark/session-history";
 import type {
 	SessionHistoryDetail,
 	SessionHistoryReport,
-	SessionHistoryReportInput,
+	SessionHistoryReportMetadata,
 } from "#benchmark/session-history";
 
-const IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const identitySchema = z
+	.string()
+	.regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
+	.brand("SavedIdentity");
+type SavedIdentity = z.infer<typeof identitySchema>;
 
 export class SessionHistoryReaderError extends Error {
 	public override name = "SessionHistoryReaderError";
@@ -48,25 +49,49 @@ interface ConfirmationAttemptHistoryIdentity {
 	readonly repId: string;
 }
 
-function assertIdentity(value: string): void {
-	if (!IDENTITY.test(value)) {
+const fileErrorSchema = z.object({ code: z.string() }).loose();
+
+async function undefinedWhenMissing<T>(
+	operation: () => Promise<T>,
+): Promise<T | undefined> {
+	try {
+		return await operation();
+	} catch (error) {
+		const parsed = fileErrorSchema.safeParse(error);
+		if (
+			parsed.success &&
+			(parsed.data.code === "ENOENT" || parsed.data.code === "ENOTDIR")
+		) {
+			return undefined;
+		}
+		throw error;
+	}
+}
+
+function lstatWhenPresent(
+	path: string,
+): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
+	return undefinedWhenMissing(() => lstat(path));
+}
+
+function realpathWhenPresent(path: string): Promise<string | undefined> {
+	return undefinedWhenMissing(() => realpath(path));
+}
+
+function parseIdentity(value: string): SavedIdentity {
+	const parsed = identitySchema.safeParse(value);
+	if (!parsed.success) {
 		throw new SessionHistoryReaderError(
 			"refused",
 			"Invalid saved-attempt identity",
 		);
 	}
-}
 
-function contained(path: string, root: string): boolean {
-	const fromRoot = relative(root, path);
-
-	return (
-		fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..")
-	);
+	return parsed.data;
 }
 
 async function canonicalRunsRoot(runsDirectory: string): Promise<string> {
-	const root = await realpath(runsDirectory).catch(() => undefined);
+	const root = await realpathWhenPresent(runsDirectory);
 	if (root === undefined) {
 		throw new SessionHistoryReaderError("not-found", "No saved run directory");
 	}
@@ -80,9 +105,9 @@ async function verifiedDirectory(
 ): Promise<string> {
 	let current = root;
 	for (const segment of segments) {
-		assertIdentity(segment);
-		current = resolve(current, segment);
-		const status = await lstat(current).catch(() => undefined);
+		const safeSegment = parseIdentity(segment);
+		current = resolve(current, safeSegment);
+		const status = await lstatWhenPresent(current);
 		if (status === undefined) {
 			throw new SessionHistoryReaderError(
 				"not-found",
@@ -95,8 +120,8 @@ async function verifiedDirectory(
 				"Saved-attempt path is not a real directory",
 			);
 		}
-		const canonical = await realpath(current).catch(() => undefined);
-		if (canonical === undefined || !contained(canonical, root)) {
+		const canonical = await realpathWhenPresent(current);
+		if (canonical === undefined || !pathIsWithin(canonical, root)) {
 			throw new SessionHistoryReaderError(
 				"refused",
 				"Saved-attempt path leaves the runs directory",
@@ -114,9 +139,9 @@ async function verifiedFile(
 	name: string,
 	required: boolean,
 ): Promise<string | undefined> {
-	assertIdentity(name);
-	const path = resolve(directory, name);
-	const status = await lstat(path).catch(() => undefined);
+	const safeName = parseIdentity(name);
+	const path = resolve(directory, safeName);
+	const status = await lstatWhenPresent(path);
 	if (status === undefined) {
 		if (required) {
 			throw new SessionHistoryReaderError(
@@ -133,8 +158,8 @@ async function verifiedFile(
 			"Saved-attempt evidence is not a real file",
 		);
 	}
-	const canonical = await realpath(path).catch(() => undefined);
-	if (canonical === undefined || !contained(canonical, root)) {
+	const canonical = await realpathWhenPresent(path);
+	if (canonical === undefined || !pathIsWithin(canonical, root)) {
 		throw new SessionHistoryReaderError(
 			"refused",
 			"Saved-attempt evidence leaves the runs directory",
@@ -144,21 +169,72 @@ async function verifiedFile(
 	return canonical;
 }
 
-async function readVerifiedFile(path: string): Promise<string> {
+async function openVerifiedFile(
+	root: string,
+	path: string,
+): Promise<FileHandle> {
 	const handle = await open(path, constants.O_RDONLY + constants.O_NOFOLLOW);
 	try {
-		const status = await handle.stat();
-		if (!status.isFile()) {
+		const opened = await handle.stat();
+		const canonical = await realpath(path);
+		const current = await lstat(path);
+		if (
+			!opened.isFile() ||
+			current.isSymbolicLink() ||
+			!current.isFile() ||
+			!pathIsWithin(canonical, root) ||
+			opened.dev !== current.dev ||
+			opened.ino !== current.ino
+		) {
 			throw new SessionHistoryReaderError(
 				"refused",
-				"Saved-attempt evidence is not a regular file",
+				"Saved-attempt evidence changed during verification",
 			);
 		}
+		return handle;
+	} catch (error) {
+		await handle.close();
+		throw error;
+	}
+}
 
+async function readVerifiedFile(root: string, path: string): Promise<string> {
+	const handle = await openVerifiedFile(root, path);
+	try {
 		return await handle.readFile({ encoding: "utf8" });
 	} finally {
 		await handle.close();
 	}
+}
+
+async function* readVerifiedLines(
+	root: string,
+	path: string,
+): AsyncGenerator<string> {
+	const handle = await openVerifiedFile(root, path);
+	try {
+		for await (const line of handle.readLines({ autoClose: false })) {
+			yield line;
+		}
+	} finally {
+		await handle.close();
+	}
+}
+
+async function readVerifiedLine(
+	root: string,
+	path: string,
+	selectedLine: number,
+): Promise<string | undefined> {
+	let lineNumber = 0;
+	for await (const line of readVerifiedLines(root, path)) {
+		lineNumber += 1;
+		if (lineNumber === selectedLine) {
+			return line;
+		}
+	}
+
+	return undefined;
 }
 
 export interface RecordedEvidenceFile {
@@ -175,17 +251,26 @@ export async function readRecordedEvidenceFile(
 		throw new SessionHistoryReaderError("refused", "Recorded path is absolute");
 	}
 	const root = await canonicalRunsRoot(runsDirectory);
-	const candidate = resolve(dirname(root), recordedPath);
-	if (!contained(candidate, root)) {
+	const recordedSegments = recordedPath.split(/[\\/]/u);
+	const rootMarker = recordedSegments.lastIndexOf(basename(root));
+	const segments =
+		rootMarker === -1
+			? recordedSegments.filter((segment) => segment !== ".")
+			: recordedSegments.slice(rootMarker + 1);
+	if (
+		segments.length === 0 ||
+		segments.some(
+			(segment) => segment === "" || segment === "." || segment === "..",
+		) ||
+		(rootMarker === -1 && recordedSegments.includes(".."))
+	) {
 		throw new SessionHistoryReaderError(
 			"refused",
-			"Recorded path leaves the runs directory",
+			"Recorded path has no confined runs-relative identity",
 		);
 	}
-	const fromRoot = relative(root, candidate);
-	const segments = fromRoot.split(sep);
 	const name = segments.pop();
-	if (name === undefined || name !== basename(candidate)) {
+	if (name === undefined) {
 		throw new SessionHistoryReaderError("refused", "Recorded path is invalid");
 	}
 	const directory = await verifiedDirectory(root, segments);
@@ -197,21 +282,17 @@ export async function readRecordedEvidenceFile(
 		);
 	}
 
-	return { path: file, text: await readVerifiedFile(file) };
+	return { path: file, text: await readVerifiedFile(root, file) };
 }
 
-async function reportInput(
+async function reportMetadata(
+	root: string,
 	attemptFile: string,
-	transcriptFile: string | undefined,
 	id: string,
-): Promise<SessionHistoryReportInput> {
+): Promise<SessionHistoryReportMetadata> {
 	const attempt = parseSessionAttemptRecord(
-		await readVerifiedFile(attemptFile),
+		await readVerifiedFile(root, attemptFile),
 	);
-	const transcript =
-		transcriptFile === undefined
-			? undefined
-			: await readVerifiedFile(transcriptFile);
 
 	return {
 		attempt: {
@@ -224,17 +305,20 @@ async function reportInput(
 				resolvedPath,
 			})),
 		},
-		transcript,
 		prefixLinesExcluded: attempt.transcriptDiagnostics?.prefixLinesExcluded,
 		diagnostics: attempt.transcriptDiagnostics,
 	};
 }
 
+interface ResolvedHistoryInput {
+	readonly root: string;
+	readonly metadata: SessionHistoryReportMetadata;
+	readonly transcriptFile: string | undefined;
+}
+
 async function standaloneInput(
 	identity: Readonly<SessionAttemptHistoryIdentity>,
-): Promise<SessionHistoryReportInput> {
-	assertIdentity(identity.caseId);
-	assertIdentity(identity.uuid);
+): Promise<ResolvedHistoryInput> {
 	const root = await canonicalRunsRoot(identity.runsDirectory);
 	const directory = await verifiedDirectory(root, [
 		"sessions",
@@ -254,22 +338,20 @@ async function standaloneInput(
 		"transcript.jsonl",
 		false,
 	);
-	const input = await reportInput(attemptFile, transcriptFile, identity.uuid);
-	if (input.attempt.caseId !== identity.caseId) {
+	const metadata = await reportMetadata(root, attemptFile, identity.uuid);
+	if (metadata.attempt.caseId !== identity.caseId) {
 		throw new SessionHistoryReaderError(
 			"refused",
 			"Saved attempt does not own this case identity",
 		);
 	}
 
-	return input;
+	return { root, metadata, transcriptFile };
 }
 
 async function confirmationInput(
 	identity: Readonly<ConfirmationAttemptHistoryIdentity>,
-): Promise<SessionHistoryReportInput> {
-	assertIdentity(identity.groupId);
-	assertIdentity(identity.repId);
+): Promise<ResolvedHistoryInput> {
 	const root = await canonicalRunsRoot(identity.runsDirectory);
 	const groupDirectory = await verifiedDirectory(root, [
 		"confirmations",
@@ -304,8 +386,10 @@ async function confirmationInput(
 			"Saved confirmation attempt is unavailable",
 		);
 	}
-	const group = parseConfirmationGroupRecord(await readVerifiedFile(groupFile));
-	const rep = parseConfirmationRepRecord(await readVerifiedFile(repFile));
+	const group = parseConfirmationGroupRecord(
+		await readVerifiedFile(root, groupFile),
+	);
+	const rep = parseConfirmationRepRecord(await readVerifiedFile(root, repFile));
 	if (group.mode !== "session" || rep.mode !== "session") {
 		throw new SessionHistoryReaderError(
 			"refused",
@@ -334,10 +418,10 @@ async function confirmationInput(
 		"transcript.jsonl",
 		false,
 	);
-	const input = await reportInput(attemptFile, transcriptFile, identity.repId);
+	const metadata = await reportMetadata(root, attemptFile, identity.repId);
 	if (
-		input.attempt.caseId !== group.caseId ||
-		input.attempt.caseId !== rep.caseId
+		metadata.attempt.caseId !== group.caseId ||
+		metadata.attempt.caseId !== rep.caseId
 	) {
 		throw new SessionHistoryReaderError(
 			"refused",
@@ -345,31 +429,71 @@ async function confirmationInput(
 		);
 	}
 
-	return input;
+	return { root, metadata, transcriptFile };
+}
+
+function reportFor(
+	input: Readonly<ResolvedHistoryInput>,
+): Promise<SessionHistoryReport> {
+	return input.transcriptFile === undefined
+		? Promise.resolve(
+				sessionHistoryReport({ ...input.metadata, transcript: undefined }),
+			)
+		: sessionHistoryReportFromLines(
+				input.metadata,
+				readVerifiedLines(input.root, input.transcriptFile),
+			);
+}
+
+async function detailFor(
+	input: Readonly<ResolvedHistoryInput>,
+	eventId: string,
+): Promise<SessionHistoryDetail | undefined> {
+	if (input.transcriptFile === undefined) {
+		return undefined;
+	}
+	const report = await reportFor(input);
+	const event = [
+		...report.startingContext,
+		...report.attemptEvents,
+		...report.boundaryUnknown,
+	].find(({ id }) => id === eventId);
+	if (event === undefined) {
+		return undefined;
+	}
+	const line = await readVerifiedLine(
+		input.root,
+		input.transcriptFile,
+		event.locator.line,
+	);
+
+	return line === undefined
+		? undefined
+		: sessionHistoryDetailFromLine(report, eventId, line);
 }
 
 export async function readSessionAttemptHistory(
 	identity: Readonly<SessionAttemptHistoryIdentity>,
 ): Promise<SessionHistoryReport> {
-	return sessionHistoryReport(await standaloneInput(identity));
+	return reportFor(await standaloneInput(identity));
 }
 
 export async function readSessionAttemptHistoryDetail(
 	identity: Readonly<SessionAttemptHistoryIdentity>,
 	eventId: string,
 ): Promise<SessionHistoryDetail | undefined> {
-	return sessionHistoryDetail(await standaloneInput(identity), eventId);
+	return detailFor(await standaloneInput(identity), eventId);
 }
 
 export async function readConfirmationAttemptHistory(
 	identity: Readonly<ConfirmationAttemptHistoryIdentity>,
 ): Promise<SessionHistoryReport> {
-	return sessionHistoryReport(await confirmationInput(identity));
+	return reportFor(await confirmationInput(identity));
 }
 
 export async function readConfirmationAttemptHistoryDetail(
 	identity: Readonly<ConfirmationAttemptHistoryIdentity>,
 	eventId: string,
 ): Promise<SessionHistoryDetail | undefined> {
-	return sessionHistoryDetail(await confirmationInput(identity), eventId);
+	return detailFor(await confirmationInput(identity), eventId);
 }

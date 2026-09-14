@@ -127,5 +127,8 @@
 }
 
 .rh-comparison__history-arm a {
+	display: inline-flex;
+	min-block-size: calc(var(--space-22) + var(--space-22));
+	align-items: center;
 	color: var(--color-accent-light);
 }

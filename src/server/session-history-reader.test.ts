@@ -2,11 +2,19 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+	sessionConfirmationGroupRecordSchema,
+	sessionConfirmationRepRecordSchema,
+} from "#benchmark/confirmation-record";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
 import { directorySource } from "#benchmark/run-records-test-support";
-import { sessionAttemptPaths } from "#benchmark/run-layout";
+import {
+	confirmationGroupPaths,
+	sessionAttemptPaths,
+} from "#benchmark/run-layout";
 import { createApiApp } from "#server/api";
 import {
+	readConfirmationAttemptHistory,
 	readSessionAttemptHistory,
 	SessionHistoryReaderError,
 } from "#server/session-history-reader";
@@ -92,6 +100,114 @@ async function writtenAttempt(): Promise<{
 	return { runsDirectory, caseId, uuid };
 }
 
+async function writtenConfirmationAttempt(): Promise<{
+	readonly runsDirectory: string;
+	readonly groupId: string;
+	readonly repId: string;
+	readonly paths: ReturnType<typeof confirmationGroupPaths>;
+}> {
+	const root = await mkdtemp(join(tmpdir(), "rehearsal-confirmation-history-"));
+	roots.push(root);
+	const runsDirectory = join(root, ".benchmark-runs");
+	const groupId = "group-a";
+	const repId = "group-a-rep-1";
+	const paths = confirmationGroupPaths(runsDirectory, groupId);
+	const repPaths = paths.rep(repId);
+	await mkdir(repPaths.directory, { recursive: true });
+	await Bun.write(
+		paths.groupFile,
+		`${JSON.stringify(
+			sessionConfirmationGroupRecordSchema.parse({
+				schemaVersion: 2,
+				caseId: "case-a",
+				groupId,
+				mode: "session",
+				reps: 2,
+				declaredStages: ["checks"],
+				inputs: {
+					lineage: { kind: "SESSION", lineage: "lineage-a" },
+					files: [
+						{
+							kind: "case",
+							path: "inputs/case.json",
+							sha256: "a".repeat(64),
+						},
+					],
+					model: "sonnet",
+					sessionBudgetUsd: 1,
+				},
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 1,
+					preflightMaximumUsd: 0,
+					totalMaximumUsd: 2,
+				},
+				preflight: { status: "MISSING", missing: "metrics unavailable" },
+				approval: { method: "yes", approved: true },
+				repRecords: [1, 2].map((ordinal) => ({
+					repId: `group-a-rep-${String(ordinal)}`,
+					ordinal,
+					path: `reps/group-a-rep-${String(ordinal)}/rep.json`,
+				})),
+				reportFile: "report.json",
+				makespanMs: 1,
+			}),
+		)}\n`,
+	);
+	await Bun.write(
+		repPaths.recordFile,
+		`${JSON.stringify(
+			sessionConfirmationRepRecordSchema.parse({
+				schemaVersion: 2,
+				caseId: "case-a",
+				groupId,
+				repId,
+				ordinal: 1,
+				mode: "session",
+				lineage: { kind: "SESSION", lineage: "lineage-a" },
+				outcome: "UNSUCCESSFUL",
+				stages: [
+					{
+						stage: "checks",
+						status: "NOT_REACHED",
+						reason: "not reached",
+						evidence: { recordFile: "attempt.json" },
+					},
+				],
+				finalOutcome: { status: "NOT_APPLICABLE" },
+				metrics: { status: "MISSING", calls: [], missing: ["metrics"] },
+				workerTrajectorySteps: 0,
+				elapsedMs: 1,
+			}),
+		)}\n`,
+	);
+	await Bun.write(
+		repPaths.attemptFile,
+		`${JSON.stringify(
+			sessionAttemptRecordSchema.parse({
+				schemaVersion: 1,
+				caseId: "case-a",
+				lineage: "lineage-a",
+				model: "sonnet",
+				sessionBudgetUsd: 1,
+				corpusFiles: [],
+				prompt: "inspect",
+				reply: "done",
+				transcriptFile: "/outside/must-not-be-read.jsonl",
+				outcome: "SUCCESSFUL",
+				checks: [{ kind: "word-band", status: "PASS", detail: "pass" }],
+				elapsedMs: 1,
+			}),
+		)}\n`,
+	);
+	await Bun.write(
+		repPaths.transcriptFile,
+		`${JSON.stringify({ type: "assistant", message: { content: "saved" } })}\n`,
+	);
+
+	return { runsDirectory, groupId, repId, paths };
+}
+
 describe(readSessionAttemptHistory.name, () => {
 	it("reads the verified sibling transcript", async () => {
 		const fixture = await writtenAttempt();
@@ -144,6 +260,20 @@ describe(readSessionAttemptHistory.name, () => {
 			SessionHistoryReaderError,
 		);
 	});
+
+	it("keeps a persisted boundary known when the transcript is missing", async () => {
+		const fixture = await writtenAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		await rm(paths.transcriptFile);
+
+		const report = await readSessionAttemptHistory(fixture);
+
+		expect(report.boundary).toBe("known");
+		expect(report.evidence).toEqual({
+			state: "unavailable",
+			reasons: ["transcript unavailable"],
+		});
+	});
 });
 
 describe("saved session history API", () => {
@@ -167,6 +297,7 @@ describe("saved session history API", () => {
 			schemaVersion: 1,
 			eventId: "2:1",
 			locator: { line: 2, block: 1 },
+			kind: "result",
 			state: "delivered",
 			relatedEventIds: ["1:1"],
 			deliveredText: "1\tproject instructions",
@@ -192,5 +323,111 @@ describe("saved session history API", () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.text()).not.toContain(fixture.runsDirectory);
+	});
+});
+
+describe(readConfirmationAttemptHistory.name, () => {
+	it("reads an owned confirmation rep and leaves its evidence byte-identical", async () => {
+		const fixture = await writtenConfirmationAttempt();
+		const repPaths = fixture.paths.rep(fixture.repId);
+		const before = await Promise.all(
+			[
+				fixture.paths.groupFile,
+				repPaths.recordFile,
+				repPaths.attemptFile,
+				repPaths.transcriptFile,
+			].map((path) => Bun.file(path).text()),
+		);
+
+		const report = await readConfirmationAttemptHistory(fixture);
+
+		expect(report.attempt.id).toBe(fixture.repId);
+		expect(
+			await Promise.all(
+				[
+					fixture.paths.groupFile,
+					repPaths.recordFile,
+					repPaths.attemptFile,
+					repPaths.transcriptFile,
+				].map((path) => Bun.file(path).text()),
+			),
+		).toEqual(before);
+	});
+
+	it("refuses traversal identities", async () => {
+		const fixture = await writtenConfirmationAttempt();
+
+		expect(
+			readConfirmationAttemptHistory({ ...fixture, repId: "../rep" }),
+		).rejects.toBeInstanceOf(SessionHistoryReaderError);
+	});
+
+	it.each([
+		[
+			"group file",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.groupFile,
+		],
+		[
+			"rep file",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.rep(fixture.repId).recordFile,
+		],
+		[
+			"attempt file",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.rep(fixture.repId).attemptFile,
+		],
+		[
+			"transcript file",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.rep(fixture.repId).transcriptFile,
+		],
+	] as const)("refuses a symlinked %s", async (_name, selectedPath) => {
+		const fixture = await writtenConfirmationAttempt();
+		const path = selectedPath(fixture);
+		const outside = join(fixture.runsDirectory, "outside-file");
+		await Bun.write(outside, "outside");
+		await rm(path);
+		await symlink(outside, path);
+
+		expect(readConfirmationAttemptHistory(fixture)).rejects.toBeInstanceOf(
+			SessionHistoryReaderError,
+		);
+	});
+
+	it.each([
+		[
+			"group directory",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.directory,
+		],
+		[
+			"rep directory",
+			(fixture: Awaited<ReturnType<typeof writtenConfirmationAttempt>>) =>
+				fixture.paths.rep(fixture.repId).directory,
+		],
+	] as const)("refuses a symlinked %s", async (_name, selectedPath) => {
+		const fixture = await writtenConfirmationAttempt();
+		const path = selectedPath(fixture);
+		const outside = join(fixture.runsDirectory, "outside-directory");
+		await mkdir(outside);
+		await rm(path, { recursive: true });
+		await symlink(outside, path);
+
+		expect(readConfirmationAttemptHistory(fixture)).rejects.toBeInstanceOf(
+			SessionHistoryReaderError,
+		);
+	});
+
+	it("refuses a non-regular transcript", async () => {
+		const fixture = await writtenConfirmationAttempt();
+		const transcript = fixture.paths.rep(fixture.repId).transcriptFile;
+		await rm(transcript);
+		await mkdir(transcript);
+
+		expect(readConfirmationAttemptHistory(fixture)).rejects.toBeInstanceOf(
+			SessionHistoryReaderError,
+		);
 	});
 });

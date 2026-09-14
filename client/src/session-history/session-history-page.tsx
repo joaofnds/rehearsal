@@ -8,6 +8,7 @@ import type {
 	TextMeasurement,
 } from "#benchmark/session-history";
 import { apiClient } from "#client/api-client";
+import { Switcher } from "#client/system/components/switcher";
 import "./session-history-page.css";
 
 export type SessionHistoryIdentity =
@@ -22,7 +23,7 @@ export type SessionHistoryIdentity =
 			readonly repId: string;
 	  };
 
-type SourceSort = "introduced" | "repeated";
+type SourceSort = "Introduced" | "Most repeated";
 
 function summaryPath(identity: SessionHistoryIdentity): string {
 	return identity.kind === "standalone"
@@ -75,13 +76,46 @@ async function fetchDetail(
 
 function measurementLabel(measurement: TextMeasurement): string {
 	if (measurement.state === "complete") {
-		return `${measurement.characters} recorded text characters — not tokens`;
+		return `✓ Complete · ${measurement.characters} recorded text characters — not tokens`;
 	}
 	if (measurement.state === "partial") {
-		return `${measurement.observedCharacters} observed recorded text characters — not tokens · partial`;
+		return `◐ Partial · ${measurement.observedCharacters} observed recorded text characters — not tokens · ${measurement.reasons.join(", ")}`;
 	}
 
-	return `Unavailable · ${measurement.reasons.join(", ")}`;
+	return `? Unavailable · ${measurement.reasons.join(", ")}`;
+}
+
+function eventStateLabel(state: SessionHistoryEvent["state"]): string {
+	return {
+		invoked: "▶ Invoked",
+		delivered: "↓ Delivered",
+		recorded: "• Recorded",
+		failed: "✕ Failed",
+		partial: "◐ Partial",
+		unavailable: "? Unavailable",
+	}[state];
+}
+
+function detailContentHeading(detail: SessionHistoryDetail): string {
+	if (detail.state === "delivered") {
+		return "Observed delivery";
+	}
+
+	return detail.kind === "result" ? "Saved result content" : "Recorded content";
+}
+
+function reportEvidenceLabel(report: SessionHistoryReport): string {
+	if (report.boundary === "unknown") {
+		return "? Unavailable · boundary unknown";
+	}
+	if (report.evidence.state === "unavailable") {
+		return `? Unavailable · ${report.evidence.reasons.join(", ")}`;
+	}
+	if (report.evidence.state === "partial") {
+		return `◐ Partial · ${report.evidence.reasons.join(", ")}`;
+	}
+
+	return `✓ Complete · ${report.startingContext.length} recorded events`;
 }
 
 function locatorLabel(event: SessionHistoryEvent): string {
@@ -104,7 +138,7 @@ function sortedSources(
 	sort: SourceSort,
 ): readonly SessionHistorySource[] {
 	return sources.toSorted((left, right) => {
-		if (sort === "repeated") {
+		if (sort === "Most repeated") {
 			const repeats =
 				(right.observedDeliveryCount ?? -1) -
 				(left.observedDeliveryCount ?? -1);
@@ -176,12 +210,19 @@ function SourceList({
 						<small>{source.kind}</small>
 						<small>
 							{source.failedOccurrences} failed · {source.partialOccurrences}{" "}
-							partial · {source.unavailableOccurrences} unavailable
+							partial · {source.missingOccurrences} missing ·{" "}
+							{source.unavailableOccurrences} unavailable
+						</small>
+						<small>{measurementLabel(source.measurement)}</small>
+						<small>
+							{source.observedDeliveryCount === undefined
+								? "? Unavailable observed deliveries · boundary unknown"
+								: `${source.observedDeliveryCount} observed deliveries`}
 						</small>
 					</span>
 					<span className="rh-history__count">
 						{source.repeatDeliveryCount === undefined
-							? "?"
+							? "? Unavailable repeats"
 							: `${source.repeatDeliveryCount}×`}
 					</span>
 				</button>
@@ -325,14 +366,16 @@ function DetailPane({
 }: {
 	readonly detail: SessionHistoryDetail;
 }): React.JSX.Element {
+	const contentHeading = detailContentHeading(detail);
+
 	return (
 		<div className="rh-history__detail-body">
 			<header>
 				<code>{`${detail.locator.line}:${detail.locator.block}`}</code>
-				<span>{detail.state}</span>
+				<span>{eventStateLabel(detail.state)}</span>
 			</header>
 			<section>
-				<h3>Observed delivery</h3>
+				<h3>{contentHeading}</h3>
 				<p className="rh-history__measurement">
 					{measurementLabel(detail.deliveredMeasurement)}
 				</p>
@@ -365,7 +408,7 @@ function DetailPane({
 			</section>
 			{detail.applicationTruncated ? (
 				<p className="rh-history__notice">
-					Display capped at 65,536 UTF-8 bytes.
+					◐ Application-truncated · display capped at 65,536 UTF-8 bytes.
 				</p>
 			) : null}
 		</div>
@@ -380,7 +423,7 @@ export function SessionHistoryPage({
 	const path = summaryPath(identity);
 	const [sourceId, setSourceId] = useState<string>();
 	const [selectedEventId, setSelectedEventId] = useState<string>();
-	const [sourceSort, setSourceSort] = useState<SourceSort>("introduced");
+	const [sourceSort, setSourceSort] = useState<SourceSort>("Introduced");
 	const summary = useQuery({
 		queryKey: ["session-history", path],
 		queryFn: () => fetchSummary(identity),
@@ -389,7 +432,7 @@ export function SessionHistoryPage({
 		let all: readonly SessionHistoryEvent[] = [];
 		if (summary.data !== undefined) {
 			all =
-				summary.data.boundaryUnknown.length > 0
+				summary.data.boundary === "unknown"
 					? summary.data.boundaryUnknown
 					: summary.data.attemptEvents;
 		}
@@ -451,8 +494,7 @@ export function SessionHistoryPage({
 					>
 						<div>
 							<span>
-								{summary.data.boundaryUnknown.length > 0 ||
-								summary.data.evidence.state === "unavailable"
+								{summary.data.boundary === "unknown"
 									? "Boundary unknown"
 									: "Starting context"}
 							</span>
@@ -462,32 +504,16 @@ export function SessionHistoryPage({
 								</small>
 							))}
 						</div>
-						<strong>
-							{summary.data.evidence.state === "unavailable"
-								? `Unavailable · ${summary.data.evidence.reasons.join(", ")}`
-								: `${summary.data.startingContext.length > 0 ? summary.data.startingContext.length : summary.data.boundaryUnknown.length} recorded events`}
-						</strong>
+						<strong>{reportEvidenceLabel(summary.data)}</strong>
 					</section>
 					<div className="rh-history__toolbar">
 						<span>Sort sources</span>
-						<button
-							type="button"
-							aria-pressed={sourceSort === "introduced"}
-							onClick={() => {
-								setSourceSort("introduced");
-							}}
-						>
-							Introduced
-						</button>
-						<button
-							type="button"
-							aria-pressed={sourceSort === "repeated"}
-							onClick={() => {
-								setSourceSort("repeated");
-							}}
-						>
-							Most repeated
-						</button>
+						<Switcher
+							label="Sort sources"
+							options={["Introduced", "Most repeated"]}
+							selected={sourceSort}
+							onSelect={setSourceSort}
+						/>
 					</div>
 					{diagnostics.length === 0 ? null : (
 						<nav
@@ -514,13 +540,28 @@ export function SessionHistoryPage({
 							selected={sourceId}
 							sort={sourceSort}
 							onSelect={(source) => {
+								const allEvents =
+									summary.data.boundary === "unknown"
+										? summary.data.boundaryUnknown
+										: summary.data.attemptEvents;
+								const nextEvents =
+									source === undefined
+										? allEvents
+										: allEvents.filter(({ id }) =>
+												source.eventIds.includes(id),
+											);
 								setSourceId(source?.id);
-								setSelectedEventId(source?.eventIds[0]);
+								setSelectedEventId((current) =>
+									current !== undefined &&
+									nextEvents.some(({ id }) => id === current)
+										? current
+										: nextEvents[0]?.id,
+								);
 							}}
 						/>
 						<section className="rh-history__events" aria-label="Event ledger">
 							<h2>
-								{summary.data.boundaryUnknown.length > 0
+								{summary.data.boundary === "unknown"
 									? "Boundary-unknown events"
 									: "Attempt events"}
 							</h2>

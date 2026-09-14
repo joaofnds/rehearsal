@@ -1,5 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { dirname, relative } from "node:path";
+import { z, ZodError } from "zod";
 import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
@@ -11,7 +12,10 @@ import type {
 } from "#benchmark/comparison-record";
 import { confirmationGroupPaths } from "#benchmark/run-layout";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
-import { readRecordedEvidenceFile } from "./session-history-reader";
+import {
+	readRecordedEvidenceFile,
+	SessionHistoryReaderError,
+} from "./session-history-reader";
 
 export type ComparisonAttemptHistoryLink =
 	| {
@@ -53,11 +57,26 @@ function sha256(text: string): string {
 	return new Bun.CryptoHasher("sha256").update(text).digest("hex");
 }
 
+class StaleComparisonHistoryError extends Error {
+	public override name = "StaleComparisonHistoryError";
+}
+
 async function sameRealPath(
 	actual: string,
 	expected: string,
 ): Promise<boolean> {
-	return actual === (await realpath(expected).catch(() => undefined));
+	try {
+		return actual === (await realpath(expected));
+	} catch (error) {
+		const parsed = z.object({ code: z.string() }).loose().safeParse(error);
+		if (
+			parsed.success &&
+			(parsed.data.code === "ENOENT" || parsed.data.code === "ENOTDIR")
+		) {
+			return false;
+		}
+		throw error;
+	}
 }
 
 export async function comparisonAttemptHistoryLink(
@@ -81,7 +100,7 @@ export async function comparisonAttemptHistoryLink(
 			sha256(repSource.text) !== request.rep.sha256 ||
 			sha256(attemptSource.text) !== request.rep.attempt.sha256
 		) {
-			throw new Error("digest mismatch");
+			throw new StaleComparisonHistoryError("digest mismatch");
 		}
 
 		const group = parseConfirmationGroupRecord(groupSource.text);
@@ -112,7 +131,7 @@ export async function comparisonAttemptHistoryLink(
 			!(await sameRealPath(repSource.path, expectedRep.recordFile)) ||
 			!(await sameRealPath(attemptSource.path, expectedRep.attemptFile))
 		) {
-			throw new Error("identity mismatch");
+			throw new StaleComparisonHistoryError("identity mismatch");
 		}
 
 		return {
@@ -121,7 +140,14 @@ export async function comparisonAttemptHistoryLink(
 			ordinal: request.rep.ordinal,
 			href: `/groups/${group.groupId}/reps/${request.rep.repId}/attempt`,
 		};
-	} catch {
+	} catch (error) {
+		if (
+			!(error instanceof StaleComparisonHistoryError) &&
+			!(error instanceof SessionHistoryReaderError) &&
+			!(error instanceof ZodError)
+		) {
+			throw error;
+		}
 		return {
 			status: "stale",
 			repId: request.rep.repId,

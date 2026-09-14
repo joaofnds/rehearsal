@@ -94,18 +94,11 @@
 	font-size: var(--font-size-11);
 }
 
-.rh-history__toolbar button {
-	padding: var(--space-4) var(--space-8);
-	border: var(--border-width-hairline) solid var(--color-border-2);
-	border-radius: var(--radius-pill);
-	background: transparent;
-	color: var(--color-text-muted);
-}
-
-.rh-history__toolbar button[aria-pressed="true"] {
-	border-color: var(--color-accent-border);
-	background: var(--color-accent-tint-14);
-	color: var(--color-accent-pale);
+.rh-history__toolbar .rh-switcher__option,
+.rh-history__diagnostics button,
+.rh-history__source,
+.rh-history__event {
+	min-block-size: calc(var(--space-22) + var(--space-22));
 }
 
 .rh-history__diagnostics {

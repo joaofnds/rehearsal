@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import {
 	sessionConfirmationGroupRecordSchema,
 	sessionConfirmationRepRecordSchema,
@@ -112,8 +112,9 @@ describe(comparisonAttemptHistoryLink.name, () => {
 			repPaths.transcriptFile,
 			`${JSON.stringify({ type: "assistant", message: { content: "saved" } })}\n`,
 		);
+		const manifestDirectory = join(root, "manifests", "nested");
 		const recorded = (path: string): string =>
-			relative(dirname(runsDirectory), path);
+			relative(manifestDirectory, path);
 		const request = {
 			runsDirectory,
 			caseId: "case-a",
@@ -141,11 +142,72 @@ describe(comparisonAttemptHistoryLink.name, () => {
 			corpusSource: directorySource(root),
 		}).request("/api/groups/group-a/reps/group-a-rep-1/attempt/history");
 		expect(response.status).toBe(200);
-		await Bun.write(repPaths.attemptFile, `${attemptText}\n`);
-		expect(await comparisonAttemptHistoryLink(request)).toEqual({
+		const stale = {
 			status: "stale",
 			repId: "group-a-rep-1",
 			ordinal: 1,
-		});
+		} as const;
+		expect(
+			await comparisonAttemptHistoryLink({
+				...request,
+				group: { ...request.group, sha256: "0".repeat(64) },
+			}),
+		).toEqual(stale);
+		expect(
+			await comparisonAttemptHistoryLink({
+				...request,
+				rep: { ...request.rep, sha256: "0".repeat(64) },
+			}),
+		).toEqual(stale);
+		expect(
+			await comparisonAttemptHistoryLink({
+				...request,
+				rep: {
+					...request.rep,
+					attempt: { ...request.rep.attempt, sha256: "0".repeat(64) },
+				},
+			}),
+		).toEqual(stale);
+
+		const wrongGroupFile = confirmationGroupPaths(
+			runsDirectory,
+			"group-b",
+		).groupFile;
+		await Bun.write(wrongGroupFile, groupText);
+		expect(
+			await comparisonAttemptHistoryLink({
+				...request,
+				group: { ...request.group, path: recorded(wrongGroupFile) },
+			}),
+		).toEqual(stale);
+
+		const groupRecord = sessionConfirmationGroupRecordSchema.parse(
+			JSON.parse(groupText),
+		);
+		const unownedGroupText = `${JSON.stringify({
+			...groupRecord,
+			repRecords: Array.from(groupRecord.repRecords, (reference) =>
+				reference.repId === "group-a-rep-1"
+					? { ...reference, path: "reps/other/rep.json" }
+					: reference,
+			),
+		})}\n`;
+		await Bun.write(paths.groupFile, unownedGroupText);
+		expect(
+			await comparisonAttemptHistoryLink({
+				...request,
+				group: { ...request.group, sha256: digest(unownedGroupText) },
+			}),
+		).toEqual(stale);
+		await Bun.write(paths.groupFile, groupText);
+
+		await Bun.write(paths.groupFile, `${groupText}\n`);
+		expect(await comparisonAttemptHistoryLink(request)).toEqual(stale);
+		await Bun.write(paths.groupFile, groupText);
+		await Bun.write(repPaths.recordFile, `${repText}\n`);
+		expect(await comparisonAttemptHistoryLink(request)).toEqual(stale);
+		await Bun.write(repPaths.recordFile, repText);
+		await Bun.write(repPaths.attemptFile, `${attemptText}\n`);
+		expect(await comparisonAttemptHistoryLink(request)).toEqual(stale);
 	});
 });

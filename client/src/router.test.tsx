@@ -50,6 +50,7 @@ function emptyHistory(caseId: string, id: string): SessionHistoryReport {
 			corpusFiles: [],
 		},
 		evidence: { state: "complete" },
+		boundary: "known",
 		startingContext: [],
 		attemptEvents: [],
 		boundaryUnknown: [],
@@ -120,8 +121,10 @@ describe(createAppRouter.name, () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("Saved context history")).toBeInTheDocument();
+			expect(screen.getByText("case-a")).toBeInTheDocument();
+			expect(screen.getByText("attempt-a")).toBeInTheDocument();
 		});
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 	});
 
 	it("renders confirmation rep saved session history", async () => {
@@ -136,7 +139,9 @@ describe(createAppRouter.name, () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("Saved context history")).toBeInTheDocument();
+			expect(screen.getByText("case-a")).toBeInTheDocument();
+			expect(screen.getByText("group-a-rep-1")).toBeInTheDocument();
 		});
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 	});
 });

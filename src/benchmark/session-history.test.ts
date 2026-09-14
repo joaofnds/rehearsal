@@ -93,7 +93,10 @@ describe(sessionHistoryReport.name, () => {
 		});
 
 		expect(report.evidence).toEqual({ state: "complete" });
+		expect(report.boundary).toBe("known");
 		expect(report.startingContext.map(({ id }) => id)).toEqual(["1:1", "2:1"]);
+		expect(report.startingContext.at(1)?.deliveryOrdinal).toBe(1);
+		expect(report.startingContext.at(1)?.label).toBe("Read delivered · first");
 		expect(
 			report.attemptEvents.map(({ id, state }) => ({ id, state })),
 		).toEqual([
@@ -101,6 +104,14 @@ describe(sessionHistoryReport.name, () => {
 			{ id: "4:1", state: "delivered" },
 			{ id: "5:1", state: "invoked" },
 			{ id: "6:1", state: "delivered" },
+		]);
+		expect(
+			report.attemptEvents
+				.filter(({ state }) => state === "delivered")
+				.map(({ deliveryOrdinal, label }) => ({ deliveryOrdinal, label })),
+		).toEqual([
+			{ deliveryOrdinal: 1, label: "Read delivered · first" },
+			{ deliveryOrdinal: 2, label: "Read delivered · subsequent" },
 		]);
 		expect(report.sources).toEqual([
 			expect.objectContaining({
@@ -111,6 +122,7 @@ describe(sessionHistoryReport.name, () => {
 				repeatDeliveryCount: 1,
 				failedOccurrences: 0,
 				partialOccurrences: 0,
+				missingOccurrences: 0,
 				unavailableOccurrences: 0,
 			}),
 		]);
@@ -138,9 +150,12 @@ describe(sessionHistoryReport.name, () => {
 			state: "partial",
 			reasons: ["attempt boundary unavailable"],
 		});
+		expect(report.boundary).toBe("unknown");
 		expect(report.startingContext).toEqual([]);
 		expect(report.attemptEvents).toEqual([]);
 		expect(report.boundaryUnknown.map(({ id }) => id)).toEqual(["1:1", "2:1"]);
+		expect(report.boundaryUnknown.at(1)?.label).toBe("Read delivered");
+		expect(report.boundaryUnknown[1]?.deliveryOrdinal).toBeUndefined();
 		expect(report.sources).toEqual([
 			expect.objectContaining({
 				region: "boundary-unknown",
@@ -149,6 +164,112 @@ describe(sessionHistoryReport.name, () => {
 				repeatDeliveryCount: undefined,
 			}),
 		]);
+	});
+
+	it("keeps duplicate result IDs as separate partial evidence", () => {
+		const transcript = [
+			row(call("read-1", "Read", { file_path: "/work/notes.md" })),
+			row(result("read-1", "first body")),
+			row(result("read-1", "second body")),
+		].join("\n");
+
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [],
+			},
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(
+			report.attemptEvents.map(({ id, state }) => ({ id, state })),
+		).toEqual([
+			{ id: "1:1", state: "invoked" },
+			{ id: "2:1", state: "partial" },
+			{ id: "3:1", state: "partial" },
+		]);
+		expect(report.evidence).toEqual({
+			state: "partial",
+			reasons: [
+				"ambiguous tool result read-1 at 2:1",
+				"ambiguous tool result read-1 at 3:1",
+			],
+		});
+		expect(report.sources).toEqual([
+			expect.objectContaining({
+				observedDeliveryCount: 0,
+				partialOccurrences: 2,
+				missingOccurrences: 0,
+				unavailableOccurrences: 0,
+			}),
+		]);
+	});
+
+	it("retains no-content historical rows as unsupported locator evidence", () => {
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [],
+			},
+			transcript: [
+				row({ type: "system" }),
+				row({ message: { content: [] } }),
+			].join("\n"),
+			prefixLinesExcluded: undefined,
+		});
+
+		expect(report.boundaryUnknown).toEqual([
+			expect.objectContaining({ id: "1:1", state: "recorded" }),
+			expect.objectContaining({ id: "2:1", state: "recorded" }),
+		]);
+		expect(report.evidence).toEqual({
+			state: "partial",
+			reasons: [
+				"unsupported content at 1:1",
+				"unsupported content at 2:1",
+				"attempt boundary unavailable",
+			],
+		});
+	});
+
+	it("makes unsupported result content partial at report level", () => {
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [],
+			},
+			transcript: [
+				row(call("bash-1", "Bash", { command: "pwd" })),
+				row({
+					message: {
+						content: [
+							{
+								type: "tool_result",
+								tool_use_id: "bash-1",
+								content: { unsupported: true },
+							},
+						],
+					},
+				}),
+			].join("\n"),
+			prefixLinesExcluded: 0,
+		});
+
+		expect(report.attemptEvents.at(1)?.state).toBe("unavailable");
+		expect(report.evidence).toEqual({
+			state: "partial",
+			reasons: ["unsupported text body at 2:1"],
+		});
 	});
 
 	it("keeps a post-cut result separate from its inherited call", () => {
@@ -183,6 +304,65 @@ describe(sessionHistoryReport.name, () => {
 				measurement: { state: "complete", characters: 21 },
 				observedDeliveryCount: 0,
 			}),
+		]);
+	});
+
+	it("matches a relative Read against its exact recorded corpus path", () => {
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [{ path: "shared.md", resolvedPath: "/work/shared.md" }],
+			},
+			transcript: [
+				row(call("read-1", "Read", { file_path: "shared.md" })),
+				row(result("read-1", "corpus body")),
+			].join("\n"),
+			prefixLinesExcluded: 0,
+		});
+
+		expect(report.sources).toEqual([
+			expect.objectContaining({
+				kind: "corpus",
+				name: "shared.md",
+				path: "shared.md",
+			}),
+		]);
+	});
+
+	it("classifies saved corpus, project, external, tool, and escaping sources", () => {
+		const transcript = [
+			row(call("corpus", "Read", { file_path: "/work/.claude/rules.md" })),
+			row(result("corpus", "corpus")),
+			row(call("project", "Read", { file_path: "/work/project.md" })),
+			row(result("project", "project")),
+			row(call("external", "Read", { file_path: "/outside.md" })),
+			row(result("external", "external")),
+			row(call("escape", "Read", { file_path: "../escape.md" })),
+			row(result("escape", "escape")),
+			row(call("bash", "Bash", { command: "pwd" })),
+			row(result("bash", "output")),
+		].join("\n");
+		const report = sessionHistoryReport({
+			attempt: {
+				caseId: "case-a",
+				id: "attempt-a",
+				model: "sonnet",
+				outcome: "SUCCESSFUL",
+				corpusFiles: [],
+			},
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(report.sources.map(({ kind }) => kind)).toEqual([
+			"corpus",
+			"project",
+			"external",
+			"unclassified",
+			"tool-output",
 		]);
 	});
 
@@ -230,6 +410,17 @@ describe(sessionHistoryReport.name, () => {
 			{ kind: "skill", name: "skills/verify/SKILL.md" },
 			{ kind: "skill", name: "skills/build/SKILL.md" },
 			{ kind: "tool-output", name: "Skill result · 5:1" },
+		]);
+		expect(
+			report.sources
+				.filter(({ name }) => name === "missing.md" || name.includes("verify"))
+				.map(({ missingOccurrences, unavailableOccurrences }) => ({
+					missingOccurrences,
+					unavailableOccurrences,
+				})),
+		).toEqual([
+			{ missingOccurrences: 1, unavailableOccurrences: 0 },
+			{ missingOccurrences: 1, unavailableOccurrences: 0 },
 		]);
 	});
 });

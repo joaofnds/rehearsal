@@ -1,8 +1,9 @@
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 import type { Immutable } from "./contracts";
 import { jsonValueSchema } from "./json-value";
 import type { JsonValue } from "./json-value";
+import { pathIsWithin } from "./path-containment";
 import type { TranscriptDiagnostics, TranscriptLocation } from "./transcript";
 
 export const MAX_EVENT_DETAIL_BYTES = 65_536;
@@ -70,6 +71,7 @@ export interface SessionHistorySource {
 	readonly repeatDeliveryCount: number | undefined;
 	readonly failedOccurrences: number;
 	readonly partialOccurrences: number;
+	readonly missingOccurrences: number;
 	readonly unavailableOccurrences: number;
 	readonly eventIds: readonly string[];
 }
@@ -92,10 +94,16 @@ export interface SessionHistoryReportInput {
 	readonly diagnostics?: Immutable<TranscriptDiagnostics> | undefined;
 }
 
+export type SessionHistoryReportMetadata = Omit<
+	SessionHistoryReportInput,
+	"transcript"
+>;
+
 export interface SessionHistoryReport {
 	readonly schemaVersion: 1;
 	readonly attempt: SessionHistoryAttemptIdentity;
 	readonly evidence: HistoryEvidence;
+	readonly boundary: "known" | "unknown";
 	readonly startingContext: readonly SessionHistoryEvent[];
 	readonly attemptEvents: readonly SessionHistoryEvent[];
 	readonly boundaryUnknown: readonly SessionHistoryEvent[];
@@ -188,43 +196,41 @@ const historyTextBlockSchema = z.looseObject({
 	text: z.string(),
 });
 
+function parsedRow(text: string, line: number): ParsedRow | undefined {
+	if (text.trim() === "") {
+		return undefined;
+	}
+
+	let value: HistoryRecord | undefined;
+	try {
+		const parsed = historyRecordSchema.safeParse(JSON.parse(text));
+		value = parsed.success ? parsed.data : undefined;
+	} catch {
+		value = undefined;
+	}
+	const content = value?.message?.content;
+	let blocks: readonly JsonValue[] = [];
+	const list = z.array(jsonValueSchema).safeParse(content);
+	if (list.success) {
+		blocks = list.data.length === 0 ? [null] : list.data;
+	} else {
+		const string = z.string().safeParse(content);
+		blocks = string.success ? [string.data] : [null];
+	}
+
+	return {
+		line,
+		timestamp: value?.timestamp,
+		cwd: value?.cwd,
+		value,
+		blocks,
+	};
+}
+
 function parsedRows(transcript: string): readonly ParsedRow[] {
-	return transcript.split("\n").flatMap((text, index) => {
-		if (text.trim() === "") {
-			return [];
-		}
-
-		let value: HistoryRecord | undefined;
-		try {
-			const parsed = historyRecordSchema.safeParse(JSON.parse(text));
-			value = parsed.success ? parsed.data : undefined;
-		} catch {
-			value = undefined;
-		}
-		const content = value?.message?.content;
-		let blocks: readonly JsonValue[] = [];
-		const list = z.array(jsonValueSchema).safeParse(content);
-		if (list.success) {
-			blocks = list.data;
-		} else {
-			const string = z.string().safeParse(content);
-			if (string.success) {
-				blocks = [string.data];
-			} else if (value === undefined) {
-				blocks = [null];
-			}
-		}
-
-		return [
-			{
-				line: index + 1,
-				timestamp: value?.timestamp,
-				cwd: value?.cwd,
-				value,
-				blocks,
-			},
-		];
-	});
+	return transcript
+		.split("\n")
+		.flatMap((text, index) => parsedRow(text, index + 1) ?? []);
 }
 
 function regionFor(
@@ -307,14 +313,6 @@ function measureContent(value: JsonValue | undefined): MeasuredContent {
 	};
 }
 
-function isContained(path: string, root: string): boolean {
-	const fromRoot = relative(root, path);
-
-	return (
-		fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..")
-	);
-}
-
 function sourceForCall(
 	toolName: string,
 	input: Readonly<HistoryBlockInput>,
@@ -350,8 +348,17 @@ function sourceForCall(
 			name: "Unclassified recorded content",
 		};
 	}
+	const normalizedCwd = cwd === undefined ? undefined : resolve(cwd);
+	let normalizedObserved: string | undefined;
+	if (isAbsolute(observed)) {
+		normalizedObserved = resolve(observed);
+	} else if (normalizedCwd !== undefined) {
+		normalizedObserved = resolve(normalizedCwd, observed);
+	}
 	const exactCorpus = corpusFiles.find(
-		({ resolvedPath }) => resolve(resolvedPath) === resolve(observed),
+		({ resolvedPath }) =>
+			normalizedObserved !== undefined &&
+			resolve(resolvedPath) === normalizedObserved,
 	);
 	if (exactCorpus !== undefined) {
 		return {
@@ -376,23 +383,23 @@ function sourceForCall(
 				};
 	}
 
-	const normalizedCwd = resolve(cwd);
-	const normalized = resolve(normalizedCwd, observed);
-	if (!isAbsolute(observed) && !isContained(normalized, normalizedCwd)) {
+	const savedCwd = resolve(cwd);
+	const normalized = normalizedObserved ?? resolve(savedCwd, observed);
+	if (!isAbsolute(observed) && !pathIsWithin(normalized, savedCwd)) {
 		return {
 			id: `unclassified:${locatorId(location)}`,
 			kind: "unclassified",
 			name: "Unclassified recorded content",
 		};
 	}
-	const corpusRoot = resolve(normalizedCwd, ".claude");
-	if (isContained(normalized, corpusRoot)) {
+	const corpusRoot = resolve(savedCwd, ".claude");
+	if (pathIsWithin(normalized, corpusRoot)) {
 		const path = relative(corpusRoot, normalized) || basename(normalized);
 
 		return { id: `corpus:${path}`, kind: "corpus", name: path, path };
 	}
-	if (isContained(normalized, normalizedCwd)) {
-		const path = relative(normalizedCwd, normalized) || basename(normalized);
+	if (pathIsWithin(normalized, savedCwd)) {
+		const path = relative(savedCwd, normalized) || basename(normalized);
 
 		return { id: `project:${path}`, kind: "project", name: path, path };
 	}
@@ -475,102 +482,114 @@ function baseEvent(
 	};
 }
 
-function parseEvents(
+function parseRowEvents(
 	input: Immutable<SessionHistoryReportInput>,
+	row: Immutable<ParsedRow>,
+	retainBodies: boolean,
 ): ProjectionState {
 	const events: MutableEvent[] = [];
 	const issues: string[] = [];
-	if (input.transcript === undefined) {
-		return { events, issues };
-	}
-
-	for (const row of parsedRows(input.transcript)) {
-		const region = regionFor(row.line, input.prefixLinesExcluded);
-		for (const [index, value] of row.blocks.entries()) {
-			const location = { line: row.line, block: index + 1 };
-			const common = baseEvent(row, index + 1, region);
-			const call = historyToolCallSchema.safeParse(value);
-			if (call.success) {
-				const { name: toolName, input: inputRecord } = call.data;
-				const source = sourceForCall(
-					toolName,
-					inputRecord,
-					row.cwd,
-					location,
-					input.attempt.corpusFiles,
-				);
-				events.push({
-					...common,
-					kind: "call",
-					state: "invoked",
-					label: `${toolName} invoked`,
-					toolUseId: call.data.id,
-					toolName,
-					sourceId: source.id,
-					measurement: { state: "complete", characters: 0 },
-					source,
-					isDelivery: false,
-					input: inputRecord,
-				});
-				continue;
-			}
-			const result = historyToolResultSchema.safeParse(value);
-			if (result.success) {
-				const measured = measureContent(result.data.content);
-				const snapshot = snapshotFor(row);
-				events.push({
-					...common,
-					kind: "result",
-					state: result.data.is_error === true ? "failed" : "recorded",
-					label:
-						result.data.is_error === true
-							? "Tool result · failed"
-							: "Tool result",
-					toolUseId: result.data.tool_use_id,
-					measurement: measured.measurement,
-					content: measured.text,
-					snapshot: snapshot.text,
-					snapshotMeasurement: snapshot.measurement,
-					snapshotRange: snapshot.range,
-					source: undefined,
-					isDelivery: false,
-				});
-				continue;
-			}
-
-			const text = historyTextBlockSchema.safeParse(value);
-			const measured = measureContent(text.success ? text.data.text : value);
-			const companionId = row.value?.sourceToolUseID;
+	const region = regionFor(row.line, input.prefixLinesExcluded);
+	for (const [index, value] of row.blocks.entries()) {
+		const location = { line: row.line, block: index + 1 };
+		const common = baseEvent(row, index + 1, region);
+		const call = historyToolCallSchema.safeParse(value);
+		if (call.success) {
+			const { name: toolName, input: inputRecord } = call.data;
+			const source = sourceForCall(
+				toolName,
+				inputRecord,
+				row.cwd,
+				location,
+				input.attempt.corpusFiles,
+			);
 			events.push({
 				...common,
-				kind:
-					companionId === undefined ? "unclassified" : "instruction-delivery",
-				state: companionId === undefined ? "recorded" : "partial",
+				kind: "call",
+				state: "invoked",
+				label: `${toolName} invoked`,
+				toolUseId: call.data.id,
+				toolName,
+				sourceId: source.id,
+				measurement: { state: "complete", characters: 0 },
+				source,
+				isDelivery: false,
+				input: inputRecord,
+			});
+			continue;
+		}
+		const result = historyToolResultSchema.safeParse(value);
+		if (result.success) {
+			const measured = measureContent(result.data.content);
+			const snapshot = snapshotFor(row);
+			events.push({
+				...common,
+				kind: "result",
+				state: result.data.is_error === true ? "failed" : "recorded",
 				label:
-					companionId === undefined
-						? "Unclassified recorded content"
-						: "Skill delivery · partial",
-				toolUseId: companionId,
+					result.data.is_error === true
+						? "Tool result · failed"
+						: "Tool result",
+				toolUseId: result.data.tool_use_id,
 				measurement: measured.measurement,
-				content: measured.text,
-				source:
-					companionId === undefined
-						? {
-								id: "unclassified",
-								kind: "unclassified",
-								name: "Unclassified recorded content",
-							}
-						: undefined,
-				sourceId: companionId === undefined ? "unclassified" : undefined,
+				content: retainBodies ? measured.text : undefined,
+				snapshot: retainBodies ? snapshot.text : undefined,
+				snapshotMeasurement: snapshot.measurement,
+				snapshotRange: snapshot.range,
+				source: undefined,
 				isDelivery: false,
 			});
-			if (measured.measurement.state !== "complete") {
-				issues.push(`unsupported content at ${common.id}`);
-			}
+			continue;
+		}
+
+		const text = historyTextBlockSchema.safeParse(value);
+		const measured = measureContent(text.success ? text.data.text : value);
+		const companionId = row.value?.sourceToolUseID;
+		events.push({
+			...common,
+			kind: companionId === undefined ? "unclassified" : "instruction-delivery",
+			state: companionId === undefined ? "recorded" : "partial",
+			label:
+				companionId === undefined
+					? "Unclassified recorded content"
+					: "Skill delivery · partial",
+			toolUseId: companionId,
+			measurement: measured.measurement,
+			content: retainBodies ? measured.text : undefined,
+			source:
+				companionId === undefined
+					? {
+							id: "unclassified",
+							kind: "unclassified",
+							name: "Unclassified recorded content",
+						}
+					: undefined,
+			sourceId: companionId === undefined ? "unclassified" : undefined,
+			isDelivery: false,
+		});
+		if (measured.measurement.state !== "complete") {
+			issues.push(`unsupported content at ${common.id}`);
 		}
 	}
 
 	return { events, issues };
+}
+
+function parseEvents(
+	input: Immutable<SessionHistoryReportInput>,
+	retainBodies = true,
+): ProjectionState {
+	if (input.transcript === undefined) {
+		return { events: [], issues: [] };
+	}
+	const states = parsedRows(input.transcript).map((row) =>
+		parseRowEvents(input, row, retainBodies),
+	);
+
+	return {
+		events: states.flatMap(({ events }) => events),
+		issues: states.flatMap(({ issues }) => issues),
+	};
 }
 
 interface JoinIndices {
@@ -706,6 +725,7 @@ function joinResult(
 	resultMatches: Immutable<readonly MutableEvent[]>,
 ): JoinedEvent {
 	const source = sourceForResult(call);
+	const ambiguous = resultMatches.length !== 1;
 	if (event.state === "failed") {
 		return {
 			event: {
@@ -716,16 +736,22 @@ function joinResult(
 				sourceId: source?.id,
 				relatedEventIds: [call.id],
 			},
-			issues: [],
+			issues: ambiguous
+				? [
+						`ambiguous tool result ${event.toolUseId ?? "without ID"} at ${event.id}`,
+					]
+				: [],
 		};
 	}
 	const delivered =
 		call.toolName === "Read" &&
-		resultMatches.length === 1 &&
+		!ambiguous &&
 		event.measurement.state !== "unavailable";
 	const unavailable = event.measurement.state === "unavailable";
 	let resultState: HistoryEventState = "recorded";
-	if (delivered) {
+	if (ambiguous) {
+		resultState = "partial";
+	} else if (delivered) {
 		resultState = "delivered";
 	} else if (unavailable) {
 		resultState = "unavailable";
@@ -735,15 +761,35 @@ function joinResult(
 		event: {
 			...event,
 			state: resultState,
-			label: delivered ? "Read delivered" : `${call.toolName ?? "Tool"} result`,
+			label: delivered
+				? "Read delivered"
+				: `${call.toolName ?? "Tool"} result${ambiguous ? " · partial" : ""}`,
 			toolName: call.toolName,
 			source,
 			sourceId: source?.id,
 			isDelivery: delivered,
 			relatedEventIds: [call.id],
 		},
-		issues: [],
+		issues: ambiguous
+			? [
+					`ambiguous tool result ${event.toolUseId ?? "without ID"} at ${event.id}`,
+				]
+			: [],
 	};
+}
+
+function expectedDeliveryEvents(
+	call: Immutable<MutableEvent>,
+	events: Immutable<readonly MutableEvent[]>,
+): readonly MutableEvent[] {
+	const expectedKind =
+		call.toolName === "Read" ? "result" : "instruction-delivery";
+
+	return events.filter(
+		(candidate) =>
+			candidate.kind === expectedKind &&
+			call.relatedEventIds.includes(candidate.id),
+	);
 }
 
 function joinNonCall(
@@ -782,14 +828,14 @@ function missingDeliveryIssues(
 		if (event.kind !== "call" || !expectsDelivery || key === undefined) {
 			return [];
 		}
-		const candidates = events.filter(
+		const candidates = expectedDeliveryEvents(event, events);
+		const failed = events.some(
 			(candidate) =>
-				event.relatedEventIds.includes(candidate.id) && candidate.isDelivery,
+				event.relatedEventIds.includes(candidate.id) &&
+				candidate.state === "failed",
 		);
 
-		return candidates.some(
-			({ state: candidateState }) => candidateState === "delivered",
-		)
+		return candidates.length > 0 || failed
 			? []
 			: [`missing delivery for ${event.id}`];
 	});
@@ -809,7 +855,7 @@ function markUnavailableDeliveries(
 			event.relatedEventIds.includes(candidate.id),
 		);
 		if (
-			related.some(({ isDelivery }) => isDelivery) ||
+			expectedDeliveryEvents(event, events).length > 0 ||
 			related.some(({ state }) => state === "failed")
 		) {
 			return event;
@@ -829,11 +875,16 @@ function numberDeliveries(
 	const ordinals = new Map<string, number>();
 
 	return events.map((event) => {
-		if (!event.isDelivery || event.sourceId === undefined) {
+		if (
+			!event.isDelivery ||
+			event.sourceId === undefined ||
+			event.region === "boundary-unknown"
+		) {
 			return event;
 		}
-		const next = (ordinals.get(event.sourceId) ?? 0) + 1;
-		ordinals.set(event.sourceId, next);
+		const key = `${event.region}:${event.sourceId}`;
+		const next = (ordinals.get(key) ?? 0) + 1;
+		ordinals.set(key, next);
 
 		return {
 			...event,
@@ -867,6 +918,13 @@ function joinEvents(state: Immutable<ProjectionState>): ProjectionState {
 			...state.issues,
 			...joined.flatMap(({ issues }) => issues),
 			...missingDeliveryIssues(events),
+			...events.flatMap((event) =>
+				event.kind !== "result" || event.measurement.state === "complete"
+					? []
+					: event.measurement.reasons.map(
+							(reason) => `${reason} at ${event.id}`,
+						),
+			),
 		],
 	};
 }
@@ -946,10 +1004,11 @@ function sourcesFor(
 			(event) =>
 				event.kind === "call" &&
 				(event.toolName === "Read" || event.toolName === "Skill") &&
+				expectedDeliveryEvents(event, sourceEvents).length === 0 &&
 				!sourceEvents.some(
 					(candidate) =>
-						candidate.isDelivery &&
-						candidate.relatedEventIds.includes(event.id),
+						event.relatedEventIds.includes(candidate.id) &&
+						candidate.state === "failed",
 				),
 		).length;
 		const countsAvailable = region !== "boundary-unknown";
@@ -973,9 +1032,10 @@ function sourcesFor(
 			partialOccurrences: sourceEvents.filter(
 				({ state }) => state === "partial",
 			).length,
-			unavailableOccurrences:
-				sourceEvents.filter(({ state }) => state === "unavailable").length +
-				missingDeliveries,
+			missingOccurrences: missingDeliveries,
+			unavailableOccurrences: sourceEvents.filter(
+				({ kind, state }) => kind !== "call" && state === "unavailable",
+			).length,
 			eventIds: sourceEvents.map(({ id: eventId }) => eventId),
 		};
 	});
@@ -996,24 +1056,28 @@ function publicEvent(event: Immutable<MutableEvent>): SessionHistoryEvent {
 	return publicFields;
 }
 
-export function sessionHistoryReport(
-	input: Immutable<SessionHistoryReportInput>,
+function missingTranscriptReport(
+	input: Immutable<SessionHistoryReportMetadata>,
 ): SessionHistoryReport {
-	if (input.transcript === undefined) {
-		return {
-			schemaVersion: 1,
-			attempt: input.attempt,
-			evidence: { state: "unavailable", reasons: ["transcript unavailable"] },
-			startingContext: [],
-			attemptEvents: [],
-			boundaryUnknown: [],
-			startingSources: [],
-			sources: [],
-			diagnostics: input.diagnostics,
-		};
-	}
+	return {
+		schemaVersion: 1,
+		attempt: input.attempt,
+		evidence: { state: "unavailable", reasons: ["transcript unavailable"] },
+		boundary: input.prefixLinesExcluded === undefined ? "unknown" : "known",
+		startingContext: [],
+		attemptEvents: [],
+		boundaryUnknown: [],
+		startingSources: [],
+		sources: [],
+		diagnostics: input.diagnostics,
+	};
+}
 
-	let state = joinEvents(parseEvents(input));
+function reportFromProjection(
+	input: Immutable<SessionHistoryReportMetadata>,
+	projection: Immutable<ProjectionState>,
+): SessionHistoryReport {
+	let state = joinEvents(projection);
 	if (state.events.length === 0) {
 		state = { ...state, issues: [...state.issues, "empty transcript"] };
 	}
@@ -1040,6 +1104,7 @@ export function sessionHistoryReport(
 			state.issues.length === 0
 				? { state: "complete" }
 				: { state: "partial", reasons: [...new Set(state.issues)] },
+		boundary: input.prefixLinesExcluded === undefined ? "unknown" : "known",
 		startingContext: state.events
 			.filter(({ region }) => region === "starting-context")
 			.map((event) => publicEvent(event)),
@@ -1058,10 +1123,41 @@ export function sessionHistoryReport(
 	};
 }
 
+export function sessionHistoryReport(
+	input: Immutable<SessionHistoryReportInput>,
+): SessionHistoryReport {
+	return input.transcript === undefined
+		? missingTranscriptReport(input)
+		: reportFromProjection(input, parseEvents(input, false));
+}
+
+export async function sessionHistoryReportFromLines(
+	input: Immutable<SessionHistoryReportMetadata>,
+	lines: AsyncIterable<string>,
+): Promise<SessionHistoryReport> {
+	const events: MutableEvent[] = [];
+	const issues: string[] = [];
+	let lineNumber = 0;
+	const rowInput = { ...input, transcript: "" };
+	for await (const text of lines) {
+		lineNumber += 1;
+		const row = parsedRow(text, lineNumber);
+		if (row === undefined) {
+			continue;
+		}
+		const state = parseRowEvents(rowInput, row, false);
+		events.push(...state.events);
+		issues.push(...state.issues);
+	}
+
+	return reportFromProjection(input, { events, issues });
+}
+
 export interface SessionHistoryDetail {
 	readonly schemaVersion: 1;
 	readonly eventId: string;
 	readonly locator: TranscriptLocation;
+	readonly kind: HistoryEventKind;
 	readonly state: HistoryEventState;
 	readonly deliveredText?: string | undefined;
 	readonly sourceSnapshot?: string | undefined;
@@ -1163,6 +1259,7 @@ export function sessionHistoryDetail(
 		schemaVersion: 1,
 		eventId: event.id,
 		locator: event.locator,
+		kind: event.kind,
 		state: event.state,
 		deliveredText: excerpts.deliveredText,
 		sourceSnapshot: excerpts.sourceSnapshot,
@@ -1170,6 +1267,61 @@ export function sessionHistoryDetail(
 		snapshotMeasurement:
 			event.snapshotMeasurement ?? measureContent(event.snapshot).measurement,
 		sourceSnapshotRange: event.snapshotRange,
+		applicationTruncated: excerpts.truncated,
+		relatedEventIds: event.relatedEventIds,
+	};
+}
+
+export function sessionHistoryDetailFromLine(
+	report: Immutable<SessionHistoryReport>,
+	eventId: string,
+	lineText: string,
+): SessionHistoryDetail | undefined {
+	const event = [
+		...report.startingContext,
+		...report.attemptEvents,
+		...report.boundaryUnknown,
+	].find(({ id }) => id === eventId);
+	if (event === undefined) {
+		return undefined;
+	}
+	const row = parsedRow(lineText, event.locator.line);
+	if (row === undefined) {
+		return undefined;
+	}
+	let prefixLinesExcluded: number | undefined;
+	if (event.region === "starting-context") {
+		prefixLinesExcluded = event.locator.line;
+	} else if (event.region === "attempt") {
+		prefixLinesExcluded = 0;
+	}
+	const raw = parseRowEvents(
+		{
+			attempt: report.attempt,
+			transcript: "",
+			prefixLinesExcluded,
+			diagnostics: report.diagnostics,
+		},
+		row,
+		true,
+	).events.find(({ id }) => id === eventId);
+	if (raw === undefined) {
+		return undefined;
+	}
+	const excerpts = allocateDetailBodies(raw.content, raw.snapshot);
+
+	return {
+		schemaVersion: 1,
+		eventId: event.id,
+		locator: event.locator,
+		kind: event.kind,
+		state: event.state,
+		deliveredText: excerpts.deliveredText,
+		sourceSnapshot: excerpts.sourceSnapshot,
+		deliveredMeasurement: raw.measurement,
+		snapshotMeasurement:
+			raw.snapshotMeasurement ?? measureContent(raw.snapshot).measurement,
+		sourceSnapshotRange: raw.snapshotRange,
 		applicationTruncated: excerpts.truncated,
 		relatedEventIds: event.relatedEventIds,
 	};
