@@ -255,7 +255,15 @@ export const sessionAttemptRecordV3Schema = z
 	.strict()
 	.superRefine(refineSessionAttemptRecord);
 
-export const currentSessionAttemptRecordSchema = sessionAttemptRecordV3Schema;
+/**
+ * The shapes a writer may produce today. Reads accept every historical shape;
+ * writes are held to the current contract so a regression in the builder
+ * cannot silently emit a legacy record.
+ */
+const writableSessionAttemptRecordSchema = z.union([
+	executionFailedSessionAttemptRecordSchema,
+	sessionAttemptRecordV3Schema,
+]);
 
 export const sessionAttemptRecordSchema = z.union([
 	legacyUntaggedSessionAttemptRecordSchema,
@@ -366,5 +374,5 @@ export function buildSessionAttemptRecord(
 		]);
 	}
 
-	return sessionAttemptRecordSchema.parse(record);
+	return writableSessionAttemptRecordSchema.parse(record);
 }

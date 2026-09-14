@@ -385,6 +385,25 @@ describe("sessionAttemptRecordSchema", () => {
 		expect("half" in (parsed.divergences?.[0] ?? {})).toBe(false);
 	});
 
+	it("holds a schemaVersion 3 record to the same outcome and check consistency rules as a version 1 record", () => {
+		const current = { ...record(), schemaVersion: 3 };
+
+		expect(sessionAttemptRecordSchema.safeParse(current).success).toBe(true);
+		expect(
+			sessionAttemptRecordSchema.safeParse({ ...current, checks: [] }).success,
+		).toBe(false);
+		expect(
+			sessionAttemptRecordSchema.safeParse({
+				...current,
+				outcome: "UNSUCCESSFUL",
+			}).success,
+		).toBe(false);
+		expect(
+			sessionAttemptRecordSchema.safeParse({ ...current, reply: undefined })
+				.success,
+		).toBe(false);
+	});
+
 	it("buildSessionAttemptRecord produces a schemaVersion 3 record that roundtrips with half on manifest and divergence entries", () => {
 		const sampleCase: SessionCase = {
 			kind: "session",
@@ -538,6 +557,6 @@ describe("sessionAttemptRecordSchema", () => {
 				attempt: sampleAttempt as unknown as SessionAttempt,
 				elapsedMs: 123,
 			}),
-		).toThrow();
+		).toThrow(/expected object, received string/u);
 	});
 });
