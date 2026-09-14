@@ -256,8 +256,8 @@ mise exec -- bun run serve
 
 Open `http://localhost:4173`. `PORT` overrides the server port. The server reads
 local records and the live corpus; it does not launch experiments. It has no
-authentication and does not explicitly restrict its bind address to loopback,
-so do not expose its port as a public service.
+authentication and binds to `127.0.0.1`; do not forward its port or otherwise
+expose it as a public service.
 
 For linked instruction files, configure the server's shell using
 [live-corpus setup](#configure-a-linked-live-corpus). A layout directory or file

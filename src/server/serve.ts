@@ -15,6 +15,13 @@ import { createAppServer } from "./app";
 
 const DEFAULT_PORT = 4173;
 
+export function startLocalServer(
+	port: number,
+	fetch: (request: Request) => Response | Promise<Response>,
+): Bun.Server<undefined> {
+	return Bun.serve({ hostname: "127.0.0.1", port, fetch });
+}
+
 /**
  * Runs once at startup and completes before the server accepts traffic: a
  * crash leaves a run's event stream stuck at a non-terminal event, and a
@@ -55,7 +62,7 @@ async function main(): Promise<void> {
 	});
 
 	const port = Number(Bun.env["PORT"] ?? DEFAULT_PORT);
-	Bun.serve({ port, fetch: app.fetch });
+	startLocalServer(port, app.fetch);
 	console.log(`rehearsal serving on http://localhost:${String(port)}`);
 }
 

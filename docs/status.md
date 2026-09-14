@@ -101,7 +101,7 @@ verdict.
 Run launch, live monitor, full run detail, task/case management, calibration
 screens, settings, and first-run setup are design targets. The SSE API already
 exists, but a completed live-monitor screen does not. The server has no
-authentication and no explicit loopback-only bind; use it locally.
+authentication and binds to IPv4 loopback; use it locally.
 
 ## Near-term priorities
 

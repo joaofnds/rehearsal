@@ -79,7 +79,7 @@ mise exec -- bun run serve
 A fresh clone has no run history. Available views cover run history, the live
 corpus, saved comparisons, and the design system. Run launch, live monitoring,
 and several prototype screens are still planned. The server is intended for
-local use and has no authentication.
+local use, binds to IPv4 loopback, and has no authentication.
 
 ## Documentation
 
