@@ -48,6 +48,18 @@ const SOURCE_ROOT = "/sources/template";
 const CORPUS_DIGEST = "a".repeat(64);
 const COMPARISON_DIGEST = "c".repeat(64);
 
+/**
+ * The settings evidence an ordinary fixture record carries when the caller
+ * names none. A literal, so writing a record never reads the repository's root
+ * stage-settings.json. A test whose assertions depend on that file passes
+ * `liveStageSettings()` instead, and so declares the dependency at its own
+ * call site.
+ */
+const SETTINGS_DIGEST: HashedFile = {
+	path: DEFAULT_STAGE_SETTINGS_FILE,
+	sha256: "d".repeat(64),
+};
+
 type ParsedReplayRecord = z.infer<typeof replayRecordSchema>;
 
 type LegacyGroupRecord = Omit<ConfirmationGroupRecord, "caseId">;
@@ -143,14 +155,6 @@ function checkpoint(
 		workflowState: [],
 		settingsFile,
 	};
-}
-
-async function currentSettingsFile(): Promise<HashedFile> {
-	const loaded = await loadStageSettings(
-		join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
-	);
-
-	return loaded.hashed;
 }
 
 function initialCheckpoint(settingsFile: HashedFile): CheckpointRecord {
@@ -328,6 +332,25 @@ function sessionAttempt(caseId: string): SessionAttemptRecord {
 }
 
 /**
+ * The settings evidence the repository's root stage-settings.json holds right
+ * now. A test whose assertions depend on that file, because it asserts a run is
+ * not stale, passes this and so says at its own call site that it reads the
+ * live file.
+ */
+export async function liveStageSettings(): Promise<HashedFile> {
+	const loaded = await loadStageSettings(
+		join(CONTROL_DIR, DEFAULT_STAGE_SETTINGS_FILE),
+	);
+
+	return loaded.hashed;
+}
+
+export interface RecordedRunsOptions {
+	readonly settingsFile?: HashedFile;
+	readonly sourceRoot?: string;
+}
+
+/**
  * Every record kind `list` and `show` read, written at the paths `run-layout`
  * builds, under a root the caller owns. Nothing on this machine has recorded a
  * pipeline run, a checkpoint, a group, or a comparison, so this is the only
@@ -352,10 +375,16 @@ export class RecordedRunsFixture {
 	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
 	public readonly interruptedRun = "2026-09-06T00-00-00.000Z";
 
+	private readonly settingsFile: HashedFile;
+	private readonly sourceRoot: string;
+
 	public constructor(
 		public readonly runsDirectory: string,
-		private readonly sourceRoot: string = SOURCE_ROOT,
-	) {}
+		options: RecordedRunsOptions = {},
+	) {
+		this.settingsFile = options.settingsFile ?? SETTINGS_DIGEST;
+		this.sourceRoot = options.sourceRoot ?? SOURCE_ROOT;
+	}
 
 	public get stageAttemptFile(): string {
 		return replayRecordFile(
@@ -406,7 +435,7 @@ export class RecordedRunsFixture {
 		caseId: string,
 		settingsFile?: HashedFile,
 	): Promise<void> {
-		const recordedSettings = settingsFile ?? (await currentSettingsFile());
+		const recordedSettings = settingsFile ?? this.settingsFile;
 		const paths = benchmarkRunPaths(this.runsDirectory, run);
 		await mkdir(paths.checkpointsDirectory, { recursive: true });
 		await writeRunManifest(
@@ -438,9 +467,7 @@ export class RecordedRunsFixture {
 		await mkdir(directory, { recursive: true });
 		await Bun.write(
 			checkpointRecordFile(directory),
-			serialize(
-				initialCheckpoint(settingsFile ?? (await currentSettingsFile())),
-			),
+			serialize(initialCheckpoint(settingsFile ?? this.settingsFile)),
 		);
 	}
 

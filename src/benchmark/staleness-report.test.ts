@@ -7,6 +7,7 @@ import { CONTROL_DIR } from "./config";
 import { resolveCorpusSource } from "./corpus-source";
 import {
 	directorySource,
+	liveStageSettings,
 	RecordedRunsFixture,
 } from "./run-records-test-support";
 import { TestResources } from "./test-support";
@@ -51,9 +52,17 @@ describe(staleCheckpoints.name, () => {
 		return root;
 	}
 
+	/**
+	 * Records the live root settings digest, because every assertion below reads
+	 * a checkpoint's staleness and `deriveStaleness` compares the recorded digest
+	 * against the one it loads from that file. A literal would stale every run
+	 * here for a reason no test is about.
+	 */
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
 		const root = await temporaryDirectory("rehearsal-stale-");
-		const fixture = new RecordedRunsFixture(root);
+		const fixture = new RecordedRunsFixture(root, {
+			settingsFile: await liveStageSettings(),
+		});
 		await fixture.write();
 		await fixture.writeInitialCheckpoint();
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	directorySource,
+	liveStageSettings,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
@@ -51,11 +52,18 @@ describe(runStale.name, () => {
 		return root;
 	}
 
+	/**
+	 * Records the live root settings digest, because the checkpoint assertions
+	 * below read staleness and `deriveStaleness` compares the recorded digest
+	 * against the one it loads from that file.
+	 */
 	async function fixtureRecordedAgainst(
 		corpusRoot: string,
 	): Promise<RecordedRunsFixture> {
 		const root = await temporaryDirectory("rehearsal-stale-cli-");
-		const fixture = new RecordedRunsFixture(root);
+		const fixture = new RecordedRunsFixture(root, {
+			settingsFile: await liveStageSettings(),
+		});
 		await fixture.write();
 		await fixture.recordCorpusFrom(directorySource(corpusRoot));
 		await fixture.writeAttemptReading(corpusRoot, "smoke", [

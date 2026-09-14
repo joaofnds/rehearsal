@@ -14,8 +14,10 @@ import type { CorpusRoot } from "#benchmark/corpus-file";
 import { CASES_DIRECTORY } from "#benchmark/case";
 import {
 	directorySource,
+	liveStageSettings,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
+import type { RecordedRunsOptions } from "#benchmark/run-records-test-support";
 import { CONTROL_DIR } from "#benchmark/config";
 import { runEventsDatabaseFile } from "#benchmark/run-layout";
 import { openRunEventStore } from "#benchmark/run-events";
@@ -108,13 +110,27 @@ describe(createApiApp.name, () => {
 		return root;
 	}
 
-	async function writtenFixture(): Promise<RecordedRunsFixture> {
+	async function writtenFixture(
+		options: RecordedRunsOptions = {},
+	): Promise<RecordedRunsFixture> {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-api-"));
 		roots.push(root);
-		const fixture = new RecordedRunsFixture(root);
+		const fixture = new RecordedRunsFixture(root, options);
 		await fixture.write();
 
 		return fixture;
+	}
+
+	/**
+	 * A fixture whose records carry the live root settings digest. Every
+	 * assertion about a row's `stale` flag needs it, because `deriveStaleness`
+	 * compares the recorded digest against the one it loads from that file. The
+	 * fixture's own literal never matches, so it would decide the flag on its
+	 * own, passing a `stale: false` test for the wrong reason and passing a
+	 * `stale: true` test whatever the corpus holds.
+	 */
+	async function fixtureRecordingLiveSettings(): Promise<RecordedRunsFixture> {
+		return writtenFixture({ settingsFile: await liveStageSettings() });
 	}
 
 	describe("GET /api/runs", () => {
@@ -137,7 +153,7 @@ describe(createApiApp.name, () => {
 		});
 
 		it("keeps healthy rows when one run's current settings are unavailable", async () => {
-			const fixture = await writtenFixture();
+			const fixture = await fixtureRecordingLiveSettings();
 			const corpus = await corpusDirectory();
 			const brokenRun = "2026-09-07T00-00-00.000Z";
 			const caseId = "zz-api-settings-missing";
@@ -211,7 +227,7 @@ describe(createApiApp.name, () => {
 			async function historyFor(
 				corpusSource: CorpusRoot,
 			): Promise<z.infer<typeof runHistoryResponseSchema>> {
-				const fixture = await writtenFixture();
+				const fixture = await fixtureRecordingLiveSettings();
 				const app = createApiApp({
 					runsDirectory: fixture.runsDirectory,
 					corpusSource,
@@ -281,7 +297,7 @@ describe(createApiApp.name, () => {
 		});
 
 		it("recomputes staleness fresh on every request rather than caching it", async () => {
-			const fixture = await writtenFixture();
+			const fixture = await fixtureRecordingLiveSettings();
 			const corpus = await corpusDirectory();
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			const app = createApiApp({

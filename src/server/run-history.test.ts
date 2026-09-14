@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { CONTROL_DIR } from "#benchmark/config";
 import {
 	directorySource,
+	liveStageSettings,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
+import type { RecordedRunsOptions } from "#benchmark/run-records-test-support";
 import { runHistoryReport } from "./run-history";
 
 describe(runHistoryReport.name, () => {
@@ -33,13 +35,27 @@ describe(runHistoryReport.name, () => {
 		return root;
 	}
 
-	async function writtenFixture(): Promise<RecordedRunsFixture> {
+	async function writtenFixture(
+		options: RecordedRunsOptions = {},
+	): Promise<RecordedRunsFixture> {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-"));
 		roots.push(root);
-		const fixture = new RecordedRunsFixture(root);
+		const fixture = new RecordedRunsFixture(root, options);
 		await fixture.write();
 
 		return fixture;
+	}
+
+	/**
+	 * A fixture whose records carry the live root settings digest. Every
+	 * assertion about a row's `stale` flag needs it, because `deriveStaleness`
+	 * compares the recorded digest against the one it loads from that file. The
+	 * fixture's own literal never matches, so it would decide the flag on its
+	 * own, passing a `stale: false` test for the wrong reason and passing a
+	 * `stale: true` test whatever the corpus holds.
+	 */
+	async function fixtureRecordingLiveSettings(): Promise<RecordedRunsFixture> {
+		return writtenFixture({ settingsFile: await liveStageSettings() });
 	}
 
 	it("names a run's status, stage, and corpus digest from its own recorded corpus files", async () => {
@@ -91,7 +107,7 @@ describe(runHistoryReport.name, () => {
 	});
 
 	it("marks a row stale when its latest checkpoint's corpus no longer matches", async () => {
-		const fixture = await writtenFixture();
+		const fixture = await fixtureRecordingLiveSettings();
 		const recorded = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(recorded));
 		const edited = await corpusDirectory("build skill, edited\n");
@@ -127,7 +143,7 @@ describe(runHistoryReport.name, () => {
 		});
 
 		it("marks the row stale, naming the entry that could not be hashed", async () => {
-			const fixture = await writtenFixture();
+			const fixture = await fixtureRecordingLiveSettings();
 			const corpus = await corpusDirectory("build skill\n");
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			await symlink(
@@ -168,7 +184,7 @@ describe(runHistoryReport.name, () => {
 	});
 
 	it("marks a row clean when its latest checkpoint's corpus still matches", async () => {
-		const fixture = await writtenFixture();
+		const fixture = await fixtureRecordingLiveSettings();
 		const corpus = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(corpus));
 
