@@ -89,3 +89,43 @@
 .rh-comparison__quality-verdict-glyph::before {
 	content: attr(data-glyph);
 }
+
+.rh-comparison__histories,
+.rh-comparison__history-case,
+.rh-comparison__history-arm {
+	display: flex;
+	gap: var(--space-8);
+}
+
+.rh-comparison__histories,
+.rh-comparison__history-case {
+	flex-direction: column;
+}
+
+.rh-comparison__histories h2 {
+	margin: 0;
+	font-size: var(--font-size-12);
+	font-weight: 500;
+	color: var(--color-text-secondary);
+}
+
+.rh-comparison__history-case {
+	padding: var(--space-10) var(--space-12);
+	border: var(--border-width-hairline) solid var(--color-border-2);
+}
+
+.rh-comparison__history-arm {
+	align-items: baseline;
+	color: var(--color-text-dim);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-11);
+}
+
+.rh-comparison__history-arm > span:first-child {
+	width: var(--space-56);
+	text-transform: uppercase;
+}
+
+.rh-comparison__history-arm a {
+	color: var(--color-accent-light);
+}

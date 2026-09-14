@@ -84,6 +84,29 @@ function arm(
 
 interface ComparisonResponseFixture {
 	readonly report: { readonly cases: ComparisonReport["cases"] };
+	readonly attemptHistories: Readonly<
+		Record<
+			string,
+			Readonly<
+				Record<
+					"baseline" | "candidate" | "control",
+					readonly (
+						| {
+								readonly status: "available";
+								readonly repId: string;
+								readonly ordinal: number;
+								readonly href: string;
+						  }
+						| {
+								readonly status: "stale";
+								readonly repId: string;
+								readonly ordinal: number;
+						  }
+					)[]
+				>
+			>
+		>
+	>;
 	readonly attribution: Readonly<
 		Record<string, Readonly<Record<string, ComparisonAttribution>>>
 	>;
@@ -97,6 +120,7 @@ interface ComparisonResponseFixture {
 
 function comparisonResponseBody(): ComparisonResponseFixture {
 	return {
+		attemptHistories: {},
 		report: {
 			cases: [
 				{
@@ -213,10 +237,10 @@ function comparisonResponseBody(): ComparisonResponseFixture {
 	};
 }
 
-function renderPage(): void {
-	stubFetchByPath(
-		new Map([[`/api/comparisons/${DIGEST}`, comparisonResponseBody()]]),
-	);
+function renderPage(
+	body: ComparisonResponseFixture = comparisonResponseBody(),
+): void {
+	stubFetchByPath(new Map([[`/api/comparisons/${DIGEST}`, body]]));
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
@@ -425,6 +449,36 @@ describe(ComparisonPage.name, () => {
 		expect(
 			within(caseOne).getByText("candidate vs baseline"),
 		).toBeInTheDocument();
+	});
+
+	it("links only comparison reps whose saved provenance is still valid", async () => {
+		const body = comparisonResponseBody();
+		renderPage({
+			...body,
+			attemptHistories: {
+				"case-1": {
+					baseline: [
+						{
+							status: "available",
+							repId: "group-a-rep-1",
+							ordinal: 1,
+							href: "/groups/group-a/reps/group-a-rep-1/attempt",
+						},
+					],
+					candidate: [],
+					control: [{ status: "stale", repId: "group-c-rep-1", ordinal: 1 }],
+				},
+			},
+		});
+
+		const region = await screen.findByRole("region", {
+			name: "Inspect saved attempt history",
+		});
+		expect(within(region).getByRole("link", { name: "Rep 1" })).toHaveAttribute(
+			"href",
+			"/groups/group-a/reps/group-a-rep-1/attempt",
+		);
+		expect(within(region).getByText("Rep 1 · stale")).toBeInTheDocument();
 	});
 
 	it("renders the empty state, not a generic error, when no comparison is recorded for the digest", async () => {

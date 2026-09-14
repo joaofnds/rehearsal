@@ -15,6 +15,7 @@ import {
 	openRunEventStore,
 } from "#benchmark/run-events";
 import { comparisonReport } from "./comparisons";
+import { comparisonAttemptHistoryLinks } from "./comparison-history-links";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
@@ -38,9 +39,7 @@ interface HistoryErrorResponse {
 	readonly status: 400 | 404;
 }
 
-function historyError(
-	error: HistoryErrorView,
-): HistoryErrorResponse {
+function historyError(error: HistoryErrorView): HistoryErrorResponse {
 	return {
 		message: redactAbsolutePaths(error.message),
 		status: error.kind === "not-found" ? 404 : 400,
@@ -119,7 +118,15 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 
 				const report = parseComparisonReport(await Bun.file(file).text());
 
-				return context.json(comparisonReport(report));
+				return context.json(
+					comparisonReport(
+						report,
+						await comparisonAttemptHistoryLinks(
+							report,
+							dependencies.runsDirectory,
+						),
+					),
+				);
 			} catch (error) {
 				if (error instanceof UsageError) {
 					return context.json(

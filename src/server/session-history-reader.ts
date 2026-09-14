@@ -1,6 +1,13 @@
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 import {
 	parseConfirmationGroupRecord,
 	parseConfirmationRepRecord,
@@ -43,14 +50,19 @@ interface ConfirmationAttemptHistoryIdentity {
 
 function assertIdentity(value: string): void {
 	if (!IDENTITY.test(value)) {
-		throw new SessionHistoryReaderError("refused", "Invalid saved-attempt identity");
+		throw new SessionHistoryReaderError(
+			"refused",
+			"Invalid saved-attempt identity",
+		);
 	}
 }
 
 function contained(path: string, root: string): boolean {
 	const fromRoot = relative(root, path);
 
-	return fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..");
+	return (
+		fromRoot === "" || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== "..")
+	);
 }
 
 async function canonicalRunsRoot(runsDirectory: string): Promise<string> {
@@ -149,12 +161,53 @@ async function readVerifiedFile(path: string): Promise<string> {
 	}
 }
 
+export interface RecordedEvidenceFile {
+	readonly path: string;
+	readonly text: string;
+}
+
+/** Resolve a comparison-recorded path without trusting any path component. */
+export async function readRecordedEvidenceFile(
+	runsDirectory: string,
+	recordedPath: string,
+): Promise<RecordedEvidenceFile> {
+	if (isAbsolute(recordedPath)) {
+		throw new SessionHistoryReaderError("refused", "Recorded path is absolute");
+	}
+	const root = await canonicalRunsRoot(runsDirectory);
+	const candidate = resolve(dirname(root), recordedPath);
+	if (!contained(candidate, root)) {
+		throw new SessionHistoryReaderError(
+			"refused",
+			"Recorded path leaves the runs directory",
+		);
+	}
+	const fromRoot = relative(root, candidate);
+	const segments = fromRoot.split(sep);
+	const name = segments.pop();
+	if (name === undefined || name !== basename(candidate)) {
+		throw new SessionHistoryReaderError("refused", "Recorded path is invalid");
+	}
+	const directory = await verifiedDirectory(root, segments);
+	const file = await verifiedFile(root, directory, name, true);
+	if (file === undefined) {
+		throw new SessionHistoryReaderError(
+			"not-found",
+			"Recorded evidence is missing",
+		);
+	}
+
+	return { path: file, text: await readVerifiedFile(file) };
+}
+
 async function reportInput(
 	attemptFile: string,
 	transcriptFile: string | undefined,
 	id: string,
 ): Promise<SessionHistoryReportInput> {
-	const attempt = parseSessionAttemptRecord(await readVerifiedFile(attemptFile));
+	const attempt = parseSessionAttemptRecord(
+		await readVerifiedFile(attemptFile),
+	);
 	const transcript =
 		transcriptFile === undefined
 			? undefined
@@ -190,7 +243,10 @@ async function standaloneInput(
 	]);
 	const attemptFile = await verifiedFile(root, directory, "attempt.json", true);
 	if (attemptFile === undefined) {
-		throw new SessionHistoryReaderError("not-found", "Saved attempt is unavailable");
+		throw new SessionHistoryReaderError(
+			"not-found",
+			"Saved attempt is unavailable",
+		);
 	}
 	const transcriptFile = await verifiedFile(
 		root,
@@ -225,10 +281,24 @@ async function confirmationInput(
 		"reps",
 		identity.repId,
 	]);
-	const groupFile = await verifiedFile(root, groupDirectory, "group.json", true);
+	const groupFile = await verifiedFile(
+		root,
+		groupDirectory,
+		"group.json",
+		true,
+	);
 	const repFile = await verifiedFile(root, repDirectory, "rep.json", true);
-	const attemptFile = await verifiedFile(root, repDirectory, "attempt.json", true);
-	if (groupFile === undefined || repFile === undefined || attemptFile === undefined) {
+	const attemptFile = await verifiedFile(
+		root,
+		repDirectory,
+		"attempt.json",
+		true,
+	);
+	if (
+		groupFile === undefined ||
+		repFile === undefined ||
+		attemptFile === undefined
+	) {
 		throw new SessionHistoryReaderError(
 			"not-found",
 			"Saved confirmation attempt is unavailable",
@@ -265,7 +335,10 @@ async function confirmationInput(
 		false,
 	);
 	const input = await reportInput(attemptFile, transcriptFile, identity.repId);
-	if (input.attempt.caseId !== group.caseId || input.attempt.caseId !== rep.caseId) {
+	if (
+		input.attempt.caseId !== group.caseId ||
+		input.attempt.caseId !== rep.caseId
+	) {
 		throw new SessionHistoryReaderError(
 			"refused",
 			"Confirmation attempt case identity differs",

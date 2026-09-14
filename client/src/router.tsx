@@ -8,6 +8,7 @@ import type { RouterHistory } from "@tanstack/react-router";
 import { ComparisonPage } from "#client/comparison/comparison-page";
 import { CorpusPage } from "#client/corpus/corpus-page";
 import { RunHistoryPage } from "#client/run-history/run-history-page";
+import { SessionHistoryPage } from "#client/session-history/session-history-page";
 import { SystemPage } from "#client/system/system-page";
 
 const rootRoute = createRootRoute({
@@ -38,6 +39,32 @@ const comparisonRoute = createRoute({
 	component: ComparisonRoute,
 });
 
+const sessionAttemptRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/attempts/session/$caseId/$uuid",
+	component: SessionAttemptRoute,
+});
+
+function SessionAttemptRoute(): React.JSX.Element {
+	const params: { readonly caseId: string; readonly uuid: string } =
+		sessionAttemptRoute.useParams();
+
+	return <SessionHistoryPage identity={{ kind: "standalone", ...params }} />;
+}
+
+const confirmationAttemptRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/groups/$groupId/reps/$repId/attempt",
+	component: ConfirmationAttemptRoute,
+});
+
+function ConfirmationAttemptRoute(): React.JSX.Element {
+	const params: { readonly groupId: string; readonly repId: string } =
+		confirmationAttemptRoute.useParams();
+
+	return <SessionHistoryPage identity={{ kind: "confirmation", ...params }} />;
+}
+
 function ComparisonRoute(): React.JSX.Element {
 	const params: { readonly digest: string } = comparisonRoute.useParams();
 
@@ -49,6 +76,8 @@ const routeTree = rootRoute.addChildren([
 	systemRoute,
 	corpusRoute,
 	comparisonRoute,
+	sessionAttemptRoute,
+	confirmationAttemptRoute,
 ]);
 
 export interface CreateAppRouterOptions {

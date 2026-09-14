@@ -21,6 +21,7 @@ type ComparisonReport = ComparisonResponse["report"];
 type ComparisonCase = ComparisonReport["cases"][number];
 type ComparisonArmReport = ComparisonCase["arms"]["baseline"];
 type QualityReadings = ComparisonResponse["qualityReadings"];
+type AttemptHistories = ComparisonResponse["attemptHistories"];
 type CaseQualityReadings = QualityReadings[string];
 type QualityReading = CaseQualityReadings[string][string];
 
@@ -185,6 +186,49 @@ function QualityReadingTables({
 	);
 }
 
+function AttemptHistoryLinks({
+	histories,
+}: {
+	readonly histories: AttemptHistories;
+}): React.JSX.Element | null {
+	if (Object.keys(histories).length === 0) {
+		return null;
+	}
+
+	return (
+		<section
+			className="rh-comparison__histories"
+			aria-labelledby="attempt-histories-heading"
+		>
+			<h2 id="attempt-histories-heading">Inspect saved attempt history</h2>
+			{Object.entries(histories).map(([caseId, arms]) => (
+				<div key={caseId} className="rh-comparison__history-case">
+					<strong>{caseId}</strong>
+					{Object.entries(arms).map(([arm, links]) => (
+						<div key={arm} className="rh-comparison__history-arm">
+							<span>{arm}</span>
+							{links.map((link) =>
+								link.status === "available" ? (
+									<a key={link.repId} href={link.href}>
+										Rep {link.ordinal}
+									</a>
+								) : (
+									<span
+										key={link.repId}
+										title="Saved provenance no longer matches"
+									>
+										Rep {link.ordinal} · stale
+									</span>
+								),
+							)}
+						</div>
+					))}
+				</div>
+			))}
+		</section>
+	);
+}
+
 function AttributionCard({
 	pairKey,
 	attribution,
@@ -312,6 +356,7 @@ export function ComparisonPage({
 							rowFor(benchmarkCase),
 						)}
 					/>
+					<AttemptHistoryLinks histories={query.data.attemptHistories ?? {}} />
 					{query.data.report.cases.map((benchmarkCase) => (
 						<AttributionCards
 							key={benchmarkCase.caseId}

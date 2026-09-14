@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
+import type { SessionHistoryReport } from "#benchmark/session-history";
 import { stubFetch, stubFetchByPath } from "#client/test-support/fetch-stub";
 import { createAppRouter } from "./router";
 
@@ -36,6 +37,25 @@ function renderRouterAt(path: string): void {
 			<RouterProvider router={router} />
 		</QueryClientProvider>,
 	);
+}
+
+function emptyHistory(caseId: string, id: string): SessionHistoryReport {
+	return {
+		schemaVersion: 1,
+		attempt: {
+			caseId,
+			id,
+			model: "sonnet",
+			outcome: "SUCCESSFUL",
+			corpusFiles: [],
+		},
+		evidence: { state: "complete" },
+		startingContext: [],
+		attemptEvents: [],
+		boundaryUnknown: [],
+		startingSources: [],
+		sources: [],
+	};
 }
 
 describe(createAppRouter.name, () => {
@@ -85,6 +105,38 @@ describe(createAppRouter.name, () => {
 
 		await waitFor(() => {
 			expect(screen.getByText("Comparison")).toBeInTheDocument();
+		});
+	});
+
+	it("renders standalone saved session history", async () => {
+		renderAtWithStub(
+			"/attempts/session/case-a/attempt-a",
+			new Map([
+				[
+					"/api/attempts/session/case-a/attempt-a/history",
+					emptyHistory("case-a", "attempt-a"),
+				],
+			]),
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Saved context history")).toBeInTheDocument();
+		});
+	});
+
+	it("renders confirmation rep saved session history", async () => {
+		renderAtWithStub(
+			"/groups/group-a/reps/group-a-rep-1/attempt",
+			new Map([
+				[
+					"/api/groups/group-a/reps/group-a-rep-1/attempt/history",
+					emptyHistory("case-a", "group-a-rep-1"),
+				],
+			]),
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Saved context history")).toBeInTheDocument();
 		});
 	});
 });

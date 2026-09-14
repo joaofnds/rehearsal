@@ -9,9 +9,11 @@ import type { ComparisonAttribution } from "./comparison-attribution";
 import { comparisonAttribution } from "./comparison-attribution";
 import type { QualityReading } from "./comparison-quality-reading";
 import { qualityReading } from "./comparison-quality-reading";
+import type { ComparisonAttemptHistoryLinks } from "./comparison-history-links";
 
 export interface ComparisonReportWithAttribution {
 	readonly report: ComparisonReport | LegacyComparisonReport;
+	readonly attemptHistories: ComparisonAttemptHistoryLinks;
 	readonly attribution: Readonly<
 		Record<string, Readonly<Record<string, ComparisonAttribution>>>
 	>;
@@ -59,6 +61,7 @@ function qualityReadingsByMeasure(
  */
 export function comparisonReport(
 	report: ComparisonReport | LegacyComparisonReport,
+	attemptHistories: ComparisonAttemptHistoryLinks = {},
 ): ComparisonReportWithAttribution {
 	const attribution: Record<string, Record<string, ComparisonAttribution>> = {};
 	const qualityReadings: Record<
@@ -92,5 +95,5 @@ export function comparisonReport(
 		qualityReadings[benchmarkCase.caseId] = qualityByPair;
 	}
 
-	return { report, attribution, qualityReadings };
+	return { report, attemptHistories, attribution, qualityReadings };
 }
