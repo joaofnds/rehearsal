@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
+import { directorySource } from "#benchmark/run-records-test-support";
 import { sessionAttemptPaths } from "#benchmark/run-layout";
+import { createApiApp } from "#server/api";
 import {
 	readSessionAttemptHistory,
 	SessionHistoryReaderError,
@@ -139,5 +141,54 @@ describe(readSessionAttemptHistory.name, () => {
 		expect(readSessionAttemptHistory(fixture)).rejects.toBeInstanceOf(
 			SessionHistoryReaderError,
 		);
+	});
+});
+
+describe("saved session history API", () => {
+	it("serves summary and bounded event detail from the standalone route", async () => {
+		const fixture = await writtenAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const summary = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history`,
+		);
+		const detail = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/2%3A1`,
+		);
+
+		expect(summary.status).toBe(200);
+		expect(detail.status).toBe(200);
+		expect(await detail.json()).toEqual({
+			schemaVersion: 1,
+			eventId: "2:1",
+			locator: { line: 2, block: 1 },
+			state: "delivered",
+			relatedEventIds: ["1:1"],
+			deliveredText: "1\tproject instructions",
+			deliveredMeasurement: { state: "complete", characters: 22 },
+			snapshotMeasurement: {
+				state: "unavailable",
+				reasons: ["unsupported text body"],
+			},
+			applicationTruncated: false,
+		});
+	});
+
+	it("returns a redacted refusal for an invalid route identity", async () => {
+		const fixture = await writtenAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/bad..%2Fid/history`,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.text()).not.toContain(fixture.runsDirectory);
 	});
 });

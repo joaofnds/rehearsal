@@ -18,8 +18,34 @@ import { comparisonReport } from "./comparisons";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths } from "./redact-path";
 import { runHistoryReport } from "./run-history";
+import {
+	readConfirmationAttemptHistory,
+	readConfirmationAttemptHistoryDetail,
+	readSessionAttemptHistory,
+	readSessionAttemptHistoryDetail,
+	SessionHistoryReaderError,
+} from "./session-history-reader";
 
 const RUN_EVENTS_POLL_MS = 500;
+
+interface HistoryErrorView {
+	readonly kind: "not-found" | "refused";
+	readonly message: string;
+}
+
+interface HistoryErrorResponse {
+	readonly message: string;
+	readonly status: 400 | 404;
+}
+
+function historyError(
+	error: HistoryErrorView,
+): HistoryErrorResponse {
+	return {
+		message: redactAbsolutePaths(error.message),
+		status: error.kind === "not-found" ? 404 : 400,
+	};
+}
 
 async function streamRunEvents(
 	store: RunEventStore,
@@ -111,6 +137,99 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 				throw error;
 			}
 		})
+		.get(
+			"/api/attempts/session/:caseId/:uuid/history/:eventId",
+			async (context) => {
+				try {
+					const detail = await readSessionAttemptHistoryDetail(
+						{
+							runsDirectory: dependencies.runsDirectory,
+							caseId: context.req.param("caseId"),
+							uuid: context.req.param("uuid"),
+						},
+						context.req.param("eventId"),
+					);
+					if (detail === undefined) {
+						return context.json({ error: "No event at this locator" }, 404);
+					}
+
+					return context.json(detail);
+				} catch (error) {
+					if (!(error instanceof SessionHistoryReaderError)) {
+						throw error;
+					}
+					const response = historyError(error);
+
+					return context.json({ error: response.message }, response.status);
+				}
+			},
+		)
+		.get("/api/attempts/session/:caseId/:uuid/history", async (context) => {
+			try {
+				return context.json(
+					await readSessionAttemptHistory({
+						runsDirectory: dependencies.runsDirectory,
+						caseId: context.req.param("caseId"),
+						uuid: context.req.param("uuid"),
+					}),
+				);
+			} catch (error) {
+				if (!(error instanceof SessionHistoryReaderError)) {
+					throw error;
+				}
+				const response = historyError(error);
+
+				return context.json({ error: response.message }, response.status);
+			}
+		})
+		.get(
+			"/api/groups/:groupId/reps/:repId/attempt/history/:eventId",
+			async (context) => {
+				try {
+					const detail = await readConfirmationAttemptHistoryDetail(
+						{
+							runsDirectory: dependencies.runsDirectory,
+							groupId: context.req.param("groupId"),
+							repId: context.req.param("repId"),
+						},
+						context.req.param("eventId"),
+					);
+					if (detail === undefined) {
+						return context.json({ error: "No event at this locator" }, 404);
+					}
+
+					return context.json(detail);
+				} catch (error) {
+					if (!(error instanceof SessionHistoryReaderError)) {
+						throw error;
+					}
+					const response = historyError(error);
+
+					return context.json({ error: response.message }, response.status);
+				}
+			},
+		)
+		.get(
+			"/api/groups/:groupId/reps/:repId/attempt/history",
+			async (context) => {
+				try {
+					return context.json(
+						await readConfirmationAttemptHistory({
+							runsDirectory: dependencies.runsDirectory,
+							groupId: context.req.param("groupId"),
+							repId: context.req.param("repId"),
+						}),
+					);
+				} catch (error) {
+					if (!(error instanceof SessionHistoryReaderError)) {
+						throw error;
+					}
+					const response = historyError(error);
+
+					return context.json({ error: response.message }, response.status);
+				}
+			},
+		)
 		.get("/api/runs/:run/events", (context) => {
 			const runId = context.req.param("run");
 
