@@ -1343,6 +1343,7 @@ export interface SessionHistoryRequestEntry {
 	readonly line: number;
 	readonly model: string | undefined;
 	readonly usage: SessionHistoryRequestUsage;
+	readonly usageState: "complete" | "conflict";
 }
 
 export interface SessionHistoryRequestSeries {
@@ -1365,37 +1366,97 @@ const requestRowSchema = z.looseObject({
 	}),
 });
 
+interface ParsedRequestRow {
+	readonly requestId: string | undefined;
+	readonly line: number;
+	readonly model: string | undefined;
+	readonly usage: SessionHistoryRequestUsage;
+}
+
+function parsedRequestRow(
+	text: string,
+	line: number,
+): ParsedRequestRow | undefined {
+	if (text.trim() === "") {
+		return undefined;
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+	const row = requestRowSchema.safeParse(parsed);
+	if (!row.success) {
+		return undefined;
+	}
+
+	const { usage } = row.data.message;
+
+	return {
+		requestId: row.data.requestId ?? undefined,
+		line,
+		model: row.data.message.model,
+		usage: {
+			inputTokens: usage.input_tokens,
+			outputTokens: usage.output_tokens,
+			cacheReadTokens: usage.cache_read_input_tokens,
+			cacheWriteTokens: usage.cache_creation_input_tokens,
+		},
+	};
+}
+
+function sameUsage(
+	left: Readonly<SessionHistoryRequestUsage>,
+	right: Readonly<SessionHistoryRequestUsage>,
+): boolean {
+	return (
+		left.inputTokens === right.inputTokens &&
+		left.outputTokens === right.outputTokens &&
+		left.cacheReadTokens === right.cacheReadTokens &&
+		left.cacheWriteTokens === right.cacheWriteTokens
+	);
+}
+
+function collapsedEntries(
+	rows: readonly Readonly<ParsedRequestRow>[],
+): readonly SessionHistoryRequestEntry[] {
+	const conflicting = new Set<string>();
+	const firstByRequestId = new Map<string, Readonly<ParsedRequestRow>>();
+	for (const row of rows) {
+		if (row.requestId === undefined) {
+			continue;
+		}
+		const first = firstByRequestId.get(row.requestId);
+		if (first === undefined) {
+			firstByRequestId.set(row.requestId, row);
+		} else if (!sameUsage(first.usage, row.usage)) {
+			conflicting.add(row.requestId);
+		}
+	}
+
+	return rows
+		.filter(
+			(row) =>
+				row.requestId === undefined ||
+				firstByRequestId.get(row.requestId) === row,
+		)
+		.map((row) => ({
+			...row,
+			usageState:
+				row.requestId !== undefined && conflicting.has(row.requestId)
+					? ("conflict" as const)
+					: ("complete" as const),
+		}));
+}
+
 export function sessionHistoryRequestSeries(
 	transcript: string,
 ): SessionHistoryRequestSeries {
-	const entries: SessionHistoryRequestEntry[] = [];
-	for (const [index, text] of transcript.split("\n").entries()) {
-		if (text.trim() === "") {
-			continue;
-		}
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(text);
-		} catch {
-			continue;
-		}
-		const row = requestRowSchema.safeParse(parsed);
-		if (!row.success) {
-			continue;
-		}
-		const { usage } = row.data.message;
-		entries.push({
-			requestId: row.data.requestId ?? undefined,
-			line: index + 1,
-			model: row.data.message.model,
-			usage: {
-				inputTokens: usage.input_tokens,
-				outputTokens: usage.output_tokens,
-				cacheReadTokens: usage.cache_read_input_tokens,
-				cacheWriteTokens: usage.cache_creation_input_tokens,
-			},
-		});
-	}
+	const rows = transcript
+		.split("\n")
+		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
-	return { entries };
+	return { entries: collapsedEntries(rows) };
 }

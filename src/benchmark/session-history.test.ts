@@ -593,4 +593,48 @@ describe(sessionHistoryRequestSeries.name, () => {
 			},
 		]);
 	});
+	it("collapses duplicate rows sharing a request into one entry", () => {
+		const usage = { input: 2, output: 10, cacheRead: 100, cacheWrite: 20 };
+		const transcript = [
+			row(assistantRow("1", "req-a", "claude-opus-5", usage)),
+			row(assistantRow("2", "req-a", "claude-opus-5", usage)),
+			row(assistantRow("3", "req-a", "claude-opus-5", usage)),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries(transcript);
+
+		expect(
+			series.entries.map(({ requestId, line, usageState }) => ({
+				requestId,
+				line,
+				usageState,
+			})),
+		).toEqual([{ requestId: "req-a", line: 1, usageState: "complete" }]);
+	});
+
+	it("reports conflict when duplicates disagree on a usage value", () => {
+		const transcript = [
+			row(
+				assistantRow("1", "req-a", "claude-opus-5", {
+					input: 2,
+					output: 10,
+					cacheRead: 100,
+					cacheWrite: 20,
+				}),
+			),
+			row(
+				assistantRow("2", "req-a", "claude-opus-5", {
+					input: 2,
+					output: 11,
+					cacheRead: 100,
+					cacheWrite: 20,
+				}),
+			),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries(transcript);
+
+		expect(series.entries).toHaveLength(1);
+		expect(series.entries[0]?.usageState).toBe("conflict");
+	});
 });
