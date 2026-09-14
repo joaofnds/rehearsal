@@ -512,10 +512,11 @@ record the model probe and missing provider metrics explicitly.
 
 The local browser can inspect standalone session attempts at
 `/attempts/session/<case>/<uuid>` and confirmation attempts at
-`/groups/<group>/reps/<rep>/attempt`. The matching JSON endpoints append
-`/history`; appending `/<line>:<block>` returns the selected event detail.
-Each locator is the saved transcript's one-based physical line and content
-block.
+`/groups/<group>/reps/<rep>/attempt`. Their JSON summaries are
+`/api/attempts/session/<case>/<uuid>/history` and
+`/api/groups/<group>/reps/<rep>/attempt/history`; appending
+`/<line>:<block>` to either API path returns the selected event detail. Each
+locator is the saved transcript's one-based physical line and content block.
 
 The summary separates inherited Starting context from Attempt events when the
 attempt record retains its transcript cut. Older records without a cut use the
@@ -523,20 +524,24 @@ Boundary unknown region: their rows and content stay selectable, while
 inherited, attempt-activity, delivery, and repeat counts remain unavailable.
 Read result text is the observed delivery. A structured Read file body is a
 separate source snapshot and is not added to the delivery measurement. Text
-sizes count Unicode code points, not tokens.
+sizes count Unicode code points, not tokens. Source rows keep failed, partial,
+missing-result, and unavailable occurrence counts separate and deduplicate
+repeated evidence reasons.
 
 Selected detail contains at most 65,536 UTF-8 bytes across the delivery and
 snapshot excerpts. It cuts only at a Unicode boundary and marks an omitted
 suffix as application-truncated. The saved transcript remains the full-body
-record. The reader opens the verified sibling transcript and does not trust the
-attempt record's absolute transcript path or any path observed inside a Read.
-It rejects traversal, symbolic links, non-regular evidence files, and paths
-outside the real run directory.
+record. Summary reads stream the transcript while retaining body-free event
+metadata; detail reopens the verified file and retains only the selected
+physical line. The reader does not trust the attempt record's absolute
+transcript path or any path observed inside a Read. It rejects traversal,
+symbolic links, non-regular evidence files, detected path or inode replacement
+during open verification, and paths outside the real run directory.
 
 Version-4 session comparison pages link to a rep's history only after the
 server verifies the recorded group, rep, and attempt paths, ownership, and all
-three SHA-256 digests. A failed check appears as stale provenance without a
-navigable link.
+three SHA-256 digests. Failed provenance validation appears as stale provenance
+without a navigable link; a valid failed experiment remains inspectable.
 
 ## Comparison manifests
 
