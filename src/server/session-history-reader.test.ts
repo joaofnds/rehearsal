@@ -173,7 +173,7 @@ describe("saved session history API", () => {
 			deliveredMeasurement: { state: "complete", characters: 22 },
 			snapshotMeasurement: {
 				state: "unavailable",
-				reasons: ["unsupported text body"],
+				reasons: ["source snapshot unavailable"],
 			},
 			applicationTruncated: false,
 		});
