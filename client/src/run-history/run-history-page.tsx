@@ -111,7 +111,7 @@ export function RunHistoryPage(): React.JSX.Element {
 				<EmptyState heading="No runs recorded">
 					<p>
 						The corpus is linked and a spend limit is set. Declare a case, then
-						run it — every attempt lands here as a durable record.
+						run it. Every attempt lands here as a durable record.
 					</p>
 					<button type="button" disabled>
 						Declare a case

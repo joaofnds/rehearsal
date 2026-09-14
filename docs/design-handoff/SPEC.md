@@ -125,7 +125,7 @@ Columns:
 
 Footer prose under the table (11.5px `#75798c`, max 70ch): "A stopped run is a recorded outcome, not an error: the step that fell below the minimum is the finding. Runs marked stale were produced by a corpus version that has since changed — their grades are kept as history and excluded from comparisons." This copy carries product rules 2 and 3; keep it.
 
-**Empty state** (fresh install with corpus linked but no runs): header with "0 records on disk"; centered left-aligned block ≤44ch containing a small ASCII box drawn in mono 11px `#3f424d`, `h2` "No runs recorded", prose "The corpus is linked and a spend limit is set. Declare a case, then run it — every attempt lands here as a durable record.", and a **Declare a case** button. No illustration, no marketing.
+**Empty state** (fresh install with corpus linked but no runs): header with "0 records on disk"; centered left-aligned block ≤44ch containing a small ASCII box drawn in mono 11px `#3f424d`, `h2` "No runs recorded", prose "The corpus is linked and a spend limit is set. Declare a case, then run it. Every attempt lands here as a durable record.", and a **Declare a case** button. No illustration, no marketing.
 
 ---
 
