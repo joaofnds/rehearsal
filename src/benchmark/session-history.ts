@@ -1416,9 +1416,7 @@ function parsedRequestRow(
 	};
 }
 
-function totalInputTokens(
-	usage: Readonly<SessionHistoryRequestUsage>,
-): number {
+function totalInputTokens(usage: Readonly<SessionHistoryRequestUsage>): number {
 	return usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 }
 
@@ -1451,20 +1449,28 @@ function collapsedEntries(
 		}
 	}
 
-	return rows
-		.filter(
-			(row) =>
-				row.requestId === undefined ||
-				firstByRequestId.get(row.requestId) === row,
-		)
-		.map((row) => ({
-			...row,
+	const entries: SessionHistoryRequestEntry[] = [];
+	for (const row of rows) {
+		if (
+			row.requestId !== undefined &&
+			firstByRequestId.get(row.requestId) !== row
+		) {
+			continue;
+		}
+		entries.push({
+			requestId: row.requestId,
+			line: row.line,
+			model: row.model,
+			usage: row.usage,
 			totalInputTokens: totalInputTokens(row.usage),
 			usageState:
 				row.requestId !== undefined && conflicting.has(row.requestId)
-					? ("conflict" as const)
-					: ("complete" as const),
-		}));
+					? "conflict"
+					: "complete",
+		});
+	}
+
+	return entries;
 }
 
 export function sessionHistoryRequestSeries(

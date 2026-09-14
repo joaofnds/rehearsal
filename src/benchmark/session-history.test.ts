@@ -522,7 +522,12 @@ describe(sessionHistoryRequestSeries.name, () => {
 		line: string,
 		requestId: string | null,
 		model: string,
-		usage: Readonly<Record<string, number>>,
+		usage: {
+			readonly input: number;
+			readonly output: number;
+			readonly cacheRead: number;
+			readonly cacheWrite: number;
+		},
 	): JsonValue {
 		return {
 			type: "assistant",
@@ -532,10 +537,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 			message: {
 				model,
 				usage: {
-					input_tokens: usage.input ?? 0,
-					output_tokens: usage.output ?? 0,
-					cache_read_input_tokens: usage.cacheRead ?? 0,
-					cache_creation_input_tokens: usage.cacheWrite ?? 0,
+					input_tokens: usage.input,
+					output_tokens: usage.output,
+					cache_read_input_tokens: usage.cacheRead,
+					cache_creation_input_tokens: usage.cacheWrite,
 				},
 				content: [{ type: "text", text: "reply" }],
 			},
@@ -642,14 +647,14 @@ describe(sessionHistoryRequestSeries.name, () => {
 			assistantRow("1", "req-a", "claude-opus-5", {
 				input: 2,
 				output: 151,
-				cacheRead: 30000,
-				cacheWrite: 251695,
+				cacheRead: 30_000,
+				cacheWrite: 251_695,
 			}),
 		);
 
 		const series = sessionHistoryRequestSeries(transcript);
 
-		expect(series.entries[0]?.totalInputTokens).toBe(281697);
+		expect(series.entries[0]?.totalInputTokens).toBe(281_697);
 	});
 
 	it("values a row recording no model request at zero rather than omitting it", () => {
@@ -667,7 +672,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 					input: 2,
 					output: 151,
 					cacheRead: 0,
-					cacheWrite: 251695,
+					cacheWrite: 251_695,
 				}),
 			),
 		].join("\n");
@@ -682,7 +687,11 @@ describe(sessionHistoryRequestSeries.name, () => {
 			})),
 		).toEqual([
 			{ requestId: undefined, model: "<synthetic>", totalInputTokens: 0 },
-			{ requestId: "req-a", model: "claude-sonnet-5", totalInputTokens: 251697 },
+			{
+				requestId: "req-a",
+				model: "claude-sonnet-5",
+				totalInputTokens: 251_697,
+			},
 		]);
 	});
 	it("names what the total omits without claiming the categories overlap", () => {
@@ -692,7 +701,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 					input: 2,
 					output: 151,
 					cacheRead: 0,
-					cacheWrite: 251695,
+					cacheWrite: 251_695,
 				}),
 			),
 		);
