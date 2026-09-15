@@ -988,6 +988,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 					cacheWriteTokens: 20,
 				},
 				totalInputTokens: 122,
+				cumulativeTotalInputTokens: 122,
 				usageState: "complete",
 				cacheWriteSplit: {
 					state: "missing",
@@ -1210,6 +1211,82 @@ describe(sessionHistoryRequestSeries.name, () => {
 				totalInputTokens: 0,
 			});
 		});
+	});
+});
+
+describe("compaction in a request series", () => {
+	function assistant(
+		requestId: string,
+		timestamp: string,
+		tokens: number,
+	): string {
+		return row({
+			type: "assistant",
+			timestamp,
+			cwd: "/work",
+			requestId,
+			message: {
+				model: "claude-sonnet-5",
+				usage: {
+					input_tokens: tokens,
+					output_tokens: 1,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 0,
+					cache_creation: {
+						ephemeral_1h_input_tokens: 0,
+						ephemeral_5m_input_tokens: 0,
+					},
+				},
+				content: [{ type: "text", text: "reply" }],
+			},
+		});
+	}
+
+	const withCompaction = [
+		assistant("req-1", "2026-09-14T00:00:01.000Z", 100),
+		row({
+			type: "system",
+			subtype: "compact_boundary",
+			timestamp: "2026-09-14T00:00:02.000Z",
+			cwd: "/work",
+			compactMetadata: { trigger: "auto", preTokens: 101 },
+		}),
+		assistant("req-2", "2026-09-14T00:00:03.000Z", 20),
+	].join("\n");
+
+	it("continues cumulative usage across a compaction without resetting", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: withCompaction,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(
+			series.entries.map((entry) =>
+				entry.usageState === "complete"
+					? entry.cumulativeTotalInputTokens
+					: undefined,
+			),
+		).toEqual([100, 120]);
+	});
+
+	it("marks the compaction on the series", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: withCompaction,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(series.compactions).toEqual([
+			{ line: 2, trigger: "auto", region: "attempt" },
+		]);
+	});
+
+	it("reports no compactions for a transcript that carries none", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: assistant("req-1", "2026-09-14T00:00:01.000Z", 100),
+			prefixLinesExcluded: 0,
+		});
+
+		expect(series.compactions).toEqual([]);
 	});
 });
 

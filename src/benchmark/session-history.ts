@@ -1364,6 +1364,7 @@ export type SessionHistoryRequestEntry = {
 			readonly usageState: "complete";
 			readonly usage: SessionHistoryRequestUsage;
 			readonly totalInputTokens: number;
+			readonly cumulativeTotalInputTokens: number;
 			readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
 	  }
 	| { readonly usageState: "conflict" }
@@ -1393,6 +1394,7 @@ export interface SessionHistoryRequestSeries {
 	readonly boundary: "known" | "unknown";
 	readonly transcriptState: "saved" | "absent";
 	readonly entries: readonly SessionHistoryRequestEntry[];
+	readonly compactions: readonly SessionHistoryCompaction[];
 	readonly attemptTotals: SessionHistoryAttemptTotals;
 }
 
@@ -1475,12 +1477,53 @@ const requestRowSchema = z.looseObject({
 	}),
 });
 
+const compactionRowSchema = z
+	.object({
+		type: z.literal("system"),
+		subtype: z.literal("compact_boundary"),
+		compactMetadata: z.object({ trigger: z.string().min(1) }).loose(),
+	})
+	.loose();
+
+export interface SessionHistoryCompaction {
+	readonly line: number;
+	readonly trigger: string;
+	readonly region: HistoryRegion;
+}
+
+interface ParsedCompactionRow {
+	readonly line: number;
+	readonly trigger: string;
+}
+
 interface ParsedRequestRow {
 	readonly requestId: string | undefined;
 	readonly line: number;
 	readonly model: string | undefined;
 	readonly usage: SessionHistoryRequestUsage;
 	readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
+}
+
+function parsedCompactionRow(
+	text: string,
+	line: number,
+): ParsedCompactionRow | undefined {
+	if (text.trim() === "") {
+		return undefined;
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+	const row = compactionRowSchema.safeParse(parsed);
+	if (!row.success) {
+		return undefined;
+	}
+
+	return { line, trigger: row.data.compactMetadata.trigger };
 }
 
 function parsedRequestRow(
@@ -1607,11 +1650,20 @@ function requestDisagreements(
 	return { usage, model, firstRowByRequestId };
 }
 
+type PricedEntry = Extract<
+	SessionHistoryRequestEntry,
+	{ usageState: "complete" }
+>;
+
+type UnaccumulatedEntry =
+	| Omit<PricedEntry, "cumulativeTotalInputTokens">
+	| Extract<SessionHistoryRequestEntry, { usageState: "conflict" }>;
+
 function collapsedEntry(
 	row: Readonly<ParsedRequestRow>,
 	disagreements: Readonly<RequestDisagreements>,
 	prefixLinesExcluded: number | undefined,
-): SessionHistoryRequestEntry {
+): UnaccumulatedEntry {
 	const modelDisagrees =
 		row.requestId !== undefined && disagreements.model.has(row.requestId);
 	const identity = {
@@ -1635,12 +1687,18 @@ function collapsedEntry(
 	};
 }
 
+/**
+ * A compaction shortens the conversation the provider sees; it does not undo
+ * the tokens already spent. The running total therefore carries across one,
+ * and a reset here would read as a session that cost less than it did.
+ */
 function collapsedEntries(
 	rows: readonly Readonly<ParsedRequestRow>[],
 	prefixLinesExcluded: number | undefined,
 ): readonly SessionHistoryRequestEntry[] {
 	const disagreements = requestDisagreements(rows);
 	const entries: SessionHistoryRequestEntry[] = [];
+	let cumulative = 0;
 	for (const row of rows) {
 		if (
 			row.requestId !== undefined &&
@@ -1648,7 +1706,13 @@ function collapsedEntries(
 		) {
 			continue;
 		}
-		entries.push(collapsedEntry(row, disagreements, prefixLinesExcluded));
+		const entry = collapsedEntry(row, disagreements, prefixLinesExcluded);
+		if (entry.usageState !== "complete") {
+			entries.push(entry);
+			continue;
+		}
+		cumulative += entry.totalInputTokens;
+		entries.push({ ...entry, cumulativeTotalInputTokens: cumulative });
 	}
 
 	return entries;
@@ -1663,12 +1727,17 @@ export interface SessionHistoryRequestSeriesInput {
 export function sessionHistoryRequestSeries(
 	input: Readonly<SessionHistoryRequestSeriesInput>,
 ): SessionHistoryRequestSeries {
-	const rows = (input.transcript ?? "")
-		.split("\n")
-		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
+	const lines = (input.transcript ?? "").split("\n");
+	const rows = lines.flatMap(
+		(text, index) => parsedRequestRow(text, index + 1) ?? [],
+	);
+	const compactions = lines.flatMap(
+		(text, index) => parsedCompactionRow(text, index + 1) ?? [],
+	);
 
 	return seriesFromRows(
 		rows,
+		compactions,
 		input.prefixLinesExcluded,
 		input.transcript === undefined ? "absent" : "saved",
 	);
@@ -1684,6 +1753,7 @@ export async function sessionHistoryRequestSeriesFromLines(
 	lines: AsyncIterable<string>,
 ): Promise<SessionHistoryRequestSeries> {
 	const rows: ParsedRequestRow[] = [];
+	const compactions: ParsedCompactionRow[] = [];
 	let lineNumber = 0;
 	for await (const text of lines) {
 		lineNumber += 1;
@@ -1691,13 +1761,18 @@ export async function sessionHistoryRequestSeriesFromLines(
 		if (row !== undefined) {
 			rows.push(row);
 		}
+		const compaction = parsedCompactionRow(text, lineNumber);
+		if (compaction !== undefined) {
+			compactions.push(compaction);
+		}
 	}
 
-	return seriesFromRows(rows, input.prefixLinesExcluded, "saved");
+	return seriesFromRows(rows, compactions, input.prefixLinesExcluded, "saved");
 }
 
 function seriesFromRows(
 	rows: readonly Readonly<ParsedRequestRow>[],
+	compactionRows: readonly Readonly<ParsedCompactionRow>[],
 	prefixLinesExcluded: number | undefined,
 	transcriptState: "saved" | "absent",
 ): SessionHistoryRequestSeries {
@@ -1711,6 +1786,11 @@ function seriesFromRows(
 		boundary,
 		transcriptState,
 		entries,
+		compactions: compactionRows.map((compaction) => ({
+			line: compaction.line,
+			trigger: compaction.trigger,
+			region: regionFor(compaction.line, prefixLinesExcluded),
+		})),
 		attemptTotals: attemptTotals(entries, boundary, transcriptState),
 	};
 }
