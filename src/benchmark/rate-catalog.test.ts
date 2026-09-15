@@ -72,6 +72,15 @@ describe("committedRateCatalog", () => {
 		}
 	});
 
+	it("names a source that no category contradicts", () => {
+		const provenances = new Set(Object.values(committedRateCatalog.provenance));
+
+		expect(provenances.has("publication-backed")).toBe(false);
+		expect(committedRateCatalog.source).toBe(
+			"corpus-fit-with-tier-inferred-5m",
+		);
+	});
+
 	it("marks the 5m cache-write rate as inferred and the rest as corpus-measured", () => {
 		expect(committedRateCatalog.provenance).toEqual({
 			inputUsdPerMillion: "corpus-measured",

@@ -13,7 +13,7 @@ import { contextRateCatalogSchema } from "./context-evidence-contract";
 export const committedRateCatalog: ContextRateCatalog =
 	contextRateCatalogSchema.parse({
 		schemaVersion: 1,
-		source: "anthropic-list-prices",
+		source: "corpus-fit-with-tier-inferred-5m",
 		version: "2026-09-15",
 		currency: "USD",
 		provenance: {

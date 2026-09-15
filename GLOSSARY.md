@@ -477,11 +477,14 @@ See [current state](docs/status.md) for implementation coverage and
 - **Rate catalog** — the per-model, per-category prices a request's cost is
   calculated from, carrying the source and version they came from. A saved
   calculation persists the catalog that priced it, so a later catalog changes
-  what new calculations cost and leaves the saved ones alone. Each category
+  what new calculations cost and leaves the saved ones alone. A reading computed
+  on demand persists nothing and prices from whatever catalog its caller
+  supplies, reporting itself unavailable when none does. Each category
   records where its price came from, because the suite can only defend a rate
-  the saved attempts re-derive; a category no saved attempt exercises is marked
-  as inferred, and pricing that rests on it is weaker evidence than pricing that
-  does not.
+  the saved attempts re-derive. A category no saved attempt exercises is marked
+  for what it does rest on, a price someone looked up or a figure computed from
+  another category, and pricing that rests on either is weaker evidence than
+  pricing the corpus measures.
 - **Instruction load** — one instruction file an attempt loaded automatically,
   named by its path and the kind of memory it came from. Two sources record
   loads and they carry different detail. A hook capture also records why the
