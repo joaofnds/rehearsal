@@ -1,4 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, afterEach } from "bun:test";
+import { mkdtemp, open } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { JsonValue } from "#benchmark/json-value";
 import type { SessionHistoryRequestSeries } from "#benchmark/session-history";
 import {
@@ -7,6 +11,7 @@ import {
 	sessionHistoryDetail,
 	sessionHistoryReport,
 	sessionHistoryRequestSeries,
+	sessionHistoryRequestSeriesFromLines,
 } from "#benchmark/session-history";
 
 function row(record: JsonValue): string {
@@ -1082,6 +1087,111 @@ describe(sessionHistoryRequestSeries.name, () => {
 			"the model's context window limit, which the transcript does not carry",
 		]);
 		expect(series.measuresActiveContextWindow).toBe(false);
+	});
+
+	describe("when the transcript arrives as lines", () => {
+		const temporaryHandles: FileHandle[] = [];
+
+		afterEach(async () => {
+			for (const handle of temporaryHandles.splice(0)) {
+				await handle.close();
+			}
+		});
+
+		async function linesOf(contents: string): Promise<AsyncIterable<string>> {
+			const path = join(
+				await mkdtemp(join(tmpdir(), "rehearsal-series-lines-")),
+				"transcript.jsonl",
+			);
+			await Bun.write(path, contents);
+			const handle = await open(path);
+			temporaryHandles.push(handle);
+
+			return handle.readLines({ autoClose: false });
+		}
+
+		const multiRequestTranscript = [
+			row(
+				assistantRow("1", "req-inherited", "claude-opus-5", {
+					input: 2,
+					output: 10,
+					cacheRead: 100,
+					cacheWrite: 20,
+				}),
+			),
+			row(
+				assistantRow("2", "req-attempt", "claude-sonnet-5", {
+					input: 3,
+					output: 151,
+					cacheRead: 200,
+					cacheWrite: 251_695,
+				}),
+			),
+			row(
+				assistantRow("3", "req-attempt-2", "claude-sonnet-5", {
+					input: 5,
+					output: 7,
+					cacheRead: 300,
+					cacheWrite: 40,
+				}),
+			),
+		].join("\n");
+
+		it("builds the same series the string input builds", async () => {
+			const streamed = await sessionHistoryRequestSeriesFromLines(
+				{ prefixLinesExcluded: 1 },
+				await linesOf(`${multiRequestTranscript}\n`),
+			);
+
+			expect(streamed).toEqual(
+				sessionHistoryRequestSeries({
+					transcript: multiRequestTranscript,
+					prefixLinesExcluded: 1,
+				}),
+			);
+		});
+
+		it("reads a final line carrying no trailing newline as the same entry", async () => {
+			const withNewline = await sessionHistoryRequestSeriesFromLines(
+				{ prefixLinesExcluded: 1 },
+				await linesOf(`${multiRequestTranscript}\n`),
+			);
+
+			const withoutNewline = await sessionHistoryRequestSeriesFromLines(
+				{ prefixLinesExcluded: 1 },
+				await linesOf(multiRequestTranscript),
+			);
+
+			expect(withoutNewline.entries).toEqual(withNewline.entries);
+		});
+
+		it("reads a transcript written with carriage-return line endings", async () => {
+			const crlf = await linesOf(
+				`${multiRequestTranscript.replaceAll("\n", "\r\n")}\r\n`,
+			);
+
+			const streamed = await sessionHistoryRequestSeriesFromLines(
+				{ prefixLinesExcluded: 1 },
+				crlf,
+			);
+
+			expect(streamed.entries).toEqual(
+				sessionHistoryRequestSeries({
+					transcript: multiRequestTranscript,
+					prefixLinesExcluded: 1,
+				}).entries,
+			);
+		});
+
+		it("reports totals unavailable when no transcript lines are read", async () => {
+			const series = await sessionHistoryRequestSeriesFromLines(
+				{ prefixLinesExcluded: 1268 },
+				await linesOf(""),
+			);
+
+			expect(series.transcriptState).toBe("saved");
+			expect(series.entries).toEqual([]);
+		});
 	});
 });
 

@@ -1659,14 +1659,45 @@ export interface SessionHistoryRequestSeriesInput {
 export function sessionHistoryRequestSeries(
 	input: Readonly<SessionHistoryRequestSeriesInput>,
 ): SessionHistoryRequestSeries {
-	const transcriptState = input.transcript === undefined ? "absent" : "saved";
 	const rows = (input.transcript ?? "")
 		.split("\n")
 		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
-	const boundary =
-		input.prefixLinesExcluded === undefined ? "unknown" : "known";
-	const entries = collapsedEntries(rows, input.prefixLinesExcluded);
+	return seriesFromRows(
+		rows,
+		input.prefixLinesExcluded,
+		input.transcript === undefined ? "absent" : "saved",
+	);
+}
+
+export interface SessionHistoryRequestSeriesMetadata {
+	readonly prefixLinesExcluded: number | undefined;
+}
+
+export async function sessionHistoryRequestSeriesFromLines(
+	input: Readonly<SessionHistoryRequestSeriesMetadata>,
+	lines: AsyncIterable<string>,
+): Promise<SessionHistoryRequestSeries> {
+	const rows: ParsedRequestRow[] = [];
+	let lineNumber = 0;
+	for await (const text of lines) {
+		lineNumber += 1;
+		const row = parsedRequestRow(text, lineNumber);
+		if (row !== undefined) {
+			rows.push(row);
+		}
+	}
+
+	return seriesFromRows(rows, input.prefixLinesExcluded, "saved");
+}
+
+function seriesFromRows(
+	rows: readonly Readonly<ParsedRequestRow>[],
+	prefixLinesExcluded: number | undefined,
+	transcriptState: "saved" | "absent",
+): SessionHistoryRequestSeries {
+	const boundary = prefixLinesExcluded === undefined ? "unknown" : "known";
+	const entries = collapsedEntries(rows, prefixLinesExcluded);
 
 	return {
 		name: "total input tokens",
