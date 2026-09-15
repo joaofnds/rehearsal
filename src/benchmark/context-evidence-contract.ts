@@ -104,22 +104,54 @@ const completeRequestPricingSchema = z
 	})
 	.strict();
 
+/**
+ * The preconditions pricing can fail on. Two projections walk them, and a
+ * state named in only one would let the same transcript report a different
+ * gap depending on which reader asked.
+ */
+export const UNPRICED_STATES = [
+	"usage-missing",
+	"usage-conflict",
+	"model-missing",
+	"model-conflict",
+	"ttl-split-missing",
+	"ttl-split-conflict",
+	"rates-missing",
+] as const;
+
+export type UnpricedState = (typeof UNPRICED_STATES)[number];
+
+export const UNPRICED_REASONS = {
+	"usage-missing": "the row carries no usage",
+	"usage-conflict": "usage is in conflict",
+	"model-missing": "the row names no model",
+	"model-conflict": "the executing model is in conflict",
+	"ttl-split-missing": "the cache-write TTL split is missing",
+	"ttl-split-conflict": "the cache-write TTL split is in conflict",
+	"rates-missing": "no rate is catalogued for the executing model",
+} satisfies Readonly<Record<UnpricedState, string>>;
+
 const incompleteRequestPricingSchema = z
 	.object({
-		state: z.enum([
-			"usage-missing",
-			"usage-conflict",
-			"model-missing",
-			"model-conflict",
-			"ttl-split-missing",
-			"ttl-split-conflict",
-			"rates-missing",
-		]),
+		state: z.enum(UNPRICED_STATES),
+	})
+	.strict();
+
+/**
+ * Priced at zero with no rate behind it. Kept apart from "complete", which
+ * requires the rate it was priced at, so a reading never claims a rate it
+ * never selected.
+ */
+const zeroUsageRequestPricingSchema = z
+	.object({
+		state: z.literal("zero-usage"),
+		calculatedCostUsd: z.literal(0),
 	})
 	.strict();
 
 const requestPricingSchema = z.union([
 	completeRequestPricingSchema,
+	zeroUsageRequestPricingSchema,
 	incompleteRequestPricingSchema,
 ]);
 
@@ -527,6 +559,23 @@ export interface PricedTokenUsage {
  * requests, and a category added to the catalog but to only one of the sums
  * would undercharge silently rather than fail.
  */
+/**
+ * A request that consumed nothing costs nothing under every rate, since
+ * costFromRate is linear with no per-request constant. Pricing it without a
+ * catalogued rate assumes no rate; reporting it unpriced would leave an
+ * attempt's calculated cost permanently incomplete though nothing is missing
+ * from the sum.
+ */
+export function usageIsZero(usage: Readonly<PricedTokenUsage>): boolean {
+	return (
+		usage.inputTokens === 0 &&
+		usage.outputTokens === 0 &&
+		usage.cacheReadTokens === 0 &&
+		usage.cacheWrite5mTokens === 0 &&
+		usage.cacheWrite1hTokens === 0
+	);
+}
+
 export function costFromRate(
 	usage: Readonly<PricedTokenUsage>,
 	rate: ModelRate,

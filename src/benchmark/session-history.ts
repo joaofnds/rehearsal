@@ -1,6 +1,10 @@
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
-import { costFromRate } from "./context-evidence-contract";
+import {
+	costFromRate,
+	UNPRICED_REASONS,
+	usageIsZero,
+} from "./context-evidence-contract";
 import type { ContextRateCatalog } from "./context-evidence-contract";
 import type { Immutable } from "./contracts";
 import { jsonValueSchema } from "./json-value";
@@ -1749,40 +1753,41 @@ function pricedRequest(
 	rates: ContextRateCatalog,
 ): PricedRequest {
 	if (entry.usageState !== "complete") {
-		return { state: "unpriced", reason: "usage is in conflict" };
+		return { state: "unpriced", reason: UNPRICED_REASONS["usage-conflict"] };
 	}
 	if (entry.modelState === "conflict") {
-		return { state: "unpriced", reason: "the executing model is in conflict" };
+		return { state: "unpriced", reason: UNPRICED_REASONS["model-conflict"] };
 	}
 	const { model } = entry;
 	if (model === undefined) {
-		return { state: "unpriced", reason: "the row names no model" };
+		return { state: "unpriced", reason: UNPRICED_REASONS["model-missing"] };
 	}
 	const split = entry.cacheWriteSplit;
-	if (split.state !== "complete") {
+	if (split.state === "conflict") {
 		return {
 			state: "unpriced",
-			reason: "the cache-write TTL split is unusable",
+			reason: UNPRICED_REASONS["ttl-split-conflict"],
 		};
+	}
+	if (split.state !== "complete") {
+		return { state: "unpriced", reason: UNPRICED_REASONS["ttl-split-missing"] };
+	}
+	const usage = {
+		inputTokens: entry.usage.inputTokens,
+		outputTokens: entry.usage.outputTokens,
+		cacheReadTokens: entry.usage.cacheReadTokens,
+		cacheWrite5mTokens: split.fiveMinuteTokens,
+		cacheWrite1hTokens: split.oneHourTokens,
+	};
+	if (usageIsZero(usage)) {
+		return { state: "priced", costUsd: 0 };
 	}
 	const rate = rates.models.find((candidate) => candidate.model === model);
 	if (rate === undefined) {
-		return { state: "unpriced", reason: `no rate is catalogued for ${model}` };
+		return { state: "unpriced", reason: UNPRICED_REASONS["rates-missing"] };
 	}
 
-	return {
-		state: "priced",
-		costUsd: costFromRate(
-			{
-				inputTokens: entry.usage.inputTokens,
-				outputTokens: entry.usage.outputTokens,
-				cacheReadTokens: entry.usage.cacheReadTokens,
-				cacheWrite5mTokens: split.fiveMinuteTokens,
-				cacheWrite1hTokens: split.oneHourTokens,
-			},
-			rate,
-		),
-	};
+	return { state: "priced", costUsd: costFromRate(usage, rate) };
 }
 
 function calculatedCost(

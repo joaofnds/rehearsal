@@ -1314,6 +1314,64 @@ describe(sessionHistoryAttemptCost.name, () => {
 		).toBeCloseTo(-0.000757, 6);
 	});
 
+	it("prices a zero-usage row at zero without a catalogued rate", () => {
+		const transcript = [
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:01.000Z",
+				cwd: "/work",
+				requestId: "req-attempt",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 2,
+						output_tokens: 151,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 251_695,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 251_695,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:02.000Z",
+				cwd: "/work",
+				message: {
+					model: "<synthetic>",
+					usage: {
+						input_tokens: 0,
+						output_tokens: 0,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 0,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 0,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "api error" }],
+				},
+			}),
+		].join("\n");
+
+		const cost = sessionHistoryAttemptCost({
+			series: sessionHistoryRequestSeries({
+				transcript,
+				prefixLinesExcluded: 0,
+			}),
+			reportedCostUsd: 1.008294,
+			rates,
+		});
+
+		expect(cost.calculated.state).toBe("complete");
+		expect(
+			cost.calculated.state === "complete" && cost.calculated.costUsd,
+		).toBeCloseTo(1.009051, 6);
+	});
+
 	it("prices only the attempt region, leaving inherited requests out", () => {
 		const confined = sessionHistoryAttemptCost({
 			series: seriesWith(1),

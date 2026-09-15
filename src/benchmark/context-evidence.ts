@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from "./json-value";
 import {
 	contextEvidenceSchema,
 	costFromRate,
+	usageIsZero,
 } from "./context-evidence-contract";
 import type {
 	ContextEvidence,
@@ -554,23 +555,23 @@ function requestPricing(
 	if (split.fiveMinuteTokens + split.oneHourTokens !== usage.cacheWriteTokens) {
 		return { state: "ttl-split-conflict" };
 	}
+	const pricedUsage = {
+		inputTokens: usage.inputTokens,
+		outputTokens: usage.outputTokens,
+		cacheReadTokens: usage.cacheReadTokens,
+		cacheWrite5mTokens: split.fiveMinuteTokens,
+		cacheWrite1hTokens: split.oneHourTokens,
+	};
 	const rate = rates?.models.find((entry) => entry.model === model);
 	if (rates === undefined || rate === undefined) {
-		return { state: "rates-missing" };
+		return usageIsZero(pricedUsage)
+			? { state: "zero-usage", calculatedCostUsd: 0 }
+			: { state: "rates-missing" };
 	}
 
 	return {
 		state: "complete",
-		calculatedCostUsd: costFromRate(
-			{
-				inputTokens: usage.inputTokens,
-				outputTokens: usage.outputTokens,
-				cacheReadTokens: usage.cacheReadTokens,
-				cacheWrite5mTokens: split.fiveMinuteTokens,
-				cacheWrite1hTokens: split.oneHourTokens,
-			},
-			rate,
-		),
+		calculatedCostUsd: costFromRate(pricedUsage, rate),
 		rateSource: rates.source,
 		rateVersion: rates.version,
 		currency: rates.currency,
