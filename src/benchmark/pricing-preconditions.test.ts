@@ -65,6 +65,13 @@ const preconditions: readonly {
 		].join("\n"),
 	},
 	{
+		state: "model-conflict",
+		transcript: [
+			assistantRow({ model: "claude-sonnet-5", usage: usage(completeSplit) }),
+			assistantRow({ model: "claude-opus-5", usage: usage(completeSplit) }),
+		].join("\n"),
+	},
+	{
 		state: "model-missing",
 		transcript: assistantRow({ usage: usage(completeSplit) }),
 	},
