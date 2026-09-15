@@ -1670,9 +1670,10 @@ export function sessionHistoryRequestSeries(
 	);
 }
 
-export interface SessionHistoryRequestSeriesMetadata {
-	readonly prefixLinesExcluded: number | undefined;
-}
+export type SessionHistoryRequestSeriesMetadata = Omit<
+	SessionHistoryRequestSeriesInput,
+	"transcript"
+>;
 
 export async function sessionHistoryRequestSeriesFromLines(
 	input: Readonly<SessionHistoryRequestSeriesMetadata>,

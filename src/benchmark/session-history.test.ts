@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "bun:test";
-import { mkdtemp, open } from "node:fs/promises";
+import { mkdtemp, open, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1090,22 +1090,27 @@ describe(sessionHistoryRequestSeries.name, () => {
 	});
 
 	describe("when the transcript arrives as lines", () => {
-		const temporaryHandles: FileHandle[] = [];
+		const openHandles: FileHandle[] = [];
+		const roots: string[] = [];
 
 		afterEach(async () => {
-			for (const handle of temporaryHandles.splice(0)) {
+			for (const handle of openHandles.splice(0)) {
 				await handle.close();
 			}
+			await Promise.all(
+				roots
+					.splice(0)
+					.map((root) => rm(root, { force: true, recursive: true })),
+			);
 		});
 
 		async function linesOf(contents: string): Promise<AsyncIterable<string>> {
-			const path = join(
-				await mkdtemp(join(tmpdir(), "rehearsal-series-lines-")),
-				"transcript.jsonl",
-			);
+			const root = await mkdtemp(join(tmpdir(), "rehearsal-series-lines-"));
+			roots.push(root);
+			const path = join(root, "transcript.jsonl");
 			await Bun.write(path, contents);
 			const handle = await open(path);
-			temporaryHandles.push(handle);
+			openHandles.push(handle);
 
 			return handle.readLines({ autoClose: false });
 		}
@@ -1119,6 +1124,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 					cacheWrite: 20,
 				}),
 			),
+			"",
 			row(
 				assistantRow("2", "req-attempt", "claude-sonnet-5", {
 					input: 3,
@@ -1152,17 +1158,17 @@ describe(sessionHistoryRequestSeries.name, () => {
 		});
 
 		it("reads a final line carrying no trailing newline as the same entry", async () => {
-			const withNewline = await sessionHistoryRequestSeriesFromLines(
-				{ prefixLinesExcluded: 1 },
-				await linesOf(`${multiRequestTranscript}\n`),
-			);
-
 			const withoutNewline = await sessionHistoryRequestSeriesFromLines(
 				{ prefixLinesExcluded: 1 },
 				await linesOf(multiRequestTranscript),
 			);
 
-			expect(withoutNewline.entries).toEqual(withNewline.entries);
+			expect(withoutNewline.entries).toEqual(
+				sessionHistoryRequestSeries({
+					transcript: multiRequestTranscript,
+					prefixLinesExcluded: 1,
+				}).entries,
+			);
 		});
 
 		it("reads a transcript written with carriage-return line endings", async () => {
@@ -1183,7 +1189,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 			);
 		});
 
-		it("reports totals unavailable when no transcript lines are read", async () => {
+		it("counts an empty saved transcript as zero requests, not as an absent one", async () => {
 			const series = await sessionHistoryRequestSeriesFromLines(
 				{ prefixLinesExcluded: 1268 },
 				await linesOf(""),
@@ -1191,6 +1197,17 @@ describe(sessionHistoryRequestSeries.name, () => {
 
 			expect(series.transcriptState).toBe("saved");
 			expect(series.entries).toEqual([]);
+			expect(series.attemptTotals).toEqual({
+				state: "complete",
+				requestCount: 0,
+				usage: {
+					inputTokens: 0,
+					outputTokens: 0,
+					cacheReadTokens: 0,
+					cacheWriteTokens: 0,
+				},
+				totalInputTokens: 0,
+			});
 		});
 	});
 });
