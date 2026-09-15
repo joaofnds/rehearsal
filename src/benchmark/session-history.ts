@@ -1504,10 +1504,7 @@ interface ParsedRequestRow {
 	readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
 }
 
-function parsedCompactionRow(
-	text: string,
-	line: number,
-): ParsedCompactionRow | undefined {
+function transcriptRow(text: string): JsonValue | undefined {
 	if (text.trim() === "") {
 		return undefined;
 	}
@@ -1518,6 +1515,15 @@ function parsedCompactionRow(
 	} catch {
 		return undefined;
 	}
+	const row = jsonValueSchema.safeParse(parsed);
+
+	return row.success ? row.data : undefined;
+}
+
+function parsedCompactionRow(
+	parsed: JsonValue,
+	line: number,
+): ParsedCompactionRow | undefined {
 	const row = compactionRowSchema.safeParse(parsed);
 	if (!row.success) {
 		return undefined;
@@ -1527,19 +1533,9 @@ function parsedCompactionRow(
 }
 
 function parsedRequestRow(
-	text: string,
+	parsed: JsonValue,
 	line: number,
 ): ParsedRequestRow | undefined {
-	if (text.trim() === "") {
-		return undefined;
-	}
-
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(text);
-	} catch {
-		return undefined;
-	}
 	const row = requestRowSchema.safeParse(parsed);
 	if (!row.success) {
 		return undefined;
@@ -1727,13 +1723,17 @@ export interface SessionHistoryRequestSeriesInput {
 export function sessionHistoryRequestSeries(
 	input: Readonly<SessionHistoryRequestSeriesInput>,
 ): SessionHistoryRequestSeries {
-	const lines = (input.transcript ?? "").split("\n");
-	const rows = lines.flatMap(
-		(text, index) => parsedRequestRow(text, index + 1) ?? [],
-	);
-	const compactions = lines.flatMap(
-		(text, index) => parsedCompactionRow(text, index + 1) ?? [],
-	);
+	const rows: ParsedRequestRow[] = [];
+	const compactions: ParsedCompactionRow[] = [];
+	for (const [index, text] of (input.transcript ?? "").split("\n").entries()) {
+		const { request, compaction } = lineReadings(text, index + 1);
+		if (request !== undefined) {
+			rows.push(request);
+		}
+		if (compaction !== undefined) {
+			compactions.push(compaction);
+		}
+	}
 
 	return seriesFromRows(
 		rows,
@@ -1757,17 +1757,38 @@ export async function sessionHistoryRequestSeriesFromLines(
 	let lineNumber = 0;
 	for await (const text of lines) {
 		lineNumber += 1;
-		const row = parsedRequestRow(text, lineNumber);
-		if (row !== undefined) {
-			rows.push(row);
+		const { request, compaction } = lineReadings(text, lineNumber);
+		if (request !== undefined) {
+			rows.push(request);
 		}
-		const compaction = parsedCompactionRow(text, lineNumber);
 		if (compaction !== undefined) {
 			compactions.push(compaction);
 		}
 	}
 
 	return seriesFromRows(rows, compactions, input.prefixLinesExcluded, "saved");
+}
+
+interface TranscriptLineReadings {
+	readonly request: ParsedRequestRow | undefined;
+	readonly compaction: ParsedCompactionRow | undefined;
+}
+
+/**
+ * One JSON parse per line, feeding both readings. Parsing the line twice
+ * would let a request row and a compaction row disagree about what the line
+ * says.
+ */
+function lineReadings(text: string, line: number): TranscriptLineReadings {
+	const parsed = transcriptRow(text);
+	if (parsed === undefined) {
+		return { request: undefined, compaction: undefined };
+	}
+
+	return {
+		request: parsedRequestRow(parsed, line),
+		compaction: parsedCompactionRow(parsed, line),
+	};
 }
 
 function seriesFromRows(
