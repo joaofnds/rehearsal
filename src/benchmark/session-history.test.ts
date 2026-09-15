@@ -552,6 +552,26 @@ describe(sessionHistoryRequestSeries.name, () => {
 		return { ...withoutRequestId, requestId };
 	}
 
+	it("marks each entry with the region its line falls in", () => {
+		const usage = { input: 2, output: 10, cacheRead: 100, cacheWrite: 20 };
+		const transcript = [
+			row(assistantRow("1", "req-inherited", "claude-opus-5", usage)),
+			row(assistantRow("2", "req-attempt", "claude-sonnet-5", usage)),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 1,
+		});
+
+		expect(
+			series.entries.map(({ requestId, region }) => ({ requestId, region })),
+		).toEqual([
+			{ requestId: "req-inherited", region: "starting-context" },
+			{ requestId: "req-attempt", region: "attempt" },
+		]);
+	});
+
 	it("yields one entry per distinct request in transcript order", () => {
 		const transcript = [
 			row(
@@ -572,7 +592,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 			),
 		].join("\n");
 
-		const series = sessionHistoryRequestSeries(transcript);
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
 
 		expect(
 			series.entries.map((entry) => ({
@@ -611,7 +634,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 			row(assistantRow("3", "req-a", "claude-opus-5", usage)),
 		].join("\n");
 
-		const series = sessionHistoryRequestSeries(transcript);
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
 
 		expect(
 			series.entries.map(({ requestId, line, usageState }) => ({
@@ -642,12 +668,16 @@ describe(sessionHistoryRequestSeries.name, () => {
 				row(assistantRow("2", "req-a", "claude-opus-5", second)),
 			].join("\n");
 
-			const series = sessionHistoryRequestSeries(transcript);
+			const series = sessionHistoryRequestSeries({
+				transcript,
+				prefixLinesExcluded: 0,
+			});
 
 			expect(series.entries).toEqual([
 				{
 					requestId: "req-a",
 					line: 1,
+					region: "attempt",
 					model: "claude-opus-5",
 					usageState: "conflict",
 				},
@@ -662,12 +692,16 @@ describe(sessionHistoryRequestSeries.name, () => {
 			row(assistantRow("2", "req-a", "claude-haiku-4-5", usage)),
 		].join("\n");
 
-		const series = sessionHistoryRequestSeries(transcript);
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
 
 		expect(series.entries).toEqual([
 			{
 				requestId: "req-a",
 				line: 1,
+				region: "attempt",
 				model: undefined,
 				modelState: "conflict",
 				usage: {
@@ -691,7 +725,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 			}),
 		);
 
-		const series = sessionHistoryRequestSeries(transcript);
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
 
 		const [entry] = series.entries;
 
@@ -726,7 +763,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 				),
 			].join("\n");
 
-			const series = sessionHistoryRequestSeries(transcript);
+			const series = sessionHistoryRequestSeries({
+				transcript,
+				prefixLinesExcluded: 0,
+			});
 
 			expect(
 				series.entries.map((entry) => ({
@@ -749,8 +789,8 @@ describe(sessionHistoryRequestSeries.name, () => {
 	);
 
 	it("names what the total omits without claiming the categories overlap", () => {
-		const series = sessionHistoryRequestSeries(
-			row(
+		const series = sessionHistoryRequestSeries({
+			transcript: row(
 				assistantRow("1", "req-a", "claude-opus-5", {
 					input: 2,
 					output: 151,
@@ -758,7 +798,8 @@ describe(sessionHistoryRequestSeries.name, () => {
 					cacheWrite: 251_695,
 				}),
 			),
-		);
+			prefixLinesExcluded: 0,
+		});
 
 		expect(series.name).toBe("total input tokens");
 		expect(series.omits).toEqual([

@@ -1341,6 +1341,7 @@ export interface SessionHistoryRequestUsage {
 export type SessionHistoryRequestEntry = {
 	readonly requestId: string | undefined;
 	readonly line: number;
+	readonly region: HistoryRegion;
 	readonly model?: string | undefined;
 	readonly modelState?: "conflict";
 } & (
@@ -1472,12 +1473,14 @@ function requestDisagreements(
 function collapsedEntry(
 	row: Readonly<ParsedRequestRow>,
 	disagreements: Readonly<RequestDisagreements>,
+	prefixLinesExcluded: number | undefined,
 ): SessionHistoryRequestEntry {
 	const modelDisagrees =
 		row.requestId !== undefined && disagreements.model.has(row.requestId);
 	const identity = {
 		requestId: row.requestId,
 		line: row.line,
+		region: regionFor(row.line, prefixLinesExcluded),
 		...(modelDisagrees
 			? { model: undefined, modelState: "conflict" as const }
 			: { model: row.model }),
@@ -1496,6 +1499,7 @@ function collapsedEntry(
 
 function collapsedEntries(
 	rows: readonly Readonly<ParsedRequestRow>[],
+	prefixLinesExcluded: number | undefined,
 ): readonly SessionHistoryRequestEntry[] {
 	const disagreements = requestDisagreements(rows);
 	const entries: SessionHistoryRequestEntry[] = [];
@@ -1506,16 +1510,21 @@ function collapsedEntries(
 		) {
 			continue;
 		}
-		entries.push(collapsedEntry(row, disagreements));
+		entries.push(collapsedEntry(row, disagreements, prefixLinesExcluded));
 	}
 
 	return entries;
 }
 
+export interface SessionHistoryRequestSeriesInput {
+	readonly transcript: string;
+	readonly prefixLinesExcluded: number | undefined;
+}
+
 export function sessionHistoryRequestSeries(
-	transcript: string,
+	input: Readonly<SessionHistoryRequestSeriesInput>,
 ): SessionHistoryRequestSeries {
-	const rows = transcript
+	const rows = input.transcript
 		.split("\n")
 		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
@@ -1523,6 +1532,6 @@ export function sessionHistoryRequestSeries(
 		name: "total input tokens",
 		measuresActiveContextWindow: false,
 		omits: TOTAL_INPUT_TOKENS_OMITS,
-		entries: collapsedEntries(rows),
+		entries: collapsedEntries(rows, input.prefixLinesExcluded),
 	};
 }
