@@ -474,6 +474,18 @@ See [current state](docs/status.md) for implementation coverage and
   that cost was priced on. The harness retains it verbatim on an attempt's
   metrics. A call made by a CLI that reports no such block records its absence,
   which is not the same as a call that used no model.
+- **Rate catalog** — the per-model, per-category prices a request's cost is
+  calculated from, carrying the source and version they came from. A saved
+  calculation persists the catalog that priced it, so a later catalog changes
+  what new calculations cost and leaves the saved ones alone. A category whose
+  price no saved attempt exercises is marked as resting on publication rather
+  than on measurement, since the suite can only defend the rates the corpus
+  re-derives.
+- **Instruction load** — one instruction file an attempt loaded automatically,
+  named by its path and the kind of memory it came from. The transcript records
+  which files loaded but not why, what triggered the load, or which file
+  included it, so those three report unavailable. An attempt whose transcript
+  records no loads at all is distinct from one that loaded none.
 - **Cost basis** — what the provider priced a model's reported cost on. A cost
   basis of `list` is public per-token rates, so the cost can be re-derived from
   a rate catalog and checked. Any other basis is a discount or plan the catalog
