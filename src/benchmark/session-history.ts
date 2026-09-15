@@ -1338,6 +1338,15 @@ export interface SessionHistoryRequestUsage {
 	readonly cacheWriteTokens: number;
 }
 
+export type SessionHistoryCacheWriteSplit =
+	| {
+			readonly state: "complete";
+			readonly fiveMinuteTokens: number;
+			readonly oneHourTokens: number;
+	  }
+	| { readonly state: "missing"; readonly reasons: readonly string[] }
+	| { readonly state: "conflict"; readonly reasons: readonly string[] };
+
 export type SessionHistoryRequestEntry = {
 	readonly requestId: string | undefined;
 	readonly line: number;
@@ -1349,6 +1358,7 @@ export type SessionHistoryRequestEntry = {
 			readonly usageState: "complete";
 			readonly usage: SessionHistoryRequestUsage;
 			readonly totalInputTokens: number;
+			readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
 	  }
 	| { readonly usageState: "conflict" }
 );
@@ -1431,11 +1441,17 @@ const TOTAL_INPUT_TOKENS_OMITS = [
 	"the model's context window limit, which the transcript does not carry",
 ] as const;
 
+const cacheCreationSchema = z.looseObject({
+	ephemeral_5m_input_tokens: z.number().int().nonnegative(),
+	ephemeral_1h_input_tokens: z.number().int().nonnegative(),
+});
+
 const requestUsageSchema = z.looseObject({
 	input_tokens: z.number().int().nonnegative(),
 	output_tokens: z.number().int().nonnegative(),
 	cache_read_input_tokens: z.number().int().nonnegative(),
 	cache_creation_input_tokens: z.number().int().nonnegative(),
+	cache_creation: cacheCreationSchema.nullish(),
 });
 
 const requestRowSchema = z.looseObject({
@@ -1452,6 +1468,7 @@ interface ParsedRequestRow {
 	readonly line: number;
 	readonly model: string | undefined;
 	readonly usage: SessionHistoryRequestUsage;
+	readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
 }
 
 function parsedRequestRow(
@@ -1485,7 +1502,42 @@ function parsedRequestRow(
 			cacheReadTokens: usage.cache_read_input_tokens,
 			cacheWriteTokens: usage.cache_creation_input_tokens,
 		},
+		cacheWriteSplit: cacheWriteSplit(
+			usage.cache_creation,
+			usage.cache_creation_input_tokens,
+		),
 	};
+}
+
+/**
+ * The split is what makes a cache write priceable: the 5m and 1h rates differ
+ * per model and are not derivable from one another. A split that does not add
+ * up to the cache-write total prices nothing, so it is a conflict rather than
+ * a number to lean on.
+ */
+function cacheWriteSplit(
+	reported: Readonly<z.infer<typeof cacheCreationSchema>> | null | undefined,
+	cacheWriteTokens: number,
+): SessionHistoryCacheWriteSplit {
+	if (reported === null || reported === undefined) {
+		return {
+			state: "missing",
+			reasons: ["the row reports no cache-creation TTL split"],
+		};
+	}
+	const fiveMinuteTokens = reported.ephemeral_5m_input_tokens;
+	const oneHourTokens = reported.ephemeral_1h_input_tokens;
+	const total = fiveMinuteTokens + oneHourTokens;
+	if (total !== cacheWriteTokens) {
+		return {
+			state: "conflict",
+			reasons: [
+				`the TTL split totals ${total} against ${cacheWriteTokens} cache-write tokens`,
+			],
+		};
+	}
+
+	return { state: "complete", fiveMinuteTokens, oneHourTokens };
 }
 
 function totalInputTokens(usage: Readonly<SessionHistoryRequestUsage>): number {
@@ -1560,6 +1612,7 @@ function collapsedEntry(
 		usageState: "complete",
 		usage: row.usage,
 		totalInputTokens: totalInputTokens(row.usage),
+		cacheWriteSplit: row.cacheWriteSplit,
 	};
 }
 

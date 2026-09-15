@@ -699,6 +699,98 @@ describe(sessionHistoryRequestSeries.name, () => {
 		});
 	});
 
+	it("carries the cache-write TTL split the row reports", () => {
+		const transcript = row({
+			type: "assistant",
+			timestamp: "2026-09-14T00:00:01.000Z",
+			cwd: "/work",
+			requestId: "req-a",
+			message: {
+				model: "claude-sonnet-5",
+				usage: {
+					input_tokens: 2,
+					output_tokens: 151,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 251_695,
+					cache_creation: {
+						ephemeral_1h_input_tokens: 251_695,
+						ephemeral_5m_input_tokens: 0,
+					},
+				},
+				content: [{ type: "text", text: "reply" }],
+			},
+		});
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		const [entry] = series.entries;
+
+		expect(entry?.usageState === "complete" && entry.cacheWriteSplit).toEqual({
+			state: "complete",
+			fiveMinuteTokens: 0,
+			oneHourTokens: 251_695,
+		});
+	});
+
+	it("reports the TTL split missing when the row omits it", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: row(
+				assistantRow("1", "req-a", "claude-sonnet-5", {
+					input: 2,
+					output: 151,
+					cacheRead: 0,
+					cacheWrite: 251_695,
+				}),
+			),
+			prefixLinesExcluded: 0,
+		});
+
+		const [entry] = series.entries;
+
+		expect(entry?.usageState === "complete" && entry.cacheWriteSplit).toEqual({
+			state: "missing",
+			reasons: ["the row reports no cache-creation TTL split"],
+		});
+	});
+
+	it("reports the TTL split in conflict when it disagrees with cache-write usage", () => {
+		const transcript = row({
+			type: "assistant",
+			timestamp: "2026-09-14T00:00:01.000Z",
+			cwd: "/work",
+			requestId: "req-a",
+			message: {
+				model: "claude-sonnet-5",
+				usage: {
+					input_tokens: 2,
+					output_tokens: 151,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 251_695,
+					cache_creation: {
+						ephemeral_1h_input_tokens: 1,
+						ephemeral_5m_input_tokens: 1,
+					},
+				},
+				content: [{ type: "text", text: "reply" }],
+			},
+		});
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		const [entry] = series.entries;
+
+		expect(entry?.usageState === "complete" && entry.cacheWriteSplit).toEqual({
+			state: "conflict",
+			reasons: ["the TTL split totals 2 against 251695 cache-write tokens"],
+		});
+	});
+
 	it("yields one entry per distinct request in transcript order", () => {
 		const transcript = [
 			row(
@@ -839,6 +931,10 @@ describe(sessionHistoryRequestSeries.name, () => {
 				},
 				totalInputTokens: 122,
 				usageState: "complete",
+				cacheWriteSplit: {
+					state: "missing",
+					reasons: ["the row reports no cache-creation TTL split"],
+				},
 			},
 		]);
 	});
