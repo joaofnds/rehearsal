@@ -16,6 +16,7 @@ import { createApiApp } from "#server/api";
 import {
 	readConfirmationAttemptHistory,
 	readSessionAttemptHistory,
+	readSessionAttemptRequestSeries,
 	SessionHistoryReaderError,
 } from "#server/session-history-reader";
 
@@ -429,5 +430,190 @@ describe(readConfirmationAttemptHistory.name, () => {
 		expect(readConfirmationAttemptHistory(fixture)).rejects.toBeInstanceOf(
 			SessionHistoryReaderError,
 		);
+	});
+});
+
+describe(readSessionAttemptRequestSeries.name, () => {
+	async function writtenResumedAttempt(): Promise<{
+		readonly runsDirectory: string;
+		readonly caseId: string;
+		readonly uuid: string;
+	}> {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-history-series-"));
+		roots.push(root);
+		const runsDirectory = join(root, ".benchmark-runs");
+		const caseId = "case-resumed";
+		const uuid = "attempt-resumed";
+		const paths = sessionAttemptPaths(runsDirectory, { caseId, uuid });
+		await mkdir(paths.directory, { recursive: true });
+		const assistant = (
+			requestId: string,
+			model: string,
+			usage: Readonly<Record<string, number>>,
+		): string =>
+			JSON.stringify({
+				type: "assistant",
+				requestId,
+				cwd: "/work",
+				message: {
+					model,
+					usage: {
+						input_tokens: usage["input"],
+						output_tokens: usage["output"],
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: usage["cacheWrite"],
+						cache_creation: {
+							ephemeral_1h_input_tokens: usage["cacheWrite"],
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			});
+		const transcript = [
+			assistant("req-inherited", "claude-opus-5", {
+				input: 7,
+				output: 90_592,
+				cacheWrite: 9,
+			}),
+			assistant("req-attempt", "claude-sonnet-5", {
+				input: 2,
+				output: 151,
+				cacheWrite: 251_695,
+			}),
+		].join("\n");
+		const record = sessionAttemptRecordSchema.parse({
+			schemaVersion: 1,
+			caseId,
+			lineage: "lineage-a",
+			model: "sonnet",
+			sessionBudgetUsd: 2,
+			corpusFiles: [],
+			prompt: "inspect",
+			reply: "done",
+			transcriptFile: "/outside/must-not-be-read.jsonl",
+			transcriptDiagnostics: {
+				state: "complete",
+				prefixLinesExcluded: 1,
+				sourceLineCount: 2,
+				measuredLineCount: 1,
+				toolUseOccurrences: { total: 0, byName: [] },
+				toolErrors: [],
+				repeatedBashCommands: [],
+				issues: [],
+			},
+			metrics: {
+				costUsd: 1.008294,
+				inputTokens: 2,
+				outputTokens: 151,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 251_695,
+				turns: 1,
+			},
+			outcome: "SUCCESSFUL",
+			checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+			elapsedMs: 1,
+		});
+		await Bun.write(paths.recordFile, `${JSON.stringify(record, null, 2)}\n`);
+		await Bun.write(join(paths.directory, "transcript.jsonl"), transcript);
+
+		return { runsDirectory, caseId, uuid };
+	}
+
+	it("totals only the attempt region of a resumed saved attempt", async () => {
+		const fixture = await writtenResumedAttempt();
+
+		const { series } = await readSessionAttemptRequestSeries(fixture);
+
+		expect(series.boundary).toBe("known");
+		expect(series.attemptTotals).toEqual({
+			state: "complete",
+			requestCount: 1,
+			usage: {
+				inputTokens: 2,
+				outputTokens: 151,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 251_695,
+			},
+			totalInputTokens: 251_697,
+		});
+	});
+
+	it("reads the provider cost the attempt record carries", async () => {
+		const fixture = await writtenResumedAttempt();
+
+		const { cost } = await readSessionAttemptRequestSeries(fixture);
+
+		expect(cost.reported).toEqual({ state: "complete", costUsd: 1.008294 });
+	});
+
+	it("reports boundary-unknown with totals unavailable on an attempt carrying no boundary", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearsal-history-noboundary-"));
+		roots.push(root);
+		const runsDirectory = join(root, ".benchmark-runs");
+		const caseId = "case-no-boundary";
+		const uuid = "attempt-no-boundary";
+		const paths = sessionAttemptPaths(runsDirectory, { caseId, uuid });
+		await mkdir(paths.directory, { recursive: true });
+		await Bun.write(
+			paths.recordFile,
+			`${JSON.stringify(
+				sessionAttemptRecordSchema.parse({
+					schemaVersion: 1,
+					caseId,
+					lineage: "lineage-a",
+					model: "sonnet",
+					sessionBudgetUsd: 1,
+					corpusFiles: [],
+					prompt: "inspect",
+					reply: "done",
+					transcriptFile: "/outside/must-not-be-read.jsonl",
+					outcome: "SUCCESSFUL",
+					checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+					elapsedMs: 1,
+				}),
+			)}\n`,
+		);
+		await Bun.write(
+			join(paths.directory, "transcript.jsonl"),
+			JSON.stringify({
+				type: "assistant",
+				requestId: "req-a",
+				cwd: "/work",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 2,
+						output_tokens: 151,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 251_695,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 251_695,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+		);
+
+		const { series, cost } = await readSessionAttemptRequestSeries({
+			runsDirectory,
+			caseId,
+			uuid,
+		});
+
+		expect(series.boundary).toBe("unknown");
+		expect(series.entries.map(({ region }) => region)).toEqual([
+			"boundary-unknown",
+		]);
+		expect(series.attemptTotals).toEqual({
+			state: "unavailable",
+			reasons: ["the transcript carries no attempt boundary"],
+		});
+		expect(cost.calculated).toEqual({
+			state: "unavailable",
+			reasons: ["the transcript carries no attempt boundary"],
+		});
 	});
 });

@@ -10,15 +10,20 @@ import {
 import { pathIsWithin } from "#benchmark/path-containment";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import {
+	sessionHistoryAttemptCost,
 	sessionHistoryDetailFromLine,
 	sessionHistoryReport,
 	sessionHistoryReportFromLines,
+	sessionHistoryRequestSeries,
 } from "#benchmark/session-history";
 import type {
+	SessionHistoryAttemptCost,
 	SessionHistoryDetail,
 	SessionHistoryReport,
 	SessionHistoryReportMetadata,
+	SessionHistoryRequestSeries,
 } from "#benchmark/session-history";
+import type { ContextRateCatalog } from "#benchmark/context-evidence-contract";
 
 const identitySchema = z
 	.string()
@@ -285,34 +290,43 @@ export async function readRecordedEvidenceFile(
 	return { path: file, text: await readVerifiedFile(root, file) };
 }
 
+interface AttemptReadings {
+	readonly metadata: SessionHistoryReportMetadata;
+	readonly reportedCostUsd: number | undefined;
+}
+
 async function reportMetadata(
 	root: string,
 	attemptFile: string,
 	id: string,
-): Promise<SessionHistoryReportMetadata> {
+): Promise<AttemptReadings> {
 	const attempt = parseSessionAttemptRecord(
 		await readVerifiedFile(root, attemptFile),
 	);
 
 	return {
-		attempt: {
-			caseId: attempt.caseId,
-			id,
-			model: attempt.model,
-			outcome: attempt.outcome,
-			corpusFiles: attempt.corpusFiles.map(({ path, resolvedPath }) => ({
-				path,
-				resolvedPath,
-			})),
+		metadata: {
+			attempt: {
+				caseId: attempt.caseId,
+				id,
+				model: attempt.model,
+				outcome: attempt.outcome,
+				corpusFiles: attempt.corpusFiles.map(({ path, resolvedPath }) => ({
+					path,
+					resolvedPath,
+				})),
+			},
+			prefixLinesExcluded: attempt.transcriptDiagnostics?.prefixLinesExcluded,
+			diagnostics: attempt.transcriptDiagnostics,
 		},
-		prefixLinesExcluded: attempt.transcriptDiagnostics?.prefixLinesExcluded,
-		diagnostics: attempt.transcriptDiagnostics,
+		reportedCostUsd: attempt.metrics?.costUsd,
 	};
 }
 
 interface ResolvedHistoryInput {
 	readonly root: string;
 	readonly metadata: SessionHistoryReportMetadata;
+	readonly reportedCostUsd: number | undefined;
 	readonly transcriptFile: string | undefined;
 }
 
@@ -338,7 +352,11 @@ async function standaloneInput(
 		"transcript.jsonl",
 		false,
 	);
-	const metadata = await reportMetadata(root, attemptFile, identity.uuid);
+	const { metadata, reportedCostUsd } = await reportMetadata(
+		root,
+		attemptFile,
+		identity.uuid,
+	);
 	if (metadata.attempt.caseId !== identity.caseId) {
 		throw new SessionHistoryReaderError(
 			"refused",
@@ -346,7 +364,7 @@ async function standaloneInput(
 		);
 	}
 
-	return { root, metadata, transcriptFile };
+	return { root, metadata, reportedCostUsd, transcriptFile };
 }
 
 async function confirmationInput(
@@ -418,7 +436,11 @@ async function confirmationInput(
 		"transcript.jsonl",
 		false,
 	);
-	const metadata = await reportMetadata(root, attemptFile, identity.repId);
+	const { metadata, reportedCostUsd } = await reportMetadata(
+		root,
+		attemptFile,
+		identity.repId,
+	);
 	if (
 		metadata.attempt.caseId !== group.caseId ||
 		metadata.attempt.caseId !== rep.caseId
@@ -429,7 +451,7 @@ async function confirmationInput(
 		);
 	}
 
-	return { root, metadata, transcriptFile };
+	return { root, metadata, reportedCostUsd, transcriptFile };
 }
 
 function reportFor(
@@ -496,4 +518,45 @@ export async function readConfirmationAttemptHistoryDetail(
 	eventId: string,
 ): Promise<SessionHistoryDetail | undefined> {
 	return detailFor(await confirmationInput(identity), eventId);
+}
+
+export interface SessionHistoryAttemptSeries {
+	readonly series: SessionHistoryRequestSeries;
+	readonly cost: SessionHistoryAttemptCost;
+}
+
+async function seriesFor(
+	input: Readonly<ResolvedHistoryInput>,
+	rates: ContextRateCatalog | undefined,
+): Promise<SessionHistoryAttemptSeries> {
+	const series = sessionHistoryRequestSeries({
+		transcript:
+			input.transcriptFile === undefined
+				? ""
+				: await readVerifiedFile(input.root, input.transcriptFile),
+		prefixLinesExcluded: input.metadata.prefixLinesExcluded,
+	});
+
+	return {
+		series,
+		cost: sessionHistoryAttemptCost({
+			series,
+			reportedCostUsd: input.reportedCostUsd,
+			rates,
+		}),
+	};
+}
+
+export async function readSessionAttemptRequestSeries(
+	identity: Readonly<SessionAttemptHistoryIdentity>,
+	rates?: ContextRateCatalog,
+): Promise<SessionHistoryAttemptSeries> {
+	return seriesFor(await standaloneInput(identity), rates);
+}
+
+export async function readConfirmationAttemptRequestSeries(
+	identity: Readonly<ConfirmationAttemptHistoryIdentity>,
+	rates?: ContextRateCatalog,
+): Promise<SessionHistoryAttemptSeries> {
+	return seriesFor(await confirmationInput(identity), rates);
 }
