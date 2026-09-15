@@ -606,6 +606,7 @@ describe(readSessionAttemptRequestSeries.name, () => {
 			uuid,
 		});
 
+		expect(series.transcriptState).toBe("absent");
 		expect(series.attemptTotals).toEqual({
 			state: "unavailable",
 			reasons: ["the attempt has no saved transcript"],

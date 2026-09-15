@@ -15,6 +15,7 @@ import {
 	sessionHistoryReport,
 	sessionHistoryReportFromLines,
 	sessionHistoryRequestSeries,
+	sessionHistoryRequestSeriesFromLines,
 } from "#benchmark/session-history";
 import type {
 	SessionHistoryAttemptCost,
@@ -529,13 +530,16 @@ async function seriesFor(
 	input: Readonly<ResolvedHistoryInput>,
 	rates: ContextRateCatalog | undefined,
 ): Promise<SessionHistoryAttemptSeries> {
-	const series = sessionHistoryRequestSeries({
-		transcript:
-			input.transcriptFile === undefined
-				? undefined
-				: await readVerifiedFile(input.root, input.transcriptFile),
-		prefixLinesExcluded: input.metadata.prefixLinesExcluded,
-	});
+	const series =
+		input.transcriptFile === undefined
+			? sessionHistoryRequestSeries({
+					transcript: undefined,
+					prefixLinesExcluded: input.metadata.prefixLinesExcluded,
+				})
+			: await sessionHistoryRequestSeriesFromLines(
+					{ prefixLinesExcluded: input.metadata.prefixLinesExcluded },
+					readVerifiedLines(input.root, input.transcriptFile),
+				);
 
 	return {
 		series,
