@@ -20,16 +20,18 @@ See [current state](docs/status.md) for implementation coverage and
   supplied provider context evidence bundle and its normalized projection.
   Older records may omit snapshot provenance and context evidence.
 - **Attempt region** — the part of a resumed session's transcript the attempt
-  itself produced, being the lines after the recorded prefix line count. The
-  lines at or before it are the inherited **starting context**, and a transcript
-  whose record carries no prefix count is **boundary-unknown** throughout. Only
-  attempt-region requests count toward an attempt's totals: on a measured
-  resumed attempt the region sums 151 output tokens, matching the provider
-  envelope, while the whole transcript sums 90743 from the inherited session,
-  which is a different session's spend rather than a rougher estimate of this
-  one. A boundary-unknown transcript reports its totals unavailable, since both
-  zero and a whole-transcript sum would assert something the record does not
-  settle.
+  itself produced: the 1-based physical lines after the prefix line count the
+  attempt record carries. The lines at or before that count are the inherited
+  starting context, and a transcript whose record carries no prefix count is
+  boundary unknown throughout, the same three regions the context history
+  projects (see [reference](docs/reference.md)). Only attempt-region requests
+  count toward an attempt's totals: on a measured resumed attempt the region's
+  two requests match the provider envelope in all four usage categories, while
+  the whole transcript sums 90743 output tokens against the envelope's 151,
+  because the rest belongs to the session that was resumed. A transcript whose
+  boundary is unknown, and an attempt that saved no transcript, both report
+  totals unavailable, since zero and a whole-transcript sum would each assert
+  something the record does not settle.
 - **Attempt directory** — the fresh temporary directory the harness creates and
   owns for one session attempt, seeded from the case's fixture tree when it
   declares one. A session attempt never runs in a live repository, and the
@@ -452,15 +454,19 @@ See [current state](docs/status.md) for implementation coverage and
   monotonically: a cache re-warm moves tokens from `cache_read_input_tokens` to
   `cache_creation_input_tokens` and lowers the sum, observed in 6 of 54 saved
   attempts, and rows recording no model request report every category zero.
-- **Cost reconciliation** — three separately stated readings of one attempt's
-  cost: the cost the provider reported on the attempt record, the sum of
-  per-request calculated costs over attempt-region requests only, and the
-  difference between them. They are never folded into one figure, because the
-  gap between a provider charge and a catalog-derived sum is evidence about the
-  catalog. Each reading is complete, incomplete, or unavailable with its
-  reasons; a request whose usage, model, cache-write TTL split or rate is
-  missing or in conflict leaves the calculated reading incomplete and names
-  why, rather than contributing a cost of zero.
+- **Attempt cost reconciliation** — three separately stated readings of one
+  attempt's cost, taken from its saved transcript and record rather than from a
+  supplied context evidence bundle, whose own per-request pricing is described
+  in [reference](docs/reference.md): the cost the provider reported on the
+  attempt record, the sum of per-request calculated costs over attempt-region
+  requests only, and the difference between them. They are never folded into
+  one figure, because the gap between a provider charge and a catalog-derived
+  sum is evidence about the catalog. Each reading is complete, incomplete, or
+  unavailable with its reasons, and a reader takes the state before the figure:
+  an incomplete reading still carries a number, and that number is a partial
+  sum rather than a total. A request whose usage, model, cache-write TTL split
+  or rate is missing or in conflict leaves the calculated reading incomplete
+  and names why, rather than passing as a priced request costing zero.
 - **Per-model usage block** — the provider's own account of one CLI call,
   broken down by the models the call used. It carries each model's input,
   output, cache-read and cache-creation tokens, the cost the provider charged
