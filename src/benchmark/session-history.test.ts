@@ -1303,6 +1303,17 @@ describe("compaction in a request series", () => {
 		]);
 	});
 
+	it("places a compaction in the inherited prefix outside the attempt region", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: withCompaction,
+			prefixLinesExcluded: 2,
+		});
+
+		expect(series.compactions).toEqual([
+			{ line: 2, trigger: "auto", region: "starting-context" },
+		]);
+	});
+
 	it("reports no compactions for a transcript that carries none", () => {
 		const series = sessionHistoryRequestSeries({
 			transcript: assistant("req-1", "2026-09-14T00:00:01.000Z", 100),

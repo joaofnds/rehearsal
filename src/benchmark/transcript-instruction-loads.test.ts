@@ -61,6 +61,12 @@ describe(transcriptInstructionLoads.name, () => {
 		expect(loads).toEqual({ state: "unavailable" });
 	});
 
+	it("reports an attachment carrying no files as available with no loads", () => {
+		const loads = transcriptInstructionLoads(attachmentRow([]));
+
+		expect(loads).toEqual({ state: "available", loads: [] });
+	});
+
 	it("selects on the attachment type rather than the presence of files", () => {
 		const loads = transcriptInstructionLoads(
 			[

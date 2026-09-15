@@ -777,11 +777,16 @@ describe("transcript-supplied request usage", () => {
 	function transcriptOnlySource(
 		usage: Readonly<JsonObject> | undefined,
 	): ReturnType<typeof contextEvidenceSourceSchema.parse> {
-		const message: JsonObject = { model: "claude-sonnet-5" };
-		if (usage !== undefined) {
-			message["usage"] = usage;
-		}
+		return transcriptSourceWithMessage(
+			usage === undefined
+				? { model: "claude-sonnet-5" }
+				: { model: "claude-sonnet-5", usage },
+		);
+	}
 
+	function transcriptSourceWithMessage(
+		message: Readonly<JsonObject>,
+	): ReturnType<typeof contextEvidenceSourceSchema.parse> {
 		return contextEvidenceSourceSchema.parse({
 			schemaVersion: 1,
 			kind: "context-evidence-source",
@@ -861,6 +866,16 @@ describe("transcript-supplied request usage", () => {
 			cacheWrite5mTokens: 400,
 			cacheWrite1hTokens: 40,
 		});
+	});
+
+	it("reports a request whose row names no model as model-missing", () => {
+		const evidence = normalizeContextEvidence(
+			transcriptSourceWithMessage({ usage: fullUsage }),
+		);
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.pricing).toEqual({ state: "model-missing" });
 	});
 
 	it("prices a request that consumed nothing at zero with no rate selected", () => {

@@ -52,10 +52,12 @@ function calculatedReading(
 
 const preconditions: readonly {
 	readonly state: UnpricedState;
+	readonly reason: string;
 	readonly transcript: string;
 }[] = [
 	{
 		state: "usage-conflict",
+		reason: "usage is in conflict",
 		transcript: [
 			assistantRow({ model: "claude-sonnet-5", usage: usage(completeSplit) }),
 			assistantRow({
@@ -66,6 +68,7 @@ const preconditions: readonly {
 	},
 	{
 		state: "model-conflict",
+		reason: "the executing model is in conflict",
 		transcript: [
 			assistantRow({ model: "claude-sonnet-5", usage: usage(completeSplit) }),
 			assistantRow({ model: "claude-opus-5", usage: usage(completeSplit) }),
@@ -73,10 +76,12 @@ const preconditions: readonly {
 	},
 	{
 		state: "model-missing",
+		reason: "the row names no model",
 		transcript: assistantRow({ usage: usage(completeSplit) }),
 	},
 	{
 		state: "ttl-split-missing",
+		reason: "the cache-write TTL split is missing",
 		transcript: assistantRow({
 			model: "claude-sonnet-5",
 			usage: {
@@ -89,6 +94,7 @@ const preconditions: readonly {
 	},
 	{
 		state: "ttl-split-conflict",
+		reason: "the cache-write TTL split is in conflict",
 		transcript: assistantRow({
 			model: "claude-sonnet-5",
 			usage: usage({
@@ -99,6 +105,7 @@ const preconditions: readonly {
 	},
 	{
 		state: "rates-missing",
+		reason: "no rate is catalogued for the executing model",
 		transcript: assistantRow({
 			model: "claude-uncatalogued-9",
 			usage: usage(completeSplit),
@@ -107,13 +114,13 @@ const preconditions: readonly {
 ];
 
 describe("pricing preconditions", () => {
-	for (const { state, transcript } of preconditions) {
+	for (const { state, reason, transcript } of preconditions) {
 		it(`reports ${state} as its own named reason rather than a cost`, () => {
 			const reading = calculatedReading(transcript);
 
 			expect(reading.state).toBe("incomplete");
 			expect(reading.state === "incomplete" ? reading.reasons : []).toContain(
-				UNPRICED_REASONS[state],
+				reason,
 			);
 		});
 	}
