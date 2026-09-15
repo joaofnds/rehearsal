@@ -1,5 +1,6 @@
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
+import { costFromRate } from "./context-evidence-contract";
 import type { ContextRateCatalog } from "./context-evidence-contract";
 import type { Immutable } from "./contracts";
 import { jsonValueSchema } from "./json-value";
@@ -1723,13 +1724,16 @@ function pricedRequest(
 
 	return {
 		state: "priced",
-		costUsd:
-			(entry.usage.inputTokens * rate.inputUsdPerMillion +
-				entry.usage.outputTokens * rate.outputUsdPerMillion +
-				entry.usage.cacheReadTokens * rate.cacheReadUsdPerMillion +
-				split.fiveMinuteTokens * rate.cacheWrite5mUsdPerMillion +
-				split.oneHourTokens * rate.cacheWrite1hUsdPerMillion) /
-			1_000_000,
+		costUsd: costFromRate(
+			{
+				inputTokens: entry.usage.inputTokens,
+				outputTokens: entry.usage.outputTokens,
+				cacheReadTokens: entry.usage.cacheReadTokens,
+				cacheWrite5mTokens: split.fiveMinuteTokens,
+				cacheWrite1hTokens: split.oneHourTokens,
+			},
+			rate,
+		),
 	};
 }
 

@@ -496,3 +496,31 @@ export type ContextEvidence = Immutable<z.infer<typeof contextEvidenceSchema>>;
 export type ContextRateCatalog = Immutable<
 	z.infer<typeof contextRateCatalogSchema>
 >;
+export type ModelRate = Immutable<z.infer<typeof modelRateSchema>>;
+
+export interface PricedTokenUsage {
+	readonly inputTokens: number;
+	readonly outputTokens: number;
+	readonly cacheReadTokens: number;
+	readonly cacheWrite5mTokens: number;
+	readonly cacheWrite1hTokens: number;
+}
+
+/**
+ * One place where a rate category turns into money. Two projections price
+ * requests, and a category added to the catalog but to only one of the sums
+ * would undercharge silently rather than fail.
+ */
+export function costFromRate(
+	usage: Readonly<PricedTokenUsage>,
+	rate: ModelRate,
+): number {
+	return (
+		(usage.inputTokens * rate.inputUsdPerMillion +
+			usage.outputTokens * rate.outputUsdPerMillion +
+			usage.cacheReadTokens * rate.cacheReadUsdPerMillion +
+			usage.cacheWrite5mTokens * rate.cacheWrite5mUsdPerMillion +
+			usage.cacheWrite1hTokens * rate.cacheWrite1hUsdPerMillion) /
+		1_000_000
+	);
+}

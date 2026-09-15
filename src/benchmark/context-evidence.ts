@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { jsonObjectSchema, jsonValueSchema } from "./json-value";
 import type { JsonObject, JsonValue } from "./json-value";
-import { contextEvidenceSchema } from "./context-evidence-contract";
+import {
+	contextEvidenceSchema,
+	costFromRate,
+} from "./context-evidence-contract";
 import type {
 	ContextEvidence,
 	ContextEvidenceSource,
@@ -558,13 +561,16 @@ function requestPricing(
 
 	return {
 		state: "complete",
-		calculatedCostUsd:
-			(usage.inputTokens * rate.inputUsdPerMillion +
-				usage.outputTokens * rate.outputUsdPerMillion +
-				usage.cacheReadTokens * rate.cacheReadUsdPerMillion +
-				split.fiveMinuteTokens * rate.cacheWrite5mUsdPerMillion +
-				split.oneHourTokens * rate.cacheWrite1hUsdPerMillion) /
-			1_000_000,
+		calculatedCostUsd: costFromRate(
+			{
+				inputTokens: usage.inputTokens,
+				outputTokens: usage.outputTokens,
+				cacheReadTokens: usage.cacheReadTokens,
+				cacheWrite5mTokens: split.fiveMinuteTokens,
+				cacheWrite1hTokens: split.oneHourTokens,
+			},
+			rate,
+		),
 		rateSource: rates.source,
 		rateVersion: rates.version,
 		currency: rates.currency,
