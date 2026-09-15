@@ -5,6 +5,7 @@ import {
 	contextRateCatalogSchema,
 	normalizeContextEvidence,
 } from "#benchmark/context-evidence";
+import type { ContextEvidence } from "#benchmark/context-evidence-contract";
 import { jsonObjectSchema } from "#benchmark/json-value";
 import { syntheticRateProvenance } from "#benchmark/rate-catalog-test-support";
 import type { JsonObject } from "#benchmark/json-value";
@@ -21,6 +22,14 @@ async function sourceFixture(): Promise<
 
 function objectAt(record: Readonly<JsonObject>, key: string): JsonObject {
 	return jsonObjectSchema.parse(record[key]);
+}
+
+function pricedCosts(evidence: ContextEvidence): readonly number[] {
+	return evidence.projection.requests.flatMap((request) =>
+		request.pricing.state === "complete"
+			? [request.pricing.calculatedCostUsd]
+			: [],
+	);
 }
 
 function required<T>(value: T | undefined, message: string): T {
@@ -419,6 +428,67 @@ describe(normalizeContextEvidence.name, () => {
 			pricing: { state: "model-conflict" },
 		});
 		expect(evidence.projection.accountingIssues).toContain("request-model");
+	});
+
+	it("records the rate source and version alongside each priced calculation", async () => {
+		const source = await sourceFixture();
+
+		const evidence = normalizeContextEvidence(source, rates);
+
+		const priced = evidence.projection.requests.filter(
+			(request) => request.pricing.state === "complete",
+		);
+		expect(priced.length).toBeGreaterThan(0);
+		for (const request of priced) {
+			expect(request.pricing).toMatchObject({
+				rateSource: rates.source,
+				rateVersion: rates.version,
+				currency: "USD",
+			});
+		}
+	});
+
+	it("leaves a saved calculation unchanged when the rate catalog changes", async () => {
+		const source = await sourceFixture();
+		const dearer = contextRateCatalogSchema.parse({
+			...rates,
+			version: "2027-01-01",
+			models: rates.models.map((rate) => ({
+				...rate,
+				inputUsdPerMillion: rate.inputUsdPerMillion * 2,
+			})),
+		});
+		const saved = contextEvidenceSchema.parse(
+			normalizeContextEvidence(source, rates),
+		);
+
+		const later = contextEvidenceSchema.parse(
+			normalizeContextEvidence(source, dearer),
+		);
+
+		expect(saved.rateCatalog).toEqual(rates);
+		expect(later.rateCatalog).toEqual(dearer);
+		expect(pricedCosts(later)).not.toEqual(pricedCosts(saved));
+	});
+
+	it("rejects a saved calculation swapped onto a catalog that did not price it", async () => {
+		const source = await sourceFixture();
+		const dearer = contextRateCatalogSchema.parse({
+			...rates,
+			version: "2027-01-01",
+			models: rates.models.map((rate) => ({
+				...rate,
+				inputUsdPerMillion: rate.inputUsdPerMillion * 2,
+			})),
+		});
+		const saved = normalizeContextEvidence(source, rates);
+
+		const swapped = contextEvidenceSchema.safeParse({
+			...saved,
+			rateCatalog: dearer,
+		});
+
+		expect(swapped.success).toBe(false);
 	});
 
 	it("prices each request from its model and reconciled cache TTL categories", async () => {
