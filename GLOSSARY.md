@@ -477,15 +477,18 @@ See [current state](docs/status.md) for implementation coverage and
 - **Rate catalog** — the per-model, per-category prices a request's cost is
   calculated from, carrying the source and version they came from. A saved
   calculation persists the catalog that priced it, so a later catalog changes
-  what new calculations cost and leaves the saved ones alone. A category whose
-  price no saved attempt exercises is marked as resting on publication rather
-  than on measurement, since the suite can only defend the rates the corpus
-  re-derives.
+  what new calculations cost and leaves the saved ones alone. Each category
+  records where its price came from, because the suite can only defend a rate
+  the saved attempts re-derive; a category no saved attempt exercises is marked
+  as inferred, and pricing that rests on it is weaker evidence than pricing that
+  does not.
 - **Instruction load** — one instruction file an attempt loaded automatically,
-  named by its path and the kind of memory it came from. The transcript records
-  which files loaded but not why, what triggered the load, or which file
-  included it, so those three report unavailable. An attempt whose transcript
-  records no loads at all is distinct from one that loaded none.
+  named by its path and the kind of memory it came from. Two sources record
+  loads and they carry different detail. A hook capture also records why the
+  file loaded, what triggered it and which file included it. A transcript
+  records none of those three, so a load read from a transcript reports them
+  unavailable rather than guessing. An attempt whose source records no loads at
+  all is distinct from one that loaded none.
 - **Cost basis** — what the provider priced a model's reported cost on. A cost
   basis of `list` is public per-token rates, so the cost can be re-derived from
   a rate catalog and checked. Any other basis is a discount or plan the catalog

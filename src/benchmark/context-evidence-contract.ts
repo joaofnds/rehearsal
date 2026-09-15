@@ -46,7 +46,17 @@ const modelRateSchema = z
 	})
 	.strict();
 
-const rateProvenanceSchema = z.enum(["corpus-measured", "publication-backed"]);
+/**
+ * How much weight a rate carries. Only a corpus-measured rate is one the suite
+ * re-derives from a provider charge. A tier-inferred one is computed from
+ * another category by the published multiplier and has never been checked
+ * against a charge, which the ACT-178 probe showed can be wrong.
+ */
+const rateProvenanceSchema = z.enum([
+	"corpus-measured",
+	"publication-backed",
+	"tier-inferred",
+]);
 
 const catalogProvenanceSchema = z
 	.object({

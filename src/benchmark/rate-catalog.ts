@@ -5,8 +5,8 @@ import { contextRateCatalogSchema } from "./context-evidence-contract";
  * Removing a rate here silently unprices every request that used it, and the
  * suite defends the four corpus-measured categories against drift. The 5m
  * cache-write figure is the exception: no saved attempt writes a 5m cache
- * entry, so it rests on the provider's published price rather than on
- * measurement.
+ * entry, so it is computed as 1.25x the input rate, the published tier
+ * multiplier, and no charge has ever confirmed it.
  */
 export const committedRateCatalog: ContextRateCatalog =
 	contextRateCatalogSchema.parse({
@@ -19,7 +19,7 @@ export const committedRateCatalog: ContextRateCatalog =
 			outputUsdPerMillion: "corpus-measured",
 			cacheReadUsdPerMillion: "corpus-measured",
 			cacheWrite1hUsdPerMillion: "corpus-measured",
-			cacheWrite5mUsdPerMillion: "publication-backed",
+			cacheWrite5mUsdPerMillion: "tier-inferred",
 		},
 		models: [
 			{

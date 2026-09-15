@@ -74,13 +74,13 @@ describe("committedRateCatalog", () => {
 		}
 	});
 
-	it("marks the 5m cache-write rate as publication-backed and the rest as corpus-measured", () => {
+	it("marks the 5m cache-write rate as inferred and the rest as corpus-measured", () => {
 		expect(committedRateCatalog.provenance).toEqual({
 			inputUsdPerMillion: "corpus-measured",
 			outputUsdPerMillion: "corpus-measured",
 			cacheReadUsdPerMillion: "corpus-measured",
 			cacheWrite1hUsdPerMillion: "corpus-measured",
-			cacheWrite5mUsdPerMillion: "publication-backed",
+			cacheWrite5mUsdPerMillion: "tier-inferred",
 		});
 	});
 });
