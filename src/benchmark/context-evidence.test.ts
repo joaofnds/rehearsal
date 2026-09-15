@@ -863,6 +863,29 @@ describe("transcript-supplied request usage", () => {
 		});
 	});
 
+	it("prices a request that consumed nothing at zero with no rate selected", () => {
+		const evidence = normalizeContextEvidence(
+			transcriptOnlySource({
+				input_tokens: 0,
+				output_tokens: 0,
+				cache_read_input_tokens: 0,
+				cache_creation_input_tokens: 0,
+				cache_creation: {
+					ephemeral_5m_input_tokens: 0,
+					ephemeral_1h_input_tokens: 0,
+				},
+			}),
+		);
+
+		const [request] = evidence.projection.requests;
+
+		expect(request?.pricing).toEqual({
+			state: "zero-usage",
+			calculatedCostUsd: 0,
+		});
+		expect(contextEvidenceSchema.safeParse(evidence).success).toBe(true);
+	});
+
 	it("names the transcript as the route that supplied the usage", () => {
 		const evidence = normalizeContextEvidence(transcriptOnlySource(fullUsage));
 

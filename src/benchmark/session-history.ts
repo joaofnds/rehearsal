@@ -1504,7 +1504,16 @@ interface ParsedRequestRow {
 	readonly cacheWriteSplit: SessionHistoryCacheWriteSplit;
 }
 
-function transcriptRow(text: string): JsonValue | undefined {
+const transcriptLineSchema = z.union([requestRowSchema, compactionRowSchema]);
+
+type TranscriptLine = Immutable<z.infer<typeof transcriptLineSchema>>;
+
+/**
+ * Decodes only the two row kinds the series reads. Walking the whole line as
+ * generic JSON doubled the time to build a series from the largest saved
+ * transcript, and validated nothing either reader needs.
+ */
+function transcriptRow(text: string): TranscriptLine | undefined {
 	if (text.trim() === "") {
 		return undefined;
 	}
@@ -1515,13 +1524,13 @@ function transcriptRow(text: string): JsonValue | undefined {
 	} catch {
 		return undefined;
 	}
-	const row = jsonValueSchema.safeParse(parsed);
+	const row = transcriptLineSchema.safeParse(parsed);
 
 	return row.success ? row.data : undefined;
 }
 
 function parsedCompactionRow(
-	parsed: JsonValue,
+	parsed: TranscriptLine,
 	line: number,
 ): ParsedCompactionRow | undefined {
 	const row = compactionRowSchema.safeParse(parsed);
@@ -1533,7 +1542,7 @@ function parsedCompactionRow(
 }
 
 function parsedRequestRow(
-	parsed: JsonValue,
+	parsed: TranscriptLine,
 	line: number,
 ): ParsedRequestRow | undefined {
 	const row = requestRowSchema.safeParse(parsed);
@@ -1646,13 +1655,13 @@ function requestDisagreements(
 	return { usage, model, firstRowByRequestId };
 }
 
-type PricedEntry = Extract<
+type CompleteUsageEntry = Extract<
 	SessionHistoryRequestEntry,
 	{ usageState: "complete" }
 >;
 
 type UnaccumulatedEntry =
-	| Omit<PricedEntry, "cumulativeTotalInputTokens">
+	| Omit<CompleteUsageEntry, "cumulativeTotalInputTokens">
 	| Extract<SessionHistoryRequestEntry, { usageState: "conflict" }>;
 
 function collapsedEntry(
@@ -1684,9 +1693,9 @@ function collapsedEntry(
 }
 
 /**
- * A compaction shortens the conversation the provider sees; it does not undo
- * the tokens already spent. The running total therefore carries across one,
- * and a reset here would read as a session that cost less than it did.
+ * The running total never resets. A compaction shortens the conversation the
+ * provider sees without refunding the tokens already spent, so a reset would
+ * read as a session that cost less than it did.
  */
 function collapsedEntries(
 	rows: readonly Readonly<ParsedRequestRow>[],
@@ -1774,20 +1783,15 @@ interface TranscriptLineReadings {
 	readonly compaction: ParsedCompactionRow | undefined;
 }
 
-/**
- * One JSON parse per line, feeding both readings. Parsing the line twice
- * would let a request row and a compaction row disagree about what the line
- * says.
- */
 function lineReadings(text: string, line: number): TranscriptLineReadings {
-	const parsed = transcriptRow(text);
-	if (parsed === undefined) {
+	const decoded = transcriptRow(text);
+	if (decoded === undefined) {
 		return { request: undefined, compaction: undefined };
 	}
 
 	return {
-		request: parsedRequestRow(parsed, line),
-		compaction: parsedCompactionRow(parsed, line),
+		request: parsedRequestRow(decoded, line),
+		compaction: parsedCompactionRow(decoded, line),
 	};
 }
 

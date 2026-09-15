@@ -1269,6 +1269,29 @@ describe("compaction in a request series", () => {
 		).toEqual([100, 120]);
 	});
 
+	it("counts inherited requests in the running total of an attempt-region row", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: [
+				assistant("req-1", "2026-09-14T00:00:01.000Z", 100),
+				assistant("req-2", "2026-09-14T00:00:03.000Z", 20),
+			].join("\n"),
+			prefixLinesExcluded: 1,
+		});
+
+		expect(
+			series.entries.map((entry) => ({
+				region: entry.region,
+				cumulative:
+					entry.usageState === "complete"
+						? entry.cumulativeTotalInputTokens
+						: undefined,
+			})),
+		).toEqual([
+			{ region: "starting-context", cumulative: 100 },
+			{ region: "attempt", cumulative: 120 },
+		]);
+	});
+
 	it("marks the compaction on the series", () => {
 		const series = sessionHistoryRequestSeries({
 			transcript: withCompaction,

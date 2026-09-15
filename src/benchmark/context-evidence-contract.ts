@@ -565,11 +565,6 @@ export interface PricedTokenUsage {
 }
 
 /**
- * One place where a rate category turns into money. Two projections price
- * requests, and a category added to the catalog but to only one of the sums
- * would undercharge silently rather than fail.
- */
-/**
  * A request that consumed nothing costs nothing under every rate, since
  * costFromRate is linear with no per-request constant. Pricing it without a
  * catalogued rate assumes no rate; reporting it unpriced would leave an
@@ -586,6 +581,11 @@ export function usageIsZero(usage: Readonly<PricedTokenUsage>): boolean {
 	);
 }
 
+/**
+ * One place where a rate category turns into money. Two projections price
+ * requests, and a category added to the catalog but to only one of the sums
+ * would undercharge silently rather than fail.
+ */
 export function costFromRate(
 	usage: Readonly<PricedTokenUsage>,
 	rate: ModelRate,

@@ -3,7 +3,7 @@ import { transcriptInstructionLoads } from "#benchmark/transcript-instruction-lo
 
 function attachmentRow(files: readonly unknown[]): string {
 	return JSON.stringify({
-		type: "user",
+		type: "attachment",
 		timestamp: "2026-09-14T00:00:01.000Z",
 		attachment: { type: "instructions", files },
 	});
@@ -50,7 +50,7 @@ describe(transcriptInstructionLoads.name, () => {
 	it("reports loads unavailable when the transcript carries no instructions attachment", () => {
 		const loads = transcriptInstructionLoads(
 			JSON.stringify({
-				type: "user",
+				type: "attachment",
 				attachment: {
 					type: "nested_memory",
 					files: [{ path: "/tmp/other.md", type: "Project", content: "x" }],
@@ -65,7 +65,7 @@ describe(transcriptInstructionLoads.name, () => {
 		const loads = transcriptInstructionLoads(
 			[
 				JSON.stringify({
-					type: "user",
+					type: "attachment",
 					attachment: {
 						type: "nested_memory",
 						files: [{ path: "/tmp/nested.md", type: "Project", content: "x" }],

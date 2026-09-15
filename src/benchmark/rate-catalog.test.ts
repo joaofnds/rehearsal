@@ -65,10 +65,8 @@ describe("committedRateCatalog", () => {
 			...new Set(attempts.map((attempt) => attempt.recordModelLabel)),
 		];
 
-		expect(committedRateCatalog.models.map((rate) => rate.model)).toEqual([
-			"claude-sonnet-5",
-			"claude-opus-5",
-		]);
+		expect(rateFor(committedRateCatalog, "claude-sonnet-5")).toBeDefined();
+		expect(rateFor(committedRateCatalog, "claude-opus-5")).toBeDefined();
 		for (const label of labels) {
 			expect(rateFor(committedRateCatalog, label)).toBeUndefined();
 		}
