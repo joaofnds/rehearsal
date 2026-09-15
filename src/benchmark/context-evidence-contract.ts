@@ -49,8 +49,8 @@ const modelRateSchema = z
 /**
  * How much weight a rate carries. Only a corpus-measured rate is one the suite
  * re-derives from a provider charge. A tier-inferred one is computed from
- * another category by the published multiplier and has never been checked
- * against a charge, which the ACT-178 probe showed can be wrong.
+ * another category by the published multiplier, and no charge in the corpus
+ * has ever exercised it.
  */
 const rateProvenanceSchema = z.enum([
 	"corpus-measured",

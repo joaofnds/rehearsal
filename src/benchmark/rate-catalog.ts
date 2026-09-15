@@ -6,7 +6,9 @@ import { contextRateCatalogSchema } from "./context-evidence-contract";
  * suite defends the four corpus-measured categories against drift. The 5m
  * cache-write figure is the exception: no saved attempt writes a 5m cache
  * entry, so it is computed as 1.25x the input rate, the published tier
- * multiplier, and no charge has ever confirmed it.
+ * multiplier, and no charge in the corpus confirms it. The 1h multiplier the
+ * corpus does exercise holds at 2x for both models, so the ratio is plausible
+ * rather than verified.
  */
 export const committedRateCatalog: ContextRateCatalog =
 	contextRateCatalogSchema.parse({
