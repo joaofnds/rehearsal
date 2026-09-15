@@ -1243,16 +1243,113 @@ describe(sessionHistoryAttemptCost.name, () => {
 		});
 	});
 
-	it("reports every reading unavailable when the boundary is unknown", () => {
+	it("leaves the provider reading complete while the boundary is unknown", () => {
 		const cost = sessionHistoryAttemptCost({
 			series: seriesWith(undefined),
 			reportedCostUsd: 1.008294,
 			rates,
 		});
 
+		expect(cost.reported).toEqual({ state: "complete", costUsd: 1.008294 });
 		expect(cost.calculated).toEqual({
 			state: "unavailable",
 			reasons: ["the transcript carries no attempt boundary"],
+		});
+		expect(cost.difference).toEqual({
+			state: "unavailable",
+			reasons: ["the calculated reading is unavailable"],
+		});
+	});
+
+	it("refuses to price a request whose usage is in conflict", () => {
+		const conflicted = [
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:01.000Z",
+				cwd: "/work",
+				requestId: "req-conflict",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 2,
+						output_tokens: 10,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 20,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 20,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:02.000Z",
+				cwd: "/work",
+				requestId: "req-conflict",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 3,
+						output_tokens: 10,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 20,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 20,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:03.000Z",
+				cwd: "/work",
+				requestId: "req-priced",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 2,
+						output_tokens: 151,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 251_695,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 251_695,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+		].join("\n");
+
+		const cost = sessionHistoryAttemptCost({
+			series: sessionHistoryRequestSeries({
+				transcript: conflicted,
+				prefixLinesExcluded: 0,
+			}),
+			reportedCostUsd: 1.008294,
+			rates,
+		});
+
+		expect(cost.calculated).toEqual({
+			state: "incomplete",
+			costUsd: 1.009051,
+			pricedRequestCount: 1,
+			requestCount: 2,
+			reasons: ["usage is in conflict"],
+		});
+		expect(cost.difference).toEqual({
+			state: "incomplete",
+			costUsd: 1.008294 - 1.009051,
+			pricedRequestCount: 1,
+			requestCount: 2,
+			reasons: [
+				"a reading it is drawn from is incomplete",
+				"usage is in conflict",
+			],
 		});
 	});
 

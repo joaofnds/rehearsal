@@ -15,6 +15,7 @@ import {
 import { createApiApp } from "#server/api";
 import {
 	readConfirmationAttemptHistory,
+	readConfirmationAttemptRequestSeries,
 	readSessionAttemptHistory,
 	readSessionAttemptRequestSeries,
 	SessionHistoryReaderError,
@@ -449,7 +450,11 @@ describe(readSessionAttemptRequestSeries.name, () => {
 		const assistant = (
 			requestId: string,
 			model: string,
-			usage: Readonly<Record<string, number>>,
+			usage: {
+				readonly input: number;
+				readonly output: number;
+				readonly cacheWrite: number;
+			},
 		): string =>
 			JSON.stringify({
 				type: "assistant",
@@ -458,12 +463,12 @@ describe(readSessionAttemptRequestSeries.name, () => {
 				message: {
 					model,
 					usage: {
-						input_tokens: usage["input"],
-						output_tokens: usage["output"],
+						input_tokens: usage.input,
+						output_tokens: usage.output,
 						cache_read_input_tokens: 0,
-						cache_creation_input_tokens: usage["cacheWrite"],
+						cache_creation_input_tokens: usage.cacheWrite,
 						cache_creation: {
-							ephemeral_1h_input_tokens: usage["cacheWrite"],
+							ephemeral_1h_input_tokens: usage.cacheWrite,
 							ephemeral_5m_input_tokens: 0,
 						},
 					},
@@ -679,5 +684,31 @@ describe(readSessionAttemptRequestSeries.name, () => {
 			state: "unavailable",
 			reasons: ["the transcript carries no attempt boundary"],
 		});
+	});
+});
+
+describe(readConfirmationAttemptRequestSeries.name, () => {
+	it("reads the series of the rep it was asked for", async () => {
+		const fixture = await writtenConfirmationAttempt();
+
+		const { series } = await readConfirmationAttemptRequestSeries(fixture);
+
+		expect(series.transcriptState).toBe("saved");
+		expect(series.boundary).toBe("unknown");
+		expect(series.attemptTotals).toEqual({
+			state: "unavailable",
+			reasons: ["the transcript carries no attempt boundary"],
+		});
+	});
+
+	it("refuses a rep whose group does not own it", async () => {
+		const fixture = await writtenConfirmationAttempt();
+
+		expect(
+			readConfirmationAttemptRequestSeries({
+				...fixture,
+				repId: "group-a-rep-2",
+			}),
+		).rejects.toBeInstanceOf(SessionHistoryReaderError);
 	});
 });
