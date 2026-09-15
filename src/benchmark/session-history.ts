@@ -1,5 +1,6 @@
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
+import type { ContextRateCatalog } from "./context-evidence-contract";
 import type { Immutable } from "./contracts";
 import { jsonValueSchema } from "./json-value";
 import type { JsonValue } from "./json-value";
@@ -1658,5 +1659,166 @@ export function sessionHistoryRequestSeries(
 		boundary,
 		entries,
 		attemptTotals: attemptTotals(entries, boundary),
+	};
+}
+
+export type SessionHistoryCostReading =
+	| { readonly state: "complete"; readonly costUsd: number }
+	| {
+			readonly state: "incomplete";
+			readonly costUsd: number;
+			readonly pricedRequestCount: number;
+			readonly requestCount: number;
+			readonly reasons: readonly string[];
+	  }
+	| { readonly state: "unavailable"; readonly reasons: readonly string[] };
+
+/**
+ * Three readings, never folded into one. The provider's charge and a sum of
+ * per-request calculations answer different questions, and the gap between
+ * them is evidence about the catalog rather than an error to hide. Folding
+ * them would make a missing rate look like a cost of zero.
+ */
+export interface SessionHistoryAttemptCost {
+	readonly reported: SessionHistoryCostReading;
+	readonly calculated: SessionHistoryCostReading;
+	readonly difference: SessionHistoryCostReading;
+}
+
+export interface SessionHistoryAttemptCostInput {
+	readonly series: SessionHistoryRequestSeries;
+	readonly reportedCostUsd: number | undefined;
+	readonly rates: ContextRateCatalog | undefined;
+}
+
+type PricedRequest =
+	| { readonly state: "priced"; readonly costUsd: number }
+	| { readonly state: "unpriced"; readonly reason: string };
+
+function pricedRequest(
+	entry: SessionHistoryRequestEntry,
+	rates: ContextRateCatalog,
+): PricedRequest {
+	if (entry.usageState !== "complete") {
+		return { state: "unpriced", reason: "usage is in conflict" };
+	}
+	if (entry.modelState === "conflict") {
+		return { state: "unpriced", reason: "the executing model is in conflict" };
+	}
+	const { model } = entry;
+	if (model === undefined) {
+		return { state: "unpriced", reason: "the row names no model" };
+	}
+	const split = entry.cacheWriteSplit;
+	if (split.state !== "complete") {
+		return {
+			state: "unpriced",
+			reason: "the cache-write TTL split is unusable",
+		};
+	}
+	const rate = rates.models.find((candidate) => candidate.model === model);
+	if (rate === undefined) {
+		return { state: "unpriced", reason: `no rate is catalogued for ${model}` };
+	}
+
+	return {
+		state: "priced",
+		costUsd:
+			(entry.usage.inputTokens * rate.inputUsdPerMillion +
+				entry.usage.outputTokens * rate.outputUsdPerMillion +
+				entry.usage.cacheReadTokens * rate.cacheReadUsdPerMillion +
+				split.fiveMinuteTokens * rate.cacheWrite5mUsdPerMillion +
+				split.oneHourTokens * rate.cacheWrite1hUsdPerMillion) /
+			1_000_000,
+	};
+}
+
+function calculatedCost(
+	series: SessionHistoryRequestSeries,
+	rates: ContextRateCatalog | undefined,
+): SessionHistoryCostReading {
+	if (series.boundary === "unknown") {
+		return { state: "unavailable", reasons: [BOUNDARY_ABSENT] };
+	}
+	if (rates === undefined) {
+		return {
+			state: "unavailable",
+			reasons: ["no rate catalog was supplied"],
+		};
+	}
+
+	const inRegion = series.entries.filter(({ region }) => region === "attempt");
+	const reasons = new Set<string>();
+	let costUsd = 0;
+	let priced = 0;
+	for (const entry of inRegion) {
+		const result = pricedRequest(entry, rates);
+		if (result.state === "priced") {
+			costUsd += result.costUsd;
+			priced += 1;
+		} else {
+			reasons.add(result.reason);
+		}
+	}
+	if (priced === inRegion.length) {
+		return { state: "complete", costUsd };
+	}
+
+	return {
+		state: "incomplete",
+		costUsd,
+		pricedRequestCount: priced,
+		requestCount: inRegion.length,
+		reasons: [...reasons],
+	};
+}
+
+export function sessionHistoryAttemptCost(
+	input: Readonly<SessionHistoryAttemptCostInput>,
+): SessionHistoryAttemptCost {
+	const reported: SessionHistoryCostReading =
+		input.reportedCostUsd === undefined
+			? {
+					state: "unavailable",
+					reasons: ["the attempt record carries no provider cost"],
+				}
+			: { state: "complete", costUsd: input.reportedCostUsd };
+	const calculated = calculatedCost(input.series, input.rates);
+
+	return { reported, calculated, difference: difference(reported, calculated) };
+}
+
+function difference(
+	reported: SessionHistoryCostReading,
+	calculated: SessionHistoryCostReading,
+): SessionHistoryCostReading {
+	if (reported.state === "unavailable") {
+		return {
+			state: "unavailable",
+			reasons: ["the provider reading is unavailable"],
+		};
+	}
+	if (calculated.state === "unavailable") {
+		return {
+			state: "unavailable",
+			reasons: ["the calculated reading is unavailable"],
+		};
+	}
+	const costUsd = reported.costUsd - calculated.costUsd;
+	if (reported.state === "complete" && calculated.state === "complete") {
+		return { state: "complete", costUsd };
+	}
+
+	return {
+		state: "incomplete",
+		costUsd,
+		pricedRequestCount:
+			calculated.state === "incomplete" ? calculated.pricedRequestCount : 0,
+		requestCount:
+			calculated.state === "incomplete" ? calculated.requestCount : 0,
+		reasons: [
+			"a reading it is drawn from is incomplete",
+			...(calculated.state === "incomplete" ? calculated.reasons : []),
+		],
 	};
 }

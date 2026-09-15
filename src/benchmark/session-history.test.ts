@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { JsonValue } from "#benchmark/json-value";
+import type { SessionHistoryRequestSeries } from "#benchmark/session-history";
 import {
 	MAX_EVENT_DETAIL_BYTES,
+	sessionHistoryAttemptCost,
 	sessionHistoryDetail,
 	sessionHistoryReport,
 	sessionHistoryRequestSeries,
@@ -1030,5 +1032,148 @@ describe(sessionHistoryRequestSeries.name, () => {
 			"the model's context window limit, which the transcript does not carry",
 		]);
 		expect(series.measuresActiveContextWindow).toBe(false);
+	});
+});
+
+describe(sessionHistoryAttemptCost.name, () => {
+	const rates = {
+		schemaVersion: 1,
+		source: "test catalog",
+		version: "2026-09-15",
+		currency: "USD",
+		models: [
+			{
+				model: "claude-sonnet-5",
+				inputUsdPerMillion: 3,
+				outputUsdPerMillion: 15,
+				cacheReadUsdPerMillion: 0.3,
+				cacheWrite5mUsdPerMillion: 3.75,
+				cacheWrite1hUsdPerMillion: 4,
+			},
+		],
+	} as const;
+
+	function seriesWith(
+		prefixLinesExcluded: number | undefined,
+	): SessionHistoryRequestSeries {
+		const transcript = [
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:01.000Z",
+				cwd: "/work",
+				requestId: "req-inherited",
+				message: {
+					model: "claude-opus-5",
+					usage: {
+						input_tokens: 7,
+						output_tokens: 90_592,
+						cache_read_input_tokens: 5,
+						cache_creation_input_tokens: 9,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 9,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+			row({
+				type: "assistant",
+				timestamp: "2026-09-14T00:00:02.000Z",
+				cwd: "/work",
+				requestId: "req-attempt",
+				message: {
+					model: "claude-sonnet-5",
+					usage: {
+						input_tokens: 2,
+						output_tokens: 151,
+						cache_read_input_tokens: 0,
+						cache_creation_input_tokens: 251_695,
+						cache_creation: {
+							ephemeral_1h_input_tokens: 251_695,
+							ephemeral_5m_input_tokens: 0,
+						},
+					},
+					content: [{ type: "text", text: "reply" }],
+				},
+			}),
+		].join("\n");
+
+		return sessionHistoryRequestSeries({ transcript, prefixLinesExcluded });
+	}
+
+	it("reports provider, calculated and difference as three readings", () => {
+		const cost = sessionHistoryAttemptCost({
+			series: seriesWith(1),
+			reportedCostUsd: 1.008294,
+			rates,
+		});
+
+		expect(cost.reported).toEqual({ state: "complete", costUsd: 1.008294 });
+		expect(cost.calculated.state).toBe("complete");
+		expect(
+			cost.calculated.state === "complete" && cost.calculated.costUsd,
+		).toBeCloseTo(1.009051, 6);
+		expect(cost.difference.state).toBe("complete");
+		expect(
+			cost.difference.state === "complete" && cost.difference.costUsd,
+		).toBeCloseTo(-0.000757, 6);
+	});
+
+	it("prices only the attempt region, leaving inherited requests out", () => {
+		const wholeTranscript = sessionHistoryAttemptCost({
+			series: seriesWith(0),
+			reportedCostUsd: 1.008294,
+			rates,
+		});
+
+		expect(wholeTranscript.calculated.state).toBe("incomplete");
+	});
+
+	it("reports the calculated reading unavailable rather than zero without rates", () => {
+		const cost = sessionHistoryAttemptCost({
+			series: seriesWith(1),
+			reportedCostUsd: 1.008294,
+			rates: undefined,
+		});
+
+		expect(cost.calculated).toEqual({
+			state: "unavailable",
+			reasons: ["no rate catalog was supplied"],
+		});
+		expect(cost.difference).toEqual({
+			state: "unavailable",
+			reasons: ["the calculated reading is unavailable"],
+		});
+	});
+
+	it("reports every reading unavailable when the boundary is unknown", () => {
+		const cost = sessionHistoryAttemptCost({
+			series: seriesWith(undefined),
+			reportedCostUsd: 1.008294,
+			rates,
+		});
+
+		expect(cost.calculated).toEqual({
+			state: "unavailable",
+			reasons: ["the transcript carries no attempt boundary"],
+		});
+	});
+
+	it("reports the provider reading unavailable rather than zero when absent", () => {
+		const cost = sessionHistoryAttemptCost({
+			series: seriesWith(1),
+			reportedCostUsd: undefined,
+			rates,
+		});
+
+		expect(cost.reported).toEqual({
+			state: "unavailable",
+			reasons: ["the attempt record carries no provider cost"],
+		});
+		expect(cost.difference).toEqual({
+			state: "unavailable",
+			reasons: ["the provider reading is unavailable"],
+		});
 	});
 });
