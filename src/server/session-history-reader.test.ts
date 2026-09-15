@@ -547,6 +547,70 @@ describe(readSessionAttemptRequestSeries.name, () => {
 		expect(cost.reported).toEqual({ state: "complete", costUsd: 1.008294 });
 	});
 
+	it("reports totals unavailable rather than zero when the attempt saved no transcript", async () => {
+		const root = await mkdtemp(
+			join(tmpdir(), "rehearsal-history-notranscript-"),
+		);
+		roots.push(root);
+		const runsDirectory = join(root, ".benchmark-runs");
+		const caseId = "case-no-transcript";
+		const uuid = "attempt-no-transcript";
+		const paths = sessionAttemptPaths(runsDirectory, { caseId, uuid });
+		await mkdir(paths.directory, { recursive: true });
+		await Bun.write(
+			paths.recordFile,
+			`${JSON.stringify(
+				sessionAttemptRecordSchema.parse({
+					schemaVersion: 1,
+					caseId,
+					lineage: "lineage-a",
+					model: "sonnet",
+					sessionBudgetUsd: 1,
+					corpusFiles: [],
+					prompt: "inspect",
+					reply: "done",
+					transcriptFile: "/outside/must-not-be-read.jsonl",
+					transcriptDiagnostics: {
+						state: "complete",
+						prefixLinesExcluded: 1268,
+						sourceLineCount: 1291,
+						measuredLineCount: 23,
+						toolUseOccurrences: { total: 0, byName: [] },
+						toolErrors: [],
+						repeatedBashCommands: [],
+						issues: [],
+					},
+					metrics: {
+						costUsd: 1.008294,
+						inputTokens: 2,
+						outputTokens: 151,
+						cacheReadTokens: 0,
+						cacheWriteTokens: 251_695,
+						turns: 1,
+					},
+					outcome: "SUCCESSFUL",
+					checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+					elapsedMs: 1,
+				}),
+			)}\n`,
+		);
+
+		const { series, cost } = await readSessionAttemptRequestSeries({
+			runsDirectory,
+			caseId,
+			uuid,
+		});
+
+		expect(series.attemptTotals).toEqual({
+			state: "unavailable",
+			reasons: ["the attempt has no saved transcript"],
+		});
+		expect(cost.calculated).toEqual({
+			state: "unavailable",
+			reasons: ["the attempt has no saved transcript"],
+		});
+	});
+
 	it("reports boundary-unknown with totals unavailable on an attempt carrying no boundary", async () => {
 		const root = await mkdtemp(join(tmpdir(), "rehearsal-history-noboundary-"));
 		roots.push(root);

@@ -469,13 +469,16 @@ export const contextEvidenceSchema = z
 				usage.cacheWrite5mTokens !== undefined &&
 				usage.cacheWrite1hTokens !== undefined
 			) {
-				const expectedCost =
-					(usage.inputTokens * selected.inputUsdPerMillion +
-						usage.outputTokens * selected.outputUsdPerMillion +
-						usage.cacheReadTokens * selected.cacheReadUsdPerMillion +
-						usage.cacheWrite5mTokens * selected.cacheWrite5mUsdPerMillion +
-						usage.cacheWrite1hTokens * selected.cacheWrite1hUsdPerMillion) /
-					1_000_000;
+				const expectedCost = costFromRate(
+					{
+						inputTokens: usage.inputTokens,
+						outputTokens: usage.outputTokens,
+						cacheReadTokens: usage.cacheReadTokens,
+						cacheWrite5mTokens: usage.cacheWrite5mTokens,
+						cacheWrite1hTokens: usage.cacheWrite1hTokens,
+					},
+					selected,
+				);
 				if (
 					Math.abs(expectedCost - request.pricing.calculatedCostUsd) > 1e-12
 				) {

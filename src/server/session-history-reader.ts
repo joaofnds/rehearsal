@@ -532,7 +532,7 @@ async function seriesFor(
 	const series = sessionHistoryRequestSeries({
 		transcript:
 			input.transcriptFile === undefined
-				? ""
+				? undefined
 				: await readVerifiedFile(input.root, input.transcriptFile),
 		prefixLinesExcluded: input.metadata.prefixLinesExcluded,
 	});

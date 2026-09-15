@@ -1387,16 +1387,22 @@ export interface SessionHistoryRequestSeries {
 	readonly measuresActiveContextWindow: false;
 	readonly omits: readonly string[];
 	readonly boundary: "known" | "unknown";
+	readonly transcriptState: "saved" | "absent";
 	readonly entries: readonly SessionHistoryRequestEntry[];
 	readonly attemptTotals: SessionHistoryAttemptTotals;
 }
 
 const BOUNDARY_ABSENT = "the transcript carries no attempt boundary";
+const TRANSCRIPT_ABSENT = "the attempt has no saved transcript";
 
 function attemptTotals(
 	entries: readonly SessionHistoryRequestEntry[],
 	boundary: "known" | "unknown",
+	transcriptState: "saved" | "absent",
 ): SessionHistoryAttemptTotals {
+	if (transcriptState === "absent") {
+		return { state: "unavailable", reasons: [TRANSCRIPT_ABSENT] };
+	}
 	if (boundary === "unknown") {
 		return { state: "unavailable", reasons: [BOUNDARY_ABSENT] };
 	}
@@ -1453,7 +1459,7 @@ const requestUsageSchema = z.looseObject({
 	output_tokens: z.number().int().nonnegative(),
 	cache_read_input_tokens: z.number().int().nonnegative(),
 	cache_creation_input_tokens: z.number().int().nonnegative(),
-	cache_creation: cacheCreationSchema.nullish(),
+	cache_creation: jsonValueSchema.nullish(),
 });
 
 const requestRowSchema = z.looseObject({
@@ -1518,7 +1524,7 @@ function parsedRequestRow(
  * a number to lean on.
  */
 function cacheWriteSplit(
-	reported: Readonly<z.infer<typeof cacheCreationSchema>> | null | undefined,
+	reported: JsonValue | null | undefined,
 	cacheWriteTokens: number,
 ): SessionHistoryCacheWriteSplit {
 	if (reported === null || reported === undefined) {
@@ -1527,8 +1533,15 @@ function cacheWriteSplit(
 			reasons: ["the row reports no cache-creation TTL split"],
 		};
 	}
-	const fiveMinuteTokens = reported.ephemeral_5m_input_tokens;
-	const oneHourTokens = reported.ephemeral_1h_input_tokens;
+	const parsed = cacheCreationSchema.safeParse(reported);
+	if (!parsed.success) {
+		return {
+			state: "missing",
+			reasons: ["the row's cache-creation TTL split is unreadable"],
+		};
+	}
+	const fiveMinuteTokens = parsed.data.ephemeral_5m_input_tokens;
+	const oneHourTokens = parsed.data.ephemeral_1h_input_tokens;
 	const total = fiveMinuteTokens + oneHourTokens;
 	if (total !== cacheWriteTokens) {
 		return {
@@ -1638,14 +1651,16 @@ function collapsedEntries(
 }
 
 export interface SessionHistoryRequestSeriesInput {
-	readonly transcript: string;
+	/** Absent means no transcript was saved, which is not an empty one. */
+	readonly transcript: string | undefined;
 	readonly prefixLinesExcluded: number | undefined;
 }
 
 export function sessionHistoryRequestSeries(
 	input: Readonly<SessionHistoryRequestSeriesInput>,
 ): SessionHistoryRequestSeries {
-	const rows = input.transcript
+	const transcriptState = input.transcript === undefined ? "absent" : "saved";
+	const rows = (input.transcript ?? "")
 		.split("\n")
 		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
@@ -1658,8 +1673,9 @@ export function sessionHistoryRequestSeries(
 		measuresActiveContextWindow: false,
 		omits: TOTAL_INPUT_TOKENS_OMITS,
 		boundary,
+		transcriptState,
 		entries,
-		attemptTotals: attemptTotals(entries, boundary),
+		attemptTotals: attemptTotals(entries, boundary, transcriptState),
 	};
 }
 
@@ -1741,6 +1757,9 @@ function calculatedCost(
 	series: SessionHistoryRequestSeries,
 	rates: ContextRateCatalog | undefined,
 ): SessionHistoryCostReading {
+	if (series.transcriptState === "absent") {
+		return { state: "unavailable", reasons: [TRANSCRIPT_ABSENT] };
+	}
 	if (series.boundary === "unknown") {
 		return { state: "unavailable", reasons: [BOUNDARY_ABSENT] };
 	}

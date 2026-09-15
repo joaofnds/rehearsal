@@ -574,6 +574,20 @@ describe(sessionHistoryRequestSeries.name, () => {
 		]);
 	});
 
+	it("reports totals unavailable rather than zero when the transcript is absent", () => {
+		const series = sessionHistoryRequestSeries({
+			transcript: undefined,
+			prefixLinesExcluded: 1268,
+		});
+
+		expect(series.boundary).toBe("known");
+		expect(series.entries).toEqual([]);
+		expect(series.attemptTotals).toEqual({
+			state: "unavailable",
+			reasons: ["the attempt has no saved transcript"],
+		});
+	});
+
 	it("marks every entry boundary-unknown when the transcript carries no boundary", () => {
 		const usage = { input: 2, output: 10, cacheRead: 100, cacheWrite: 20 };
 		const transcript = [
@@ -755,6 +769,42 @@ describe(sessionHistoryRequestSeries.name, () => {
 		expect(entry?.usageState === "complete" && entry.cacheWriteSplit).toEqual({
 			state: "missing",
 			reasons: ["the row reports no cache-creation TTL split"],
+		});
+	});
+
+	it("keeps a request whose TTL split reports only one tier, marking the split missing", () => {
+		const transcript = row({
+			type: "assistant",
+			timestamp: "2026-09-14T00:00:01.000Z",
+			cwd: "/work",
+			requestId: "req-a",
+			message: {
+				model: "claude-sonnet-5",
+				usage: {
+					input_tokens: 2,
+					output_tokens: 151,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: 251_695,
+					cache_creation: { ephemeral_5m_input_tokens: 251_695 },
+				},
+				content: [{ type: "text", text: "reply" }],
+			},
+		});
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		const [entry] = series.entries;
+
+		expect(series.entries).toHaveLength(1);
+		expect(entry?.usageState === "complete" && entry.usage.outputTokens).toBe(
+			151,
+		);
+		expect(entry?.usageState === "complete" && entry.cacheWriteSplit).toEqual({
+			state: "missing",
+			reasons: ["the row's cache-creation TTL split is unreadable"],
 		});
 	});
 
@@ -1053,6 +1103,21 @@ describe(sessionHistoryAttemptCost.name, () => {
 		],
 	} as const;
 
+	const bothModels = {
+		...rates,
+		models: [
+			...rates.models,
+			{
+				model: "claude-opus-5",
+				inputUsdPerMillion: 15,
+				outputUsdPerMillion: 15,
+				cacheReadUsdPerMillion: 1.5,
+				cacheWrite5mUsdPerMillion: 18.75,
+				cacheWrite1hUsdPerMillion: 30,
+			},
+		],
+	} as const;
+
 	function seriesWith(
 		prefixLinesExcluded: number | undefined,
 	): SessionHistoryRequestSeries {
@@ -1121,13 +1186,44 @@ describe(sessionHistoryAttemptCost.name, () => {
 	});
 
 	it("prices only the attempt region, leaving inherited requests out", () => {
+		const confined = sessionHistoryAttemptCost({
+			series: seriesWith(1),
+			reportedCostUsd: 1.008294,
+			rates: bothModels,
+		});
 		const wholeTranscript = sessionHistoryAttemptCost({
 			series: seriesWith(0),
 			reportedCostUsd: 1.008294,
+			rates: bothModels,
+		});
+
+		expect(
+			confined.calculated.state === "complete" && confined.calculated.costUsd,
+		).toBeCloseTo(1.009051, 6);
+		expect(
+			wholeTranscript.calculated.state === "complete" &&
+				wholeTranscript.calculated.costUsd,
+		).toBeCloseTo(2.3683135, 6);
+	});
+
+	it("reports the calculated reading unavailable rather than zero when the transcript is absent", () => {
+		const cost = sessionHistoryAttemptCost({
+			series: sessionHistoryRequestSeries({
+				transcript: undefined,
+				prefixLinesExcluded: 1268,
+			}),
+			reportedCostUsd: 0.039296,
 			rates,
 		});
 
-		expect(wholeTranscript.calculated.state).toBe("incomplete");
+		expect(cost.calculated).toEqual({
+			state: "unavailable",
+			reasons: ["the attempt has no saved transcript"],
+		});
+		expect(cost.difference).toEqual({
+			state: "unavailable",
+			reasons: ["the calculated reading is unavailable"],
+		});
 	});
 
 	it("reports the calculated reading unavailable rather than zero without rates", () => {
