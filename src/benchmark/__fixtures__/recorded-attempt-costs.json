@@ -1,0 +1,66 @@
+{
+	"measuredOn": "2026-09-15",
+	"note": "Recorded provider charges copied from .benchmark-runs, which is git-ignored. Every cache write in the corpus is 1h.",
+	"attempts": [
+		{
+			"attemptPath": ".benchmark-runs/sessions/brief-reply-02f0f204/d3431614-69d0-4705-8321-5a73640822d0/attempt.json",
+			"transcriptModel": "claude-sonnet-5",
+			"recordModelLabel": "sonnet",
+			"inputTokens": 2,
+			"outputTokens": 529,
+			"cacheReadTokens": 3304,
+			"cacheWrite1hTokens": 276750,
+			"recordedCostUsd": 1.1129548
+		},
+		{
+			"attemptPath": ".benchmark-runs/sessions/brief-reply-92b2e8b0/935649b6-55b2-42b3-b3ce-9e52eba38b03/attempt.json",
+			"transcriptModel": "claude-sonnet-5",
+			"recordModelLabel": "sonnet",
+			"inputTokens": 2,
+			"outputTokens": 199,
+			"cacheReadTokens": 0,
+			"cacheWrite1hTokens": 254023,
+			"recordedCostUsd": 1.018086
+		},
+		{
+			"attemptPath": ".benchmark-runs/sessions/brief-reply-92b2e8b0/e1af2c09-2c1e-4ef3-b1e6-97baf991211c/attempt.json",
+			"transcriptModel": "claude-sonnet-5",
+			"recordModelLabel": "sonnet",
+			"inputTokens": 2,
+			"outputTokens": 151,
+			"cacheReadTokens": 0,
+			"cacheWrite1hTokens": 251695,
+			"recordedCostUsd": 1.008294
+		},
+		{
+			"attemptPath": ".benchmark-runs/sessions/doctrine-fu-with/610ad64f-f2f4-4449-954b-7fb6e721f66d/attempt.json",
+			"transcriptModel": "claude-opus-5",
+			"recordModelLabel": "opus",
+			"inputTokens": 78,
+			"outputTokens": 22099,
+			"cacheReadTokens": 2583272,
+			"cacheWrite1hTokens": 84087,
+			"recordedCostUsd": 2.685371
+		},
+		{
+			"attemptPath": ".benchmark-runs/sessions/doctrine-ab-with/60dedcaf-ab09-4b30-a0b7-43007c2b43b6/attempt.json",
+			"transcriptModel": "claude-opus-5",
+			"recordModelLabel": "opus",
+			"inputTokens": 72,
+			"outputTokens": 15541,
+			"cacheReadTokens": 2191073,
+			"cacheWrite1hTokens": 75194,
+			"recordedCostUsd": 2.2363615
+		},
+		{
+			"attemptPath": ".benchmark-runs/sessions/doctrine-fu-with/55fa510f-74b4-4702-8dc9-d411582f54bd/attempt.json",
+			"transcriptModel": "claude-opus-5",
+			"recordModelLabel": "opus",
+			"inputTokens": 50,
+			"outputTokens": 15928,
+			"cacheReadTokens": 1419544,
+			"cacheWrite1hTokens": 72920,
+			"recordedCostUsd": 1.8374219999999997
+		}
+	]
+}

@@ -12,6 +12,7 @@ import { join } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import type { Immutable } from "#benchmark/contracts";
 import type { SessionRunConfig } from "#benchmark/config";
+import { syntheticRateProvenance } from "#benchmark/rate-catalog-test-support";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
 import { projectSlug } from "#benchmark/session-capture";
 import type { ClaudeRunner } from "#benchmark/session-attempt";
@@ -299,6 +300,7 @@ describe(runSessionDebugAttempt.name, () => {
 			source: "synthetic-rate-card",
 			version: "2026-09-13",
 			currency: "USD",
+			provenance: syntheticRateProvenance,
 			models: [
 				{
 					model: "claude-sonnet-5",

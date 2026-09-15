@@ -46,12 +46,25 @@ const modelRateSchema = z
 	})
 	.strict();
 
+const rateProvenanceSchema = z.enum(["corpus-measured", "publication-backed"]);
+
+const catalogProvenanceSchema = z
+	.object({
+		inputUsdPerMillion: rateProvenanceSchema,
+		outputUsdPerMillion: rateProvenanceSchema,
+		cacheReadUsdPerMillion: rateProvenanceSchema,
+		cacheWrite5mUsdPerMillion: rateProvenanceSchema,
+		cacheWrite1hUsdPerMillion: rateProvenanceSchema,
+	})
+	.strict();
+
 export const contextRateCatalogSchema = z
 	.object({
 		schemaVersion: z.literal(1),
 		source: z.string().min(1),
 		version: z.string().min(1),
 		currency: z.literal("USD"),
+		provenance: catalogProvenanceSchema,
 		models: z.array(modelRateSchema),
 	})
 	.strict()

@@ -6,6 +6,7 @@ import {
 	normalizeContextEvidence,
 } from "#benchmark/context-evidence";
 import { jsonObjectSchema } from "#benchmark/json-value";
+import { syntheticRateProvenance } from "#benchmark/rate-catalog-test-support";
 import type { JsonObject } from "#benchmark/json-value";
 
 async function sourceFixture(): Promise<
@@ -51,6 +52,7 @@ const rates = contextRateCatalogSchema.parse({
 	source: "synthetic-rate-card",
 	version: "2026-09-13",
 	currency: "USD",
+	provenance: syntheticRateProvenance,
 	models: [sonnetRate, haikuRate],
 });
 

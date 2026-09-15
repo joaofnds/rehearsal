@@ -4,6 +4,7 @@ import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { JsonValue } from "#benchmark/json-value";
+import { syntheticRateProvenance } from "#benchmark/rate-catalog-test-support";
 import type { SessionHistoryRequestSeries } from "#benchmark/session-history";
 import {
 	MAX_EVENT_DETAIL_BYTES,
@@ -1218,6 +1219,7 @@ describe(sessionHistoryAttemptCost.name, () => {
 		source: "test catalog",
 		version: "2026-09-15",
 		currency: "USD",
+		provenance: syntheticRateProvenance,
 		models: [
 			{
 				model: "claude-sonnet-5",
