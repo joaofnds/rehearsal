@@ -1353,11 +1353,77 @@ export type SessionHistoryRequestEntry = {
 	| { readonly usageState: "conflict" }
 );
 
+export type SessionHistoryAttemptTotals =
+	| {
+			readonly state: "complete";
+			readonly requestCount: number;
+			readonly usage: SessionHistoryRequestUsage;
+			readonly totalInputTokens: number;
+	  }
+	| {
+			readonly state: "incomplete";
+			readonly requestCount: number;
+			readonly countedRequestCount: number;
+			readonly usage: SessionHistoryRequestUsage;
+			readonly totalInputTokens: number;
+			readonly reasons: readonly string[];
+	  }
+	| { readonly state: "unavailable"; readonly reasons: readonly string[] };
+
 export interface SessionHistoryRequestSeries {
 	readonly name: "total input tokens";
 	readonly measuresActiveContextWindow: false;
 	readonly omits: readonly string[];
+	readonly boundary: "known" | "unknown";
 	readonly entries: readonly SessionHistoryRequestEntry[];
+	readonly attemptTotals: SessionHistoryAttemptTotals;
+}
+
+const BOUNDARY_ABSENT = "the transcript carries no attempt boundary";
+
+function attemptTotals(
+	entries: readonly SessionHistoryRequestEntry[],
+	boundary: "known" | "unknown",
+): SessionHistoryAttemptTotals {
+	if (boundary === "unknown") {
+		return { state: "unavailable", reasons: [BOUNDARY_ABSENT] };
+	}
+
+	const inRegion = entries.filter(({ region }) => region === "attempt");
+	const usage = {
+		inputTokens: 0,
+		outputTokens: 0,
+		cacheReadTokens: 0,
+		cacheWriteTokens: 0,
+	};
+	let counted = 0;
+	for (const entry of inRegion) {
+		if (entry.usageState !== "complete") {
+			continue;
+		}
+		counted += 1;
+		usage.inputTokens += entry.usage.inputTokens;
+		usage.outputTokens += entry.usage.outputTokens;
+		usage.cacheReadTokens += entry.usage.cacheReadTokens;
+		usage.cacheWriteTokens += entry.usage.cacheWriteTokens;
+	}
+	const totals = {
+		requestCount: inRegion.length,
+		usage,
+		totalInputTokens: totalInputTokens(usage),
+	};
+	if (counted === inRegion.length) {
+		return { state: "complete", ...totals };
+	}
+
+	return {
+		state: "incomplete",
+		...totals,
+		countedRequestCount: counted,
+		reasons: [
+			`${inRegion.length - counted} of ${inRegion.length} attempt-region requests carry no settled usage`,
+		],
+	};
 }
 
 const TOTAL_INPUT_TOKENS_OMITS = [
@@ -1528,10 +1594,16 @@ export function sessionHistoryRequestSeries(
 		.split("\n")
 		.flatMap((text, index) => parsedRequestRow(text, index + 1) ?? []);
 
+	const boundary =
+		input.prefixLinesExcluded === undefined ? "unknown" : "known";
+	const entries = collapsedEntries(rows, input.prefixLinesExcluded);
+
 	return {
 		name: "total input tokens",
 		measuresActiveContextWindow: false,
 		omits: TOTAL_INPUT_TOKENS_OMITS,
-		entries: collapsedEntries(rows, input.prefixLinesExcluded),
+		boundary,
+		entries,
+		attemptTotals: attemptTotals(entries, boundary),
 	};
 }

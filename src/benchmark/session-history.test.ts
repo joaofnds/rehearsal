@@ -572,6 +572,133 @@ describe(sessionHistoryRequestSeries.name, () => {
 		]);
 	});
 
+	it("marks every entry boundary-unknown when the transcript carries no boundary", () => {
+		const usage = { input: 2, output: 10, cacheRead: 100, cacheWrite: 20 };
+		const transcript = [
+			row(assistantRow("1", "req-a", "claude-opus-5", usage)),
+			row(assistantRow("2", "req-b", "claude-sonnet-5", usage)),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: undefined,
+		});
+
+		expect(series.boundary).toBe("unknown");
+		expect(series.entries.map(({ region }) => region)).toEqual([
+			"boundary-unknown",
+			"boundary-unknown",
+		]);
+	});
+
+	it("totals only the requests inside the attempt region", () => {
+		const transcript = [
+			row(
+				assistantRow("1", "req-inherited", "claude-opus-5", {
+					input: 7,
+					output: 90_592,
+					cacheRead: 5,
+					cacheWrite: 9,
+				}),
+			),
+			row(
+				assistantRow("2", "req-attempt", "claude-sonnet-5", {
+					input: 2,
+					output: 151,
+					cacheRead: 0,
+					cacheWrite: 251_695,
+				}),
+			),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 1,
+		});
+
+		expect(series.boundary).toBe("known");
+		expect(series.attemptTotals).toEqual({
+			state: "complete",
+			requestCount: 1,
+			usage: {
+				inputTokens: 2,
+				outputTokens: 151,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 251_695,
+			},
+			totalInputTokens: 251_697,
+		});
+	});
+
+	it("reports attempt totals unavailable rather than zero when the boundary is unknown", () => {
+		const transcript = row(
+			assistantRow("1", "req-a", "claude-opus-5", {
+				input: 2,
+				output: 151,
+				cacheRead: 0,
+				cacheWrite: 251_695,
+			}),
+		);
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: undefined,
+		});
+
+		expect(series.attemptTotals).toEqual({
+			state: "unavailable",
+			reasons: ["the transcript carries no attempt boundary"],
+		});
+	});
+
+	it("marks attempt totals incomplete when a request in the region has no settled usage", () => {
+		const transcript = [
+			row(
+				assistantRow("1", "req-conflict", "claude-sonnet-5", {
+					input: 2,
+					output: 10,
+					cacheRead: 0,
+					cacheWrite: 20,
+				}),
+			),
+			row(
+				assistantRow("2", "req-conflict", "claude-sonnet-5", {
+					input: 3,
+					output: 10,
+					cacheRead: 0,
+					cacheWrite: 20,
+				}),
+			),
+			row(
+				assistantRow("3", "req-settled", "claude-sonnet-5", {
+					input: 2,
+					output: 151,
+					cacheRead: 0,
+					cacheWrite: 251_695,
+				}),
+			),
+		].join("\n");
+
+		const series = sessionHistoryRequestSeries({
+			transcript,
+			prefixLinesExcluded: 0,
+		});
+
+		expect(series.attemptTotals).toEqual({
+			state: "incomplete",
+			requestCount: 2,
+			countedRequestCount: 1,
+			usage: {
+				inputTokens: 2,
+				outputTokens: 151,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 251_695,
+			},
+			totalInputTokens: 251_697,
+			reasons: ["1 of 2 attempt-region requests carry no settled usage"],
+		});
+	});
+
 	it("yields one entry per distinct request in transcript order", () => {
 		const transcript = [
 			row(
