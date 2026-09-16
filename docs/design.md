@@ -14,8 +14,8 @@ records the gaps in its implementation.
 | [`src/benchmark/`](../src/benchmark/) | Case loading, provider invocation, execution, grading, checkpoints, records, and comparisons  |
 | [`src/server/`](../src/server/)       | Read API, derived reports, event streaming, startup reconciliation, and static client serving |
 | [`client/src/`](../client/src/)       | React routes and shared design system                                                         |
-| [`cases/`](../cases/)                 | Benchmark declarations, fixtures, tasks, and rubrics                                          |
-| `.benchmark-runs/`                    | Local evidence, captured prefixes, confirmation groups, comparisons, and event database       |
+| [`cases/`](../cases/)                 | Benchmark declarations, fixtures, transcript prefixes, tasks, and rubrics                     |
+| `.benchmark-runs/`                    | Local evidence, confirmation groups, comparisons, and event database                          |
 
 Zod validates case and record boundaries. Bun's test runner covers the harness
 and server; the client suite uses a DOM environment. The current client uses

@@ -9,7 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { SessionCase } from "#benchmark/case";
 import { CommandError } from "#benchmark/command";
 import type { Immutable } from "#benchmark/contracts";
@@ -1023,6 +1023,31 @@ describe(runSessionAttempt.name, () => {
 		expect(failure).toBeInstanceOf(SessionInputError);
 		expect(failure.message).toBe(
 			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. Add the bytes to that case directory, or recapture them with \`rehearse case capture\`.`,
+		);
+	});
+
+	it("refuses a declared transcript prefix that is a symlink, before any provider call", async () => {
+		const prefix = await writtenPrefix(
+			`${transcriptLine(SOURCE_SESSION, "bytes behind the link")}\n`,
+		);
+		const link = join(dirname(prefix.path), "linked.jsonl");
+		await symlink(prefix.path, link);
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					sessionCase: resumingCase(link, prefix.sha256),
+					projectsDirectory: await projectsRoot(),
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.reject(new Error("a provider call must not happen")),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInputError);
+		expect(failure.message).toBe(
+			`Case probe declares transcript prefix.jsonl at ${link}, which is a symlink; a prefix is read as the bytes the case directory holds`,
 		);
 	});
 

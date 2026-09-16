@@ -442,10 +442,10 @@ See [current state](docs/status.md) for implementation coverage and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
 - **Transcript prefix** — a real session file truncated at a cut and used as
-  frozen starting context. It is a `.jsonl` file in the case directory, which
-  the loader reads, verifies against the declared digest, and includes in
-  lineage. A prefix is ignored by git unless `.gitignore` names it, so a case
-  whose prefix holds private material reaches another clone without its bytes.
+  frozen starting context. It lives in the case directory the declaration
+  belongs to, is checked against the declared digest before an attempt resumes
+  from it, and is carried in lineage. A prefix holding private material is kept
+  out of the repository, so the case reaches another clone without its bytes.
 - **Transcript diagnostics** — the compact projection saved on each new session
   attempt record from transcript records at and after its captured cut. It
   records source and measured line counts; raw tool-use occurrences; explicit

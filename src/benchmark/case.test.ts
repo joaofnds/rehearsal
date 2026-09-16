@@ -106,7 +106,7 @@ describe(parseCaseDeclaration.name, () => {
 	});
 
 	it.each(["sub/prefix.jsonl", "prefix.json", "prefix.jsonl.bak"])(
-		"refuses a transcript file %s, which the ignore rule for prefixes would not cover",
+		"refuses a transcript file %s, which is not a bare .jsonl name",
 		(file) => {
 			expect(() =>
 				parseCaseDeclaration(
@@ -496,6 +496,64 @@ describe("loadCase for the brief-reply cases", () => {
 			});
 		},
 	);
+});
+
+/**
+ * The schema decides which names a prefix can carry and `.gitignore` decides
+ * which ones stay unpublished. Nothing in the language links the two, so the
+ * agreement is asserted here against git itself.
+ */
+describe("the ignore rule for transcript prefixes", () => {
+	function acceptedName(file: string): string | undefined {
+		const declaration = parseCaseDeclaration(
+			"smoke",
+			JSON.stringify({
+				id: "smoke",
+				kind: "session",
+				title: "Smoke",
+				prompt: "Reply with the single word OK.",
+				transcript: {
+					file,
+					sha256: "a".repeat(64),
+					sourceSession: "aaaaaaaa-1111-2222-3333-444444444444",
+					cut: 3,
+				},
+				tools: [],
+				corpusFiles: [],
+				checks: [{ kind: "tool-calls", max: 0 }],
+			}),
+		);
+
+		return declaration.kind === "session"
+			? declaration.transcript?.file
+			: undefined;
+	}
+
+	async function ignored(path: string): Promise<boolean> {
+		try {
+			await runCommand(["git", "check-ignore", "-q", path], PROJECT_ROOT);
+
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	it.each([
+		"capture.jsonl",
+		"a0491c04-fb39-42b6-851e-37aba8250e82-cut-24.jsonl",
+	])("covers %s, a name the declaration schema accepts", async (file) => {
+		expect(acceptedName(file)).toBe(file);
+		expect(await ignored(join(CASES_DIRECTORY, "smoke", file))).toBe(true);
+	});
+
+	it("leaves a case's other declared input files tracked", async () => {
+		expect(
+			await ignored(
+				join(CASES_DIRECTORY, "manifest-probe", "fixture", "x.jsonl"),
+			),
+		).toBe(false);
+	});
 });
 
 describe(transcriptPrefixPath.name, () => {

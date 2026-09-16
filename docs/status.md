@@ -61,7 +61,8 @@ verdict.
 - **Several cases depend on private inputs.** `brief-reply-*` need transcript
   prefixes that are ignored rather than published; `smoke` needs an output
   style; doctrine examples need installed corpus files. `manifest-probe` carries
-  its prefix in the repository, so a clone can run it.
+  its prefix in the repository, so a clone has its bytes, and still needs the
+  corpus files it declares.
 - **Session output grading is narrow.** Checks currently read the reply and tool
   transcript. Generated fixture setup, post-session filesystem/Git preservation,
   and command scorers are planned. A doctrine example's tool-call check is not

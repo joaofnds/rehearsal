@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
 	cp,
+	lstat,
 	mkdir,
 	mkdtemp,
 	readdir,
@@ -185,6 +186,11 @@ export class SessionInputError extends Error {
  * whose prefix is withheld from publication reaches a clone as a declaration
  * with no bytes beside it, so absence is an ordinary state there, and the
  * message says how to get the bytes back.
+ *
+ * A symlink is refused rather than followed, for the reason `seedFixture`
+ * refuses one: the case directory now travels with the repository, so a link
+ * committed into it would name a file on the machine that runs the case and
+ * send those bytes to the provider.
  */
 async function verifiedPrefix(
 	sessionCase: SessionCase,
@@ -194,6 +200,12 @@ async function verifiedPrefix(
 	if (!(await Bun.file(transcriptPath).exists())) {
 		throw new SessionInputError(
 			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. Add the bytes to that case directory, or recapture them with \`rehearse case capture\`.`,
+		);
+	}
+	const entry = await lstat(transcriptPath);
+	if (entry.isSymbolicLink()) {
+		throw new SessionInputError(
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file} at ${transcriptPath}, which is a symlink; a prefix is read as the bytes the case directory holds`,
 		);
 	}
 

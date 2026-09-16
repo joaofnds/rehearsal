@@ -147,7 +147,10 @@ the recorded identity or expose the recording machine's path.
 A session case declares a prompt, allowed tools, declared corpus files, and at
 least one deterministic check. Optional inputs are a fixture tree, transcript
 prefix, inline settings/agent definitions, and `projectFiles` for context
-manifest reconciliation. Fixture trees may not contain symlinks.
+manifest reconciliation. A declared `transcript.file` is a `.jsonl` file name
+directly in the case directory, with no subdirectory. Neither a fixture tree nor
+a transcript prefix may be a symlink, which is refused before any provider
+call.
 
 | Check            | Behavior                                                    |
 | ---------------- | ----------------------------------------------------------- |
@@ -220,17 +223,18 @@ and writes the prefix under `cases/<id>/`, beside the declaration that names
 it. The cut is a positive zero-based index of the first dropped record. Run the
 formatter after capture.
 
-The loader reads the prefix from that one location. `.gitignore` excludes every
-`.jsonl` file under `cases/`, so a captured prefix stays out of a commit until
-a negation names it, which makes publishing one an explicit edit that
+The loader reads the prefix from that one location. `.gitignore` excludes the
+`.jsonl` files directly inside a case directory, which is where a prefix may
+sit and nothing else does, so a captured prefix stays out of a commit until a
+negation names it. Publishing one is therefore an explicit edit that
 CONTRIBUTING.md's content review can gate. A case whose prefix is withheld
 reaches another clone as a declaration with no bytes beside it, and an attempt
-at it is refused. Resumption
-checks the declared digest, forks the prefix under a fresh session ID, and owns
-only the forked session file for cleanup. Its Claude invocation sets
-`--system-prompt-snapshot off`, so the system prompt is rendered again from the
-case's declared settings and installed corpus rather than reused from the
-prefix's original conversation. Missing or changed bytes are refused.
+at it is refused. Resumption checks the declared digest, forks the prefix under
+a fresh session ID, and owns only the forked session file for cleanup. Its
+Claude invocation sets `--system-prompt-snapshot off`, so the system prompt is
+rendered again from the case's declared settings and installed corpus rather
+than reused from the prefix's original conversation. Missing or changed bytes
+are refused.
 
 ## Corpus sources and delivery
 

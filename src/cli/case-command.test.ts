@@ -8,7 +8,6 @@ import {
 	caseDeclarationSchema,
 	CASES_DIRECTORY,
 	casesRoot,
-	transcriptPrefixPath,
 } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
 import { TestResources } from "#benchmark/test-support";
@@ -258,11 +257,11 @@ describe(runCaseCapture.name, () => {
 			transcript: { sourceSession: SESSION_ID, cut: 3 },
 		});
 		const written = await Bun.file(
-			transcriptPrefixPath(
+			join(
+				cases,
 				CAPTURE_CASE_ID,
 				z.object({ transcript: z.object({ file: z.string() }) }).parse(printed)
 					.transcript.file,
-				cases,
 			),
 		).text();
 		expect(written.trimEnd().split("\n")).toHaveLength(3);

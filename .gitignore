@@ -2,5 +2,5 @@ node_modules/
 .benchmark-runs/
 client/dist/
 
-cases/**/*.jsonl
+cases/*/*.jsonl
 !cases/manifest-probe/a0491c04-fb39-42b6-851e-37aba8250e82-cut-24.jsonl
