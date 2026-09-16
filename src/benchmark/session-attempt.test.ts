@@ -1022,7 +1022,7 @@ describe(runSessionAttempt.name, () => {
 
 		expect(failure).toBeInstanceOf(SessionInputError);
 		expect(failure.message).toBe(
-			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. The prefix bytes are git-ignored run state; recapture them with \`rehearse case capture\`.`,
+			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. Add the bytes to that case directory, or recapture them with \`rehearse case capture\`.`,
 		);
 	});
 

@@ -175,17 +175,16 @@ export class SessionInputError extends Error {
 }
 
 /**
- * The prefix's bytes are git-ignored run state that the declaration only names,
- * so the file on disk can be any file the machine has and the declaration is
- * the only claim about which bytes this case resumes. Hashing before the fork
- * is what turns that claim into a precondition: an attempt either resumes the
- * bytes the case was captured from or it refuses, before the provider is paid
- * to read them.
+ * The declaration names the file, so the bytes on disk can be any file the
+ * machine has and the declared digest is the only claim about which bytes this
+ * case resumes. Hashing before the fork is what turns that claim into a
+ * precondition: an attempt either resumes the bytes the case was captured from
+ * or it refuses, before the provider is paid to read them.
  *
- * A prefix that is absent is the same refusal, not a filesystem error. A fresh
- * clone has every committed case declaration and none of the git-ignored bytes
- * they name, so absence is the ordinary state there, and the message says how
- * to get the bytes back.
+ * A prefix that is absent is the same refusal, not a filesystem error. A case
+ * whose prefix is withheld from publication reaches a clone as a declaration
+ * with no bytes beside it, so absence is an ordinary state there, and the
+ * message says how to get the bytes back.
  */
 async function verifiedPrefix(
 	sessionCase: SessionCase,
@@ -194,7 +193,7 @@ async function verifiedPrefix(
 ): Promise<void> {
 	if (!(await Bun.file(transcriptPath).exists())) {
 		throw new SessionInputError(
-			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. The prefix bytes are git-ignored run state; recapture them with \`rehearse case capture\`.`,
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. Add the bytes to that case directory, or recapture them with \`rehearse case capture\`.`,
 		);
 	}
 

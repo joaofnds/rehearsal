@@ -19,7 +19,6 @@ import { chmod, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runCommand } from "#benchmark/command";
 import { pipelineDefinitionSchema } from "#benchmark/pipeline";
-import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { DEFAULT_STAGE_SETTINGS_FILE } from "#benchmark/stage-settings";
 import { PROJECT_ROOT, TestResources } from "#benchmark/test-support";
 
@@ -472,14 +471,9 @@ describe("loadCase for the brief-reply cases", () => {
 });
 
 describe(transcriptPrefixPath.name, () => {
-	it("resolves a declared file under the case's own prefix directory", () => {
+	it("resolves a declared file under the case's own committed directory", () => {
 		expect(transcriptPrefixPath("smoke", "prefix.jsonl")).toBe(
-			join(
-				benchmarkRunsDirectory(CONTROL_DIR),
-				CASES_DIRECTORY,
-				"smoke",
-				"prefix.jsonl",
-			),
+			join(casesRoot(), "smoke", "prefix.jsonl"),
 		);
 	});
 
@@ -487,12 +481,9 @@ describe(transcriptPrefixPath.name, () => {
 		"../../../../../../etc/passwd",
 		"/etc/passwd",
 		"../audit-log/x.jsonl",
-	])(
-		"refuses a transcript at %s, which leaves the case's prefix directory",
-		(file) => {
-			expect(() => transcriptPrefixPath("smoke", file)).toThrow(
-				`Case smoke names a transcript outside its prefix directory: ${file}`,
-			);
-		},
-	);
+	])("refuses a transcript at %s, which leaves the case directory", (file) => {
+		expect(() => transcriptPrefixPath("smoke", file)).toThrow(
+			`Case smoke names a transcript outside its case directory: ${file}`,
+		);
+	});
 });

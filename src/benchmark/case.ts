@@ -4,7 +4,6 @@ import { z } from "zod";
 import { CONTROL_DIR } from "./config";
 import type { JsonObject } from "./json-value";
 import { jsonObjectSchema } from "./json-value";
-import { benchmarkRunsDirectory } from "./run-layout";
 import type { Immutable, StageRubric } from "./contracts";
 import type { PipelineDefinition } from "./pipeline";
 import { loadPipeline } from "./pipeline";
@@ -420,16 +419,15 @@ async function loadPipelineCase(
 	};
 }
 
-/**
- * The transcript prefix's bytes are git-ignored run state, not case input, so
- * the declaration names the file and the loader resolves it under the run
- * directory rather than inside the committed case directory.
- */
-export function transcriptPrefixPath(caseId: string, file: string): string {
+export function transcriptPrefixPath(
+	caseId: string,
+	file: string,
+	root: string = casesRoot(),
+): string {
 	return confinedTo(
-		join(benchmarkRunsDirectory(CONTROL_DIR), CASES_DIRECTORY, caseId),
+		caseDirectory(caseId, root),
 		file,
-		`Case ${caseId} names a transcript outside its prefix directory: ${file}`,
+		`Case ${caseId} names a transcript outside its case directory: ${file}`,
 	);
 }
 

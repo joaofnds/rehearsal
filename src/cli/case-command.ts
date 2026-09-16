@@ -194,7 +194,7 @@ export async function runCaseCapture(
 
 	const source = await resolved(dependencies.projectsDirectory, session);
 	const file = `${source.sessionId}-cut-${String(cut)}.jsonl`;
-	const destination = transcriptPrefixPath(caseId, file);
+	const destination = transcriptPrefixPath(caseId, file, root);
 	await mkdir(dirname(destination), { recursive: true });
 	const prefix = await captured(source.path, destination, cut);
 

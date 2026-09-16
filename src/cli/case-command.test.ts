@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +11,6 @@ import {
 	transcriptPrefixPath,
 } from "#benchmark/case";
 import { CONTROL_DIR, DEFAULT_CASE_ID } from "#benchmark/config";
-import { benchmarkRunsDirectory } from "#benchmark/run-layout";
 import { TestResources } from "#benchmark/test-support";
 import type { OutputRecorder } from "#cli/cli-test-support";
 import { failureOf, recordOutput } from "#cli/cli-test-support";
@@ -244,18 +243,7 @@ describe(runCaseCapture.name, () => {
 		return recorder;
 	}
 
-	afterEach(async () => {
-		await rm(
-			join(
-				benchmarkRunsDirectory(CONTROL_DIR),
-				CASES_DIRECTORY,
-				CAPTURE_CASE_ID,
-			),
-			{ force: true, recursive: true },
-		);
-	});
-
-	it("writes the source's first cut lines under the run directory and records the digest", async () => {
+	it("writes the source's first cut lines into the case directory and records the digest", async () => {
 		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
 
@@ -274,6 +262,7 @@ describe(runCaseCapture.name, () => {
 				CAPTURE_CASE_ID,
 				z.object({ transcript: z.object({ file: z.string() }) }).parse(printed)
 					.transcript.file,
+				cases,
 			),
 		).text();
 		expect(written.trimEnd().split("\n")).toHaveLength(3);
