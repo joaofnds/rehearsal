@@ -76,7 +76,7 @@ function causeList(
 	));
 }
 
-function causes(staleCauses: readonly string[]): React.ReactNode {
+function causesFor(staleCauses: readonly string[]): React.ReactNode {
 	if (staleCauses.length <= 1) {
 		return causeList(staleCauses);
 	}
@@ -102,7 +102,7 @@ function corpusCell(row: RunHistoryRow): React.JSX.Element {
 				<CorpusPill hash={row.corpus.digest} />
 			)}
 			<Status state={row.stale ? "stale" : "clear"} />
-			{causes(row.staleCauses)}
+			{causesFor(row.staleCauses)}
 		</span>
 	);
 }
@@ -148,8 +148,7 @@ export function RunHistoryPage(): React.JSX.Element {
 	const unreadable = query.data?.unreadable ?? [];
 	const recorded = query.data?.rows ?? [];
 	const rows = recorded.filter((row) => matchesFilter(row, filter));
-	const unreadableSpeaksForTheReport =
-		recorded.length === 0 && unreadable.length > 0;
+	const onlyUnreadableRuns = recorded.length === 0 && unreadable.length > 0;
 
 	return (
 		<main className="rh-run-history">
@@ -161,7 +160,7 @@ export function RunHistoryPage(): React.JSX.Element {
 
 			{unreadable.length > 0 ? <UnreadableRuns runs={unreadable} /> : null}
 
-			{query.isSuccess && rows.length === 0 && !unreadableSpeaksForTheReport ? (
+			{query.isSuccess && rows.length === 0 && !onlyUnreadableRuns ? (
 				<EmptyState heading="No runs recorded">
 					<p>
 						The corpus is linked and a spend limit is set. Declare a case, then
