@@ -119,19 +119,30 @@
 }
 
 /*
- * Four panes. The columns' own minimums sum to 1070px, which is wider than
- * the 100ch the three-pane layout declared: that figure was already narrower
- * than its three columns needed, so it never bound anything. The grid's
- * minmax floors force the width on their own, and the ancestor scrolls
- * horizontally below the breakpoint. The timeline sits third, between the
- * events it selects and the detail that explains one, because a row and the
- * evidence it points at read together.
+ * Four panes. Each floor is named once here and the grid's own floor is their
+ * sum, because a track floor sizes the track and not the grid box: without
+ * min-inline-size the box collapses to the space available and the fourth
+ * pane spills past the grid's right border, which is painted through it. The
+ * 100ch the three-pane layout declared was already narrower than its three
+ * columns needed, so it never bound anything and was not worth raising. The
+ * timeline sits third, between the events it selects and the detail that
+ * explains one, because a row and the evidence it points at read together.
  */
 .rh-history__workbench {
+	--rh-pane-sources: 190px;
+	--rh-pane-events: 260px;
+	--rh-pane-timeline: 300px;
+	--rh-pane-detail: 320px;
+
 	display: grid;
 	grid-template-columns:
-		minmax(190px, 0.7fr) minmax(260px, 1fr)
-		minmax(300px, 1.2fr) minmax(320px, 1.3fr);
+		minmax(var(--rh-pane-sources), 0.7fr) minmax(var(--rh-pane-events), 1fr)
+		minmax(var(--rh-pane-timeline), 1.2fr)
+		minmax(var(--rh-pane-detail), 1.3fr);
+	min-inline-size: calc(
+		var(--rh-pane-sources) + var(--rh-pane-events) + var(--rh-pane-timeline) +
+			var(--rh-pane-detail)
+	);
 	min-height: 70vh;
 	border: var(--border-width-hairline) solid var(--color-border-2);
 	background: var(--color-surface);
@@ -274,7 +285,13 @@
 	word-break: break-word;
 }
 
-@media (width < 1120px) {
+/*
+ * 1110px is where the workbench first overflows: the four pane floors sum to
+ * 1070, which under border-box already covers the grid's own hairline borders,
+ * and .rh-history's padding adds 40. A media query cannot read the custom
+ * properties above, so this number is derived by hand and changes with them.
+ */
+@media (width < 1110px) {
 	.rh-history {
 		overflow-x: auto;
 	}
