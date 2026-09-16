@@ -176,11 +176,22 @@ function requestRowForEventLine(
 	return owner === undefined ? undefined : requestRowId(owner);
 }
 
-function eventForRequestRow(
+/**
+ * The first event the request owns, bounded above by the next request's line.
+ * Without that bound a request that produced no event of its own, which is
+ * every text-only assistant reply, selects the next request's event, and the
+ * pane then highlights that other row rather than the one clicked.
+ */
+export function eventForRequestRow(
+	entries: readonly SessionHistoryRequestEntry[],
 	events: readonly SessionHistoryEvent[],
 	entry: Readonly<SessionHistoryRequestEntry>,
 ): SessionHistoryEvent | undefined {
-	return events.find(({ locator }) => locator.line >= entry.line);
+	return events.find(
+		({ locator }) =>
+			locator.line >= entry.line &&
+			requestRowForEventLine(entries, locator.line) === requestRowId(entry),
+	);
 }
 
 /**
@@ -497,6 +508,50 @@ function DetailPane({
 	);
 }
 
+/**
+ * The pane occupies its grid column whether or not its query landed, so a
+ * failed request leaves a named column with a reason in it rather than a
+ * four-column grid with three panes and one silent gap.
+ */
+function RequestTimelinePane({
+	read,
+	failed,
+	entries,
+	selected,
+	onSelect,
+}: {
+	readonly read: RequestSeriesResponse | undefined;
+	readonly failed: boolean;
+	readonly entries: readonly SessionHistoryRequestEntry[];
+	readonly selected: string | undefined;
+	readonly onSelect: (entry: SessionHistoryRequestEntry) => void;
+}): React.JSX.Element {
+	if (read === undefined) {
+		return (
+			<section className="rh-timeline" aria-label="Request timeline">
+				<h2>Request timeline</h2>
+				<p className="rh-timeline__note" role={failed ? "alert" : undefined}>
+					{failed
+						? "Could not load the request timeline."
+						: "Loading the request timeline…"}
+				</p>
+			</section>
+		);
+	}
+
+	return (
+		<RequestTimeline
+			series={read.series}
+			entries={entries}
+			cost={read.cost}
+			requestCosts={read.requestCosts}
+			instructionLoads={read.instructionLoads}
+			selected={selected}
+			onSelect={onSelect}
+		/>
+	);
+}
+
 export function SessionHistoryPage({
 	identity,
 }: {
@@ -672,22 +727,22 @@ export function SessionHistoryPage({
 								onSelect={setSelectedEventId}
 							/>
 						</section>
-						{requests.data === undefined ? null : (
-							<RequestTimeline
-								series={requests.data.series}
-								entries={visibleEntries}
-								cost={requests.data.cost}
-								requestCosts={requests.data.requestCosts}
-								instructionLoads={requests.data.instructionLoads}
-								selected={selectedRequestRow}
-								onSelect={(entry) => {
-									const target = eventForRequestRow(events, entry);
-									if (target !== undefined) {
-										setSelectedEventId(target.id);
-									}
-								}}
-							/>
-						)}
+						<RequestTimelinePane
+							read={requests.data}
+							failed={requests.isError}
+							entries={visibleEntries}
+							selected={selectedRequestRow}
+							onSelect={(entry) => {
+								const target = eventForRequestRow(
+									timelineEntries,
+									events,
+									entry,
+								);
+								if (target !== undefined) {
+									setSelectedEventId(target.id);
+								}
+							}}
+						/>
 						<aside className="rh-history__detail" aria-label="Event detail">
 							<h2>Evidence detail</h2>
 							{detail.isLoading ? <p>Loading evidence…</p> : null}

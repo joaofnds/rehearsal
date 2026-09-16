@@ -84,3 +84,26 @@ const redact = redactorFor([homedir(), tmpdir()]);
 export function redactAbsolutePaths(message: string): string {
 	return redact(message);
 }
+
+/**
+ * For a field whose whole value is one path, not a message that might contain
+ * one. `redactAbsolutePaths` has to guess where a path ends inside prose, so it
+ * stops at the first space, comma, paren or quote and leaves the tail of
+ * `~/Library/Application Support/Claude/CLAUDE.md` behind. Here the producer
+ * knows the value is a path, so no guessing is needed: everything above the
+ * file keeps no name, and the file's own name survives.
+ *
+ * The name has to survive. A load is named by its path and its memory type
+ * (GLOSSARY.md, Instruction load), and replacing the whole path leaves every
+ * load in a list reading alike, which is no evidence about which file loaded.
+ */
+export function redactedFilePath(path: string): string {
+	const separator = /[/\\]/u;
+	if (!/^(?:\/|\\\\|[A-Za-z]:[/\\])/u.test(path)) {
+		return path;
+	}
+	const segments = path.split(separator).filter((segment) => segment !== "");
+	const name = segments.at(-1);
+
+	return name === undefined ? "<path>" : `<path>/${name}`;
+}

@@ -17,7 +17,7 @@ import {
 import { comparisonReport } from "./comparisons";
 import { comparisonAttemptHistoryLinks } from "./comparison-history-links";
 import { corpusReport } from "./corpus-report";
-import { redactAbsolutePaths } from "./redact-path";
+import { redactAbsolutePaths, redactedFilePath } from "./redact-path";
 import { runHistoryReport } from "./run-history";
 import {
 	readConfirmationAttemptHistory,
@@ -51,10 +51,12 @@ function historyError(error: HistoryErrorView): HistoryErrorResponse {
 }
 
 /**
- * The instructions attachment records each loaded file by its absolute path
- * on the machine that ran the attempt, so serving it verbatim would put the
- * operator's home directory into a browser. The attempt's own identifiers are
- * relative and survive redaction.
+ * The instructions attachment records each loaded file by its absolute path on
+ * the machine that ran the attempt, so serving it verbatim would put the
+ * operator's home directory into a browser. `redactedFilePath` drops the
+ * directories above the file and keeps the file's own name, because a load is
+ * named by its path and its memory type and a list of identical placeholders
+ * names no file.
  */
 function redactedSeries(
 	read: Readonly<SessionHistoryAttemptSeries>,
@@ -69,7 +71,7 @@ function redactedSeries(
 		instructionLoads: {
 			state: "available",
 			loads: instructionLoads.loads.map((load) => ({
-				filePath: redactAbsolutePaths(load.filePath),
+				filePath: redactedFilePath(load.filePath),
 				memoryType: load.memoryType,
 				loadReason: load.loadReason,
 				triggerFilePath: load.triggerFilePath,

@@ -1399,6 +1399,7 @@ export interface SessionHistoryRequestSeries {
 }
 
 const BOUNDARY_ABSENT = "the transcript carries no attempt boundary";
+const NO_CATALOG = "no rate catalog was supplied";
 const TRANSCRIPT_ABSENT = "the attempt has no saved transcript";
 
 function attemptTotals(
@@ -1905,13 +1906,19 @@ export type SessionHistoryRequestCost = PricedRequest;
  */
 export function sessionHistoryRequestCosts(
 	series: Readonly<SessionHistoryRequestSeries>,
-	rates: ContextRateCatalog,
+	rates: ContextRateCatalog | undefined,
 ): ReadonlyMap<number, SessionHistoryRequestCost> {
 	const costs = new Map<number, SessionHistoryRequestCost>();
 	for (const entry of series.entries) {
-		if (entry.region === "attempt") {
-			costs.set(entry.line, pricedRequest(entry, rates));
+		if (entry.region !== "attempt") {
+			continue;
 		}
+		costs.set(
+			entry.line,
+			rates === undefined
+				? { state: "unpriced", reason: NO_CATALOG }
+				: pricedRequest(entry, rates),
+		);
 	}
 
 	return costs;
@@ -1928,10 +1935,7 @@ function calculatedCost(
 		return { state: "unavailable", reasons: [BOUNDARY_ABSENT] };
 	}
 	if (rates === undefined) {
-		return {
-			state: "unavailable",
-			reasons: ["no rate catalog was supplied"],
-		};
+		return { state: "unavailable", reasons: [NO_CATALOG] };
 	}
 
 	const inRegion = series.entries.filter(({ region }) => region === "attempt");

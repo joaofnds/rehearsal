@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import type { SessionHistoryReport } from "#benchmark/session-history";
+import type { SessionHistoryAttemptSeries } from "#server/session-history-reader";
 import { stubFetch, stubFetchByPath } from "#client/test-support/fetch-stub";
 import { createAppRouter } from "./router";
 
@@ -59,6 +60,38 @@ function emptyHistory(caseId: string, id: string): SessionHistoryReport {
 	};
 }
 
+function emptyRequestSeries(): SessionHistoryAttemptSeries {
+	return {
+		series: {
+			name: "total input tokens",
+			measuresActiveContextWindow: false,
+			omits: [],
+			boundary: "known",
+			transcriptState: "saved",
+			entries: [],
+			compactions: [],
+			attemptTotals: {
+				state: "complete",
+				requestCount: 0,
+				usage: {
+					inputTokens: 0,
+					outputTokens: 0,
+					cacheReadTokens: 0,
+					cacheWriteTokens: 0,
+				},
+				totalInputTokens: 0,
+			},
+		},
+		cost: {
+			reported: { state: "complete", costUsd: 0 },
+			calculated: { state: "complete", costUsd: 0 },
+			difference: { state: "complete", costUsd: 0 },
+		},
+		requestCosts: [],
+		instructionLoads: { state: "unavailable" },
+	};
+}
+
 describe(createAppRouter.name, () => {
 	it("renders run history at the root path, the landing screen", async () => {
 		renderAt("/");
@@ -112,10 +145,14 @@ describe(createAppRouter.name, () => {
 	it("renders standalone saved session history", async () => {
 		renderAtWithStub(
 			"/attempts/session/case-a/attempt-a",
-			new Map([
+			new Map<string, unknown>([
 				[
 					"/api/attempts/session/case-a/attempt-a/history",
 					emptyHistory("case-a", "attempt-a"),
+				],
+				[
+					"/api/attempts/session/case-a/attempt-a/history/requests",
+					emptyRequestSeries(),
 				],
 			]),
 		);
@@ -130,10 +167,14 @@ describe(createAppRouter.name, () => {
 	it("renders confirmation rep saved session history", async () => {
 		renderAtWithStub(
 			"/groups/group-a/reps/group-a-rep-1/attempt",
-			new Map([
+			new Map<string, unknown>([
 				[
 					"/api/groups/group-a/reps/group-a-rep-1/attempt/history",
 					emptyHistory("case-a", "group-a-rep-1"),
+				],
+				[
+					"/api/groups/group-a/reps/group-a-rep-1/attempt/history/requests",
+					emptyRequestSeries(),
 				],
 			]),
 		);

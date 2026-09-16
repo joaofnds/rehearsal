@@ -13,6 +13,7 @@ import type {
 	SessionHistoryRequestEntry,
 } from "#benchmark/session-history";
 import {
+	eventForRequestRow,
 	requestRowsOwningEvents,
 	SessionHistoryPage,
 } from "./session-history-page";
@@ -598,7 +599,27 @@ describe(SessionHistoryPage.name, () => {
 		expect(rows).toHaveLength(5);
 		expect(rows[1]).toHaveTextContent("286,813");
 		expect(rows[1]).toHaveTextContent("claude-sonnet-5");
+		expect(rows[1]).toHaveTextContent(
+			"in 2 · out 151 · read 100 · write 286,711",
+		);
+		expect(rows[1]).toHaveTextContent("$1.50");
 		expect(rows[2]).toHaveTextContent("280,056");
+	});
+
+	it("names why an unpriced request carries no cost", async () => {
+		renderPage();
+
+		const timeline = await screen.findByRole("listbox", {
+			name: "Request timeline",
+		});
+
+		const rows = within(timeline).getAllByRole("option");
+		expect(rows[4]).toHaveTextContent(
+			"? Unpriced · a request's duplicate rows disagree on usage",
+		);
+		expect(rows[0]).toHaveTextContent(
+			"? Unpriced · starting-context requests are not priced",
+		);
 	});
 
 	it("states that the active context window is not measured", async () => {
@@ -694,29 +715,38 @@ describe(SessionHistoryPage.name, () => {
 	});
 });
 
+const textOnlyReply: SessionHistoryRequestEntry = {
+	requestId: "req-a",
+	line: 10,
+	region: "attempt",
+	usageState: "conflict",
+};
+const toolCallingRequest: SessionHistoryRequestEntry = {
+	requestId: "req-b",
+	line: 20,
+	region: "attempt",
+	usageState: "conflict",
+};
+const ownershipEntries = [textOnlyReply, toolCallingRequest];
+
+function eventAtLine(line: number): SessionHistoryEvent {
+	return {
+		id: `${line}:1`,
+		locator: { line, block: 1 },
+		region: "attempt",
+		kind: "result",
+		state: "recorded",
+		label: `event at ${line}`,
+		measurement: { state: "complete", characters: 1 },
+		relatedEventIds: [],
+	};
+}
+
 describe(requestRowsOwningEvents.name, () => {
-	const entries: readonly SessionHistoryRequestEntry[] = [
-		{ requestId: "req-a", line: 10, region: "attempt", usageState: "conflict" },
-		{ requestId: "req-b", line: 20, region: "attempt", usageState: "conflict" },
-	];
-
-	function eventAtLine(line: number): SessionHistoryEvent {
-		return {
-			id: `${line}:1`,
-			locator: { line, block: 1 },
-			region: "attempt",
-			kind: "result",
-			state: "recorded",
-			label: `event at ${line}`,
-			measurement: { state: "complete", characters: 1 },
-			relatedEventIds: [],
-		};
-	}
-
 	it("keeps a request whose events all sit on later lines than its own", () => {
 		const events = [eventAtLine(12), eventAtLine(13)];
 
-		const owning = requestRowsOwningEvents(entries, events);
+		const owning = requestRowsOwningEvents(ownershipEntries, events);
 
 		expect(owning.map(({ requestId }) => requestId)).toEqual(["req-a"]);
 	});
@@ -724,8 +754,26 @@ describe(requestRowsOwningEvents.name, () => {
 	it("drops a request no visible event belongs to", () => {
 		const events = [eventAtLine(21)];
 
-		const owning = requestRowsOwningEvents(entries, events);
+		const owning = requestRowsOwningEvents(ownershipEntries, events);
 
 		expect(owning.map(({ requestId }) => requestId)).toEqual(["req-b"]);
+	});
+});
+
+describe(eventForRequestRow.name, () => {
+	it("selects nothing for a request that recorded no event of its own", () => {
+		const events = [eventAtLine(20)];
+
+		expect(
+			eventForRequestRow(ownershipEntries, events, textOnlyReply),
+		).toBeUndefined();
+	});
+
+	it("selects the first event the request owns, not the next request's", () => {
+		const events = [eventAtLine(12), eventAtLine(20)];
+
+		expect(
+			eventForRequestRow(ownershipEntries, events, textOnlyReply)?.id,
+		).toBe("12:1");
 	});
 });

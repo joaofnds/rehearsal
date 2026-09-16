@@ -447,9 +447,136 @@ describe("saved session history API", () => {
 		expect(JSON.parse(body)).toMatchObject({
 			instructionLoads: {
 				state: "available",
-				loads: [{ filePath: "<path>", memoryType: "User" }],
+				loads: [{ filePath: "<path>/CLAUDE.md", memoryType: "User" }],
 			},
 		});
+	});
+
+	it("leaves no directory name when the load sat under a path containing a space", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const transcript = await Bun.file(
+			join(paths.directory, "transcript.jsonl"),
+		).text();
+		await Bun.write(
+			join(paths.directory, "transcript.jsonl"),
+			`${transcript}\n${JSON.stringify({
+				type: "attachment",
+				attachment: {
+					type: "instructions",
+					files: [
+						{
+							path: join(
+								homedir(),
+								"Library",
+								"Application Support",
+								"Claude",
+								"CLAUDE.md",
+							),
+							type: "User",
+							content: "# secret",
+						},
+					],
+				},
+			})}`,
+		);
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		const body = await response.text();
+		expect(body).not.toContain("Application Support");
+		expect(body).not.toContain("Library");
+		expect(JSON.parse(body)).toMatchObject({
+			instructionLoads: {
+				state: "available",
+				loads: [{ filePath: "<path>/CLAUDE.md" }],
+			},
+		});
+	});
+
+	it("keeps two loads from one directory distinguishable", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const transcript = await Bun.file(
+			join(paths.directory, "transcript.jsonl"),
+		).text();
+		await Bun.write(
+			join(paths.directory, "transcript.jsonl"),
+			`${transcript}\n${JSON.stringify({
+				type: "attachment",
+				attachment: {
+					type: "instructions",
+					files: [
+						{
+							path: join(homedir(), ".claude", "CLAUDE.md"),
+							type: "User",
+							content: "a",
+						},
+						{
+							path: join(homedir(), ".claude", "AGENTS.md"),
+							type: "User",
+							content: "b",
+						},
+					],
+				},
+			})}`,
+		);
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		expect(await response.json()).toMatchObject({
+			instructionLoads: {
+				state: "available",
+				loads: [
+					{ filePath: "<path>/CLAUDE.md", memoryType: "User" },
+					{ filePath: "<path>/AGENTS.md", memoryType: "User" },
+				],
+			},
+		});
+	});
+
+	it("serves the confirmation rep's series through its own route", async () => {
+		const fixture = await writtenConfirmationAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/groups/${fixture.groupId}/reps/${fixture.repId}/attempt/history/requests`,
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			series: { name: "total input tokens", transcriptState: "saved" },
+		});
+	});
+
+	it("refuses a confirmation series route whose group does not own the rep", async () => {
+		const fixture = await writtenConfirmationAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/groups/${fixture.groupId}/reps/group-a-rep-2/attempt/history/requests`,
+		);
+
+		expect(response.status).not.toBe(200);
+		expect(await response.text()).not.toContain(fixture.runsDirectory);
 	});
 
 	it("returns a redacted refusal for an invalid route identity", async () => {

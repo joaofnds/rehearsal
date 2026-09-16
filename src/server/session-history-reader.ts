@@ -571,12 +571,9 @@ async function seriesFor(
 			reportedCostUsd: input.reportedCostUsd,
 			rates,
 		}),
-		requestCosts:
-			rates === undefined
-				? []
-				: [...sessionHistoryRequestCosts(series, rates)].map(
-						([line, cost]) => ({ line, cost }),
-					),
+		requestCosts: [...sessionHistoryRequestCosts(series, rates)].map(
+			([line, cost]) => ({ line, cost }),
+		),
 		instructionLoads:
 			transcriptFile === undefined
 				? { state: "unavailable" }

@@ -1,4 +1,5 @@
 import type {
+	HistoryRegion,
 	SessionHistoryAttemptCost,
 	SessionHistoryCostReading,
 	SessionHistoryRequestCost,
@@ -20,9 +21,18 @@ export function requestRowId(entry: SessionHistoryRequestEntry): string {
 	return `${entry.line}`;
 }
 
-function requestCostLabel(cost: SessionHistoryRequestCost | undefined): string {
+/**
+ * Only attempt-region requests are priced, so an absent cost says which region
+ * the row sits in rather than a pricing failure. Saying "outside the attempt
+ * region" for every row of a boundary-unknown series would name a region that
+ * series never established.
+ */
+function requestCostLabel(
+	cost: SessionHistoryRequestCost | undefined,
+	region: HistoryRegion,
+): string {
 	if (cost === undefined) {
-		return "not priced outside the attempt region";
+		return `? Unpriced · ${region} requests are not priced`;
 	}
 
 	return cost.state === "priced"
@@ -123,8 +133,8 @@ function InstructionLoads({
 
 	return (
 		<ul className="rh-timeline__loads">
-			{loads.loads.map((load) => (
-				<li key={`${load.memoryType}:${load.filePath}`}>
+			{loads.loads.map((load, index) => (
+				<li key={`${index}:${load.memoryType}:${load.filePath}`}>
 					<code>{load.filePath}</code>
 					<small>{load.memoryType}</small>
 					<small>
@@ -221,7 +231,9 @@ export function RequestTimeline({
 						</strong>
 						<small>{categoryLabel(entry)}</small>
 						<small>{modelLabel(entry)}</small>
-						<small>{requestCostLabel(costByLine.get(entry.line))}</small>
+						<small>
+							{requestCostLabel(costByLine.get(entry.line), entry.region)}
+						</small>
 						{compactedLines.has(entry.line) ? (
 							<small className="rh-timeline__compaction">
 								⇥ compaction at this line

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { redactAbsolutePaths, redactorFor } from "./redact-path";
+import {
+	redactAbsolutePaths,
+	redactedFilePath,
+	redactorFor,
+} from "./redact-path";
 
 const roots: string[] = [];
 
@@ -190,5 +194,46 @@ describe(redactAbsolutePaths.name, () => {
 
 			expect(redact("open '/srv/target-repo/secret.md'")).toBe("open '<path>'");
 		});
+	});
+});
+
+describe(redactedFilePath.name, () => {
+	test("keeps the file's own name and drops the directory it sat in", () => {
+		expect(redactedFilePath(join(homedir(), ".claude", "CLAUDE.md"))).toBe(
+			"<path>/CLAUDE.md",
+		);
+	});
+
+	test("distinguishes two files that shared a directory", () => {
+		expect([
+			redactedFilePath(join(homedir(), ".claude", "CLAUDE.md")),
+			redactedFilePath(join(homedir(), ".claude", "AGENTS.md")),
+		]).toEqual(["<path>/CLAUDE.md", "<path>/AGENTS.md"]);
+	});
+
+	test("leaves nothing of a directory whose name contains a space", () => {
+		expect(
+			redactedFilePath(
+				join(homedir(), "Library", "Application Support", "CLAUDE.md"),
+			),
+		).toBe("<path>/CLAUDE.md");
+	});
+
+	test("redacts a path whose root this process cannot know", () => {
+		expect(redactedFilePath("/home/someone/my project/AGENTS.md")).toBe(
+			"<path>/AGENTS.md",
+		);
+	});
+
+	test("redacts a Windows-style absolute path", () => {
+		expect(redactedFilePath(String.raw`C:\Users\alice\CLAUDE.md`)).toBe(
+			"<path>/CLAUDE.md",
+		);
+	});
+
+	test("leaves a relative path as it is", () => {
+		expect(redactedFilePath("skills/build/SKILL.md")).toBe(
+			"skills/build/SKILL.md",
+		);
 	});
 });
