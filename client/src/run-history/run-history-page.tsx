@@ -73,13 +73,15 @@ function causes(staleCauses: readonly string[]): React.ReactNode {
 }
 
 function corpusCell(row: RunHistoryRow): React.JSX.Element {
-	if (row.corpus === undefined) {
+	if (row.corpus === undefined && !row.stale) {
 		return <span className="rh-run-history__no-corpus">—</span>;
 	}
 
 	return (
 		<span className="rh-run-history__corpus">
-			<CorpusPill hash={row.corpus.digest} />
+			{row.corpus === undefined ? null : (
+				<CorpusPill hash={row.corpus.digest} />
+			)}
 			<Status state={row.stale ? "stale" : "clear"} />
 			{causes(row.staleCauses)}
 		</span>

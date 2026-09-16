@@ -285,6 +285,35 @@ describe(RunHistoryPage.name, () => {
 		});
 	});
 
+	it("shows the badge and the cause for a stale row that recorded no checkpoint stage, with no pill and no em dash", async () => {
+		respondingWith({
+			rows: [
+				{
+					run: "2026-09-05T00-00-00.000Z",
+					caseId: "audit-log",
+					status: "INTERRUPTED",
+					stage: undefined,
+					grade: undefined,
+					corpus: undefined,
+					stale: true,
+					staleCauses: ["upstream stage initial is stale"],
+				},
+			],
+			unreadable: [],
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("stale")).toBeInTheDocument();
+		});
+		expect(
+			screen.getByText("upstream stage initial is stale"),
+		).toBeInTheDocument();
+		expect(screen.queryByText(/^corpus@/u)).not.toBeInTheDocument();
+		expect(document.querySelector(".rh-run-history__no-corpus")).toBeNull();
+	});
+
 	it("renders a run with no recorded checkpoint without a corpus digest", async () => {
 		respondingWith({
 			rows: [
