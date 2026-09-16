@@ -58,10 +58,10 @@ verdict.
   the corpus digest is withheld.
 - **Pipeline `run --corpus` is refused.** Replay supports explicit corpus
   directories, but the forward pipeline command does not yet use that path.
-- **Several cases depend on private inputs.** `brief-reply-*` need ignored
-  transcript prefixes; `smoke` needs an output style; doctrine examples need
-  installed corpus files. `manifest-probe` also needs its prefix in the runtime
-  transcript store even though a reference copy exists under `cases/`.
+- **Several cases depend on private inputs.** `brief-reply-*` need transcript
+  prefixes that are ignored rather than published; `smoke` needs an output
+  style; doctrine examples need installed corpus files. `manifest-probe` carries
+  its prefix in the repository, so a clone can run it.
 - **Session output grading is narrow.** Checks currently read the reply and tool
   transcript. Generated fixture setup, post-session filesystem/Git preservation,
   and command scorers are planned. A doctrine example's tool-call check is not

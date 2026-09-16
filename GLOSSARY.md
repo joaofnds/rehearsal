@@ -113,9 +113,8 @@ See [current state](docs/status.md) for implementation coverage and
   is parsed at the boundary. Case input paths stay within the case directory,
   while a pipeline target may point to an external repository.
 - **Case directory** — `cases/<id>/`, the one place a case's declaration and its
-  input files live. The directory name is the case id. Transcript prefixes
-  resolve through the separate ignored prefix store. Cases live in the control repository,
-  never beside the corpus they grade.
+  input files live, transcript prefixes included. The directory name is the case
+  id. Cases live in the control repository, never beside the corpus they grade.
 - **Case kind** — which inputs a case declares and how an attempt at it is run:
   `pipeline`, today's stage graph against a target repository, or `session`, one
   Claude session. The kind is the discriminator of the case declaration, so a
@@ -443,10 +442,10 @@ See [current state](docs/status.md) for implementation coverage and
   Judge turns are excluded so the measure tracks corpus-induced workflow
   behavior.
 - **Transcript prefix** — a real session file truncated at a cut and used as
-  frozen starting context. The loader reads its bytes from
-  `.benchmark-runs/cases/<case>/`, verifies the declared digest, and includes it
-  in lineage. Committing a declaration or a reference copy elsewhere does not
-  populate that local store.
+  frozen starting context. It is a `.jsonl` file in the case directory, which
+  the loader reads, verifies against the declared digest, and includes in
+  lineage. A prefix is ignored by git unless `.gitignore` names it, so a case
+  whose prefix holds private material reaches another clone without its bytes.
 - **Transcript diagnostics** — the compact projection saved on each new session
   attempt record from transcript records at and after its captured cut. It
   records source and measured line counts; raw tool-use occurrences; explicit

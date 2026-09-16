@@ -216,12 +216,16 @@ collected, not that the attempt used zero context or cost.
 
 `case capture <id> --session <id-or-prefix> --cut <N>` copies records `[0, N)`
 from a local Claude transcript, updates the declaration's digest/source/cut,
-and writes the prefix under `.benchmark-runs/cases/<id>/`. The cut is a positive
-zero-based index of the first dropped record. Run the formatter after capture.
+and writes the prefix under `cases/<id>/`, beside the declaration that names
+it. The cut is a positive zero-based index of the first dropped record. Run the
+formatter after capture.
 
-Prefix bytes are ignored local run state. A committed declaration does not make
-them available to another clone. The loader uses the prefix store even if a
-similarly named file exists inside the committed case directory. Resumption
+The loader reads the prefix from that one location. `.gitignore` excludes every
+`.jsonl` file under `cases/`, so a captured prefix stays out of a commit until
+a negation names it, which makes publishing one an explicit edit that
+CONTRIBUTING.md's content review can gate. A case whose prefix is withheld
+reaches another clone as a declaration with no bytes beside it, and an attempt
+at it is refused. Resumption
 checks the declared digest, forks the prefix under a fresh session ID, and owns
 only the forked session file for cleanup. Its Claude invocation sets
 `--system-prompt-snapshot off`, so the system prompt is rendered again from the

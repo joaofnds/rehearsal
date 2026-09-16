@@ -104,6 +104,34 @@ describe(parseCaseDeclaration.name, () => {
 
 		expect(parsed).toMatchObject({ model: "sonnet", sessionBudgetUsd: 0.2 });
 	});
+
+	it.each(["sub/prefix.jsonl", "prefix.json", "prefix.jsonl.bak"])(
+		"refuses a transcript file %s, which the ignore rule for prefixes would not cover",
+		(file) => {
+			expect(() =>
+				parseCaseDeclaration(
+					"smoke",
+					JSON.stringify({
+						id: "smoke",
+						kind: "session",
+						title: "Smoke",
+						prompt: "Reply with the single word OK.",
+						transcript: {
+							file,
+							sha256: "a".repeat(64),
+							sourceSession: "aaaaaaaa-1111-2222-3333-444444444444",
+							cut: 3,
+						},
+						tools: [],
+						corpusFiles: ["output-styles/brief.md"],
+						checks: [{ kind: "tool-calls", max: 0 }],
+					}),
+				),
+			).toThrow(
+				"Case smoke declaration has an invalid transcript.file: A transcript prefix is a .jsonl file name in the case directory",
+			);
+		},
+	);
 });
 
 describe(caseRelative.name, () => {

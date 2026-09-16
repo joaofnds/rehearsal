@@ -36,9 +36,21 @@ export function isCaseId(text: string): boolean {
 
 const caseRelativePathSchema = z.string().min(1);
 
+/**
+ * The ignore rule that keeps an unpublished prefix out of a commit matches
+ * `.jsonl` files under a case directory, so a prefix it cannot see could be
+ * published by a `git add` that meant to stage the declaration beside it.
+ */
+const transcriptFileSchema = z
+	.string()
+	.regex(
+		/^[^/]+\.jsonl$/u,
+		"A transcript prefix is a .jsonl file name in the case directory",
+	);
+
 export const transcriptPrefixSchema = z
 	.object({
-		file: z.string().min(1),
+		file: transcriptFileSchema,
 		sha256: z.string().regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
 		sourceSession: z.string().min(1),
 		cut: z.number().int().positive(),
