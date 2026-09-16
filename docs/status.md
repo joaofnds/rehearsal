@@ -96,14 +96,14 @@ verdict.
 
 ## Browser UI
 
-| Route                                | Available today                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `/`                                  | Run-history report, including empty and error states                                             |
-| `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                     |
-| `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links |
-| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history, with the per-request token and cost timeline           |
-| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history, with the per-request token and cost timeline             |
-| `/system`                            | Design tokens and reusable component gallery                                                     |
+| Route                                | Available today                                                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `/`                                  | Run-history report with each row's staleness causes and the runs it could not read, including empty and error states |
+| `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                                         |
+| `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links                     |
+| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history, with the per-request token and cost timeline                               |
+| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history, with the per-request token and cost timeline                                 |
+| `/system`                            | Design tokens and reusable component gallery                                                                         |
 
 Run launch, live monitor, full run detail, task/case management, calibration
 screens, settings, and first-run setup are design targets. The SSE API already
