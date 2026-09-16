@@ -3,6 +3,7 @@ import { mkdtemp, open, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { UNPRICED_REASONS } from "#benchmark/context-evidence-contract";
 import type { JsonValue } from "#benchmark/json-value";
 import { syntheticRateProvenance } from "#benchmark/rate-catalog-test-support";
 import type { SessionHistoryRequestSeries } from "#benchmark/session-history";
@@ -11,6 +12,7 @@ import {
 	sessionHistoryAttemptCost,
 	sessionHistoryDetail,
 	sessionHistoryReport,
+	sessionHistoryRequestCosts,
 	sessionHistoryRequestSeries,
 	sessionHistoryRequestSeriesFromLines,
 } from "#benchmark/session-history";
@@ -1406,6 +1408,44 @@ describe(sessionHistoryAttemptCost.name, () => {
 
 		return sessionHistoryRequestSeries({ transcript, prefixLinesExcluded });
 	}
+
+	it("prices each attempt-region request with the reading the sum counts", () => {
+		const series = seriesWith(1);
+
+		const costs = sessionHistoryRequestCosts(series, bothModels);
+
+		const attemptRequestCost = (2 * 3 + 151 * 15 + 251_695 * 4) / 1_000_000;
+		expect(costs.get(2)).toEqual({
+			state: "priced",
+			costUsd: attemptRequestCost,
+		});
+		expect(
+			sessionHistoryAttemptCost({
+				series,
+				reportedCostUsd: undefined,
+				rates: bothModels,
+			}).calculated,
+		).toEqual({ state: "complete", costUsd: attemptRequestCost });
+	});
+
+	it("names why a request is unpriced rather than pricing it at zero", () => {
+		const series = seriesWith(0);
+
+		const costs = sessionHistoryRequestCosts(series, rates);
+
+		expect(costs.get(1)).toEqual({
+			state: "unpriced",
+			reason: UNPRICED_REASONS["rates-missing"],
+		});
+	});
+
+	it("leaves a starting-context request out of the per-request pricing", () => {
+		const series = seriesWith(1);
+
+		const costs = sessionHistoryRequestCosts(series, bothModels);
+
+		expect(costs.has(1)).toBe(false);
+	});
 
 	it("reports provider, calculated and difference as three readings", () => {
 		const cost = sessionHistoryAttemptCost({

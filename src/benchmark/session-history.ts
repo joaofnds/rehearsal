@@ -1895,6 +1895,28 @@ function pricedRequest(
 	return { state: "priced", costUsd: costFromRate(usage, rate) };
 }
 
+export type SessionHistoryRequestCost = PricedRequest;
+
+/**
+ * The same `pricedRequest` the summed reading uses, keyed by transcript line so
+ * a row and the total can never disagree about what a request cost. Only
+ * attempt-region requests are priced, because only those are what the summed
+ * reading counts; a starting-context request is absent rather than zero.
+ */
+export function sessionHistoryRequestCosts(
+	series: Readonly<SessionHistoryRequestSeries>,
+	rates: ContextRateCatalog,
+): ReadonlyMap<number, SessionHistoryRequestCost> {
+	const costs = new Map<number, SessionHistoryRequestCost>();
+	for (const entry of series.entries) {
+		if (entry.region === "attempt") {
+			costs.set(entry.line, pricedRequest(entry, rates));
+		}
+	}
+
+	return costs;
+}
+
 function calculatedCost(
 	series: SessionHistoryRequestSeries,
 	rates: ContextRateCatalog | undefined,

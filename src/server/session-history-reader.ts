@@ -15,6 +15,7 @@ import {
 	sessionHistoryDetailFromLine,
 	sessionHistoryReport,
 	sessionHistoryReportFromLines,
+	sessionHistoryRequestCosts,
 	sessionHistoryRequestSeries,
 	sessionHistoryRequestSeriesFromLines,
 } from "#benchmark/session-history";
@@ -23,6 +24,7 @@ import type {
 	SessionHistoryDetail,
 	SessionHistoryReport,
 	SessionHistoryReportMetadata,
+	SessionHistoryRequestCost,
 	SessionHistoryRequestSeries,
 } from "#benchmark/session-history";
 import type { ContextRateCatalog } from "#benchmark/context-evidence-contract";
@@ -523,9 +525,19 @@ export async function readConfirmationAttemptHistoryDetail(
 	return detailFor(await confirmationInput(identity), eventId);
 }
 
+export interface SessionHistoryRequestCostEntry {
+	readonly line: number;
+	readonly cost: SessionHistoryRequestCost;
+}
+
 export interface SessionHistoryAttemptSeries {
 	readonly series: SessionHistoryRequestSeries;
 	readonly cost: SessionHistoryAttemptCost;
+	/**
+	 * Keyed by line rather than requestId: a request recording no id still
+	 * occupies a row, and a Map does not survive the route's JSON encoding.
+	 */
+	readonly requestCosts: readonly SessionHistoryRequestCostEntry[];
 	readonly instructionLoads: TranscriptInstructionLoads;
 }
 
@@ -559,6 +571,12 @@ async function seriesFor(
 			reportedCostUsd: input.reportedCostUsd,
 			rates,
 		}),
+		requestCosts:
+			rates === undefined
+				? []
+				: [...sessionHistoryRequestCosts(series, rates)].map(
+						([line, cost]) => ({ line, cost }),
+					),
 		instructionLoads:
 			transcriptFile === undefined
 				? { state: "unavailable" }

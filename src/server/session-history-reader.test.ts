@@ -339,6 +339,22 @@ describe("saved session history API", () => {
 		});
 	});
 
+	it("serves a per-request cost for each attempt-region request", async () => {
+		const fixture = await writtenResumedAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		expect(await response.json()).toMatchObject({
+			requestCosts: [{ line: 2, cost: { state: "priced", costUsd: 1.008294 } }],
+		});
+	});
+
 	it("redacts the absolute host paths the instructions attachment records", async () => {
 		const fixture = await writtenResumedAttempt();
 		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
