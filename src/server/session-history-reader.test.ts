@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -352,6 +353,61 @@ describe("saved session history API", () => {
 
 		expect(await response.json()).toMatchObject({
 			requestCosts: [{ line: 2, cost: { state: "priced", costUsd: 1.008294 } }],
+		});
+	});
+
+	it("leaves the record and transcript byte-identical across repeated series reads", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const evidence = [
+			paths.recordFile,
+			join(paths.directory, "transcript.jsonl"),
+		];
+		const digests = (): Promise<readonly string[]> =>
+			Promise.all(
+				evidence.map(async (path) =>
+					createHash("sha256")
+						.update(await Bun.file(path).bytes())
+						.digest("hex"),
+				),
+			);
+		const before = await digests();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+		const route = `/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`;
+
+		const first = await app.request(route);
+		const second = await app.request(route);
+		const third = await app.request(route);
+
+		expect([first.status, second.status, third.status]).toEqual([
+			200, 200, 200,
+		]);
+		expect(await digests()).toEqual(before);
+	});
+
+	it("refuses a series read whose transcript is a symlink out of the attempt directory", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const transcript = join(paths.directory, "transcript.jsonl");
+		const outside = join(fixture.runsDirectory, "..", "outside.jsonl");
+		await Bun.write(outside, "{}\n");
+		await rm(transcript);
+		await symlink(outside, transcript);
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Saved-attempt evidence is not a real file",
 		});
 	});
 
