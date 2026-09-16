@@ -359,6 +359,16 @@ See [current state](docs/status.md) for implementation coverage and
   server's SSE endpoint. It is best-effort derived progress state. JSON
   artifacts remain authoritative for recorded conclusions; there is no
   event-history rebuild command.
+- **Unreadable run** — a recorded run whose own files the run-history report
+  could not read into a row, carried by its record ID and a reason with
+  absolute paths redacted. A malformed artifact, or a manifest missing from a
+  run that stopped or was interrupted, produces one. An unreadable run is data
+  the report carries, not a failure of the report, so one bad run does not
+  blank the rest. Staleness is judged for every run before any of them is read,
+  so a corpus the staleness pass cannot resolve does not produce an unreadable
+  run: it produces a staleness cause, or no report at all. A staleness report
+  carries its own unreadable list, keyed by case and attempt rather than by
+  run; the two are the same idea applied to different records.
 - **Project slug** — the name the provider gives the directory it writes a
   session file into: the working directory's real path with every `/` replaced
   by `-`. On macOS `/tmp/x` resolves through its real path first, so it is
@@ -405,6 +415,15 @@ See [current state](docs/status.md) for implementation coverage and
 - **Stale checkpoint** — a checkpoint whose recorded inputs (corpus files,
   stage settings, model, effort, or an upstream checkpoint) no longer match
   the current state; still replayable for exploration, refused in comparisons.
+- **Staleness cause** — one named statement of why a recorded result no longer
+  describes the current state. A cause names the thing that moved, an upstream
+  stage, the model, the effort, the stage settings file, or one corpus file
+  that changed, was added, or was removed, or else it carries a corpus refusal
+  verbatim, since a corpus that cannot be read cannot be shown to still match.
+  A checkpoint carries its causes as a list: at most four that are not about
+  corpus files, then one per corpus file that drifted, so the list has no bound
+  but the corpus's size. Its length counts reasons and is not a distance
+  between corpus versions.
 - **Stage kind** — which validation and evidence strategy a stage uses:
   planning or delivery. Declared per stage, independent of the stage's name.
 - **Stage mode** — running one stage against frozen upstream artifacts. This
