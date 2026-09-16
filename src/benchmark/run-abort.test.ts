@@ -304,7 +304,7 @@ function stageEvidence(
 
 describe(writeStageJudgeFailure.name, () => {
 	it("retains the frozen input and both rejected Judge attempts", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-stage-failure-"));
 		testResources.track(directory);
 		const file = join(directory, "shape.json");
 		const input = stageJudgeInput("shape");
@@ -343,7 +343,7 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 
 	it("carries the stage's captured corpus files", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-stage-failure-"));
 		testResources.track(directory);
 		const file = join(directory, "build.json");
 		const scorecard = stageScorecard("FAIL");
@@ -364,7 +364,7 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 
 	it("carries the scorecard's grade fields when a normal grade failure supplies one", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-stage-failure-"));
 		testResources.track(directory);
 		const file = join(directory, "discuss.json");
 		const scorecard = stageScorecard("FAIL");
@@ -391,7 +391,7 @@ describe(writeStageJudgeFailure.name, () => {
 	});
 
 	it("carries the model, judge model, effort settings, and budget into the failed artifact", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-stage-failure-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-stage-failure-"));
 		testResources.track(directory);
 		const file = join(directory, "build.json");
 		const scorecard = stageScorecard("FAIL");
@@ -931,7 +931,7 @@ describe(createRunAbort.name, () => {
 	 * evidence `loadRecord` then refuses to read.
 	 */
 	it("leaves an artifact awaiting review alone when a signal arrives", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-await-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-await-"));
 		testResources.track(directory);
 		const artifactFile = join(directory, "run.json");
 		const pipeline = await loadDefaultPipeline();
@@ -1226,7 +1226,7 @@ describe(createRunAbort.name, () => {
 	});
 
 	it("writes the pending stage and failed run artifact without a Claude session", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-abort-"));
 		testResources.track(directory);
 		const artifactFile = join(directory, "run.json");
 		const stageFile = join(directory, "shape.json");
@@ -1305,7 +1305,7 @@ describe(createRunAbort.name, () => {
 	});
 
 	it("kills commands, records the interruption, restores, and exits with the signal code", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-signal-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-signal-"));
 		testResources.track(directory);
 		const stageFile = join(directory, "shape.json");
 		const effects: string[] = [];
@@ -1360,7 +1360,7 @@ describe(createRunAbort.name, () => {
 	});
 
 	it("records evidence and restores when command cancellation fails", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-signal-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-signal-"));
 		testResources.track(directory);
 		const stageFile = join(directory, "shape.json");
 		const handlers = new Map<
@@ -1406,7 +1406,7 @@ describe(createRunAbort.name, () => {
 	});
 
 	it("records the failed run artifact when stage evidence cannot be written", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-abort-"));
 		testResources.track(directory);
 		const artifactFile = join(directory, "run.json");
 		const pipeline = await loadDefaultPipeline();
@@ -1443,7 +1443,7 @@ describe(createRunAbort.name, () => {
 	});
 
 	it("records only the first abort reason", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-abort-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-abort-"));
 		testResources.track(directory);
 		const stageFile = join(directory, "shape.json");
 		const abort = createRunAbort(

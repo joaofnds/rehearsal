@@ -117,7 +117,7 @@ export async function captureWorkflowBackup(
 ): Promise<WorkflowBackup> {
 	await assertWorkflowBoardPrivate(targetDir);
 
-	const directory = await mkdtemp(join(tmpdir(), "rehearsal-workflow-backup-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-workflow-backup-"));
 	try {
 		const managedPaths = await managedWorkflowPaths(targetDir);
 		const presentPaths = await copyWorkflowState(
@@ -270,7 +270,7 @@ export async function recordRetentionRef(
 	runName: string,
 	sha: string,
 ): Promise<void> {
-	await git(targetDir, "update-ref", `refs/rehearsal/${runName}`, sha);
+	await git(targetDir, "update-ref", `refs/rehearse/${runName}`, sha);
 }
 
 /**

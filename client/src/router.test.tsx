@@ -105,7 +105,7 @@ describe(createAppRouter.name, () => {
 		renderAt("/system");
 
 		await waitFor(() => {
-			expect(screen.getByText("Rehearsal design system")).toBeInTheDocument();
+			expect(screen.getByText("Rehearse design system")).toBeInTheDocument();
 		});
 	});
 

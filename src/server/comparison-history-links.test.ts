@@ -26,7 +26,7 @@ function digest(text: string): string {
 
 describe(comparisonAttemptHistoryLink.name, () => {
 	it("links only when the group, rep, and attempt paths and digests agree", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-comparison-history-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-comparison-history-"));
 		roots.push(root);
 		const runsDirectory = join(root, ".benchmark-runs");
 		const paths = confirmationGroupPaths(runsDirectory, "group-a");

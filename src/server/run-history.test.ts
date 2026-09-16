@@ -21,7 +21,7 @@ describe(runHistoryReport.name, () => {
 	});
 
 	async function corpusDirectory(buildSkill: string): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-corpus-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-run-history-corpus-"));
 		roots.push(root);
 		await mkdir(join(root, "skills", "build"), { recursive: true });
 		await mkdir(join(root, "skills", "discuss"), { recursive: true });
@@ -38,7 +38,7 @@ describe(runHistoryReport.name, () => {
 	async function writtenFixture(
 		options: RecordedRunsOptions = {},
 	): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-run-history-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root, options);
 		await fixture.write();
@@ -316,7 +316,7 @@ describe(runHistoryReport.name, () => {
 	});
 
 	it("reads an empty runs directory as no rows, not an error", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-history-empty-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-run-history-empty-"));
 		roots.push(root);
 
 		const { rows } = await runHistoryReport(

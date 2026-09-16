@@ -213,16 +213,14 @@ class FakeClaude {
 }
 
 async function projectsRoot(): Promise<string> {
-	const directory = await mkdtemp(
-		join(tmpdir(), "rehearsal-attempt-projects-"),
-	);
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-projects-"));
 	resources.track(directory);
 
 	return directory;
 }
 
 async function recordDirectory(): Promise<string> {
-	const directory = await mkdtemp(join(tmpdir(), "rehearsal-attempt-record-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-record-"));
 	resources.track(directory);
 
 	return directory;
@@ -488,7 +486,7 @@ describe("the corpus overlay a session attempt installs", () => {
 
 describe(forkTranscript.name, () => {
 	it("rewrites every occurrence of the source session id and changes nothing else", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-fork-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-fork-"));
 		resources.track(directory);
 		const source = join(directory, "source.jsonl");
 		const forked = join(directory, "forked.jsonl");
@@ -506,7 +504,7 @@ describe(forkTranscript.name, () => {
 	});
 
 	it("keeps a source that ends without a newline ending without one", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-fork-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-fork-"));
 		resources.track(directory);
 		const source = join(directory, "source.jsonl");
 		const forked = join(directory, "forked.jsonl");
@@ -547,7 +545,7 @@ function resumingCase(
 }
 
 async function writtenPrefix(text: string): Promise<PrefixOnDisk> {
-	const directory = await mkdtemp(join(tmpdir(), "rehearsal-prefix-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-prefix-"));
 	resources.track(directory);
 	const path = join(directory, "prefix.jsonl");
 	await writeFile(path, text);
@@ -628,7 +626,7 @@ describe(runSessionAttempt.name, () => {
 	});
 
 	it("seeds the attempt directory from the case's fixture tree", async () => {
-		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		const fixture = await mkdtemp(join(tmpdir(), "rehearse-fixture-"));
 		resources.track(fixture);
 		await mkdir(join(fixture, "docs"), { recursive: true });
 		await writeFile(join(fixture, "docs", "note.md"), "planted\n");
@@ -655,14 +653,14 @@ describe(runSessionAttempt.name, () => {
 	 * the harness promised was its own.
 	 */
 	it("refuses a fixture tree holding a symlink, naming it, before any provider call", async () => {
-		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		const fixture = await mkdtemp(join(tmpdir(), "rehearse-fixture-"));
 		resources.track(fixture);
 		await mkdir(join(fixture, "docs"), { recursive: true });
 		await symlink("/etc/hosts", join(fixture, "docs", "escape.md"));
 		const projects = await projectsRoot();
 		const entriesBefore = await readdir(tmpdir());
 		const attemptDirectoriesBefore = new Set(
-			entriesBefore.filter((entry) => /^rehearsal-attempt-[^-]+$/u.test(entry)),
+			entriesBefore.filter((entry) => /^rehearse-attempt-[^-]+$/u.test(entry)),
 		);
 
 		const failure = await failureOf(
@@ -680,7 +678,7 @@ describe(runSessionAttempt.name, () => {
 		expect(failure.message).toContain(join("docs", "escape.md"));
 		const entriesAfter = await readdir(tmpdir());
 		const newAttemptDirectories = entriesAfter
-			.filter((entry) => /^rehearsal-attempt-[^-]+$/u.test(entry))
+			.filter((entry) => /^rehearse-attempt-[^-]+$/u.test(entry))
 			.filter((entry) => !attemptDirectoriesBefore.has(entry));
 		expect(newAttemptDirectories).toEqual([]);
 	});
@@ -878,7 +876,7 @@ describe(runSessionAttempt.name, () => {
 	});
 
 	it("names a declared project file's Read as a project-half entry in the recorded context manifest", async () => {
-		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-fixture-"));
+		const fixture = await mkdtemp(join(tmpdir(), "rehearse-fixture-"));
 		resources.track(fixture);
 		await writeFile(join(fixture, "NOTES.md"), "planted\n");
 		const projects = await projectsRoot();
@@ -1024,7 +1022,7 @@ describe(runSessionAttempt.name, () => {
 
 		expect(failure).toBeInstanceOf(SessionInputError);
 		expect(failure.message).toBe(
-			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. The prefix bytes are git-ignored run state; recapture them with \`rehearsal case capture\`.`,
+			`Case probe declares transcript prefix.jsonl, but no file is at ${prefix.path}. The prefix bytes are git-ignored run state; recapture them with \`rehearse case capture\`.`,
 		);
 	});
 

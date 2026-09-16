@@ -69,7 +69,7 @@ See [current state](docs/status.md) for implementation coverage and
   **attempts** (`group · 6 attempts`, the `×1/×3/×6/×12` replay control, the
   Cases screen's **Run group** action); the word in code, records, and this
   glossary stays confirmation run (see [UI vocabulary](docs/design-handoff/README.md)).
-- **Command** — one named verb of the `rehearsal` executable (`run`, `replay`,
+- **Command** — one named verb of the `rehearse` executable (`run`, `replay`,
   `compare`, `review`, `calibrate`, `list`, `show`, `stale`, `case list`,
   `case show`, `case capture`), declaring its own flags with their defaults, environment
   fallbacks, and help lines as data. A name is one or two
@@ -212,7 +212,7 @@ See [current state](docs/status.md) for implementation coverage and
 - **Corpus source** — where an attempt's corpus bytes come from, named by
   `--corpus`: a directory already in corpus layout, and nothing else. A corpus
   that lives somewhere else is rendered to a directory with whatever tool owns
-  it, outside rehearsal, and that directory is passed. Absent `--corpus` the
+  it, outside Rehearse, and that directory is passed. Absent `--corpus` the
   source is the live install. Whether bytes are copied and delivered depends on
   the execution mode, as described in the reference support matrix.
   The live source's permitted extent is its install root and one backing tree
@@ -251,7 +251,7 @@ See [current state](docs/status.md) for implementation coverage and
 - **Human review** — the verdict, summary, and classified findings a reviewer
   records against a run's Judge result, in `<run>.review.json`. The reviewer is
   a person or the agent standing in for one; the name says whose judgment the
-  record carries, not which hand typed it. `rehearsal review` writes it from
+  record carries, not which hand typed it. `rehearse review` writes it from
   flags or from a file, and calibration reads it.
 - **Interrupted run** — a run whose process ended (a `kill -9` or a crash)
   without writing a terminal artifact or stop record. It has no status of its
@@ -336,7 +336,7 @@ See [current state](docs/status.md) for implementation coverage and
 - **Replay** — re-running one stage from a checkpoint with the current corpus,
   in a fresh worktree.
 - **Retained candidate** — the run's final result commit, pinned in the target
-  repository under `refs/rehearsal/<run>` before the target is restored, so the
+  repository under `refs/rehearse/<run>` before the target is restored, so the
   candidate outlives the run that produced it. Restoring makes the commit
   unreachable and only the ref keeps gc from pruning it;
   `show run:<name> --checkout <dir>` materializes it as a detached worktree.
@@ -501,5 +501,5 @@ See [current state](docs/status.md) for implementation coverage and
 - **Workflow state** — the `backlog/` and `.boris/` trees copied independently
   of Git to carry workflow artifacts across stage materialization and target
   restoration. A target's Backlog configuration determines where its board
-  lives. These target artifacts are distinct from Rehearsal's external personal
+  lives. These target artifacts are distinct from Rehearse's external personal
   board.

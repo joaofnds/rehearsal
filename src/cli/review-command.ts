@@ -34,7 +34,7 @@ function reviewText(request: Readonly<ReviewRequest>): Promise<string> {
 	if (request.file !== undefined) {
 		if (described) {
 			throw new UsageError(
-				`rehearsal review takes --file or ${DESCRIBING_FLAGS.join(", ")}, not both`,
+				`rehearse review takes --file or ${DESCRIBING_FLAGS.join(", ")}, not both`,
 			);
 		}
 
@@ -42,7 +42,7 @@ function reviewText(request: Readonly<ReviewRequest>): Promise<string> {
 	}
 	if (!described) {
 		throw new UsageError(
-			`rehearsal review needs --file or ${DESCRIBING_FLAGS.join(", ")}`,
+			`rehearse review needs --file or ${DESCRIBING_FLAGS.join(", ")}`,
 		);
 	}
 
@@ -71,7 +71,7 @@ export async function runReview(
 	output: CommandOutput,
 ): Promise<void> {
 	if (request.id === undefined) {
-		throw new UsageError("Provide the run: rehearsal review <run:name|name>");
+		throw new UsageError("Provide the run: rehearse review <run:name|name>");
 	}
 
 	const { run } = parseRunRecordId(request.id);

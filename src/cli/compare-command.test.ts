@@ -18,9 +18,7 @@ describe(runCompare.name, () => {
 
 	beforeEach(async () => {
 		recorder = recordOutput();
-		temporaryDirectory = await mkdtemp(
-			join(tmpdir(), "rehearsal-compare-cli-"),
-		);
+		temporaryDirectory = await mkdtemp(join(tmpdir(), "rehearse-compare-cli-"));
 		runsDirectory = join(temporaryDirectory, "runs");
 		await mkdir(runsDirectory);
 		fixture = new ComparisonEvidenceFixture(temporaryDirectory);

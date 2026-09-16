@@ -776,7 +776,7 @@ export async function runPipelineConfirmation(
 	const paths = confirmationGroupPaths(request.runsDirectory, request.groupId);
 	await mkdir(paths.inputsDirectory, { recursive: true });
 	const worktreesDirectory = await mkdtemp(
-		join(tmpdir(), `rehearsal-${request.groupId}-`),
+		join(tmpdir(), `rehearse-${request.groupId}-`),
 	);
 	try {
 		const frozen = await freezePipelineInputs(

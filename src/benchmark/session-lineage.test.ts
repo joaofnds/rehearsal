@@ -73,7 +73,7 @@ describe(sessionLineage.name, () => {
 	 * key if the lineage read the directory rather than the declaration.
 	 */
 	it("is unchanged when an undeclared file beside a declared corpus file changes", async () => {
-		const installed = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const installed = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(installed);
 		const declared = join(installed, "declared.md");
 		await writeFile(declared, "declared\n");
@@ -97,7 +97,7 @@ describe(sessionLineage.name, () => {
 	});
 
 	it("is unchanged when a file beside the fixture tree changes", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-lineage-"));
 		testResources.track(root);
 		const fixture = join(root, "fixture");
 		await mkdir(fixture, { recursive: true });
@@ -119,7 +119,7 @@ describe(sessionLineage.name, () => {
 	});
 
 	it("changes when the fixture tree's bytes change", async () => {
-		const fixture = await mkdtemp(join(tmpdir(), "rehearsal-lineage-"));
+		const fixture = await mkdtemp(join(tmpdir(), "rehearse-lineage-"));
 		testResources.track(fixture);
 		await writeFile(join(fixture, "seed.md"), "one\n");
 		const before = await sessionLineage(

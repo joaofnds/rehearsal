@@ -74,7 +74,7 @@ describe(assertBuildCommitted.name, () => {
 
 	it("accepts a build committed on a detached replay worktree", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -118,19 +118,17 @@ describe(refExists.name, () => {
 	it("finds a ref the repository holds", async () => {
 		const source = await testResources.createRepository();
 		await runCommand(
-			["git", "update-ref", "refs/rehearsal/run-1", source.sha],
+			["git", "update-ref", "refs/rehearse/run-1", source.sha],
 			source.directory,
 		);
 
-		expect(await refExists(source.directory, "refs/rehearsal/run-1")).toBe(
-			true,
-		);
+		expect(await refExists(source.directory, "refs/rehearse/run-1")).toBe(true);
 	});
 
 	it("reports a ref the repository does not hold", async () => {
 		const source = await testResources.createRepository();
 
-		expect(await refExists(source.directory, "refs/rehearsal/run-1")).toBe(
+		expect(await refExists(source.directory, "refs/rehearse/run-1")).toBe(
 			false,
 		);
 	});
@@ -142,16 +140,16 @@ describe(refExists.name, () => {
 	 * raised rather than answered with false.
 	 */
 	it("raises a repository it cannot read rather than calling the ref missing", () => {
-		const missing = join(tmpdir(), "rehearsal-absent-repository");
+		const missing = join(tmpdir(), "rehearse-absent-repository");
 
-		expect(refExists(missing, "refs/rehearsal/run-1")).rejects.toThrow();
+		expect(refExists(missing, "refs/rehearse/run-1")).rejects.toThrow();
 	});
 
 	it("raises a directory that holds no repository", async () => {
-		const plain = await mkdtemp(join(tmpdir(), "rehearsal-plain-"));
+		const plain = await mkdtemp(join(tmpdir(), "rehearse-plain-"));
 		testResources.track(plain);
 
-		expect(refExists(plain, "refs/rehearsal/run-1")).rejects.toBeInstanceOf(
+		expect(refExists(plain, "refs/rehearse/run-1")).rejects.toBeInstanceOf(
 			CommandError,
 		);
 	});
@@ -160,7 +158,7 @@ describe(refExists.name, () => {
 describe(addWorktree.name, () => {
 	it("gives a replay a detached checkout without touching the primary", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 
@@ -185,7 +183,7 @@ describe(addWorktree.name, () => {
 
 	it("removes a worktree that holds uncommitted replay state", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -262,7 +260,7 @@ describe(capturePlanningAdvance.name, () => {
 describe(assertWorkspaceCleanAt.name, () => {
 	it("accepts a clean detached worktree when no branch is expected", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -277,7 +275,7 @@ describe(assertWorkspaceCleanAt.name, () => {
 
 	it("rejects a workspace that left its detached checkout for a branch", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -290,7 +288,7 @@ describe(assertWorkspaceCleanAt.name, () => {
 
 	it("names the branch a workspace left its detached checkout for", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -303,7 +301,7 @@ describe(assertWorkspaceCleanAt.name, () => {
 
 	it("names the commit a workspace moved to", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -318,7 +316,7 @@ describe(assertWorkspaceCleanAt.name, () => {
 
 	it("names the paths a workspace left uncommitted", async () => {
 		const source = await testResources.createRepository();
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await addWorktree(source.directory, source.sha, worktree);
@@ -604,7 +602,7 @@ describe(captureWorkflowBackup.name, () => {
 		const entriesBefore = await readdir(tmpdir());
 		const backupsBefore = new Set(
 			entriesBefore.filter((entry) =>
-				entry.startsWith("rehearsal-workflow-backup-"),
+				entry.startsWith("rehearse-workflow-backup-"),
 			),
 		);
 
@@ -618,7 +616,7 @@ describe(captureWorkflowBackup.name, () => {
 
 		const entriesAfter = await readdir(tmpdir());
 		const newBackups = entriesAfter
-			.filter((entry) => entry.startsWith("rehearsal-workflow-backup-"))
+			.filter((entry) => entry.startsWith("rehearse-workflow-backup-"))
 			.filter((entry) => !backupsBefore.has(entry));
 		expect(newBackups).toEqual([]);
 	});
@@ -680,7 +678,7 @@ describe(claimTarget.name, () => {
 	it("claims a linked-worktree target whose .git is a file", async () => {
 		const source = await testResources.createRepository();
 		await runCommand(["git", "switch", "-c", "primary"], source.directory);
-		const worktreeParent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const worktreeParent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(worktreeParent);
 		const worktree = join(worktreeParent, "main");
 		await runCommand(

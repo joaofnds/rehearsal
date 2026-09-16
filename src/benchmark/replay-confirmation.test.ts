@@ -113,7 +113,7 @@ describe(runReplayConfirmation.name, () => {
 				JSON.stringify({ ...calibrationArtifact, judgeModel: "sonnet" }),
 			),
 		]);
-		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "doctrine"]) {
 			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
@@ -176,7 +176,7 @@ describe(runReplayConfirmation.name, () => {
 	it("uses the recorded target for delivery replay confirmations", async () => {
 		const fake = new ReplayConfirmationHarness(testResources);
 		const run = await fake.recordedRun();
-		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(corpusRoot);
 		for (const skill of ["discuss", "build", "doctrine"]) {
 			await mkdir(join(corpusRoot, "skills", skill), { recursive: true });
@@ -207,7 +207,7 @@ describe(runReplayConfirmation.name, () => {
 	it("passes a declared settings overlay to every confirmed stage session", async () => {
 		const fake = new ReplayConfirmationHarness(testResources);
 		const run = await fake.recordedRun();
-		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(corpusRoot);
 		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
 		await Bun.write(
@@ -236,7 +236,7 @@ describe(runReplayConfirmation.name, () => {
 	});
 
 	it("runs three frozen stage replay reps concurrently without changing the primary checkout", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-confirmed-replay-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-confirmed-replay-"));
 		testResources.track(parent);
 		const primary = join(parent, "primary");
 		await mkdir(primary);
@@ -715,7 +715,7 @@ describe(runReplayConfirmation.name, () => {
 			join(source.directory, "backlog", "config.yml"),
 			"statuses: []\n",
 		);
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-cleanup-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-replay-cleanup-"));
 		testResources.track(parent);
 		const paths = benchmarkRunPaths(parent, "run");
 		await recordCheckpoint(
@@ -887,7 +887,7 @@ describe(runReplayConfirmation.name, () => {
 						[
 							"git",
 							"rev-parse",
-							`refs/rehearsal/confirmation-cleanup/${record.repId}`,
+							`refs/rehearse/confirmation-cleanup/${record.repId}`,
 						],
 						source.directory,
 					);
@@ -946,7 +946,7 @@ describe(runReplayConfirmation.name, () => {
 			join(source.directory, "backlog", "config.yml"),
 			"statuses: []\n",
 		);
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-failures-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-replay-failures-"));
 		testResources.track(parent);
 		const paths = benchmarkRunPaths(parent, "run");
 		await recordCheckpoint(
@@ -1176,7 +1176,7 @@ describe(runReplayConfirmation.name, () => {
 	it("removes its worktrees directory when the confirmation body throws", async () => {
 		const harness = new ReplayConfirmationHarness(testResources);
 		const run = await harness.recordedRun();
-		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const corpusRoot = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(corpusRoot);
 		await mkdir(join(corpusRoot, "skills", "discuss"), { recursive: true });
 		await Bun.write(
@@ -1200,7 +1200,7 @@ describe(runReplayConfirmation.name, () => {
 		expect(execution).rejects.toThrow("clock unavailable");
 		const entries = await readdir(tmpdir());
 		const leftover = entries.filter((entry) =>
-			entry.startsWith(`rehearsal-${groupId}-`),
+			entry.startsWith(`rehearse-${groupId}-`),
 		);
 		expect(leftover).toEqual([]);
 	});

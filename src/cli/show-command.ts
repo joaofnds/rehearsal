@@ -169,7 +169,7 @@ export async function runShow(
 ): Promise<void> {
 	if (request.id === undefined) {
 		throw new UsageError(
-			`Provide the record id: rehearsal show <${recordIdForms().join(" | ")}>`,
+			`Provide the record id: rehearse show <${recordIdForms().join(" | ")}>`,
 		);
 	}
 	if (request.checkout !== undefined) {
@@ -209,7 +209,7 @@ async function checkoutRetainedCandidate(
 	const { artifactFile } = benchmarkRunPaths(runsDirectory, id.run);
 	const text = await recordText(given, artifactFile);
 	const { sourceRoot } = retainedRunSchema.parse(JSON.parse(text));
-	const reference = `refs/rehearsal/${id.run}`;
+	const reference = `refs/rehearse/${id.run}`;
 	await refuseExistingDirectory(directory);
 	await refuseUnretainedRun(sourceRoot, reference, id.run);
 	await addWorktree(sourceRoot, reference, directory);
@@ -228,7 +228,7 @@ function parseCheckoutRunId(given: string): RunRecordId {
 		: parseRunRecordId(given);
 	if (parsed.kind !== "run") {
 		throw new UsageError(
-			"--checkout takes a run id: rehearsal show run:<name> --checkout <dir>",
+			"--checkout takes a run id: rehearse show run:<name> --checkout <dir>",
 		);
 	}
 

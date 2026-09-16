@@ -19,7 +19,7 @@ const testResources = TestResources.forEachTest();
  * own slug the way the provider does.
  */
 async function projectsDirectory(...names: readonly string[]): Promise<string> {
-	const directory = await mkdtemp(join(tmpdir(), "rehearsal-projects-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-projects-"));
 	testResources.track(directory);
 	for (const [index, name] of names.entries()) {
 		const slug = join(directory, `-private-tmp-project-${String(index)}`);
@@ -89,7 +89,7 @@ describe(resolveSessionFile.name, () => {
 
 describe(captureTranscriptPrefix.name, () => {
 	async function source(lines: number): Promise<string> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-source-"));
 		testResources.track(directory);
 		const path = join(directory, "source.jsonl");
 		await writeFile(
@@ -103,7 +103,7 @@ describe(captureTranscriptPrefix.name, () => {
 	}
 
 	async function destination(): Promise<string> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-capture-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-capture-"));
 		testResources.track(directory);
 
 		return join(directory, "prefix.jsonl");
@@ -121,7 +121,7 @@ describe(captureTranscriptPrefix.name, () => {
 	});
 
 	it("counts JSONL records rather than blank physical lines at the cut", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-source-"));
 		testResources.track(directory);
 		const path = join(directory, "source.jsonl");
 		await writeFile(path, '{"ordinal":0}\n\n{"ordinal":1}\n{"ordinal":2}\n');

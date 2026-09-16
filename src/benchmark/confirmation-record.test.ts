@@ -168,7 +168,7 @@ describe(parseConfirmationRepRecord.name, () => {
 			...base,
 			caseId: "smoke",
 			mode: "session",
-			worktreePath: "/tmp/rehearsal-attempt-abc",
+			worktreePath: "/tmp/rehearse-attempt-abc",
 			stages: [
 				{
 					stage: "checks",

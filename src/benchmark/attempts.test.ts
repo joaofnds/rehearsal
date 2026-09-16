@@ -113,7 +113,7 @@ describe(loadAttempts.name, () => {
 	async function attemptFixture(): Promise<
 		ReturnType<typeof benchmarkRunPaths>
 	> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-attempts-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempts-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run1");
 		await Bun.write(

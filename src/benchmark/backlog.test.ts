@@ -111,7 +111,7 @@ describe(assertStageArtifactState.name, () => {
 
 describe(readTaskCard.name, () => {
 	it("returns the card file matching the task id", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-card-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-card-"));
 		testResources.track(directory);
 		await mkdir(join(directory, "backlog", "tasks"), { recursive: true });
 		await Bun.write(
@@ -123,7 +123,7 @@ describe(readTaskCard.name, () => {
 	});
 
 	it("rejects a task without a card file", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-card-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-card-"));
 		testResources.track(directory);
 		await mkdir(join(directory, "backlog", "tasks"), { recursive: true });
 
@@ -610,7 +610,7 @@ describe(seedTaskBoard.name, () => {
 			target.directory,
 		);
 		await runCommand(["git", "switch", "-c", "primary"], target.directory);
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-worktree-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-worktree-"));
 		testResources.track(parent);
 		const worktree = join(parent, "main");
 		await runCommand(

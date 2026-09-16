@@ -1,14 +1,14 @@
-# Rehearsal
+# Rehearse
 
 Find out whether changing your coding agent's instructions actually helps.
 
-Rehearsal runs a fixed task through the real Claude Code CLI, records the
+Rehearse runs a fixed task through the real Claude Code CLI, records the
 instructions and evidence, and grades the result. You can replay a workflow
 stage after editing a skill, or repeat a session to see how much its results
 vary. The goal is a debugger and regression suite for an engineer's instruction
 corpus: project guidance, skills, output styles, and agent definitions.
 
-For example, a shorter instruction might produce a better reply once. Rehearsal
+For example, a shorter instruction might produce a better reply once. Rehearse
 helps you inspect that attempt, repeat the task, and compare quality with cost
 before deciding the instruction earned its place.
 
@@ -49,13 +49,13 @@ and agent environment, with records under `.benchmark-runs/`.
 Install [mise](https://mise.jdx.dev/getting-started.html), then from a clone:
 
 ```sh
-git clone https://github.com/joaofnds/rehearsal.git
-cd rehearsal
+git clone https://github.com/joaofnds/rehearse.git
+cd rehearse
 mise install
 mise exec -- bun install --frozen-lockfile
-mise exec -- bun run rehearsal --help
-mise exec -- bun run rehearsal case list
-mise exec -- bun run rehearsal case show smoke --json
+mise exec -- bun run rehearse --help
+mise exec -- bun run rehearse case list
+mise exec -- bun run rehearse case show smoke --json
 ```
 
 These commands inspect the project without calling a model. The pinned

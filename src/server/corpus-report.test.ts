@@ -26,7 +26,7 @@ describe(corpusReport.name, () => {
 	});
 
 	async function corpusDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-corpus-report-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-corpus-report-"));
 		roots.push(root);
 
 		return root;
@@ -289,7 +289,7 @@ describe(corpusReport.name, () => {
 	}
 
 	async function runsDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-corpus-report-runs-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-corpus-report-runs-"));
 		roots.push(root);
 
 		return root;

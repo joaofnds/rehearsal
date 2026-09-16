@@ -16,7 +16,7 @@
 	},
 	"prompt": "Reply with the single word OK.",
 	"reply": "OK",
-	"transcriptFile": "/home/example/code/rehearsal/.benchmark-runs/sessions/brief-reply-92b2e8b0/936e9ee1-77e1-4bab-aad6-d990408439c8/transcript.jsonl",
+	"transcriptFile": "/home/example/code/rehearse/.benchmark-runs/sessions/brief-reply-92b2e8b0/936e9ee1-77e1-4bab-aad6-d990408439c8/transcript.jsonl",
 	"metrics": {
 		"costUsd": 1.0049367999999999,
 		"inputTokens": 2,

@@ -652,7 +652,7 @@ describe("session comparison", () => {
 	let root: string;
 
 	beforeEach(async () => {
-		root = await mkdtemp(join(tmpdir(), "rehearsal-session-comparison-"));
+		root = await mkdtemp(join(tmpdir(), "rehearse-session-comparison-"));
 	});
 
 	afterEach(async () => {

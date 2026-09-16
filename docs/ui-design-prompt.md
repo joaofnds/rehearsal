@@ -8,7 +8,7 @@ Paste everything below the line.
 
 ---
 
-Design the interface for **Rehearsal**, a tool that runs locally on a
+Design the interface for **Rehearse**, a tool that runs locally on a
 developer's own machine and opens in their browser. One user: the engineer who
 owns the instructions it measures.
 
@@ -20,7 +20,7 @@ output. They keep editing those instructions on a hunch, and they never find out
 whether an edit helped, because they are never working on the same task twice.
 There is no way to attribute a better or worse outcome to a specific change.
 
-Rehearsal is a benchmark harness for an instruction corpus. It freezes a task,
+Rehearse is a benchmark harness for an instruction corpus. It freezes a task,
 runs an agent against it under a known set of instructions, grades the result,
 and lets the engineer change one instruction, run it again, and see what moved.
 A single run is never presented as a score, because identical reruns of the same

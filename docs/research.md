@@ -1,11 +1,11 @@
 # Research and evaluation methodology
 
-These sources motivate Rehearsal's measurement choices. They do not prove that
+These sources motivate Rehearse's measurement choices. They do not prove that
 an instruction helps on a particular repository. The [vision](vision.md) states
 the project's evidence standard; [current state](status.md) identifies which
 parts of that standard the implementation supports.
 
-Sources checked on 2026-09-10. The choices below are Rehearsal's interpretation,
+Sources checked on 2026-09-10. The choices below are Rehearse's interpretation,
 separate from each paper's reported findings.
 
 ## Evaluate instructions instead of assuming they help
@@ -16,7 +16,7 @@ repository context files. The revised paper reports that context files do not
 generally improve success in its tested settings and increase inference cost.
 It also distinguishes useful non-standard constraints from repository overviews.
 
-For Rehearsal, this motivates a minimal-corpus control and reporting cost beside
+For Rehearse, this motivates a minimal-corpus control and reporting cost beside
 quality. It does not establish that all instructions are harmful, nor that a
 shorter corpus will perform better on every task. Pruning needs measurement too.
 
@@ -26,7 +26,7 @@ shorter corpus will perform better on every task. Pruning needs measurement too.
 as experiments and describes how to estimate uncertainty and differences between
 models. Reusing the same tasks across conditions permits paired comparisons.
 
-Rehearsal pairs arms by benchmark case, reports standard errors with means, and
+Rehearse pairs arms by benchmark case, reports standard errors with means, and
 retains unsuccessful repetitions. A few repeated attempts are useful for
 exploration, but their variability and the diversity of cases limit the claims
 a report can support. The default of five confirmation reps is a project
@@ -38,7 +38,7 @@ convention, not a universal statistically sufficient sample size.
 an agent succeeds consistently across repeated trials. That differs from
 pass@k, which asks whether at least one trial succeeds.
 
-Rehearsal uses reliability measures because an unattended workflow needs repeated
+Rehearse uses reliability measures because an unattended workflow needs repeated
 success. A best attempt is useful debugging evidence but cannot substitute for
 the distribution of outcomes.
 
@@ -47,9 +47,9 @@ the distribution of outcomes.
 [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685)
 examines model judging and biases including position, verbosity, and
 self-enhancement. Its results concern the evaluated tasks and judges, not an
-assurance of reliability for Rehearsal's rubrics.
+assurance of reliability for Rehearse's rubrics.
 
-Rehearsal prefers deterministic checks for directly observable outcomes. Model
+Rehearse prefers deterministic checks for directly observable outcomes. Model
 Judges receive explicit rubrics and must cite supplied evidence. Human findings
 support agreement summaries by exact Judge model and rubric contract. The CLI
 normally chooses a different Claude model family from the worker; this is a
@@ -63,7 +63,7 @@ certifies a Judge as safe to trust.
 Learning](https://arxiv.org/abs/2507.19457) uses reflection on execution
 trajectories to propose and evaluate prompt changes.
 
-Rehearsal's inspect/edit/replay loop could supply inputs to a future optimizer.
+Rehearse's inspect/edit/replay loop could supply inputs to a future optimizer.
 This motivates machine-readable evidence and scriptable commands. Automated
 optimization and ablation are not current features. Logical instruction blocks,
 such as bullets and skill sections, are the intended pruning unit because they

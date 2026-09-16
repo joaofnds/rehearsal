@@ -2,7 +2,7 @@
 
 Start with the [project README](../README.md) for the purpose and first commands.
 
-## Working with Rehearsal
+## Working with Rehearse
 
 - [Runbook](runbook.md): setup, first experiment, repeated runs, and inspecting evidence.
 - [Harness reference](reference.md): case inputs, corpus delivery, grading, records,
@@ -36,4 +36,4 @@ externally dispatched maintainer tasks and is not required for experiments.
 
 Files under `cases/*/fixture/` are benchmark inputs, including their READMEs and
 agent instructions. Their text affects the experiments; they are not contributor
-guidance for Rehearsal.
+guidance for Rehearse.

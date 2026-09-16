@@ -1109,7 +1109,7 @@ describe(sessionHistoryRequestSeries.name, () => {
 		});
 
 		async function linesOf(contents: string): Promise<AsyncIterable<string>> {
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-series-lines-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-series-lines-"));
 			roots.push(root);
 			const path = join(root, "transcript.jsonl");
 			await Bun.write(path, contents);

@@ -139,7 +139,7 @@ describe(executeReplayStage.name, () => {
 		const child = Bun.spawn(
 			[
 				process.execPath,
-				"rehearsal.ts",
+				"rehearse.ts",
 				"replay",
 				"--run",
 				missingRun,

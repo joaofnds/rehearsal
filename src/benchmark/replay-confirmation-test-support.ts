@@ -83,7 +83,7 @@ export class ReplayConfirmationHarness {
 	public async recordedRun(
 		discussCorpus: readonly HashedFile[] = [],
 	): Promise<RecordedRun> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replayrun-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-replayrun-"));
 		this.resources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const stateDir = join(directory, "state");

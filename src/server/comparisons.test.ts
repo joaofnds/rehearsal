@@ -193,14 +193,14 @@ describe("GET /api/comparisons/:digest", () => {
 	});
 
 	async function corpusDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-comparisons-corpus-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-comparisons-corpus-"));
 		roots.push(root);
 
 		return root;
 	}
 
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-comparisons-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-comparisons-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
@@ -393,7 +393,7 @@ describe("GET /api/comparisons/:digest", () => {
 	});
 
 	it("refuses a digest whose segment escapes the runs directory, without a 500", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-comparisons-escape-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-comparisons-escape-"));
 		roots.push(root);
 		const app = createApiApp({
 			runsDirectory: root,
@@ -409,7 +409,7 @@ describe("GET /api/comparisons/:digest", () => {
 	});
 
 	it("refuses a digest that names no recorded comparison, without a 500", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-comparisons-empty-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-comparisons-empty-"));
 		roots.push(root);
 		const app = createApiApp({
 			runsDirectory: root,

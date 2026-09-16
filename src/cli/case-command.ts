@@ -85,7 +85,7 @@ export async function runCaseShow(
 ): Promise<void> {
 	const { caseId } = request;
 	if (caseId === undefined) {
-		throw new UsageError("Provide the case id: rehearsal case show <case-id>");
+		throw new UsageError("Provide the case id: rehearse case show <case-id>");
 	}
 
 	const declaration: CaseDeclaration = await asRefusedPrecondition(() =>
@@ -113,7 +113,7 @@ export interface CaseCaptureDependencies {
 function requiredFlag(value: string | undefined, flag: string): string {
 	if (value === undefined || value === "") {
 		throw new UsageError(
-			`Provide ${flag}: rehearsal case capture <case-id> --session <id> --cut <index>`,
+			`Provide ${flag}: rehearse case capture <case-id> --session <id> --cut <index>`,
 		);
 	}
 

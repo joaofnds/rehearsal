@@ -61,7 +61,7 @@ describe(loadRunManifest.name, () => {
 	}
 
 	it("round-trips the manifest a run wrote", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const manifest = manifestFixture();
@@ -74,7 +74,7 @@ describe(loadRunManifest.name, () => {
 	});
 
 	it("reads a manifest recorded before baseline checks were captured", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const { baselineChecks: _baselineChecks, ...legacy } = manifestFixture();
@@ -86,7 +86,7 @@ describe(loadRunManifest.name, () => {
 	});
 
 	it("reads a manifest without a caseId as the audit-log case", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const { caseId: _caseId, ...legacy } = manifestFixture();
@@ -99,7 +99,7 @@ describe(loadRunManifest.name, () => {
 	});
 
 	it("loads a pre-target manifest with the former target configuration", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const manifest = manifestFixture();
@@ -131,7 +131,7 @@ describe(loadRunManifest.name, () => {
 	});
 
 	it("names the missing manifest when the run predates manifests", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 
@@ -141,7 +141,7 @@ describe(loadRunManifest.name, () => {
 	});
 
 	it("rejects a manifest that lost a field it later needs", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-manifest-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-manifest-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const { taskSha: _taskSha, ...truncated } = manifestFixture();

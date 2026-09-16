@@ -190,7 +190,7 @@ export async function diffTexts(
 	before: string,
 	after: string,
 ): Promise<string> {
-	const directory = await mkdtemp(join(tmpdir(), "rehearsal-diff-"));
+	const directory = await mkdtemp(join(tmpdir(), "rehearse-diff-"));
 
 	try {
 		await Bun.write(join(directory, "before"), before);

@@ -167,7 +167,7 @@ describe(runCaseShow.name, () => {
 			runCaseShow({ caseId: undefined, json: true }, recorder.output),
 		);
 
-		expect(failure.message).toContain("rehearsal case show <case-id>");
+		expect(failure.message).toContain("rehearse case show <case-id>");
 	});
 });
 
@@ -183,7 +183,7 @@ describe(runCaseCapture.name, () => {
 	 * this suite and at the command line.
 	 */
 	async function probeCase(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-cases-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-cases-"));
 		resources.track(root);
 		const directory = join(root, CAPTURE_CASE_ID);
 		await mkdir(directory, { recursive: true });
@@ -214,7 +214,7 @@ describe(runCaseCapture.name, () => {
 	async function probeProjects(
 		...sessionIds: readonly string[]
 	): Promise<string> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-capture-cli-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-capture-cli-"));
 		resources.track(directory);
 		const slug = join(directory, "-private-tmp-probe");
 		await mkdir(slug, { recursive: true });

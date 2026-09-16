@@ -148,7 +148,7 @@ async function stageNamesOf(
 async function readReview(reviewFile: string): Promise<HumanReview> {
 	if (!(await Bun.file(reviewFile).exists())) {
 		throw new RefusedPreconditionError(
-			`No review for this run at ${displayPath(reviewFile)}; record one with rehearsal review first`,
+			`No review for this run at ${displayPath(reviewFile)}; record one with rehearse review first`,
 		);
 	}
 
@@ -428,9 +428,7 @@ export async function runCalibrate(
 ): Promise<void> {
 	const { buildJudges, output, probeModel } = dependencies;
 	if (request.id === undefined) {
-		throw new UsageError(
-			"Provide the run: rehearsal calibrate <run:name|name>",
-		);
+		throw new UsageError("Provide the run: rehearse calibrate <run:name|name>");
 	}
 
 	const { run } = parseRunRecordId(request.id);

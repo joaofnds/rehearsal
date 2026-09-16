@@ -13,7 +13,7 @@ const testResources = TestResources.forEachTest();
 
 describe(openRunEventStore.name, () => {
 	it("opens a file-backed database in WAL mode, per decision-3", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-events-"));
 		testResources.track(directory);
 
 		const store = await openRunEventStore(join(directory, "events.sqlite"));
@@ -23,7 +23,7 @@ describe(openRunEventStore.name, () => {
 	});
 
 	it("creates a database file's parent directory when it does not exist yet, since the runs directory is never created ahead of the first run", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-run-events-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-run-events-"));
 		testResources.track(parent);
 		const path = join(parent, "not-yet-created", "events.sqlite");
 

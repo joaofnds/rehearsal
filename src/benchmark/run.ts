@@ -413,7 +413,7 @@ export async function finishGradedRun(
 			request.resultSha,
 		);
 		dependencies.log(
-			`Candidate retained at refs/rehearsal/${request.runName}; restoring the target. Record a review with \`rehearsal review ${request.runName}\`, then \`rehearsal calibrate ${request.runName}\`.`,
+			`Candidate retained at refs/rehearse/${request.runName}; restoring the target. Record a review with \`rehearse review ${request.runName}\`, then \`rehearse calibrate ${request.runName}\`.`,
 		);
 
 		return;
@@ -430,7 +430,7 @@ export async function finishGradedRun(
 }
 
 /**
- * Records the checkpoint and then pins its commit under refs/rehearsal, in
+ * Records the checkpoint and then pins its commit under refs/rehearse, in
  * that order: an unpinned checkpoint is a gc race, a stray ref without a
  * checkpoint is only debris.
  */
@@ -888,7 +888,7 @@ export async function runBenchmark(
 	const controlSha = await assertControlReady();
 	const source = await assertSourceReady(config.sourceDir);
 	const workflowBackup = await captureWorkflowBackup(source.root);
-	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "rehearsal-po-"));
+	const productOwnerDirectory = await mkdtemp(join(tmpdir(), "rehearse-po-"));
 	const timestamp = new Date().toISOString();
 	const runFiles = await createRunFiles(timestamp);
 	let stageFailureCalibrated = false;

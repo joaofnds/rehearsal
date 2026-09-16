@@ -43,10 +43,27 @@ async function runCli(
 	args: readonly string[],
 	stdin: "inherit" | "empty" = "empty",
 ): Promise<CliResult> {
-	const child = Bun.spawn([process.execPath, "rehearsal.ts", ...args], {
+	const child = Bun.spawn([process.execPath, "rehearse.ts", ...args], {
 		cwd: PROJECT_ROOT,
 		env: environmentWithoutKnobs(),
 		stdin: stdin === "empty" ? new Blob([""]) : "inherit",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [exitCode, stdout, stderr] = await Promise.all([
+		child.exited,
+		new Response(child.stdout).text(),
+		new Response(child.stderr).text(),
+	]);
+
+	return { exitCode, stdout, stderr };
+}
+
+async function runPackageScript(args: readonly string[]): Promise<CliResult> {
+	const child = Bun.spawn([process.execPath, "run", "rehearse", ...args], {
+		cwd: PROJECT_ROOT,
+		env: environmentWithoutKnobs(),
+		stdin: new Blob([""]),
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -68,7 +85,7 @@ async function runCli(
 async function runCliThroughPipe(args: readonly string[]): Promise<string> {
 	const quoted = args.map((argument) => `'${argument}'`).join(" ");
 	const child = Bun.spawn(
-		["sh", "-c", `'${process.execPath}' rehearsal.ts ${quoted} | cat`],
+		["sh", "-c", `'${process.execPath}' rehearse.ts ${quoted} | cat`],
 		{
 			cwd: PROJECT_ROOT,
 			stdin: new Blob([""]),
@@ -122,7 +139,7 @@ async function writeOversizedManifest(
 	return manifestFile;
 }
 
-describe("rehearsal", () => {
+describe("rehearse", () => {
 	const temporaryDirectories: string[] = [];
 	let writtenReportDirectory: string | undefined;
 
@@ -151,8 +168,16 @@ describe("rehearsal", () => {
 		expect(result.stdout).toContain("3  refused precondition");
 	});
 
+	it("runs the supported package script", async () => {
+		const result = await runPackageScript(["--help"]);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Usage: rehearse <command>");
+		expect(result.stderr).toBe("$ bun run rehearse.ts --help\n");
+	});
+
 	it.each(COMMANDS.map((command) => command.name))(
-		"prints the flag table for rehearsal %s --help",
+		"prints the flag table for rehearse %s --help",
 		async (name) => {
 			const command = COMMANDS.find((candidate) => candidate.name === name);
 			const result = await runCli([...name.split(" "), "--help"]);
@@ -174,14 +199,14 @@ describe("rehearsal", () => {
 
 		expect(result.exitCode).toBe(2);
 		expect(result.stdout).toBe("");
-		expect(result.stderr).toContain("Usage: rehearsal <command>");
+		expect(result.stderr).toContain("Usage: rehearse <command>");
 		for (const command of COMMANDS) {
 			expect(result.stderr).toContain(command.name);
 		}
 	});
 
 	it("prints only the report path for a valid manifest, and nothing on stdout otherwise", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-cli-compare-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-cli-compare-"));
 		temporaryDirectories.push(directory);
 		const fixture = new ComparisonEvidenceFixture(directory);
 		await fixture.write();
@@ -202,7 +227,7 @@ describe("rehearsal", () => {
 	});
 
 	it("prints exactly the report JSON on stdout with --json", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-cli-compare-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-cli-compare-"));
 		temporaryDirectories.push(directory);
 		const fixture = new ComparisonEvidenceFixture(directory);
 		await fixture.write();
@@ -229,7 +254,7 @@ describe("rehearsal", () => {
 	it("delivers a record larger than the pipe buffer whole on stdout", async () => {
 		const roots = await Promise.all(
 			[1, 2, 3, 4, 5, 6].map((ordinal) =>
-				mkdtemp(join(tmpdir(), `rehearsal-cli-oversized-${ordinal}-`)),
+				mkdtemp(join(tmpdir(), `rehearse-cli-oversized-${ordinal}-`)),
 			),
 		);
 		temporaryDirectories.push(...roots);
@@ -470,7 +495,7 @@ describe("every declared command", () => {
 	 * the guard from passing on a command that started doing something else.
 	 */
 	it.each(COMMANDS.map((command) => command.name))(
-		"refuses rehearsal %s with no argument, exactly as declared",
+		"refuses rehearse %s with no argument, exactly as declared",
 		async (name) => {
 			const expected = BARE_REFUSALS.get(name);
 

@@ -37,7 +37,7 @@ describe(runStale.name, () => {
 	}
 
 	async function corpusDirectory(buildSkill: string): Promise<string> {
-		const root = await temporaryDirectory("rehearsal-stale-cli-corpus-");
+		const root = await temporaryDirectory("rehearse-stale-cli-corpus-");
 		for (const skill of ["build", "discuss", "doctrine"]) {
 			await mkdir(join(root, "skills", skill), { recursive: true });
 			await Bun.write(
@@ -60,7 +60,7 @@ describe(runStale.name, () => {
 	async function fixtureRecordedAgainst(
 		corpusRoot: string,
 	): Promise<RecordedRunsFixture> {
-		const root = await temporaryDirectory("rehearsal-stale-cli-");
+		const root = await temporaryDirectory("rehearse-stale-cli-");
 		const fixture = new RecordedRunsFixture(root, {
 			settingsFile: await liveStageSettings(),
 		});
@@ -254,14 +254,14 @@ describe(runStale.name, () => {
 
 	describe("when the corpus holds no CLAUDE.md", () => {
 		it("answers for the session cases when no run recorded a checkpoint", async () => {
-			const root = await temporaryDirectory("rehearsal-stale-cases-only-");
+			const root = await temporaryDirectory("rehearse-stale-cases-only-");
 			const fixture = new RecordedRunsFixture(root);
 			await fixture.writeAttemptReading(
 				await corpusDirectory("build skill\n"),
 				"smoke",
 				["output-styles/brief.md"],
 			);
-			const styles = await temporaryDirectory("rehearsal-stale-styles-");
+			const styles = await temporaryDirectory("rehearse-stale-styles-");
 			await Bun.write(
 				join(styles, "output-styles", "brief.md"),
 				"brief style, edited\n",
@@ -279,14 +279,14 @@ describe(runStale.name, () => {
 		});
 
 		it("names no absolute filesystem path when the corpus lacks the declared file", async () => {
-			const root = await temporaryDirectory("rehearsal-stale-cli-missing-");
+			const root = await temporaryDirectory("rehearse-stale-cli-missing-");
 			const fixture = new RecordedRunsFixture(root);
 			await fixture.writeAttemptReading(
 				await corpusDirectory("build skill\n"),
 				"smoke",
 				["output-styles/brief.md"],
 			);
-			const empty = await temporaryDirectory("rehearsal-stale-cli-empty-");
+			const empty = await temporaryDirectory("rehearse-stale-cli-empty-");
 			await Bun.write(join(empty, "CLAUDE.md"), "the instructions\n");
 			const recorder = recordOutput();
 
@@ -310,7 +310,7 @@ describe(runStale.name, () => {
 			it("names the instruction file the corpus lacks as a cause", async () => {
 				const corpus = await corpusDirectory("build skill\n");
 				const fixture = await fixtureRecordedAgainst(corpus);
-				const styles = await temporaryDirectory("rehearsal-stale-styles-only-");
+				const styles = await temporaryDirectory("rehearse-stale-styles-only-");
 				await Bun.write(
 					join(styles, "output-styles", "brief.md"),
 					"brief style\n",
@@ -334,12 +334,12 @@ describe(runStale.name, () => {
 
 	describe("when no --corpus is given, which is the live install", () => {
 		/**
-		 * The branch a user gets by typing `rehearsal stale`. Every other test
+		 * The branch a user gets by typing `rehearse stale`. Every other test
 		 * hands it a directory, and this one differs: the source resolves to the
 		 * live install and the instructions come from the control repository.
 		 */
 		it("compares a case against the live install, not a corpus root", async () => {
-			const root = await temporaryDirectory("rehearsal-stale-live-cli-");
+			const root = await temporaryDirectory("rehearse-stale-live-cli-");
 			const fixture = new RecordedRunsFixture(root);
 			await fixture.writeAttemptReading(
 				await corpusDirectory("build skill\n"),
@@ -368,7 +368,7 @@ describe(runStale.name, () => {
 			const failure = await failureOf(
 				runStale(
 					{
-						corpus: join(await temporaryDirectory("rehearsal-absent-"), "gone"),
+						corpus: join(await temporaryDirectory("rehearse-absent-"), "gone"),
 						model: undefined,
 						effort: undefined,
 						runsDirectory: fixture.runsDirectory,
@@ -425,7 +425,7 @@ describe(runStale.name, () => {
 			await corpusDirectory("build skill\n"),
 		);
 		const linked = await corpusDirectory("build skill\n");
-		const outside = await temporaryDirectory("rehearsal-stale-cli-outside-");
+		const outside = await temporaryDirectory("rehearse-stale-cli-outside-");
 		await Bun.write(join(outside, "secret.md"), "SECRET BYTES\n");
 		await rm(join(linked, "CLAUDE.md"));
 		await symlink(join(outside, "secret.md"), join(linked, "CLAUDE.md"));

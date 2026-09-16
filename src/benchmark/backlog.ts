@@ -185,7 +185,7 @@ async function assertPinnedCliPreservesConfiguration(
 		NonNullable<Awaited<ReturnType<typeof existingBacklogLayout>>>
 	>,
 ): Promise<void> {
-	const fixture = await mkdtemp(join(tmpdir(), "rehearsal-backlog-config-"));
+	const fixture = await mkdtemp(join(tmpdir(), "rehearse-backlog-config-"));
 	try {
 		const configPath = join(fixture, relative(targetDir, layout.configPath));
 		const boardPath = join(fixture, relative(targetDir, layout.directory));

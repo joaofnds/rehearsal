@@ -223,7 +223,7 @@ describe("recorded record enumeration", () => {
 	});
 
 	async function fixtureRoot(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-layout-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-run-layout-"));
 		roots.push(root);
 
 		return root;

@@ -33,7 +33,7 @@ function noop(): void {
 export function SystemPage(): React.JSX.Element {
 	return (
 		<main className="rh-system-page">
-			<h1>Rehearsal design system</h1>
+			<h1>Rehearse design system</h1>
 
 			<section>
 				<SectionLabel>COLOR</SectionLabel>

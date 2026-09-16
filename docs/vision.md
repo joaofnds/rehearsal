@@ -1,6 +1,6 @@
 # Vision
 
-Rehearsal aims to give an engineer a debugger and regression suite for the
+Rehearse aims to give an engineer a debugger and regression suite for the
 instructions they give their coding agent. The question is whether a particular
 instruction makes the agent's work better, at an acceptable cost, on tasks the
 engineer cares about.
@@ -10,11 +10,11 @@ skill is expanded, an output style is tightened. Without repeated measurements,
 it is hard to tell which changes helped, which only made the agent do more work,
 and which became unnecessary after a model update.
 
-Rehearsal makes those choices testable. Removal is as valuable an outcome as a
+Rehearse makes those choices testable. Removal is as valuable an outcome as a
 better instruction. The intended user is an engineer maintaining their own
 corpus and willing to inspect the evidence behind a result.
 
-An instruction can also be effective and unnecessarily expensive. Rehearsal
+An instruction can also be effective and unnecessarily expensive. Rehearse
 should help preserve its outcome while reducing the context and tokens needed
 to achieve it. That requires explaining resource use, beyond reporting a total.
 

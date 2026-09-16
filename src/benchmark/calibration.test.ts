@@ -315,16 +315,16 @@ describe(calibrate.name, () => {
 
 describe(collectCalibration.name, () => {
 	it("keeps one live corpus permission while waiting for review", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearse-review-"));
 		testResources.track(reviewDirectory);
-		const installRoot = await mkdtemp(join(tmpdir(), "rehearsal-install-"));
+		const installRoot = await mkdtemp(join(tmpdir(), "rehearse-install-"));
 		testResources.track(installRoot);
 		const firstBackingRoot = await mkdtemp(
-			join(tmpdir(), "rehearsal-backing-first-"),
+			join(tmpdir(), "rehearse-backing-first-"),
 		);
 		testResources.track(firstBackingRoot);
 		const secondBackingRoot = await mkdtemp(
-			join(tmpdir(), "rehearsal-backing-second-"),
+			join(tmpdir(), "rehearse-backing-second-"),
 		);
 		testResources.track(secondBackingRoot);
 		await Bun.write(
@@ -376,7 +376,7 @@ describe(collectCalibration.name, () => {
 	});
 
 	it("re-prompts after invalid review JSON and accepts the corrected review", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearse-review-"));
 		testResources.track(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
 		const prompts: string[] = [];
@@ -419,7 +419,7 @@ describe(collectCalibration.name, () => {
 	});
 
 	it("records a rubric.md edit during stage-failure calibration without a final rejudge", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearse-review-"));
 		testResources.track(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
 		const rubricPath = join(reviewDirectory, "discuss.json");
@@ -512,7 +512,7 @@ describe(collectCalibration.name, () => {
 	});
 
 	it("retains Judge attempts from a stage rubric rejudge", async () => {
-		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearsal-review-"));
+		const reviewDirectory = await mkdtemp(join(tmpdir(), "rehearse-review-"));
 		testResources.track(reviewDirectory);
 		const reviewFile = join(reviewDirectory, "review.json");
 		const rubricPath = join(reviewDirectory, "discuss.json");

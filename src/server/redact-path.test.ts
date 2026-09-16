@@ -40,7 +40,7 @@ async function messageFromReadingMissingFile(
 }
 
 async function messageFromRenamingMissingFile(): Promise<string> {
-	const root = await temporaryDirectory("rehearsal-redact-rename-");
+	const root = await temporaryDirectory("rehearse-redact-rename-");
 
 	try {
 		await rename(join(root, "from.md"), join(root, "to.md"));
@@ -70,7 +70,7 @@ describe(redactAbsolutePaths.name, () => {
 
 	test("redacts a path embedded mid-sentence, not only a bare path", () => {
 		const message = redactAbsolutePaths(
-			"No record run:no-such-run at /Users/joaofnds/code/rehearsal/.benchmark-runs/x.json",
+			"No record run:no-such-run at /Users/joaofnds/code/rehearse/.benchmark-runs/x.json",
 		);
 
 		expect(message).toBe("No record run:no-such-run at <path>");
@@ -101,8 +101,7 @@ describe(redactAbsolutePaths.name, () => {
 	});
 
 	test("redacts a real fs error naming a missing file under a temp directory", async () => {
-		const { message } =
-			await messageFromReadingMissingFile("rehearsal-redact-");
+		const { message } = await messageFromReadingMissingFile("rehearse-redact-");
 
 		expect(redactAbsolutePaths(message)).toBe(
 			"ENOENT: no such file or directory, open '<path>'",
@@ -111,7 +110,7 @@ describe(redactAbsolutePaths.name, () => {
 
 	test("redacts a real fs error under a temp directory whose name contains a space", async () => {
 		const { message } = await messageFromReadingMissingFile(
-			"rehearsal redact space ",
+			"rehearse redact space ",
 		);
 
 		expect(redactAbsolutePaths(message)).toBe(
@@ -162,7 +161,7 @@ describe(redactAbsolutePaths.name, () => {
 	describe("when a directory in the path is named with an apostrophe", () => {
 		test("removes the root and leaves the fragment after the apostrophe", async () => {
 			const { message, root } = await messageFromReadingMissingFile(
-				"rehearsal-Bob's-redact-",
+				"rehearse-Bob's-redact-",
 			);
 			const tail = root.slice(root.indexOf("'"));
 

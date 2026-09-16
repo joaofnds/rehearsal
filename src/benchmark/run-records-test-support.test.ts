@@ -46,7 +46,7 @@ describe(RecordedRunsFixture.name, () => {
 	});
 
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-records-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-records-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
@@ -55,7 +55,7 @@ describe(RecordedRunsFixture.name, () => {
 	}
 
 	it("records the settings evidence it was constructed with on an ordinary checkpoint", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-records-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-records-"));
 		roots.push(root);
 		const settingsFile = {
 			path: "stage-settings.json",
@@ -88,7 +88,7 @@ describe(RecordedRunsFixture.name, () => {
 	 * the call under test moves with it and can never disagree.
 	 */
 	it("records the production default selection and digest on an ordinary checkpoint", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-records-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-records-"));
 		roots.push(root);
 		const reference = await currentStageSettingsReference("audit-log");
 		const selected = await loadStageSettings(reference.sourcePath);

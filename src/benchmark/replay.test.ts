@@ -50,7 +50,7 @@ const testResources = TestResources.forEachTest();
 
 describe(loadRunCheckpoints.name, () => {
 	it("loads every recorded checkpoint by its stage name", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-"));
 		testResources.track(directory);
 		const targetDir = join(directory, "target");
 		await mkdir(join(targetDir, "backlog"), { recursive: true });
@@ -247,7 +247,7 @@ describe(runReplay.name, () => {
 	async function recordedRun(
 		discussCorpus: readonly HashedFile[] = [],
 	): Promise<RecordedRun> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replayrun-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-replayrun-"));
 		testResources.track(directory);
 		const paths = benchmarkRunPaths(directory, "run");
 		const stateDir = join(directory, "state");
@@ -427,7 +427,7 @@ describe(runReplay.name, () => {
 	});
 
 	it("replays a linked directory variant with the captured paths and hashes", async () => {
-		const sourceRoot = await mkdtemp(join(tmpdir(), "rehearsal-variant-"));
+		const sourceRoot = await mkdtemp(join(tmpdir(), "rehearse-variant-"));
 		testResources.track(sourceRoot);
 		const instructions = "variant instructions";
 		await Bun.write(join(sourceRoot, "CLAUDE.md"), instructions);
@@ -778,7 +778,7 @@ describe(runReplay.name, () => {
 	});
 
 	it("replays end to end against a real repository, leaving the primary untouched", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-real-replay-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-real-replay-"));
 		testResources.track(parent);
 		const primary = join(parent, "primary");
 		await mkdir(primary);

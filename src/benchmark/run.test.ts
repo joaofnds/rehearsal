@@ -394,7 +394,7 @@ describe(assertStageGradePassed.name, () => {
 
 describe(ordinaryInitialCheckpointInputs.name, () => {
 	it("writes settings evidence that the production parser accepts", async () => {
-		const targetDir = await mkdtemp(join(tmpdir(), "rehearsal-initial-run-"));
+		const targetDir = await mkdtemp(join(tmpdir(), "rehearse-initial-run-"));
 		testResources.track(targetDir);
 		const checkpointDirectory = join(targetDir, "checkpoint");
 		await mkdir(join(targetDir, "backlog"), { recursive: true });
@@ -564,7 +564,7 @@ describe(runGradedStages.name, () => {
 	}
 
 	async function stageContext(): Promise<StageContext> {
-		const stageDirectory = await mkdtemp(join(tmpdir(), "rehearsal-stages-"));
+		const stageDirectory = await mkdtemp(join(tmpdir(), "rehearse-stages-"));
 		testResources.track(stageDirectory);
 		const transitions = createRunAbort(
 			{
@@ -1975,7 +1975,7 @@ describe(buildRunManifest.name, () => {
 describe(buildRunArtifact.name, () => {
 	describe(runFinalJudge.name, () => {
 		it("writes the failed main artifact after two rejected payloads", async () => {
-			const directory = await mkdtemp(join(tmpdir(), "rehearsal-final-judge-"));
+			const directory = await mkdtemp(join(tmpdir(), "rehearse-final-judge-"));
 			testResources.track(directory);
 			const artifactFile = join(directory, "run.json");
 			const persistence = new ControlledRunArtifactPersistence();
@@ -2386,7 +2386,7 @@ describe(finishGradedRun.name, () => {
 		},
 	};
 
-	it("pins the candidate under refs/rehearsal and asks nothing without a pause", async () => {
+	it("pins the candidate under refs/rehearse and asks nothing without a pause", async () => {
 		const { order, dependencies } = fakeFinish();
 
 		await finishGradedRun(request, dependencies);
@@ -2452,7 +2452,7 @@ describe(finishGradedRun.name, () => {
 });
 
 describe(retainedCheckpointRecorder.name, () => {
-	it("records the checkpoint and pins its commit under refs/rehearsal", async () => {
+	it("records the checkpoint and pins its commit under refs/rehearse", async () => {
 		const source = await testResources.createRepository();
 		const checkpointDir = join(source.directory, ".checkpoints", "initial");
 
@@ -2474,7 +2474,7 @@ describe(retainedCheckpointRecorder.name, () => {
 			await Bun.file(join(checkpointDir, "checkpoint.json")).exists(),
 		).toBe(true);
 		const retainedSha = await runCommand(
-			["git", "rev-parse", "refs/rehearsal/run-1"],
+			["git", "rev-parse", "refs/rehearse/run-1"],
 			source.directory,
 		);
 		expect(retainedSha.trim()).toBe(source.sha);

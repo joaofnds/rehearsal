@@ -57,7 +57,7 @@ describe(runShow.name, () => {
 	});
 
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-show-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-show-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
@@ -429,7 +429,7 @@ describe("list and show are read-only", () => {
 	}
 
 	it("leaves every file under the runs directory byte-identical", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-readonly-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-readonly-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
@@ -467,7 +467,7 @@ describe("show --checkout", () => {
 
 	async function retainedRun(): Promise<CheckoutFixture> {
 		const target = await resources.createRepository();
-		const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+		const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-runs-"));
 		resources.track(runsDirectory);
 		await Bun.write(
 			benchmarkRunPaths(runsDirectory, RUN_NAME).artifactFile,
@@ -478,7 +478,7 @@ describe("show --checkout", () => {
 			}),
 		);
 		await recordRetentionRef(target.directory, RUN_NAME, target.sha);
-		const checkoutRoot = await mkdtemp(join(tmpdir(), "rehearsal-checkout-"));
+		const checkoutRoot = await mkdtemp(join(tmpdir(), "rehearse-checkout-"));
 		resources.track(checkoutRoot);
 		const checkoutPath = join(checkoutRoot, "candidate");
 		resources.trackWorktree(target.directory, checkoutPath);
@@ -544,7 +544,7 @@ describe("show --checkout", () => {
 	it("refuses a target holding no retention ref for the run", async () => {
 		const fixture = await retainedRun();
 		await runCommand(
-			["git", "update-ref", "-d", `refs/rehearsal/${RUN_NAME}`],
+			["git", "update-ref", "-d", `refs/rehearse/${RUN_NAME}`],
 			fixture.targetDirectory,
 		);
 		const { output } = recordOutput();
@@ -562,7 +562,7 @@ describe("show --checkout", () => {
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).toContain(`refs/rehearsal/${RUN_NAME}`);
+		expect(failure.message).toContain(`refs/rehearse/${RUN_NAME}`);
 	});
 
 	/**

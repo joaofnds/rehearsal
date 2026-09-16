@@ -813,7 +813,7 @@ describe(transcriptDiagnostics.name, () => {
 
 describe(parseTranscriptFile.name, () => {
 	async function transcriptFile(lines: readonly string[]): Promise<string> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-transcript-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-transcript-"));
 		testResources.track(directory);
 		const path = join(directory, "transcript.jsonl");
 		await writeFile(path, `${lines.join("\n")}\n`);

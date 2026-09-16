@@ -127,7 +127,7 @@ every module the application had, which is how the inventory above was built.
 ## The branch, and why nothing is left
 
 A session's memory file from 2026-08-29
-(`~/.claude/projects/-Users-joaofnds-code-rehearsal/memory/rehearsal-two-versions.md`)
+(`~/.claude/projects/-Users-joaofnds-code-rehearse/memory/rehearsal-two-versions.md`)
 records what this actually was:
 
 > The 194-file/~46K-line expansion (HTTP server, storage, React client,

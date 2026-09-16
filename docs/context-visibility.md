@@ -11,7 +11,7 @@ records the **2026-09-14** follow-on outcomes from the
 
 ## Product conclusion
 
-Rehearsal already aims to compare quality with cost. It has useful foundations
+Rehearse already aims to compare quality with cost. It has useful foundations
 for inspecting context, but neither its implementation nor its existing plans
 cover an extensive account of context growth. The missing capability connects
 three questions: what entered an agent's context, what work and resource use
@@ -320,7 +320,7 @@ Existing scope reused by these cards:
 
 This roadmap adds a visible product stream without changing existing
 card statuses, milestone order, or treating older Done cards as unfinished.
-Independent import of ordinary sessions outside Rehearsal may later make
+Independent import of ordinary sessions outside Rehearse may later make
 diagnosis more convenient; imported traces remain observational evidence until
 frozen into a reproducible case.
 

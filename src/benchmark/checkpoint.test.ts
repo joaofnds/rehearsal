@@ -109,7 +109,7 @@ describe(lineageKey.name, () => {
 
 describe(captureStageCorpus.name, () => {
 	it("refuses a layout root outside the corpus without naming its descendants", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-layout-root-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-layout-root-"));
 		testResources.track(parent);
 		const root = join(parent, "corpus");
 		const foreign = join(parent, "private-project");
@@ -131,7 +131,7 @@ describe(captureStageCorpus.name, () => {
 	});
 
 	async function corpusRoots(): Promise<[string, string]> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-corpus-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-corpus-"));
 		testResources.track(directory);
 		const roots: [string, string] = [
 			join(directory, "target"),
@@ -223,7 +223,7 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-corpus-snapshot-"));
 		testResources.track(parent);
 		const snapshotDirectory = join(parent, "snapshot");
 		const firstWorktree = join(parent, "first");
@@ -271,7 +271,7 @@ describe(captureStageCorpus.name, () => {
 		const roots = await corpusRoots();
 		await installSkill(roots[1], "doctrine", "doctrine skill");
 		await installSkill(roots[1], "discuss", "discuss skill");
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-corpus-snapshot-"));
 		testResources.track(parent);
 		const snapshotDirectory = join(parent, "snapshot");
 		const worktree = join(parent, "worktree");
@@ -291,7 +291,7 @@ describe(captureStageCorpus.name, () => {
 	});
 
 	it("refuses to install a snapshot entry that resolves outside the snapshot directory", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-corpus-snapshot-"));
 		testResources.track(parent);
 		const outside = join(parent, "outside");
 		await mkdir(outside, { recursive: true });
@@ -323,7 +323,7 @@ describe(captureStageCorpus.name, () => {
 		await installSkill(roots[1], "discuss", "discuss skill");
 		await installSkill(roots[1], "build", "build skill");
 		await installAgent(roots[1], "reviewer", "reviewer agent");
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-snapshot-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-corpus-snapshot-"));
 		testResources.track(parent);
 		const worktree = join(parent, "worktree");
 		await mkdir(worktree, { recursive: true });
@@ -481,7 +481,7 @@ describe(recordCheckpoint.name, () => {
 	}
 
 	async function checkpointFixture(): Promise<CheckpointFixture> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-checkpoint-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-checkpoint-"));
 		testResources.track(directory);
 		const targetDir = join(directory, "target");
 		await mkdir(join(targetDir, "backlog", "docs"), { recursive: true });
@@ -543,7 +543,7 @@ describe(recordCheckpoint.name, () => {
 	});
 
 	it("materializes a root configuration and its custom board", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-checkpoint-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-checkpoint-"));
 		testResources.track(directory);
 		const targetDir = join(directory, "target");
 		const checkpointDir = join(directory, "checkpoint");
@@ -1191,7 +1191,7 @@ describe(stageCorpusRoots.name, () => {
 
 describe(hashWorkflowState.name, () => {
 	it("refuses a target whose backlog tree is itself a symlink, rather than hashing what it points at", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-workflow-state-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-workflow-state-"));
 		testResources.track(parent);
 		const outside = join(parent, "outside");
 		await mkdir(outside);
@@ -1207,7 +1207,7 @@ describe(hashWorkflowState.name, () => {
 	});
 
 	it("refuses a target whose backlog tree holds a symlink, rather than hashing what it points at", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-workflow-state-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-workflow-state-"));
 		testResources.track(parent);
 		const outside = join(parent, "outside");
 		await mkdir(outside);
@@ -1226,7 +1226,7 @@ describe(hashWorkflowState.name, () => {
 
 describe(hashDirectory.name, () => {
 	it("hashes a file reached through a link that resolves back inside the walked tree", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-hash-directory-"));
 		testResources.track(parent);
 		const root = join(parent, "corpus");
 		await mkdir(join(root, "build"), { recursive: true });
@@ -1247,7 +1247,7 @@ describe(hashDirectory.name, () => {
 	});
 
 	it("hashes the files under a root that is itself a symlink", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-hash-directory-"));
 		testResources.track(parent);
 		const real = join(parent, "real");
 		await mkdir(real);
@@ -1269,7 +1269,7 @@ describe(hashDirectory.name, () => {
 
 	describe("when the walk lists an entry that is a symlink", () => {
 		it("throws SymlinkedEntryError naming the entry, without the target's bytes", async () => {
-			const parent = await mkdtemp(join(tmpdir(), "rehearsal-hash-directory-"));
+			const parent = await mkdtemp(join(tmpdir(), "rehearse-hash-directory-"));
 			testResources.track(parent);
 			const outside = join(parent, "outside");
 			await mkdir(outside);
@@ -1290,7 +1290,7 @@ describe(hashDirectory.name, () => {
 
 		it("throws for a link whose target is gone, which stat alone reports as a missing entry", async () => {
 			const directory = await mkdtemp(
-				join(tmpdir(), "rehearsal-hash-directory-"),
+				join(tmpdir(), "rehearse-hash-directory-"),
 			);
 			testResources.track(directory);
 			await writeFile(join(directory, "CLAUDE.md"), "instructions");
@@ -1309,7 +1309,7 @@ describe(hashDirectory.name, () => {
 
 		it("says the target is missing for a link that never left the tree, rather than accusing it of resolving outside", async () => {
 			const directory = await mkdtemp(
-				join(tmpdir(), "rehearsal-hash-directory-"),
+				join(tmpdir(), "rehearse-hash-directory-"),
 			);
 			testResources.track(directory);
 			await symlink(join(directory, "gone.md"), join(directory, "dangle.md"));

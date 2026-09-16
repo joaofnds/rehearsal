@@ -244,7 +244,7 @@ describe(runReplayCommand.name, () => {
 	});
 
 	it("prints the replay record's exact bytes on stdout with --json", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-replay-json-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-replay-json-"));
 		temporaryDirectories.push(directory);
 		const recordPath = join(directory, "replay.json");
 		const recordText = `${JSON.stringify({ schemaVersion: 1, stage: "shape" }, null, 2)}\n`;
@@ -280,7 +280,7 @@ describe(runReplayCommand.name, () => {
 
 describe(replayCorpus.name, () => {
 	it("retains the captured live source alongside its instructions", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-live-source-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-live-source-"));
 		const source = {
 			kind: "live",
 			root,
@@ -403,8 +403,8 @@ describe("--corpus on a stage replay", () => {
 		}
 	});
 	it("refuses a corpus whose CLAUDE.md is a symlink out of the root, as a precondition", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-replay-corpus-"));
-		const outside = await mkdtemp(join(tmpdir(), "rehearsal-replay-outside-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-replay-corpus-"));
+		const outside = await mkdtemp(join(tmpdir(), "rehearse-replay-outside-"));
 		const manifestFile = await writeManifestFor("any-name-corpus-linked");
 
 		try {

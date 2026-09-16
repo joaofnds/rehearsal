@@ -34,7 +34,7 @@ describe(staleCheckpoints.name, () => {
 	}
 
 	async function corpusDirectory(buildSkill: string): Promise<string> {
-		const root = await temporaryDirectory("rehearsal-stale-corpus-");
+		const root = await temporaryDirectory("rehearse-stale-corpus-");
 		await mkdir(join(root, "skills", "build"), { recursive: true });
 		await mkdir(join(root, "skills", "discuss"), { recursive: true });
 		await mkdir(join(root, "skills", "doctrine"), { recursive: true });
@@ -59,7 +59,7 @@ describe(staleCheckpoints.name, () => {
 	 * here for a reason no test is about.
 	 */
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
-		const root = await temporaryDirectory("rehearsal-stale-");
+		const root = await temporaryDirectory("rehearse-stale-");
 		const fixture = new RecordedRunsFixture(root, {
 			settingsFile: await liveStageSettings(),
 		});
@@ -241,7 +241,7 @@ describe(staleCheckpoints.name, () => {
 	it("keeps a checkpoint fresh with linked files in the captured live backing tree", async () => {
 		const fixture = await writtenFixture();
 		const root = await corpusDirectory("build skill\n");
-		const backingRoot = await temporaryDirectory("rehearsal-stale-backing-");
+		const backingRoot = await temporaryDirectory("rehearse-stale-backing-");
 		await Bun.write(join(backingRoot, "reviewer.md"), "trusted reviewer\n");
 		await symlink(backingRoot, join(root, "agents"));
 		const source = { kind: "live", root, backingRoot } as const;
@@ -256,7 +256,7 @@ describe(staleCheckpoints.name, () => {
 		const fixture = await writtenFixture();
 		const root = await corpusDirectory("build skill\n");
 		await fixture.recordCorpusFrom(directorySource(root));
-		const outside = await temporaryDirectory("rehearsal-stale-foreign-");
+		const outside = await temporaryDirectory("rehearse-stale-foreign-");
 		await Bun.write(join(outside, "private.md"), "foreign bytes\n");
 		await symlink(outside, join(root, "agents"));
 
@@ -284,7 +284,7 @@ describe(staleCheckpoints.name, () => {
 
 	describe("when no corpus is named, which is the live install", () => {
 		it("answers over a runs directory holding no run, reaching no skill", async () => {
-			const runsDirectory = await temporaryDirectory("rehearsal-stale-live-");
+			const runsDirectory = await temporaryDirectory("rehearse-stale-live-");
 
 			const stale = await staleCheckpoints(
 				runsDirectory,
@@ -297,9 +297,9 @@ describe(staleCheckpoints.name, () => {
 
 	describe("when the corpus holds no CLAUDE.md", () => {
 		it("answers for the runs it can read without reading instructions", async () => {
-			const root = await temporaryDirectory("rehearsal-stale-styles-");
+			const root = await temporaryDirectory("rehearse-stale-styles-");
 			await Bun.write(join(root, "output-styles", "brief.md"), "brief style\n");
-			const runsDirectory = await temporaryDirectory("rehearsal-stale-empty-");
+			const runsDirectory = await temporaryDirectory("rehearse-stale-empty-");
 
 			const stale = await staleCheckpoints(runsDirectory, {
 				kind: "directory",
@@ -418,7 +418,7 @@ describe(staleCases.name, () => {
 	});
 
 	async function styleCorpus(brief: string): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-case-corpus-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-case-corpus-"));
 		roots.push(root);
 		await mkdir(join(root, "output-styles"), { recursive: true });
 		await Bun.write(join(root, "output-styles", "brief.md"), brief);
@@ -427,7 +427,7 @@ describe(staleCases.name, () => {
 	}
 
 	async function runsWithSmokeAttempt(corpusRoot: string): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-case-stale-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-case-stale-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.writeAttemptReading(corpusRoot, "smoke", [
@@ -465,10 +465,8 @@ describe(staleCases.name, () => {
 	it("names an out-of-extent live file as a stale cause instead of freshness", async () => {
 		const recordedCorpus = await styleCorpus("the brief style\n");
 		const runsDirectory = await runsWithSmokeAttempt(recordedCorpus);
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-live-install-"));
-		const backingRoot = await mkdtemp(
-			join(tmpdir(), "rehearsal-live-backing-"),
-		);
+		const root = await mkdtemp(join(tmpdir(), "rehearse-live-install-"));
+		const backingRoot = await mkdtemp(join(tmpdir(), "rehearse-live-backing-"));
 		const outside = await styleCorpus("FOREIGN STYLE\n");
 		roots.push(root, backingRoot);
 		await mkdir(join(root, "output-styles"), { recursive: true });
@@ -507,7 +505,7 @@ describe(staleCases.name, () => {
 			olderCorpus: string,
 			newerCorpus: string,
 		): Promise<string> {
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-two-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-case-two-"));
 			roots.push(root);
 			const fixture = new RecordedRunsFixture(root);
 			const older = await fixture.writeAttemptAt(OLDER, olderCorpus, "smoke", [
@@ -573,7 +571,7 @@ describe(staleCases.name, () => {
 			const stray = join(CONTROL_DIR, CASES_DIRECTORY, "zz-stale-probe");
 			resources.track(stray);
 			await mkdir(stray, { recursive: true });
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-unread-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-case-unread-"));
 			roots.push(root);
 
 			const report = await staleCases(
@@ -589,7 +587,7 @@ describe(staleCases.name, () => {
 
 	describe("when a case has no recorded attempt", () => {
 		it("names no case, because nothing was invalidated", async () => {
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-case-none-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-case-none-"));
 			roots.push(root);
 
 			const report = await staleCases(

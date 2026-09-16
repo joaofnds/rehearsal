@@ -31,7 +31,7 @@ function flagLine(flag: FlagDefinition): string {
 
 export function commandHelp(command: CommandDefinition): string {
 	const usage = [
-		"rehearsal",
+		"rehearse",
 		command.name,
 		command.argument === undefined ? undefined : `<${command.argument}>`,
 		command.flags.length === 0 ? undefined : "[flags]",
@@ -303,7 +303,7 @@ const COMMAND_NAME_COLUMN =
 
 export function topLevelHelp(): string {
 	return [
-		"Usage: rehearsal <command> [flags]",
+		"Usage: rehearse <command> [flags]",
 		"",
 		"Commands:",
 		...COMMANDS.map(
@@ -317,7 +317,7 @@ export function topLevelHelp(): string {
 		"  2  usage error",
 		"  3  refused precondition",
 		"",
-		"Run `rehearsal <command> --help` for a command's flags.",
+		"Run `rehearse <command> --help` for a command's flags.",
 		"",
 	].join("\n");
 }
@@ -406,7 +406,7 @@ export function parseCommandLine(
 		if (!token.startsWith("-")) {
 			if (command.argument === undefined || argument !== undefined) {
 				throw new UsageError(
-					`Unexpected argument ${token} for rehearsal ${command.name}`,
+					`Unexpected argument ${token} for rehearse ${command.name}`,
 				);
 			}
 			argument = token;
@@ -415,7 +415,7 @@ export function parseCommandLine(
 		}
 		if (!declares(command, token)) {
 			throw new UsageError(
-				`Unknown flag ${token} for rehearsal ${command.name}`,
+				`Unknown flag ${token} for rehearse ${command.name}`,
 			);
 		}
 		if (token === JSON_FLAG) {
@@ -429,7 +429,7 @@ export function parseCommandLine(
 			const value = args[index + 1];
 			if (value === undefined || declares(command, value)) {
 				throw new UsageError(
-					`Flag ${token} needs a value for rehearsal ${command.name}`,
+					`Flag ${token} needs a value for rehearse ${command.name}`,
 				);
 			}
 			flags.push(value);

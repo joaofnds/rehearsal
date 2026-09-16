@@ -16,7 +16,7 @@ export async function runCompare(
 	const { manifestPath } = request;
 	if (manifestPath === undefined) {
 		throw new UsageError(
-			"Provide the comparison manifest: rehearsal compare <comparison-manifest.json>",
+			"Provide the comparison manifest: rehearse compare <comparison-manifest.json>",
 		);
 	}
 

@@ -63,7 +63,7 @@ async function main(): Promise<void> {
 
 	const port = Number(Bun.env["PORT"] ?? DEFAULT_PORT);
 	startLocalServer(port, app.fetch);
-	console.log(`rehearsal serving on http://localhost:${String(port)}`);
+	console.log(`rehearse serving on http://localhost:${String(port)}`);
 }
 
 if (import.meta.main) {

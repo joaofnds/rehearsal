@@ -28,7 +28,7 @@ export function refuseStageCorpus(corpus: string | undefined): void {
 
 /**
  * A run whose model nothing but the case declaration named. Before cases
- * declared their knobs, a bare `rehearsal run` refused because --model was
+ * declared their knobs, a bare `rehearse run` refused because --model was
  * missing, and that refusal was what stopped a paid session starting from a
  * bare command or from the suite. Declaring the model removed the refusal
  * without removing the hazard, so the authorization moves to the operator:

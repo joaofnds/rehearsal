@@ -76,7 +76,7 @@ describe(runSessionConfirmation.name, () => {
 	});
 
 	it("refuses an out-of-extent live corpus file before starting a rep", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-live-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-live-"));
 		temporaryDirectories.push(root);
 		const liveRoot = join(root, "install");
 		const backingRoot = join(root, "backing");
@@ -134,7 +134,7 @@ describe(runSessionConfirmation.name, () => {
 	});
 
 	it("runs every rep from one frozen input set and records a provider failure", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-group-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-group-"));
 		temporaryDirectories.push(root);
 		const fixturePath = join(root, "source-fixture");
 		const transcriptPath = join(root, "source-transcript.jsonl");
@@ -365,7 +365,7 @@ describe(runSessionConfirmation.name, () => {
 	});
 
 	it("maps pass, failed checks, no reply, and provider failure without dropping named evidence", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-outcomes-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-outcomes-"));
 		temporaryDirectories.push(root);
 		const corpusRoot = join(root, "corpus");
 		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
@@ -487,7 +487,7 @@ describe(runSessionConfirmation.name, () => {
 	});
 
 	it("waits for peers but aborts group persistence after an untyped rep failure", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-abort-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-abort-"));
 		temporaryDirectories.push(root);
 		const corpusRoot = join(root, "corpus");
 		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });
@@ -529,7 +529,7 @@ describe(runSessionConfirmation.name, () => {
 	});
 
 	it("does not finalize a group when a rep record cannot be persisted", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-session-persist-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-persist-"));
 		temporaryDirectories.push(root);
 		const corpusRoot = join(root, "corpus");
 		await mkdir(join(corpusRoot, "output-styles"), { recursive: true });

@@ -52,7 +52,7 @@ describe(collectConfirmationMetrics.name, () => {
 
 describe(settleCompletedConfirmationRep.name, () => {
 	it("leaves no rep record or cleanup after retention fails", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settlement-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settlement-"));
 		testResources.track(directory);
 		const worktreePath = join(directory, "worktree");
 		await mkdir(worktreePath);

@@ -115,7 +115,7 @@ export class PipelineConfirmationHarness {
 			source.directory,
 		);
 		const runsDirectory = await mkdtemp(
-			join(tmpdir(), "rehearsal-pipeline-confirmation-"),
+			join(tmpdir(), "rehearse-pipeline-confirmation-"),
 		);
 		resources.track(runsDirectory);
 		const corpusRoot = join(runsDirectory, "corpus");

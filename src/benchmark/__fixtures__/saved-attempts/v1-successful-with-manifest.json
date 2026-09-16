@@ -20,7 +20,7 @@
 	"divergences": [],
 	"prompt": "Reply with the single word OK.",
 	"reply": "OK",
-	"transcriptFile": "/home/example/code/rehearsal/.benchmark-runs/sessions/brief-reply-40878d26/b3705ff3-f65b-4087-86c4-2bd3ffe2cc6a/transcript.jsonl",
+	"transcriptFile": "/home/example/code/rehearse/.benchmark-runs/sessions/brief-reply-40878d26/b3705ff3-f65b-4087-86c4-2bd3ffe2cc6a/transcript.jsonl",
 	"metrics": {
 		"costUsd": 0.4595288,
 		"inputTokens": 2,

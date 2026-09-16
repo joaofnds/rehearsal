@@ -54,7 +54,7 @@ describe(loadComparisonEvidence.name, () => {
 
 	beforeEach(async () => {
 		temporaryDirectory = await mkdtemp(
-			join(tmpdir(), "rehearsal-comparison-loader-"),
+			join(tmpdir(), "rehearse-comparison-loader-"),
 		);
 		fixture = new ComparisonEvidenceFixture(temporaryDirectory);
 		await fixture.write();
@@ -369,7 +369,7 @@ describe(loadComparisonEvidence.name, () => {
 			[
 				process.execPath,
 				"run",
-				join(CONTROL_DIR, "rehearsal.ts"),
+				join(CONTROL_DIR, "rehearse.ts"),
 				"compare",
 				fixture.manifestFile,
 			],

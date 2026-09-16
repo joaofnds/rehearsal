@@ -23,7 +23,7 @@ import { failureOf } from "#cli/cli-test-support";
 const resources = TestResources.forEachTest();
 
 async function installedCorpus(): Promise<LiveCorpusRoot> {
-	const parent = await mkdtemp(join(tmpdir(), "rehearsal-layout-"));
+	const parent = await mkdtemp(join(tmpdir(), "rehearse-layout-"));
 	resources.track(parent);
 	const root = join(parent, "install");
 	const backingRoot = join(parent, "backing");

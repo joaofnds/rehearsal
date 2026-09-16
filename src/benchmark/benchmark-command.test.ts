@@ -86,7 +86,7 @@ describe(executeBenchmark.name, () => {
 		const child = Bun.spawn(
 			[
 				process.execPath,
-				"rehearsal.ts",
+				"rehearse.ts",
 				"run",
 				"--target",
 				missingTarget,

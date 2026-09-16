@@ -18,7 +18,7 @@ describe(createAppServer.name, () => {
 	});
 
 	async function corpusDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-app-corpus-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-app-corpus-"));
 		roots.push(root);
 		await Bun.write(join(root, "CLAUDE.md"), "the instructions\n");
 
@@ -26,19 +26,19 @@ describe(createAppServer.name, () => {
 	}
 
 	async function runsDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-app-runs-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-app-runs-"));
 		roots.push(root);
 
 		return root;
 	}
 
 	async function clientDistDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-app-dist-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-app-dist-"));
 		roots.push(root);
 		await mkdir(join(root, "assets"), { recursive: true });
 		await Bun.write(
 			join(root, "index.html"),
-			"<!doctype html><title>rehearsal</title>",
+			"<!doctype html><title>rehearse</title>",
 		);
 		await Bun.write(join(root, "assets", "app.js"), "console.log('app');");
 
@@ -84,6 +84,6 @@ describe(createAppServer.name, () => {
 		const body = await response.text();
 
 		expect(response.status).toBe(200);
-		expect(body).toContain("rehearsal");
+		expect(body).toContain("rehearse");
 	});
 });

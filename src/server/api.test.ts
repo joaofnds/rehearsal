@@ -96,7 +96,7 @@ describe(createApiApp.name, () => {
 	}
 
 	async function corpusDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-api-corpus-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-api-corpus-"));
 		roots.push(root);
 		await mkdir(join(root, "skills", "build"), { recursive: true });
 		await mkdir(join(root, "skills", "discuss"), { recursive: true });
@@ -113,7 +113,7 @@ describe(createApiApp.name, () => {
 	async function writtenFixture(
 		options: RecordedRunsOptions = {},
 	): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-api-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-api-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root, options);
 		await fixture.write();
@@ -202,7 +202,7 @@ describe(createApiApp.name, () => {
 		});
 
 		it("renders an empty runs directory as no rows, not an error", async () => {
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-api-empty-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-api-empty-"));
 			roots.push(root);
 			const app = createApiApp({
 				runsDirectory: root,
@@ -242,7 +242,7 @@ describe(createApiApp.name, () => {
 
 			it("names a CLAUDE.md that links out of a directory source as the cause", async () => {
 				const corpus = await corpusDirectory();
-				const outside = await emptyDirectory("rehearsal-api-outside-");
+				const outside = await emptyDirectory("rehearse-api-outside-");
 				await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
 				await rm(join(corpus, "CLAUDE.md"));
 				await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
@@ -259,7 +259,7 @@ describe(createApiApp.name, () => {
 
 			it("names a CLAUDE.md that never resolves as the cause, not as a file that does not exist", async () => {
 				const corpus = await corpusDirectory();
-				const backingRoot = await emptyDirectory("rehearsal-api-backing-");
+				const backingRoot = await emptyDirectory("rehearse-api-backing-");
 				await rm(join(corpus, "CLAUDE.md"));
 				await symlink(join(corpus, "CLAUDE.md"), join(corpus, "CLAUDE.md"));
 
@@ -329,14 +329,14 @@ describe(createApiApp.name, () => {
 		it("refuses an escaping live layout root without revealing its target or descendants", async () => {
 			const corpus = await corpusDirectory();
 			const outside = await emptyDirectory("private-corpus-target-");
-			const backingRoot = await emptyDirectory("rehearsal-backing-");
+			const backingRoot = await emptyDirectory("rehearse-backing-");
 			await writeFile(
 				join(outside, "hidden-descendant.md"),
 				"private contents",
 			);
 			await symlink(outside, join(corpus, "agents"));
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: { kind: "live", root: corpus, backingRoot },
 			});
 
@@ -360,9 +360,7 @@ describe(createApiApp.name, () => {
 
 		it("renders the corpus root unredacted, since the operator declared it and the server is theirs", async () => {
 			const corpus = await corpusDirectory();
-			const runsDirectory = await mkdtemp(
-				join(tmpdir(), "rehearsal-api-runs-"),
-			);
+			const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-api-runs-"));
 			roots.push(runsDirectory);
 			const app = createApiApp({
 				runsDirectory,
@@ -378,7 +376,7 @@ describe(createApiApp.name, () => {
 
 		it("serves the files it could hash and names the refusal, rather than failing the screen over one entry", async () => {
 			const corpus = await corpusDirectory();
-			const outside = await emptyDirectory("rehearsal-api-outside-");
+			const outside = await emptyDirectory("rehearse-api-outside-");
 			await writeFile(join(outside, "secret.md"), "secret bytes\n");
 			await mkdir(join(corpus, "agents"), { recursive: true });
 			await symlink(
@@ -386,7 +384,7 @@ describe(createApiApp.name, () => {
 				join(corpus, "agents", "escape.md"),
 			);
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: directorySource(corpus),
 			});
 
@@ -407,12 +405,12 @@ describe(createApiApp.name, () => {
 		});
 
 		it("names CLAUDE.md as a refusal when it is itself a link out of the tree, rather than failing the screen", async () => {
-			const corpus = await emptyDirectory("rehearsal-api-corpus-");
-			const outside = await emptyDirectory("rehearsal-api-outside-");
+			const corpus = await emptyDirectory("rehearse-api-corpus-");
+			const outside = await emptyDirectory("rehearse-api-outside-");
 			await writeFile(join(outside, "secret.md"), "secret bytes\n");
 			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: directorySource(corpus),
 			});
 
@@ -434,7 +432,7 @@ describe(createApiApp.name, () => {
 			await writeFile(join(corpus, "agents", "private.md"), "an agent\n");
 			await chmod(join(corpus, "agents", "private.md"), 0o000);
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: directorySource(corpus),
 			});
 
@@ -459,7 +457,7 @@ describe(createApiApp.name, () => {
 				join(corpus, "agents", "loop.md"),
 			);
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: directorySource(corpus),
 			});
 
@@ -493,7 +491,7 @@ describe(createApiApp.name, () => {
 				const corpus = await corpusDirectory();
 				await plant(join(corpus, "agents"));
 				const app = createApiApp({
-					runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+					runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 					corpusSource: directorySource(corpus),
 				});
 
@@ -510,13 +508,13 @@ describe(createApiApp.name, () => {
 
 		it("serves a live corpus with an out-of-extent instruction file as a partial report", async () => {
 			const corpus = await corpusDirectory();
-			const backingRoot = await emptyDirectory("rehearsal-api-backing-");
-			const outside = await emptyDirectory("rehearsal-api-outside-");
+			const backingRoot = await emptyDirectory("rehearse-api-backing-");
+			const outside = await emptyDirectory("rehearse-api-outside-");
 			await rm(join(corpus, "CLAUDE.md"));
 			await writeFile(join(outside, "secret.md"), "SECRET BYTES\n");
 			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
 			const app = createApiApp({
-				runsDirectory: await emptyDirectory("rehearsal-api-runs-"),
+				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
 				corpusSource: { kind: "live", root: corpus, backingRoot },
 			});
 
@@ -592,9 +590,7 @@ describe(createApiApp.name, () => {
 
 	describe("GET /api/runs/:run/events", () => {
 		it("streams every already-appended event as SSE frames, for a reader attaching mid-run", async () => {
-			const runsDirectory = await mkdtemp(
-				join(tmpdir(), "rehearsal-api-runs-"),
-			);
+			const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-api-runs-"));
 			roots.push(runsDirectory);
 			const store = await openRunEventStore(
 				runEventsDatabaseFile(runsDirectory),
@@ -630,9 +626,7 @@ describe(createApiApp.name, () => {
 		});
 
 		it("keeps a run with no events open rather than closing the connection, since the run may not have started emitting yet", async () => {
-			const runsDirectory = await mkdtemp(
-				join(tmpdir(), "rehearsal-api-runs-"),
-			);
+			const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-api-runs-"));
 			roots.push(runsDirectory);
 			const app = createApiApp({
 				runsDirectory,
@@ -655,7 +649,7 @@ describe(createApiApp.name, () => {
 
 	describe("unguarded route-level throw", () => {
 		it("sanitizes an absolute path out of an error this module's own handlers did not anticipate", async () => {
-			const root = await mkdtemp(join(tmpdir(), "rehearsal-api-throw-"));
+			const root = await mkdtemp(join(tmpdir(), "rehearse-api-throw-"));
 			roots.push(root);
 			const app = createApiApp({
 				runsDirectory: root,

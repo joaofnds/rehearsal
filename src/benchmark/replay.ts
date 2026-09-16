@@ -360,7 +360,7 @@ export async function runReplay(
 	);
 	const plan = resolveReplay(manifest, checkpoints, request.stage);
 
-	const parent = await mkdtemp(join(tmpdir(), "rehearsal-replay-"));
+	const parent = await mkdtemp(join(tmpdir(), "rehearse-replay-"));
 	const worktreeDir = join(parent, "worktree");
 	const productOwnerDirectory = join(parent, "product-owner");
 	await mkdir(productOwnerDirectory, { recursive: true });

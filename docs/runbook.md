@@ -4,7 +4,7 @@ Start with a session case to learn the record format, then use repetitions to
 measure variability. Pipeline runs need a separate target repository and more
 setup. Read [current limitations](status.md#known-limitations) before using them.
 
-Commands below run from the Rehearsal repository root. Placeholders such as
+Commands below run from the Rehearse repository root. Placeholders such as
 `<group-id>` must be replaced with IDs printed by your own commands.
 
 ## Install and inspect without calling a model
@@ -12,14 +12,14 @@ Commands below run from the Rehearsal repository root. Placeholders such as
 ```sh
 mise install
 mise exec -- bun install --frozen-lockfile
-mise exec -- bun run rehearsal --help
-mise exec -- bun run rehearsal case list
-mise exec -- bun run rehearsal case show smoke --json
+mise exec -- bun run rehearse --help
+mise exec -- bun run rehearse case list
+mise exec -- bun run rehearse case show smoke --json
 ```
 
 Mise pins Bun and Backlog.md. Follow the [Claude Code quickstart](https://code.claude.com/docs/en/quickstart)
 to install and authenticate the CLI separately, and make sure `claude` is on the command's `PATH` before running an
-experiment. Rehearsal invokes that installed CLI with your credentials.
+experiment. Rehearse invokes that installed CLI with your credentials.
 
 `case list` discovers declarations present in your checkout. `case show` prints
 the declaration's path by default and its JSON with `--json`. A declaration can
@@ -36,7 +36,7 @@ mkdir -p .benchmark-runs/example-corpus/output-styles
 cat > .benchmark-runs/example-corpus/output-styles/brief.md <<'STYLE'
 ---
 name: brief
-description: Concise replies for the Rehearsal smoke example.
+description: Concise replies for the Rehearse smoke example.
 ---
 Answer concisely. Follow the requested reply format.
 STYLE
@@ -52,7 +52,7 @@ sealed environment.
 The next command calls the provider and costs money:
 
 ```sh
-mise exec -- bun run rehearsal run --case smoke \
+mise exec -- bun run rehearse run --case smoke \
   --corpus .benchmark-runs/example-corpus \
   --model sonnet --session-budget-usd 0.2
 ```
@@ -65,8 +65,8 @@ recipe in this guide was exercised for the documentation audit.
 The command prints check results and an attempt record path. Inspect it with:
 
 ```sh
-mise exec -- bun run rehearsal list attempts
-mise exec -- bun run rehearsal show attempt:session:smoke/<uuid>
+mise exec -- bun run rehearse list attempts
+mise exec -- bun run rehearse show attempt:session:smoke/<uuid>
 ```
 
 Use the complete ID printed by `list attempts`. The record includes the prompt,
@@ -78,7 +78,7 @@ failing grade or check can be a successfully completed experiment.
 ## Repeat with frozen inputs
 
 ```sh
-mise exec -- bun run rehearsal run --case smoke \
+mise exec -- bun run rehearse run --case smoke \
   --corpus .benchmark-runs/example-corpus \
   --model sonnet --session-budget-usd 0.2 \
   --confirm --reps 2
@@ -95,9 +95,9 @@ inputs once. Each repetition gets its own attempt directory and evidence. Failed
 repetitions remain in the group rather than disappearing from the result.
 
 ```sh
-mise exec -- bun run rehearsal list groups
-mise exec -- bun run rehearsal show group:<group-id>
-mise exec -- bun run rehearsal show group:<group-id> --json
+mise exec -- bun run rehearse list groups
+mise exec -- bun run rehearse show group:<group-id>
+mise exec -- bun run rehearse show group:<group-id> --json
 ```
 
 Two reps demonstrate the mechanism. They do not establish that an instruction
@@ -114,10 +114,10 @@ Use a manifest with the shape in the [reference](reference.md#comparison-manifes
 then inspect the saved report:
 
 ```sh
-mise exec -- bun run rehearsal compare path/to/comparison.json
-mise exec -- bun run rehearsal list comparisons
-mise exec -- bun run rehearsal show comparison:<manifest-sha256>
-mise exec -- bun run rehearsal show comparison:<manifest-sha256> --json
+mise exec -- bun run rehearse compare path/to/comparison.json
+mise exec -- bun run rehearse list comparisons
+mise exec -- bun run rehearse show comparison:<manifest-sha256>
+mise exec -- bun run rehearse show comparison:<manifest-sha256> --json
 ```
 
 Session reports use the checks row only. A missing or inconsistent attempt is a
@@ -129,7 +129,7 @@ After editing the example style, ask which recorded debug attempts or checkpoint
 no longer match it:
 
 ```sh
-mise exec -- bun run rehearsal stale --corpus .benchmark-runs/example-corpus
+mise exec -- bun run rehearse stale --corpus .benchmark-runs/example-corpus
 ```
 
 The session result is reported at case level using its latest debug attempt.
@@ -153,7 +153,7 @@ than refusing the whole report.
 
 Commands that use the live corpus read instructions from `~/.claude`. If your
 instruction files link into a backing tree other than the default `~/.agents`,
-set its absolute path in the shell where you run Rehearsal:
+set its absolute path in the shell where you run Rehearse:
 
 ```sh
 export BENCHMARK_LIVE_CORPUS_BACKING_ROOT=/absolute/path/to/agents
@@ -197,7 +197,7 @@ configuration file.
 Once those prerequisites are satisfied, the invocation is:
 
 ```sh
-mise exec -- bun run rehearsal run --case audit-log \
+mise exec -- bun run rehearse run --case audit-log \
   --target /absolute/path/to/compatible-target \
   --model sonnet --effort medium --session-budget-usd 10
 ```
@@ -220,9 +220,9 @@ by later runs.
 ## Read, review, and replay a pipeline result
 
 ```sh
-mise exec -- bun run rehearsal list runs
-mise exec -- bun run rehearsal show run:<run-name>
-mise exec -- bun run rehearsal list checkpoints
+mise exec -- bun run rehearse list runs
+mise exec -- bun run rehearse show run:<run-name>
+mise exec -- bun run rehearse list checkpoints
 ```
 
 Stopped runs are included. Their summary shows recorded stages, grades, failure
@@ -238,7 +238,7 @@ for verdicts, findings, and rejudging.
 Replay a stage for which the run retained an input checkpoint:
 
 ```sh
-mise exec -- bun run rehearsal replay --run <run-name> --stage build \
+mise exec -- bun run rehearse replay --run <run-name> --stage build \
   --model sonnet --effort medium --session-budget-usd 10
 ```
 

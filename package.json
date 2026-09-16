@@ -1,8 +1,8 @@
 {
-	"name": "rehearsal",
+	"name": "rehearse",
 	"private": true,
 	"bin": {
-		"rehearsal": "./rehearsal.ts"
+		"rehearse": "./rehearse.ts"
 	},
 	"type": "module",
 	"imports": {
@@ -18,7 +18,7 @@
 		"lint:css": "stylelint \"client/**/*.css\" \"!client/**/__fixtures__/**\" \"!client/dist/**\"",
 		"test": "bun test && bun test --path-ignore-patterns \"**/node_modules/**\" --preload ./client/test-setup.ts ./client",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p client/tsconfig.json",
-		"rehearsal": "bun run rehearsal.ts",
+		"rehearse": "bun run rehearse.ts",
 		"dev:client": "vite --config client/vite.config.ts",
 		"build:client": "vite build --config client/vite.config.ts",
 		"serve": "bun run src/server/serve.ts"

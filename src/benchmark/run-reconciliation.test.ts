@@ -282,7 +282,7 @@ describe(reconcileInterruptedRuns.name, () => {
 describe(liveReconciliationDependencies.name, () => {
 	it("leaves a run alone when its claimed target's pid is this live test process", async () => {
 		const runsDirectory = await mkdtemp(
-			join(tmpdir(), "rehearsal-reconciliation-"),
+			join(tmpdir(), "rehearse-reconciliation-"),
 		);
 		testResources.track(runsDirectory);
 		const repository = await testResources.createRepository();
@@ -311,7 +311,7 @@ describe(liveReconciliationDependencies.name, () => {
 
 	it("treats a run with no manifest on disk as nothing to reconcile", async () => {
 		const runsDirectory = await mkdtemp(
-			join(tmpdir(), "rehearsal-reconciliation-"),
+			join(tmpdir(), "rehearse-reconciliation-"),
 		);
 		testResources.track(runsDirectory);
 		const store = await openRunEventStore(":memory:");

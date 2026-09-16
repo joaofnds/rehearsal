@@ -25,7 +25,7 @@ const finding: z.infer<typeof humanFindingSchema> = {
 };
 
 async function runsDirectoryWithArtifact(): Promise<string> {
-	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-runs-"));
 	testResources.track(runsDirectory);
 	await Bun.write(
 		benchmarkRunPaths(runsDirectory, RUN_NAME).artifactFile,
@@ -205,7 +205,7 @@ describe(runReview.name, () => {
 	});
 
 	it("refuses a run with no artifact and writes no review", async () => {
-		const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+		const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-runs-"));
 		testResources.track(runsDirectory);
 		const { output } = recordOutput();
 

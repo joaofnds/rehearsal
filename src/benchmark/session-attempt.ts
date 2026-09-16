@@ -194,7 +194,7 @@ async function verifiedPrefix(
 ): Promise<void> {
 	if (!(await Bun.file(transcriptPath).exists())) {
 		throw new SessionInputError(
-			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. The prefix bytes are git-ignored run state; recapture them with \`rehearsal case capture\`.`,
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file}, but no file is at ${transcriptPath}. The prefix bytes are git-ignored run state; recapture them with \`rehearse case capture\`.`,
 		);
 	}
 
@@ -290,7 +290,7 @@ export async function runSessionAttempt(
 ): Promise<SessionAttempt> {
 	const { sessionCase, settings } = request;
 	const attemptDirectory = await realpath(
-		await mkdtemp(join(tmpdir(), "rehearsal-attempt-")),
+		await mkdtemp(join(tmpdir(), "rehearse-attempt-")),
 	);
 	try {
 		if (sessionCase.fixturePath !== undefined) {

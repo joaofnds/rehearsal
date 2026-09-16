@@ -1,6 +1,6 @@
 # Architecture
 
-Rehearsal is a TypeScript application on Bun. Its CLI launches experiments and
+Rehearse is a TypeScript application on Bun. Its CLI launches experiments and
 writes local evidence. A Hono server exposes that evidence to a React client.
 The [vision](vision.md) describes the intended measurement loop; [current state](status.md)
 records the gaps in its implementation.
@@ -9,7 +9,7 @@ records the gaps in its implementation.
 
 | Location                              | Responsibility                                                                                |
 | ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`rehearsal.ts`](../rehearsal.ts)     | Bun version gate and command dispatch                                                         |
+| [`rehearse.ts`](../rehearse.ts)       | Bun version gate and command dispatch                                                         |
 | [`src/cli/`](../src/cli/)             | Command definitions, argument policy, terminal gates, output, and harness wiring              |
 | [`src/benchmark/`](../src/benchmark/) | Case loading, provider invocation, execution, grading, checkpoints, records, and comparisons  |
 | [`src/server/`](../src/server/)       | Read API, derived reports, event streaming, startup reconciliation, and static client serving |

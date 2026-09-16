@@ -15,7 +15,7 @@ describe(stoppedStage.name, () => {
 	});
 
 	async function fixture(): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-run-outcome-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-run-outcome-"));
 		roots.push(root);
 
 		return new RecordedRunsFixture(root);

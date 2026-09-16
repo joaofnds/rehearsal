@@ -374,7 +374,7 @@ describe("refusing a corpus file whose bytes are outside its root", () => {
 	});
 
 	it("reads a root reached through a symlinked parent directory, which resolves the root differently from the way it was named", async () => {
-		const parent = await mkdtemp(join(tmpdir(), "rehearsal-corpus-parent-"));
+		const parent = await mkdtemp(join(tmpdir(), "rehearse-corpus-parent-"));
 		resources.track(parent);
 		const root = join(parent, "corpus");
 		await Bun.write(join(root, "CLAUDE.md"), "instructions\n");

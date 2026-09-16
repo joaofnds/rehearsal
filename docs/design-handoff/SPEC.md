@@ -1,13 +1,13 @@
-# Handoff: Rehearsal — benchmark harness for an instruction corpus
+# Handoff: Rehearse — benchmark harness for an instruction corpus
 
 > Design reference from 2026-09-04, not an inventory of shipped features.
 > Read the [handoff index](README.md) for implementation scope and vocabulary.
 
 ## Overview
 
-Rehearsal is a local-only developer tool (runs on the engineer's machine, opens in their browser, single user) for benchmarking an *instruction corpus* — the project instruction file, skills, and rubrics an engineer writes for their coding agents.
+Rehearse is a local-only developer tool (runs on the engineer's machine, opens in their browser, single user) for benchmarking an *instruction corpus* — the project instruction file, skills, and rubrics an engineer writes for their coding agents.
 
-The problem: engineers edit those instructions on a hunch and never learn whether an edit helped, because they are never working on the same task twice. Rehearsal freezes a task, runs an agent against it under a known corpus version, grades the result, and lets the engineer change one instruction, run it again, and see what moved.
+The problem: engineers edit those instructions on a hunch and never learn whether an edit helped, because they are never working on the same task twice. Rehearse freezes a task, runs an agent against it under a known corpus version, grades the result, and lets the engineer change one instruction, run it again, and see what moved.
 
 **The core loop the product is built around** (stated by the owner): *edit one instruction file → replay a single step from a checkpoint against it → compare that attempt to the previous one at the same checkpoint.* Full task runs are rarer and expensive. Every screen must serve that loop first.
 
@@ -21,9 +21,9 @@ These are not styling preferences. Violating any of them makes the tool actively
 
 ## About the Design Files
 
-`Rehearsal.dc.html` in this bundle is a **design reference created in HTML** — a prototype showing intended look, structure, and behavior. It is **not production code to copy directly**. It uses a custom streaming-template runtime (`support.js`) that exists only in the design environment; do not port that runtime.
+`prototype.html` in this bundle is a **design reference created in HTML** — a prototype showing intended look, structure, and behavior. It is **not production code to copy directly**. It uses a custom streaming-template runtime (`support.js`) that exists only in the design environment; do not port that runtime.
 
-The task is to **recreate this design in the target codebase's existing environment** — React, Vue, Svelte, whatever the Rehearsal backend already serves — using its established patterns, component library, and routing. If no frontend exists yet, choose the most appropriate framework for a local single-user tool that reads from disk and streams live run state, and implement the designs there.
+The task is to **recreate this design in the target codebase's existing environment** — React, Vue, Svelte, whatever the Rehearse backend already serves — using its established patterns, component library, and routing. If no frontend exists yet, choose the most appropriate framework for a local single-user tool that reads from disk and streams live run state, and implement the designs there.
 
 All the visual and behavioral specification you need is in this README. The HTML is the reference for anything ambiguous.
 
@@ -54,7 +54,7 @@ Reference data used throughout: task `auth-refactor` = 4 steps (Spec review → 
 
 ### Left sidebar — 222px fixed, `#14161f`, 1px right border `#292b31`
 
-Top block: product name "Rehearsal" (15px/500, letter-spacing −.01em) with version `v0.6.2` (mono 10px, `#75798c`) on the same baseline. Beneath it a bordered corpus card (`#1c1e2b`, 1px `#2f3140`, radius 6px, padding 7px 8px):
+Top block: product name "Rehearse" (15px/500, letter-spacing −.01em) with version `v0.6.2` (mono 10px, `#75798c`) on the same baseline. Beneath it a bordered corpus card (`#1c1e2b`, 1px `#2f3140`, radius 6px, padding 7px 8px):
 - label "CORPUS UNDER TEST" (10px, letter-spacing .09em, uppercase, `#75798c`)
 - `corpus@a41c7e` (mono 11.5px, `#d2cefd`) + `14 files` (mono 10px, `#9397ab`)
 - `✓ clean · no edits since 09:12` (10.5px, `#9397ab`)
@@ -328,7 +328,7 @@ Right aside: **"WHERE THE JUDGE DRIFTS"** — per dimension, a label + signed va
 
 ### 10. Settings
 
-Records location and size (`~/.rehearsal/runs · 148 records, 612 MB`). Three cards, max-width 640px: **Spend limit** (per-run USD input + "Group ceiling: 6 × per-run"), **Corpus** (path + hash, Rehash now / Unlink corpus), **Keyboard** (two-column list of shortcut chips).
+Records location and size (`~/.rehearse/runs · 148 records, 612 MB`). Three cards, max-width 640px: **Spend limit** (per-run USD input + "Group ceiling: 6 × per-run"), **Corpus** (path + hash, Rehash now / Unlink corpus), **Keyboard** (two-column list of shortcut chips).
 
 ---
 
@@ -336,12 +336,12 @@ Records location and size (`~/.rehearsal/runs · 148 records, 612 MB`). Three ca
 
 The owner's requirement: "Fresh install asks first: set a spend limit, then point at an instruction corpus. A case cannot be declared before the tool knows what corpus it measures." Ordered and gated, not a dashboard with empty widgets.
 
-Centered column, max-width 620px, padding 56px 32px. `h1` "Nothing is measured yet"; intro (≤52ch): "Rehearsal needs two things before a case can be declared: a hard ceiling on what a run may spend, and the instruction corpus whose effect it is measuring. A case is meaningless without a corpus to attribute results to."
+Centered column, max-width 620px, padding 56px 32px. `h1` "Nothing is measured yet"; intro (≤52ch): "Rehearse needs two things before a case can be declared: a hard ceiling on what a run may spend, and the instruction corpus whose effect it is measuring. A case is meaningless without a corpus to attribute results to."
 
 An `<ol>` of three cards, each with a numbered circle (20px, 1px `#5d5294`, radius 50%, mono 11px `#d2cefd`), an `h2`, a right-aligned state word, and prose:
 
-1. **Set a spend limit** — "REQUIRED". "Applies per run and per group. Rehearsal refuses to start a run without one, and stops mid-step when the ceiling is reached." Controls: USD input + preset buttons $5.00 / $20.00 / $50.00 (selected preset gets `#9184d9` border).
-2. **Point at an instruction corpus** — dimmed to `opacity: .55` with state "Set a limit first" until a limit exists, then "Required" → "Linked". Prose: "A directory of instruction files — the project instruction file, skills, rubrics. Rehearsal hashes each file on every run so a result always names the version that produced it." Path input (placeholder `~/code/omelette/.claude`) + **Scan**. After scanning: a bordered result list headed "Found 14 files · hashed as corpus@a41c7e", each row path · hash · line count in mono.
+1. **Set a spend limit** — "REQUIRED". "Applies per run and per group. Rehearse refuses to start a run without one, and stops mid-step when the ceiling is reached." Controls: USD input + preset buttons $5.00 / $20.00 / $50.00 (selected preset gets `#9184d9` border).
+2. **Point at an instruction corpus** — dimmed to `opacity: .55` with state "Set a limit first" until a limit exists, then "Required" → "Linked". Prose: "A directory of instruction files — the project instruction file, skills, rubrics. Rehearse hashes each file on every run so a result always names the version that produced it." Path input (placeholder `~/code/omelette/.claude`) + **Scan**. After scanning: a bordered result list headed "Found 14 files · hashed as corpus@a41c7e", each row path · hash · line count in mono.
 3. **Declare your first case** — 1px **dashed**, `opacity: .5`, state "LOCKED". "Unlocks once a corpus is linked. Two kinds: a multi-step task against a target repository, or a single agent session judged by deterministic checks."
 
 Footer: **Finish setup** (disabled until a corpus is scanned) + a hint line that states what is missing. Completing setup lands on Run history in its empty state.
@@ -367,7 +367,7 @@ Live run state (server-pushed in production — SSE or a websocket off the run p
 
 Config state: spend limit, corpus path, scan result, install/setup completion.
 
-Data reads, all from disk: run records (`~/.rehearsal/runs`), per-run step records with judge output (blockers, dimensions, cited evidence with source + locator + quoted span), checkpoints, corpus file list with hashes and per-run read manifests, task and case declarations (`tasks/*.yaml`, `cases/*.yaml`), calibration reviews.
+Data reads, all from disk: run records (`~/.rehearse/runs`), per-run step records with judge output (blockers, dimensions, cited evidence with source + locator + quoted span), checkpoints, corpus file list with hashes and per-run read manifests, task and case declarations (`tasks/*.yaml`, `cases/*.yaml`), calibration reviews.
 
 Two derived values worth centralizing: **staleness** (a record is stale when any instruction file it read has a different hash now — drives every `⚠ stale` marker and excludes the record from comparisons) and **badge counts** (always from the collection, never hardcoded).
 
@@ -422,7 +422,7 @@ Nocturne, dark-mode primary.
 
 ## Files
 
-- `Rehearsal.dc.html` — the complete design: all nine screens, both modals, three run-detail layouts, two comparison presentations, and the fresh-install setup. Screens are toggled by internal state; the sidebar footer switches between demo records and the fresh-install state.
+- `prototype.html` — the complete design: all nine screens, both modals, three run-detail layouts, two comparison presentations, and the fresh-install setup. Screens are toggled by internal state; the sidebar footer switches between demo records and the fresh-install state.
 - `support.js` — the design environment's streaming-template runtime. **Reference only; do not port.**
 
-To read the design: open `Rehearsal.dc.html` in a browser, then walk the sidebar. Use the sidebar footer toggle to see the fresh-install flow, the layout switcher on Run detail for the three report layouts, and the switcher on Comparisons for both presentations. Reference data is embedded in the logic class at the bottom of the file — grades, blocker ids, evidence quotes, and hashes are all there as a shape reference for the real data model.
+To read the design: open `prototype.html` in a browser, then walk the sidebar. Use the sidebar footer toggle to see the fresh-install flow, the layout switcher on Run detail for the three report layouts, and the switcher on Comparisons for both presentations. Reference data is embedded in the logic class at the bottom of the file — grades, blocker ids, evidence quotes, and hashes are all there as a shape reference for the real data model.

@@ -37,7 +37,7 @@ describe("stageSettingsSchema", () => {
 
 describe(loadStageSettings.name, () => {
 	it("records a control-relative settings identity", async () => {
-		const directory = await mkdtemp(join(CONTROL_DIR, ".rehearsal-settings-"));
+		const directory = await mkdtemp(join(CONTROL_DIR, ".rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "settings.json");
 		await Bun.write(path, "{}");
@@ -48,7 +48,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("reads, hashes, and re-serializes the declared file's bytes", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "settings.json");
 		const content = { permissions: { deny: ["Bash(rm *)"] } };
@@ -63,7 +63,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("hashes the same digest for two files that differ only in whitespace", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const compact = join(directory, "compact.json");
 		const spaced = join(directory, "spaced.json");
@@ -80,7 +80,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("refuses a settings file that fails the schema", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "settings.json");
 		await Bun.write(path, JSON.stringify({ hooks: {} }));
@@ -89,7 +89,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("refuses a settings file that is not valid JSON", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "settings.json");
 		await Bun.write(path, "not json");
@@ -98,7 +98,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("refuses a path with no file, naming it", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "missing.json");
 
@@ -108,7 +108,7 @@ describe(loadStageSettings.name, () => {
 	});
 
 	it("translates an unreadable file into a settings refusal", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-settings-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-settings-"));
 		testResources.track(directory);
 		const path = join(directory, "settings.json");
 		await Bun.write(path, "{}");

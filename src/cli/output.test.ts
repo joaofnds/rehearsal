@@ -27,7 +27,7 @@ describe(writeRecord.name, () => {
 	});
 
 	it("writes the record's own bytes when json output is requested", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-record-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-record-"));
 		temporaryDirectories.push(directory);
 		const recordFile = join(directory, "record.json");
 		await Bun.write(recordFile, '{\n  "schemaVersion": 1\n}\n');

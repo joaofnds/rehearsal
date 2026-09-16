@@ -2,7 +2,7 @@
 
 Study dated **2026-09-14**. External source:
 [context-analyzer at `2c9e446`](https://github.com/manavgup/context-analyzer/tree/2c9e44682483531c8ba14df5f0d5d7703e4341a7).
-Rehearsal baseline: `3765612a39b84aea0cc4239b4a456ccd59114ab8`.
+Rehearse baseline: `3765612a39b84aea0cc4239b4a456ccd59114ab8`.
 This is a source-code assessment and a set of recommendations. Their accepted
 delivery homes are recorded in the [context roadmap](context-visibility.md#integration-and-artifact-investigation);
 detailed implementation design remains on the delivery cards. No external project code, hooks, installers, tests, or
@@ -12,11 +12,11 @@ integration implemented by the linked project.
 
 ## Recommendation
 
-Borrow the collection and investigation patterns. Rehearsal should connect its
+Borrow the collection and investigation patterns. Rehearse should connect its
 existing evidence normalizer to retained request usage, then let an operator move
 from a request's context growth to the tool results, instructions, and agents
 behind it. Add an integration breakdown, inspectable multimodal artifacts, and
-a bounded analysis API that agents can query. Keep Rehearsal's controlled
+a bounded analysis API that agents can query. Keep Rehearse's controlled
 quality comparisons as the test of whether an optimization helps.
 
 Context-analyzer's main contribution is a working set of inspection mechanisms:
@@ -31,7 +31,7 @@ semantics enter through recorded tool results; repository indexing, symbol
 graphs, and semantic retrieval would be separate work. The transferable core
 here is execution observability and evidence navigation.
 
-Rehearsal already has more of the required foundation than the September 11
+Rehearse already has more of the required foundation than the September 11
 [context assessment](context-visibility.md) suggests. Current implementation has:
 
 - [Saved history](../src/benchmark/session-history.ts): ordered tool calls and
@@ -109,7 +109,7 @@ metadata. Neither replaces the other. Preserve original records before deriving
 analysis, with the provider version, collection configuration, identities, and
 coverage attached. Capture child evidence as part of the same task artifact.
 
-For the later collection slice, use Rehearsal's existing provider bundle as the destination. Add a collector at
+For the later collection slice, use Rehearse's existing provider bundle as the destination. Add a collector at
 the provider/session execution boundary, then make equivalent capture available
 for pipeline workers, replays, and harness-owned roles. A single CLI invocation
 can contain multiple model requests. Worker, Product Owner, Judges, and nested
@@ -125,7 +125,7 @@ Current official documentation describes
 [instruction-load and lifecycle hooks](https://code.claude.com/docs/en/hooks#instructionsloaded),
 [request telemetry](https://code.claude.com/docs/en/monitoring-usage#api-request-event),
 and [separate subagent transcripts](https://code.claude.com/docs/en/sub-agents#resume-subagents).
-These are integration candidates, not proof of fields emitted by Rehearsal's
+These are integration candidates, not proof of fields emitted by Rehearse's
 installed CLI. Validate the exact launch mode and version with a bounded capture.
 
 ### 2. Build an integration explorer from actual delivered results
@@ -137,7 +137,7 @@ groups MCP calls by server and function and joins results to the originating
 call. This makes a practical question answerable: which integration supplied
 the large result at this point in the run?
 
-Extend Rehearsal's source/event explorer with this grouping. Show invocation
+Extend Rehearse's source/event explorer with this grouping. Show invocation
 count, failures, delivered characters or labeled token estimates, receiving
 agents, and links to the exact occurrences. Distinguish call arguments from
 returned content. Keep unclassified tools visible. A tool-name namespace is
@@ -152,7 +152,7 @@ automatically as waste.
 Do not adopt their token allocation formula: this endpoint proportions character
 counts across its block registry to the last snapshot's context total. That
 does not measure each tool's token contribution at a selected request, especially
-after compaction. Rehearsal should keep delivered-content estimates separate
+after compaction. Rehearse should keep delivered-content estimates separate
 from request-level provider usage and leave an unexplained remainder visible.
 
 ### 3. Make chart selection open the evidence that explains it
@@ -165,7 +165,7 @@ implements top-growth navigation; the
 shows the overall arrangement. The screenshot was inspected; browser execution
 was not validated in this study.
 
-Add a measured-request strip above Rehearsal's existing history workbench.
+Add a measured-request strip above Rehearse's existing history workbench.
 Label the first series **total input tokens**, consistent with the current
 design decision. It is the supported sum of request input categories, not a
 measurement of the provider's active context window; it omits the request's own
@@ -189,7 +189,7 @@ request membership. Upstream's
 is useful interaction precedent, but description-based launch matching is too
 weak for cost attribution. Its reconciled parent blocks also use a child's peak
 context as the size of a synthetic tool-result block at call zero. That is not
-the amount of content the child returned to the parent. Prefer Rehearsal's
+the amount of content the child returned to the parent. Prefer Rehearse's
 lineage evidence and actual returned content for those distinct readings.
 
 ### 4. Preserve images and offloaded results as inspectable artifacts
@@ -201,7 +201,7 @@ keeps image metadata in the message response and serves image content on demand.
 Its [offload parser](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/ccscope/offload.py)
 recognizes tool outputs saved outside the inline transcript.
 
-Rehearsal should retain artifact identity, media type, original locator, content
+Rehearse should retain artifact identity, media type, original locator, content
 hash when available, and a bounded preview. Distinguish full disk output, the
 preview delivered to the model, and subsequent reads of that output. Counting
 the full offloaded file as delivered context would overstate growth. Missing
@@ -212,7 +212,7 @@ evidence. Image bytes and text characters are not interchangeable token counts.
 
 The upstream [MCP server](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/server.py)
 makes session summaries, large tool results, churn, and block lifespans queryable
-by an agent. Rehearsal could support a diagnostic agent asking for a task's
+by an agent. Rehearse could support a diagnostic agent asking for a task's
 largest deliveries, a request interval, an agent subtree, or evidence behind a
 finding without reading its entire transcript.
 
@@ -235,7 +235,7 @@ prevents the interface used to ask a question from changing the answer.
 Use descriptive diagnostics first: large results, identical repeated content,
 explicit errors, bursts of retries, and expensive request intervals. Upstream's
 [error endpoint](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/dashboard.py#L1456)
-shows how a finding can point back to a turn. Rehearsal already records explicit
+shows how a finding can point back to a turn. Rehearse already records explicit
 errors and exact repeated Bash inputs, so extend those facts rather than adding
 an opaque health grade.
 
@@ -245,7 +245,7 @@ candidate transformation, and weight the change by subsequent request exposure.
 Its optional Headroom compressor and tokenizer were not installed or evaluated
 here. No claims about their effectiveness are adopted.
 
-For Rehearsal, report an estimated opportunity under stated residency and
+For Rehearse, report an estimated opportunity under stated residency and
 measurement assumptions. Reject malformed transformations and record unmatched
 content. A cache key for a transformation must include tool context and
 configuration when they affect output, not just content bytes. The upstream
@@ -254,7 +254,7 @@ and input.
 
 Do not promise a dollar upper bound from a token-volume fraction: requests have
 different models and cache rates, and a changed transcript can alter subsequent
-behavior. After screening, freeze a variant and use Rehearsal's repeated
+behavior. After screening, freeze a variant and use Rehearse's repeated
 baseline/candidate/control comparison with fixed grading. This is where the two
 projects complement each other most directly.
 
@@ -262,38 +262,38 @@ projects complement each other most directly.
 
 “Import” means recommend adapting the mechanism to an observed implementation
 gap, not that code has been copied or delivery approved. “Carried” means
-Rehearsal already answers the relevant need. Runtime properties that require
+Rehearse already answers the relevant need. Runtime properties that require
 executing the external project remain unverified.
 
-| IDs      | Decision                                                                       | Evidence and consequence                                                                                                                                                                                                |
-| -------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M01      | Import for later lifecycle coverage                                            | The normalizer accepts hook records, but production execution does not collect the bundle. Adapt dual-stream collection without blocking transcript-only inspection.                                                    |
-| M04      | Import extraction/navigation pattern; carry stronger request identity          | Fix transcript-only usage, retain first-observed order and locators. Upstream's main block parser associates usage by file order rather than a native request-ID join; preserve Rehearsal's stronger identity contract. |
-| M02      | Declined                                                                       | Global hook installation is unnecessary for a run-owned collector. Reopen if standalone monitoring of ordinary sessions becomes a product requirement.                                                                  |
-| M03      | Carried for saved Rehearsal attempts; decline broad import for now             | Saved history already opens retained evidence without provider spend. Ordinary-session import is a later convenience in the accepted roadmap; imported traces would remain observational.                               |
-| M05      | Carried for call/result provenance; import content fingerprints                | Existing history distinguishes repeats, failures, excerpts, and inherited context more carefully. Add fingerprints/ranges for comparison; do not replace locators or evidence states.                                   |
-| M06      | Import explicit epochs; decline cache-spike inference as fact                  | Hooks and normalized compactions exist as a contract; the measured history view is missing. A cache miss can occur without compaction.                                                                                  |
-| M07      | Declined                                                                       | Rehearsal's unknown-state contract better handles hidden system content, warm starts, and missing token attribution than synthetic exact-looking buckets.                                                               |
-| M08      | Import collection and agent views                                              | Lineage normalization exists, but child capture and operator-visible accounting are incomplete. Retain identity ambiguity rather than matching repeated descriptions.                                                   |
-| M09      | Carried for declared pipeline structure                                        | Rehearsal owns task/step/role identity. Its explicit workflow boundaries are stronger than adopting another tool's artifact convention. Child integration remains M08.                                                  |
-| M10, M13 | Import artifact inspection; carry bounded text detail                          | Existing history bounds text detail but does not supply a general image/offload viewer. Separate recorded artifact from model-visible delivery.                                                                         |
-| M11      | Import versioned derived indexing when needed                                  | Rehearsal retains durable evidence, but broad analysis will need efficient projections. Invalidate against all source hashes and derivation version; SQLite is an implementation option.                                |
-| M12      | Import linked chart interactions                                               | Current saved history is an event/source workbench without a measured provider timeline. Preserve its existing selection and missing-evidence behavior.                                                                 |
-| M14      | Import                                                                         | No served MCP-server/function analysis exists. Group observed tool occurrences without presenting proportional allocation as measured tokens.                                                                           |
-| M15      | Carried for explicit errors/repeated commands; import evidence-linked grouping | Existing diagnostics cover factual events. A repeated tool name alone does not prove a retry of the same action.                                                                                                        |
-| M16      | Declined as a verdict                                                          | Uncalibrated age and lexical rules cannot establish useless context or attention loss. Reopen as explicitly labeled hypotheses if benchmarked against quality evidence.                                                 |
-| M17      | Import report structure; decline assumed savings and specificity grades        | A compact list of locatable findings would help inspection. A regex score or large output threshold does not establish task efficiency.                                                                                 |
-| M18      | Declined                                                                       | Keyword absence cannot justify deleting an instruction. A constraint may matter because the model avoided a prohibited action. Use controlled corpus variants instead.                                                  |
-| M19      | Import exploratory charts; carry controlled comparisons                        | Scatter plots can locate expensive attempts. Rehearsal's matched cases and repeated trials are stronger evidence for an improvement than unrelated session extremes.                                                    |
-| M20      | Import bounded query interface                                                 | Rehearsal has HTTP/CLI inspection but no equivalent context-analysis MCP tools. Reuse common projections and explicit record identity.                                                                                  |
-| M21      | Declined as an immediate dependency                                            | A second provider is unnecessary to close current Claude Code capture gaps. Retain provider-specific adapters and capability flags; revisit with a supported Codex execution/import requirement.                        |
-| M22      | Declined for collection; retain later operator notifications                   | Runtime nudges can affect experiments and use inconsistent estimates. Saved/live parity should precede measured-threshold UI notifications.                                                                             |
-| M23      | Import screening method, not compressor dependency                             | There is no saved-output transformation screen today. Treat its result as modeled opportunity; quality and spend effects require reruns.                                                                                |
-| M24      | Import export boundary; decline heuristic waste dollars                        | A content-free aggregate export can help share experiments. Export supported measurements and uncertainty, not inferred waste as money recovered.                                                                       |
+| IDs      | Decision                                                                       | Evidence and consequence                                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M01      | Import for later lifecycle coverage                                            | The normalizer accepts hook records, but production execution does not collect the bundle. Adapt dual-stream collection without blocking transcript-only inspection.                                                   |
+| M04      | Import extraction/navigation pattern; carry stronger request identity          | Fix transcript-only usage, retain first-observed order and locators. Upstream's main block parser associates usage by file order rather than a native request-ID join; preserve Rehearse's stronger identity contract. |
+| M02      | Declined                                                                       | Global hook installation is unnecessary for a run-owned collector. Reopen if standalone monitoring of ordinary sessions becomes a product requirement.                                                                 |
+| M03      | Carried for saved Rehearse attempts; decline broad import for now              | Saved history already opens retained evidence without provider spend. Ordinary-session import is a later convenience in the accepted roadmap; imported traces would remain observational.                              |
+| M05      | Carried for call/result provenance; import content fingerprints                | Existing history distinguishes repeats, failures, excerpts, and inherited context more carefully. Add fingerprints/ranges for comparison; do not replace locators or evidence states.                                  |
+| M06      | Import explicit epochs; decline cache-spike inference as fact                  | Hooks and normalized compactions exist as a contract; the measured history view is missing. A cache miss can occur without compaction.                                                                                 |
+| M07      | Declined                                                                       | Rehearse's unknown-state contract better handles hidden system content, warm starts, and missing token attribution than synthetic exact-looking buckets.                                                               |
+| M08      | Import collection and agent views                                              | Lineage normalization exists, but child capture and operator-visible accounting are incomplete. Retain identity ambiguity rather than matching repeated descriptions.                                                  |
+| M09      | Carried for declared pipeline structure                                        | Rehearse owns task/step/role identity. Its explicit workflow boundaries are stronger than adopting another tool's artifact convention. Child integration remains M08.                                                  |
+| M10, M13 | Import artifact inspection; carry bounded text detail                          | Existing history bounds text detail but does not supply a general image/offload viewer. Separate recorded artifact from model-visible delivery.                                                                        |
+| M11      | Import versioned derived indexing when needed                                  | Rehearse retains durable evidence, but broad analysis will need efficient projections. Invalidate against all source hashes and derivation version; SQLite is an implementation option.                                |
+| M12      | Import linked chart interactions                                               | Current saved history is an event/source workbench without a measured provider timeline. Preserve its existing selection and missing-evidence behavior.                                                                |
+| M14      | Import                                                                         | No served MCP-server/function analysis exists. Group observed tool occurrences without presenting proportional allocation as measured tokens.                                                                          |
+| M15      | Carried for explicit errors/repeated commands; import evidence-linked grouping | Existing diagnostics cover factual events. A repeated tool name alone does not prove a retry of the same action.                                                                                                       |
+| M16      | Declined as a verdict                                                          | Uncalibrated age and lexical rules cannot establish useless context or attention loss. Reopen as explicitly labeled hypotheses if benchmarked against quality evidence.                                                |
+| M17      | Import report structure; decline assumed savings and specificity grades        | A compact list of locatable findings would help inspection. A regex score or large output threshold does not establish task efficiency.                                                                                |
+| M18      | Declined                                                                       | Keyword absence cannot justify deleting an instruction. A constraint may matter because the model avoided a prohibited action. Use controlled corpus variants instead.                                                 |
+| M19      | Import exploratory charts; carry controlled comparisons                        | Scatter plots can locate expensive attempts. Rehearse's matched cases and repeated trials are stronger evidence for an improvement than unrelated session extremes.                                                    |
+| M20      | Import bounded query interface                                                 | Rehearse has HTTP/CLI inspection but no equivalent context-analysis MCP tools. Reuse common projections and explicit record identity.                                                                                  |
+| M21      | Declined as an immediate dependency                                            | A second provider is unnecessary to close current Claude Code capture gaps. Retain provider-specific adapters and capability flags; revisit with a supported Codex execution/import requirement.                       |
+| M22      | Declined for collection; retain later operator notifications                   | Runtime nudges can affect experiments and use inconsistent estimates. Saved/live parity should precede measured-threshold UI notifications.                                                                            |
+| M23      | Import screening method, not compressor dependency                             | There is no saved-output transformation screen today. Treat its result as modeled opportunity; quality and spend effects require reruns.                                                                               |
+| M24      | Import export boundary; decline heuristic waste dollars                        | A content-free aggregate export can help share experiments. Export supported measurements and uncertainty, not inferred waste as money recovered.                                                                      |
 
 ## Important limits in the external implementation
 
-The following examples change what Rehearsal should learn from the project:
+The following examples change what Rehearse should learn from the project:
 
 - **A prefix is inferred.**
   [Reconstruction](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/analysis/reconstruction.py#L378)
@@ -315,11 +315,11 @@ The following examples change what Rehearsal should learn from the project:
 - **Cross-session scaling is observational.** The
   [insight generator](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/static/sessions.html#L407)
   compares cost/call for the smallest and largest sessions. It does not control
-  task, model, cache mix, or outcome. Its headline ratios are not Rehearsal savings.
+  task, model, cache mix, or outcome. Its headline ratios are not Rehearse savings.
 - **Stored Claude cost uses fixed rates.**
   [Ingestion](https://github.com/manavgup/context-analyzer/blob/2c9e44682483531c8ba14df5f0d5d7703e4341a7/src/context_tracker/ingest.py#L203)
   prices Claude usage with constants independent of the executing model.
-  Preserve Rehearsal's request-specific frozen-rate pricing instead.
+  Preserve Rehearse's request-specific frozen-rate pricing instead.
 - **“Live” has multiple meanings.** Hooks collect ongoing events, but dashboard
   playback advances through loaded data. The main initialization has no ongoing
   subscription, and `_ensure_ingested` returns an existing database record

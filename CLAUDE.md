@@ -1,10 +1,10 @@
-# Working on Rehearsal
+# Working on Rehearse
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the project. It owns the
 development checks and documentation maintenance map. Use [docs/status.md](docs/status.md)
 for current limits and [GLOSSARY.md](GLOSSARY.md) for domain terms.
 
-Keep this file as guidance for developing Rehearsal. The corpus under evaluation
+Keep this file as guidance for developing Rehearse. The corpus under evaluation
 comes from the live agent install or an explicit corpus source. The target
 repository owns its project instructions.
 

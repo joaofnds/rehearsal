@@ -163,7 +163,7 @@ describe(runList.name, () => {
 	});
 
 	async function writtenFixture(): Promise<RecordedRunsFixture> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-list-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-list-"));
 		roots.push(root);
 		const fixture = new RecordedRunsFixture(root);
 		await fixture.write();
@@ -172,7 +172,7 @@ describe(runList.name, () => {
 	}
 
 	async function emptyRunsDirectory(): Promise<string> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-list-empty-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-list-empty-"));
 		roots.push(root);
 
 		return root;
@@ -518,7 +518,7 @@ describe(runList.name, () => {
 		 * for nothing.
 		 */
 		it("names it relative to the control root", async () => {
-			const root = await mkdtemp(join(CONTROL_DIR, "rehearsal-list-test-"));
+			const root = await mkdtemp(join(CONTROL_DIR, "rehearse-list-test-"));
 			roots.push(root);
 			const fixture = new RecordedRunsFixture(root);
 			await fixture.writeStoppedRunWithoutManifest();

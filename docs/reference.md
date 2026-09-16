@@ -23,7 +23,7 @@ metrics; they do not load pipeline Judges.
 
 ## Command interface
 
-Use `mise exec -- bun run rehearsal <command>` from the repository. The entry
+Use `mise exec -- bun run rehearse <command>` from the repository. The entry
 point enforces the Bun version in `mise.toml`. `--help` and command-specific
 `--help` are generated from [the command declarations](../src/cli/commands.ts),
 which are the complete flag reference.
@@ -231,8 +231,8 @@ prefix's original conversation. Missing or changed bytes are refused.
 ## Corpus sources and delivery
 
 The corpus is the engineer's instruction set. The target's own `CLAUDE.md`,
-`AGENTS.md`, and project documents belong to the target. Rehearsal's root
-`CLAUDE.md` instructs contributors working on Rehearsal.
+`AGENTS.md`, and project documents belong to the target. Rehearse's root
+`CLAUDE.md` instructs contributors working on Rehearse.
 
 A corpus directory has this layout; only the entries needed by an execution
 must be present:
@@ -249,7 +249,7 @@ Absent `--corpus`, the live source permits files under `~/.claude` and one
 external backing tree. `BENCHMARK_LIVE_CORPUS_BACKING_ROOT` selects that tree
 and defaults to `~/.agents`. An override replaces the default and must be a
 non-empty absolute path without NUL bytes. A missing backing tree grants no
-permission. Rehearsal checks the backing tree only when a file resolves outside
+permission. Rehearse checks the backing tree only when a file resolves outside
 the live install, so files stored directly under `~/.claude` remain usable when
 the optional tree is missing or unreadable.
 
@@ -277,7 +277,7 @@ so those measurements can no longer be reproduced. The run-history API and
 other record.
 
 A declared directory source must exist and contain at least one recognized
-layout entry. Rehearsal consumes a directory; rendering a revision from a
+layout entry. Rehearse consumes a directory; rendering a revision from a
 dotfiles repository is external work. Directory sources and frozen stage
 snapshots permit paths within their own root only. Project-level stage inputs
 keep that same boundary even when a live source supplies a fallback. The first
@@ -377,7 +377,7 @@ retain their bytes, preventing a candidate from passing by weakening checks.
 ## Review and calibration
 
 Without `--pause`, a pipeline debug run retains its candidate under
-`refs/rehearsal/<run>`, restores the target, and prints the record and follow-up
+`refs/rehearse/<run>`, restores the target, and prints the record and follow-up
 commands. A completed candidate awaits human review; a quality stop records the
 stage evidence that stopped it. Review remains separate from the machine grade.
 

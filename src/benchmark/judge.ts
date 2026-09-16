@@ -167,7 +167,7 @@ export async function runJudge(
 	localChecks: LocalCheckResult,
 	invoke?: JudgeInvoker,
 ): Promise<JudgeResult> {
-	const judgeDirectory = await mkdtemp(join(tmpdir(), "rehearsal-judge-"));
+	const judgeDirectory = await mkdtemp(join(tmpdir(), "rehearse-judge-"));
 	const rubricIds = parseRubricIds(rubric);
 	const evidence = JSON.stringify({
 		baselineContext,

@@ -230,8 +230,8 @@ async function temporary(prefix: string): Promise<string> {
 
 describe(runSessionDebugAttempt.name, () => {
 	it("writes one record carrying the reply, the transcript path, the metrics, and a result per check", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase(),
@@ -267,8 +267,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("prints a record that parses with the schema that wrote it", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase(),
@@ -285,8 +285,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("persists provider context evidence through the saved attempt boundary", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 		const contextEvidenceSource = contextEvidenceSourceSchema.parse(
 			await Bun.file(
 				new URL(
@@ -350,8 +350,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("persists exact tool diagnostics in the parsed attempt record", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase(),
@@ -402,8 +402,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("persists retained diagnostics when a direct provider attempt fails", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 		const writesTranscript = diagnosticClaude(projects);
 
 		const failure = await failureOf(
@@ -443,8 +443,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("reports the attempt unsuccessful when a check fails", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase(),
@@ -459,9 +459,9 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("refuses a fixture tree holding a symlink, before any provider call", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
-		const fixture = await temporary("rehearsal-fixture-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const fixture = await temporary("rehearse-fixture-");
 		await symlink("/etc/hosts", join(fixture, "escape.md"));
 
 		const failure = await failureOf(
@@ -480,9 +480,9 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("refuses a transcript prefix whose bytes do not match the declared digest, before any provider call", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
-		const prefix = join(await temporary("rehearsal-prefix-"), "prefix.jsonl");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const prefix = join(await temporary("rehearse-prefix-"), "prefix.jsonl");
 		await writeFile(prefix, "bytes the declaration never hashed\n");
 
 		const failure = await failureOf(
@@ -501,8 +501,8 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("refuses a declared corpus file that does not resolve, before any provider call", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
 
 		const failure = await failureOf(
 			runSessionDebugAttempt({
@@ -522,11 +522,11 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("refuses an out-of-extent live corpus file before any provider call", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
-		const root = await temporary("rehearsal-live-install-");
-		const backingRoot = await temporary("rehearsal-live-backing-");
-		const outside = await temporary("rehearsal-live-outside-");
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const root = await temporary("rehearse-live-install-");
+		const backingRoot = await temporary("rehearse-live-backing-");
+		const outside = await temporary("rehearse-live-outside-");
 		await Bun.write(join(outside, "foreign.md"), "FOREIGN STYLE\n");
 		await mkdir(join(root, "output-styles"), { recursive: true });
 		await symlink(
@@ -558,14 +558,11 @@ describe(runSessionDebugAttempt.name, () => {
 	});
 
 	it("reports an invalid needed live backing tree as a refused precondition", async () => {
-		const runs = await temporary("rehearsal-runs-");
-		const projects = await temporary("rehearsal-projects-");
-		const root = await temporary("rehearsal-live-install-");
-		const outside = await temporary("rehearsal-live-outside-");
-		const backingRoot = join(
-			await temporary("rehearsal-live-backing-"),
-			"file",
-		);
+		const runs = await temporary("rehearse-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const root = await temporary("rehearse-live-install-");
+		const outside = await temporary("rehearse-live-outside-");
+		const backingRoot = join(await temporary("rehearse-live-backing-"), "file");
 		await Bun.write(backingRoot, "not a directory\n");
 		await Bun.write(join(outside, "foreign.md"), "FOREIGN STYLE\n");
 		await mkdir(join(root, "output-styles"), { recursive: true });
@@ -602,12 +599,12 @@ describe(runSessionDebugAttempt.name, () => {
 			runSessionDebugAttempt({
 				sessionCase: sessionCase(),
 				config,
-				runsDirectory: await temporary("rehearsal-runs-"),
+				runsDirectory: await temporary("rehearse-runs-"),
 				resolveCorpus: () =>
 					Promise.reject(new CorpusConfigurationError("invalid backing root")),
 				runClaude: () =>
 					Promise.reject(new Error("a provider call must not happen")),
-				projectsDirectory: await temporary("rehearsal-projects-"),
+				projectsDirectory: await temporary("rehearse-projects-"),
 			}),
 		);
 
@@ -618,7 +615,7 @@ describe(runSessionDebugAttempt.name, () => {
 
 describe("running a session case against a corpus source", () => {
 	async function corpusDirectory(brief: string): Promise<string> {
-		const root = await temporary("rehearsal-corpus-");
+		const root = await temporary("rehearse-corpus-");
 		await Bun.write(join(root, "output-styles/brief.md"), brief);
 
 		return root;
@@ -643,8 +640,8 @@ describe("running a session case against a corpus source", () => {
 	async function attemptWith(
 		corpus: string | undefined,
 	): Promise<Awaited<ReturnType<typeof runSessionDebugAttempt>>> {
-		const projects = await temporary("rehearsal-projects-");
-		const runsDirectory = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const runsDirectory = await temporary("rehearse-runs-");
 
 		return runSessionDebugAttempt({
 			sessionCase: styledCase(),
@@ -729,8 +726,8 @@ describe("running a session case against a corpus source", () => {
 	});
 
 	it("reports an undeclared-file divergence for a skill the session invoked but the case never declared", async () => {
-		const projects = await temporary("rehearsal-projects-");
-		const runsDirectory = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const runsDirectory = await temporary("rehearse-runs-");
 		const runClaude: ClaudeRunner = async (command, cwd) => {
 			const sessionId = command[command.indexOf("--session-id") + 1] ?? "";
 			const slug = join(projects, projectSlug(await realpath(cwd)));
@@ -783,8 +780,8 @@ describe("running a session case against a corpus source", () => {
 	});
 
 	it("reports an unloaded-file divergence for a declared project file the session never read, tagged project-half", async () => {
-		const projects = await temporary("rehearsal-projects-");
-		const runsDirectory = await temporary("rehearsal-runs-");
+		const projects = await temporary("rehearse-projects-");
+		const runsDirectory = await temporary("rehearse-runs-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase({ projectFiles: ["NOTES.md"] }),
@@ -825,12 +822,12 @@ describe("running a session case against a corpus source", () => {
 	 * hash of the same four fields plus an always-absent fifth.
 	 */
 	it("records the lineage the smoke case carried before --corpus existed", async () => {
-		const projects = await temporary("rehearsal-projects-");
+		const projects = await temporary("rehearse-projects-");
 
 		const outcome = await runSessionDebugAttempt({
 			sessionCase: sessionCase(),
 			config,
-			runsDirectory: await temporary("rehearsal-runs-"),
+			runsDirectory: await temporary("rehearse-runs-"),
 			runClaude: fakeClaude(projects, "OK"),
 			projectsDirectory: projects,
 		});

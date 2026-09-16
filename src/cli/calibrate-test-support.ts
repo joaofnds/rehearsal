@@ -124,7 +124,7 @@ export interface RunFixtureOptions {
 export async function writeRunFixture(
 	options: RunFixtureOptions = {},
 ): Promise<RunFixture> {
-	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-runs-"));
 	const stageRubricPath = join(runsDirectory, "discuss.json");
 	await Bun.write(stageRubricPath, stageRubricText("Scope is explicit"));
 	const paths = benchmarkRunPaths(runsDirectory, RUN_NAME);
@@ -214,7 +214,7 @@ export const RECORDED_JUDGE_KNOBS: StageJudgeKnobs = {
 export async function writeStoppedStageFixture(
 	judgeKnobs: Readonly<StageJudgeKnobs> = RECORDED_JUDGE_KNOBS,
 ): Promise<RunFixture> {
-	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearsal-runs-"));
+	const runsDirectory = await mkdtemp(join(tmpdir(), "rehearse-runs-"));
 	const stageRubricPath = join(runsDirectory, "discuss.json");
 	await Bun.write(stageRubricPath, stageRubricText("Scope is explicit"));
 	const paths = benchmarkRunPaths(runsDirectory, RUN_NAME);

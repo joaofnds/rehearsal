@@ -65,14 +65,14 @@ export class TestResources {
 	 * `assertControlReady` would then refuse every run over.
 	 */
 	public async createControlDirectory(): Promise<string> {
-		const directory = await mkdtemp(join(PROJECT_ROOT, "rehearsal-test-"));
+		const directory = await mkdtemp(join(PROJECT_ROOT, "rehearse-test-"));
 		this.track(directory);
 
 		return directory;
 	}
 
 	public async createRepository(): Promise<TestRepository> {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-source-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-source-"));
 		this.track(directory);
 		await runCommand(["git", "init", "-b", "main"], directory);
 		await runCommand(

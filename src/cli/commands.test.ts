@@ -80,7 +80,7 @@ describe("declared commands", () => {
 			const command = COMMANDS.find((candidate) => candidate.name === name);
 			const help = commandHelp(command ?? exampleCommand);
 
-			expect(help).toContain(`rehearsal ${name}`);
+			expect(help).toContain(`rehearse ${name}`);
 			for (const flag of command?.flags ?? []) {
 				expect(help).toContain(flag.name);
 				expect(help).toContain(flag.help);
@@ -103,7 +103,7 @@ describe("declared commands", () => {
 		});
 
 		expect(help).not.toContain("Flags:");
-		expect(help).toBe("Usage: rehearsal list <kind>\n\nList the records\n");
+		expect(help).toBe("Usage: rehearse list <kind>\n\nList the records\n");
 	});
 
 	it("declares the run flags the card names", () => {
@@ -158,19 +158,19 @@ describe(findCommand.name, () => {
 describe(parseCommandLine.name, () => {
 	it("names the unknown flag it refuses", () => {
 		expect(() => parseCommandLine(exampleCommand, ["--bogus"])).toThrow(
-			"Unknown flag --bogus for rehearsal example",
+			"Unknown flag --bogus for rehearse example",
 		);
 	});
 
 	it("refuses a declared flag standing where a value belongs", () => {
 		expect(() =>
 			parseCommandLine(exampleCommand, ["--model", "--yes"]),
-		).toThrow("Flag --model needs a value for rehearsal example");
+		).toThrow("Flag --model needs a value for rehearse example");
 	});
 
 	it("refuses a token that is not a flag", () => {
 		expect(() => parseCommandLine(exampleCommand, ["oops"])).toThrow(
-			"Unexpected argument oops for rehearsal example",
+			"Unexpected argument oops for rehearse example",
 		);
 	});
 
@@ -178,7 +178,7 @@ describe(parseCommandLine.name, () => {
 		const compare = COMMANDS.find((command) => command.name === "compare");
 
 		expect(() => parseCommandLine(compare ?? exampleCommand, ["-h"])).toThrow(
-			"Unknown flag -h for rehearsal compare",
+			"Unknown flag -h for rehearse compare",
 		);
 	});
 
@@ -187,7 +187,7 @@ describe(parseCommandLine.name, () => {
 
 		expect(() =>
 			parseCommandLine(compare ?? exampleCommand, ["one.json", "two.json"]),
-		).toThrow("Unexpected argument two.json for rehearsal compare");
+		).toThrow("Unexpected argument two.json for rehearse compare");
 	});
 
 	it("reports the help request, the argument, and the remaining flags", () => {

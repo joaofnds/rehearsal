@@ -563,7 +563,7 @@ describe(runRunCommand.name, () => {
 	});
 
 	it("prints the run artifact's exact bytes on stdout with --json", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "rehearsal-run-json-"));
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-run-json-"));
 		temporaryDirectories.push(directory);
 		const recordFile = join(directory, "artifact.json");
 		const recordText = `${JSON.stringify({ schemaVersion: 1, status: "COMPLETE" }, null, 2)}\n`;

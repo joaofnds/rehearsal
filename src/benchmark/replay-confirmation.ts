@@ -385,7 +385,7 @@ export async function runReplayConfirmation(
 		paths.inputsDirectory,
 	);
 	const worktreesDirectory = await mkdtemp(
-		join(tmpdir(), `rehearsal-${request.groupId}-`),
+		join(tmpdir(), `rehearse-${request.groupId}-`),
 	);
 	try {
 		return await runReplayConfirmationBody(

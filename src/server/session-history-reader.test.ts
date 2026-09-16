@@ -35,7 +35,7 @@ async function writtenAttempt(): Promise<{
 	readonly caseId: string;
 	readonly uuid: string;
 }> {
-	const root = await mkdtemp(join(tmpdir(), "rehearsal-history-reader-"));
+	const root = await mkdtemp(join(tmpdir(), "rehearse-history-reader-"));
 	roots.push(root);
 	const runsDirectory = join(root, ".benchmark-runs");
 	const caseId = "case-a";
@@ -109,7 +109,7 @@ async function writtenConfirmationAttempt(): Promise<{
 	readonly repId: string;
 	readonly paths: ReturnType<typeof confirmationGroupPaths>;
 }> {
-	const root = await mkdtemp(join(tmpdir(), "rehearsal-confirmation-history-"));
+	const root = await mkdtemp(join(tmpdir(), "rehearse-confirmation-history-"));
 	roots.push(root);
 	const runsDirectory = join(root, ".benchmark-runs");
 	const groupId = "group-a";
@@ -706,7 +706,7 @@ async function writtenResumedAttempt(): Promise<{
 	readonly caseId: string;
 	readonly uuid: string;
 }> {
-	const root = await mkdtemp(join(tmpdir(), "rehearsal-history-series-"));
+	const root = await mkdtemp(join(tmpdir(), "rehearse-history-series-"));
 	roots.push(root);
 	const runsDirectory = join(root, ".benchmark-runs");
 	const caseId = "case-resumed";
@@ -864,7 +864,7 @@ describe(readSessionAttemptRequestSeries.name, () => {
 
 	it("reports totals unavailable rather than zero when the attempt saved no transcript", async () => {
 		const root = await mkdtemp(
-			join(tmpdir(), "rehearsal-history-notranscript-"),
+			join(tmpdir(), "rehearse-history-notranscript-"),
 		);
 		roots.push(root);
 		const runsDirectory = join(root, ".benchmark-runs");
@@ -928,7 +928,7 @@ describe(readSessionAttemptRequestSeries.name, () => {
 	});
 
 	it("reports boundary-unknown with totals unavailable on an attempt carrying no boundary", async () => {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-history-noboundary-"));
+		const root = await mkdtemp(join(tmpdir(), "rehearse-history-noboundary-"));
 		roots.push(root);
 		const runsDirectory = join(root, ".benchmark-runs");
 		const caseId = "case-no-boundary";
