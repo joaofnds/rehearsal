@@ -544,6 +544,49 @@ describe(readSessionAttemptRequestSeries.name, () => {
 		});
 	});
 
+	it("reports instruction loads unavailable when the transcript carries no attachment", async () => {
+		const fixture = await writtenResumedAttempt();
+
+		const { instructionLoads } = await readSessionAttemptRequestSeries(fixture);
+
+		expect(instructionLoads).toEqual({ state: "unavailable" });
+	});
+
+	it("carries the instruction loads the transcript attachment names", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const transcript = await Bun.file(
+			join(paths.directory, "transcript.jsonl"),
+		).text();
+		await Bun.write(
+			join(paths.directory, "transcript.jsonl"),
+			`${transcript}\n${JSON.stringify({
+				type: "attachment",
+				attachment: {
+					type: "instructions",
+					files: [
+						{ path: "/work/CLAUDE.md", type: "Project", content: "# it" },
+					],
+				},
+			})}`,
+		);
+
+		const { instructionLoads } = await readSessionAttemptRequestSeries(fixture);
+
+		expect(instructionLoads).toEqual({
+			state: "available",
+			loads: [
+				{
+					filePath: "/work/CLAUDE.md",
+					memoryType: "Project",
+					loadReason: { state: "unavailable" },
+					triggerFilePath: { state: "unavailable" },
+					parentFilePath: { state: "unavailable" },
+				},
+			],
+		});
+	});
+
 	it("reads the provider cost the attempt record carries", async () => {
 		const fixture = await writtenResumedAttempt();
 

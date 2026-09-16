@@ -9,6 +9,7 @@ import {
 } from "#benchmark/confirmation-record";
 import { pathIsWithin } from "#benchmark/path-containment";
 import { parseSessionAttemptRecord } from "#benchmark/session-record";
+import { transcriptInstructionLoadsFromLines } from "#benchmark/transcript-instruction-loads";
 import {
 	sessionHistoryAttemptCost,
 	sessionHistoryDetailFromLine,
@@ -25,6 +26,7 @@ import type {
 	SessionHistoryRequestSeries,
 } from "#benchmark/session-history";
 import type { ContextRateCatalog } from "#benchmark/context-evidence-contract";
+import type { TranscriptInstructionLoads } from "#benchmark/transcript-instruction-loads";
 
 const identitySchema = z
 	.string()
@@ -524,21 +526,30 @@ export async function readConfirmationAttemptHistoryDetail(
 export interface SessionHistoryAttemptSeries {
 	readonly series: SessionHistoryRequestSeries;
 	readonly cost: SessionHistoryAttemptCost;
+	readonly instructionLoads: TranscriptInstructionLoads;
 }
 
+/**
+ * The series decoder validates only the two row kinds it reads, which is what
+ * keeps a series over the largest saved transcript fast, and an instructions
+ * attachment is a third kind. Rather than widen that schema, the loads take
+ * their own streamed pass: measured at 10ms over the largest saved transcript
+ * (3.9MB), against the coordination a shared single pass would need.
+ */
 async function seriesFor(
 	input: Readonly<ResolvedHistoryInput>,
 	rates: ContextRateCatalog | undefined,
 ): Promise<SessionHistoryAttemptSeries> {
+	const { transcriptFile } = input;
 	const series =
-		input.transcriptFile === undefined
+		transcriptFile === undefined
 			? sessionHistoryRequestSeries({
 					transcript: undefined,
 					prefixLinesExcluded: input.metadata.prefixLinesExcluded,
 				})
 			: await sessionHistoryRequestSeriesFromLines(
 					{ prefixLinesExcluded: input.metadata.prefixLinesExcluded },
-					readVerifiedLines(input.root, input.transcriptFile),
+					readVerifiedLines(input.root, transcriptFile),
 				);
 
 	return {
@@ -548,6 +559,12 @@ async function seriesFor(
 			reportedCostUsd: input.reportedCostUsd,
 			rates,
 		}),
+		instructionLoads:
+			transcriptFile === undefined
+				? { state: "unavailable" }
+				: await transcriptInstructionLoadsFromLines(
+						readVerifiedLines(input.root, transcriptFile),
+					),
 	};
 }
 
