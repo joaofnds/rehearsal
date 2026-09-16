@@ -21,6 +21,7 @@ import "./run-history-page.css";
  */
 type RunHistoryResponse = InferResponseType<typeof apiClient.api.runs.$get>;
 type RunHistoryRow = RunHistoryResponse["rows"][number];
+type UnreadableRun = RunHistoryResponse["unreadable"][number];
 
 const COLUMNS = ["Run", "Case", "Outcome", "Grade", "Corpus"] as const;
 
@@ -31,11 +32,29 @@ function matchesFilter(row: RunHistoryRow, filter: Filter): boolean {
 	return filter === "All" || row.status.startsWith("STOPPED:");
 }
 
-async function fetchRunHistoryRows(): Promise<readonly RunHistoryRow[]> {
+async function fetchRunHistoryReport(): Promise<RunHistoryResponse> {
 	const response = await apiClient.api.runs.$get();
-	const body = await response.json();
 
-	return body.rows;
+	return response.json();
+}
+
+function UnreadableRuns({
+	runs,
+}: {
+	readonly runs: readonly UnreadableRun[];
+}): React.JSX.Element {
+	return (
+		<div className="rh-run-history__unreadable" role="alert">
+			<p>
+				These runs could not be read, so they are missing from the table below:
+			</p>
+			<ul>
+				{runs.map((run) => (
+					<li key={run.id}>{`${run.id} — ${run.reason}`}</li>
+				))}
+			</ul>
+		</div>
+	);
 }
 
 function outcomeCell(row: RunHistoryRow): React.JSX.Element {
@@ -123,10 +142,14 @@ export function RunHistoryPage(): React.JSX.Element {
 	const [filter, setFilter] = useState<Filter>("All");
 	const query = useQuery({
 		queryKey: ["run-history"],
-		queryFn: fetchRunHistoryRows,
+		queryFn: fetchRunHistoryReport,
 	});
 
-	const rows = (query.data ?? []).filter((row) => matchesFilter(row, filter));
+	const unreadable = query.data?.unreadable ?? [];
+	const recorded = query.data?.rows ?? [];
+	const rows = recorded.filter((row) => matchesFilter(row, filter));
+	const unreadableSpeaksForTheReport =
+		recorded.length === 0 && unreadable.length > 0;
 
 	return (
 		<main className="rh-run-history">
@@ -136,7 +159,9 @@ export function RunHistoryPage(): React.JSX.Element {
 			{query.isLoading ? <p>Loading…</p> : null}
 			{query.isError ? <p role="alert">Could not load run history.</p> : null}
 
-			{query.isSuccess && rows.length === 0 ? (
+			{unreadable.length > 0 ? <UnreadableRuns runs={unreadable} /> : null}
+
+			{query.isSuccess && rows.length === 0 && !unreadableSpeaksForTheReport ? (
 				<EmptyState heading="No runs recorded">
 					<p>
 						The corpus is linked and a spend limit is set. Declare a case, then

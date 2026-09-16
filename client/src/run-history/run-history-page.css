@@ -32,6 +32,17 @@
 	color: var(--color-text-faint);
 }
 
+.rh-run-history__unreadable {
+	color: var(--color-text-secondary);
+}
+
+.rh-run-history__unreadable ul {
+	margin: var(--space-5) 0 0;
+	padding: 0;
+	list-style: none;
+	font-family: var(--font-mono);
+}
+
 .rh-run-history__filters {
 	display: flex;
 	gap: var(--space-8);

@@ -314,6 +314,95 @@ describe(RunHistoryPage.name, () => {
 		expect(document.querySelector(".rh-run-history__no-corpus")).toBeNull();
 	});
 
+	describe("when the report carries unreadable runs", () => {
+		const unreadableReport: RunHistoryResponseBody = {
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "COMPLETE",
+					stage: "build",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: false,
+					staleCauses: [],
+				},
+			],
+			unreadable: [
+				{
+					id: "run:2026-09-01T00-00-00.000Z",
+					reason: "manifest.json is empty",
+				},
+				{
+					id: "run:2026-09-02T00-00-00.000Z",
+					reason: "artifact.json is empty",
+				},
+			],
+		};
+
+		it("names every unreadable run by id and reason in an alert", async () => {
+			respondingWith(unreadableReport);
+
+			renderPage();
+
+			const alert = await screen.findByRole("alert");
+
+			expect(alert).toHaveTextContent("run:2026-09-01T00-00-00.000Z");
+			expect(alert).toHaveTextContent("manifest.json is empty");
+			expect(alert).toHaveTextContent("run:2026-09-02T00-00-00.000Z");
+			expect(alert).toHaveTextContent("artifact.json is empty");
+		});
+
+		it("keeps the alert when the status filter hides every row", async () => {
+			respondingWith(unreadableReport);
+
+			renderPage();
+
+			await screen.findByRole("alert");
+			fireEvent.click(screen.getByRole("button", { name: "Stopped" }));
+
+			expect(screen.getByRole("alert")).toHaveTextContent(
+				"run:2026-09-01T00-00-00.000Z",
+			);
+		});
+
+		it("shows the unreadable runs rather than the empty state when the report has no rows at all", async () => {
+			respondingWith({ rows: [], unreadable: unreadableReport.unreadable });
+
+			renderPage();
+
+			await screen.findByRole("alert");
+
+			expect(screen.queryByText("No runs recorded")).not.toBeInTheDocument();
+		});
+
+		it("keeps the empty state when rows exist but the filter hides them", async () => {
+			respondingWith({ ...unreadableReport, unreadable: [] });
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("audit-log")).toBeInTheDocument();
+			});
+			fireEvent.click(screen.getByRole("button", { name: "Stopped" }));
+
+			expect(screen.getByText("No runs recorded")).toBeInTheDocument();
+		});
+
+		it("keeps the empty state when the filter hides every row and unreadable runs are also present", async () => {
+			respondingWith(unreadableReport);
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("audit-log")).toBeInTheDocument();
+			});
+			fireEvent.click(screen.getByRole("button", { name: "Stopped" }));
+
+			expect(screen.getByText("No runs recorded")).toBeInTheDocument();
+		});
+	});
+
 	it("renders a run with no recorded checkpoint without a corpus digest", async () => {
 		respondingWith({
 			rows: [
