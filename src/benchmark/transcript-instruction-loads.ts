@@ -44,36 +44,56 @@ export type TranscriptInstructionLoads =
 export function transcriptInstructionLoads(
 	transcript: string,
 ): TranscriptInstructionLoads {
-	const loads: TranscriptInstructionLoad[] = [];
-	let sawAttachment = false;
-	for (const line of transcript.split("\n")) {
-		if (line.trim() === "") {
-			continue;
-		}
-		let row: unknown;
-		try {
-			row = JSON.parse(line);
-		} catch {
-			continue;
-		}
-		const parsed = instructionsAttachmentSchema.safeParse(row);
-		if (!parsed.success) {
-			continue;
-		}
-		sawAttachment = true;
-		for (const file of parsed.data.attachment.files) {
-			loads.push({
-				filePath: file.path,
-				memoryType: file.type,
-				loadReason: UNAVAILABLE,
-				triggerFilePath: UNAVAILABLE,
-				parentFilePath: UNAVAILABLE,
-			});
-		}
+	return settledLoads(
+		transcript.split("\n").map((line) => attachmentLoads(line)),
+	);
+}
+
+export async function transcriptInstructionLoadsFromLines(
+	lines: AsyncIterable<string>,
+): Promise<TranscriptInstructionLoads> {
+	const readings: (readonly TranscriptInstructionLoad[] | undefined)[] = [];
+	for await (const line of lines) {
+		readings.push(attachmentLoads(line));
 	}
-	if (!sawAttachment) {
+
+	return settledLoads(readings);
+}
+
+/** Undefined means the line is not an instructions attachment at all. */
+function attachmentLoads(
+	line: string,
+): readonly TranscriptInstructionLoad[] | undefined {
+	if (line.trim() === "") {
+		return undefined;
+	}
+	let row: unknown;
+	try {
+		row = JSON.parse(line);
+	} catch {
+		return undefined;
+	}
+	const parsed = instructionsAttachmentSchema.safeParse(row);
+	if (!parsed.success) {
+		return undefined;
+	}
+
+	return parsed.data.attachment.files.map((file) => ({
+		filePath: file.path,
+		memoryType: file.type,
+		loadReason: UNAVAILABLE,
+		triggerFilePath: UNAVAILABLE,
+		parentFilePath: UNAVAILABLE,
+	}));
+}
+
+function settledLoads(
+	readings: readonly (readonly TranscriptInstructionLoad[] | undefined)[],
+): TranscriptInstructionLoads {
+	const attached = readings.filter((reading) => reading !== undefined);
+	if (attached.length === 0) {
 		return UNAVAILABLE;
 	}
 
-	return { state: "available", loads };
+	return { state: "available", loads: attached.flat() };
 }

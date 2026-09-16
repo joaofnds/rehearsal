@@ -1,5 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { transcriptInstructionLoads } from "#benchmark/transcript-instruction-loads";
+import {
+	transcriptInstructionLoads,
+	transcriptInstructionLoadsFromLines,
+} from "#benchmark/transcript-instruction-loads";
+
+async function* asLines(text: string): AsyncGenerator<string> {
+	for (const line of text.split("\n")) {
+		yield await Promise.resolve(line);
+	}
+}
 
 function attachmentRow(files: readonly unknown[]): string {
 	return JSON.stringify({
@@ -86,5 +95,27 @@ describe(transcriptInstructionLoads.name, () => {
 		expect(
 			loads.state === "available" && loads.loads.map((load) => load.filePath),
 		).toEqual(["/tmp/real.md"]);
+	});
+});
+
+describe(transcriptInstructionLoadsFromLines.name, () => {
+	it("reads the same loads from streamed lines as from whole text", async () => {
+		const transcript = attachmentRow([
+			{ path: "/tmp/project/CLAUDE.md", type: "Project", content: "# it" },
+		]);
+
+		const streamed = await transcriptInstructionLoadsFromLines(
+			asLines(transcript),
+		);
+
+		expect(streamed).toEqual(transcriptInstructionLoads(transcript));
+	});
+
+	it("reports loads unavailable when no streamed line carries the attachment", async () => {
+		const streamed = await transcriptInstructionLoadsFromLines(
+			asLines(JSON.stringify({ type: "assistant" })),
+		);
+
+		expect(streamed).toEqual({ state: "unavailable" });
 	});
 });
