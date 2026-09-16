@@ -1,5 +1,6 @@
 import { CorpusPill } from "./components/corpus-pill";
 import { EmptyState } from "./components/empty-state";
+import { Disclosure } from "./components/disclosure";
 import { FilterPill } from "./components/filter-pill";
 import { GRADE_SIZES, Grade } from "./components/grade";
 import { PlannedFeatureBlock } from "./components/planned-feature-block";
@@ -17,7 +18,6 @@ import {
 import "./system-page.css";
 
 const DEFERRED_COMPONENTS = [
-	{ name: "Evidence disclosure", neededBy: "ACT-51 (live monitor)" },
 	{ name: "Step node card", neededBy: "ACT-51 (live monitor)" },
 	{ name: "Stat card", neededBy: "run detail (unfiled)" },
 	{
@@ -197,6 +197,14 @@ export function SystemPage(): React.JSX.Element {
 				<FilterPill pressed={true} onPress={noop}>
 					Running
 				</FilterPill>
+			</section>
+
+			<section>
+				<SectionLabel>DISCLOSURE</SectionLabel>
+				<Disclosure collapsedLabel="2 cited" expandedLabel="hide evidence">
+					<p>CLAUDE.md changed</p>
+					<p>agents/advisor.md added</p>
+				</Disclosure>
 			</section>
 
 			<section>

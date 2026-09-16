@@ -51,21 +51,28 @@ describe(SystemPage.name, () => {
 		expect(screen.getByRole("table")).toBeInTheDocument();
 	});
 
-	it.each([
-		"Evidence disclosure",
-		"Step node card",
-		"Stat card",
-		"Dialog shell",
-	])("names %s as not yet built", (name) => {
+	it.each(["Step node card", "Stat card", "Dialog shell"])(
+		"names %s as not yet built",
+		(name) => {
+			render(<SystemPage />);
+
+			expect(screen.getByText(name, { exact: false })).toBeInTheDocument();
+		},
+	);
+
+	it("names ACT-51 as needing the step node card and the dialog shell", () => {
 		render(<SystemPage />);
 
-		expect(screen.getByText(name, { exact: false })).toBeInTheDocument();
+		expect(screen.getAllByText(/ACT-51/u).length).toBe(2);
 	});
 
-	it("names ACT-51 as needing evidence disclosure, the step node card, and the dialog shell", () => {
+	it("demonstrates the disclosure, collapsed until its control is pressed", () => {
 		render(<SystemPage />);
 
-		expect(screen.getAllByText(/ACT-51/u).length).toBe(3);
+		expect(screen.getByRole("button", { name: "2 cited" })).toHaveAttribute(
+			"aria-expanded",
+			"false",
+		);
 	});
 
 	it("renders the planned-feature block", () => {

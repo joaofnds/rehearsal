@@ -6,6 +6,7 @@
 }
 
 .rh-disclosure__toggle {
+	min-block-size: calc(var(--space-22) + var(--space-22));
 	padding: 0;
 	border: none;
 	background: transparent;
