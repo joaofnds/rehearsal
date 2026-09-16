@@ -406,7 +406,7 @@ function renderPage(): void {
 								usageState: "conflict",
 							},
 						],
-						compactions: [{ line: 3, trigger: "auto", region: "attempt" }],
+						compactions: [{ line: 6, trigger: "auto", region: "attempt" }],
 						attemptTotals: {
 							state: "complete",
 							requestCount: 4,
@@ -606,7 +606,7 @@ describe(SessionHistoryPage.name, () => {
 		expect(rows[2]).toHaveTextContent("280,056");
 	});
 
-	it("marks the request row a compaction happened on", async () => {
+	it("marks the request in flight when a compaction happened", async () => {
 		renderPage();
 
 		const timeline = await screen.findByRole("listbox", {
@@ -614,8 +614,8 @@ describe(SessionHistoryPage.name, () => {
 		});
 
 		const rows = within(timeline).getAllByRole("option");
-		expect(rows[2]).toHaveTextContent("compaction at this line");
-		expect(rows[1]).not.toHaveTextContent("compaction at this line");
+		expect(rows[4]).toHaveTextContent("⇥ compaction after this request");
+		expect(rows[3]).not.toHaveTextContent("compaction after this request");
 	});
 
 	it("names why an unpriced request carries no cost", async () => {

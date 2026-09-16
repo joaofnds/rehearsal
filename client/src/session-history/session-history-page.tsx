@@ -11,7 +11,11 @@ import type {
 import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
 import { Switcher } from "#client/system/components/switcher";
-import { RequestTimeline, requestRowId } from "./request-timeline";
+import {
+	RequestTimeline,
+	requestRowForLine,
+	requestRowId,
+} from "./request-timeline";
 import "./session-history-page.css";
 
 export type SessionHistoryIdentity =
@@ -155,28 +159,6 @@ function reportEvidenceLabel(report: SessionHistoryReport): string {
 }
 
 /**
- * One rule, read in both directions: a request owns the transcript lines from
- * its own line until the next request's. Both panes select through it, so they
- * cannot disagree about which request an event belongs to.
- */
-function requestRowForEventLine(
-	entries: readonly SessionHistoryRequestEntry[],
-	line: number | undefined,
-): string | undefined {
-	if (line === undefined) {
-		return undefined;
-	}
-	let owner: SessionHistoryRequestEntry | undefined;
-	for (const entry of entries) {
-		if (entry.line <= line) {
-			owner = entry;
-		}
-	}
-
-	return owner === undefined ? undefined : requestRowId(owner);
-}
-
-/**
  * The first event the request owns, bounded above by the next request's line.
  * Without that bound a request that produced no event of its own, which is
  * every text-only assistant reply, selects the next request's event, and the
@@ -190,7 +172,7 @@ export function eventForRequestRow(
 	return events.find(
 		({ locator }) =>
 			locator.line >= entry.line &&
-			requestRowForEventLine(entries, locator.line) === requestRowId(entry),
+			requestRowForLine(entries, locator.line) === requestRowId(entry),
 	);
 }
 
@@ -205,7 +187,7 @@ export function requestRowsOwningEvents(
 	events: readonly SessionHistoryEvent[],
 ): readonly SessionHistoryRequestEntry[] {
 	const owning = new Set(
-		events.map(({ locator }) => requestRowForEventLine(entries, locator.line)),
+		events.map(({ locator }) => requestRowForLine(entries, locator.line)),
 	);
 
 	return entries.filter((entry) => owning.has(requestRowId(entry)));
@@ -598,7 +580,7 @@ export function SessionHistoryPage({
 	 * for it share one, which is the only identifier the two readings have in
 	 * common. Filtering the event pane therefore narrows the timeline too.
 	 */
-	const selectedRequestRow = requestRowForEventLine(
+	const selectedRequestRow = requestRowForLine(
 		timelineEntries,
 		selectedEvent?.locator.line,
 	);

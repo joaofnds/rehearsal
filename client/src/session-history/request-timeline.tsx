@@ -1,6 +1,7 @@
 import type {
 	HistoryRegion,
 	SessionHistoryAttemptCost,
+	SessionHistoryCompaction,
 	SessionHistoryCostReading,
 	SessionHistoryRequestCost,
 	SessionHistoryRequestEntry,
@@ -19,6 +20,44 @@ const usd = new Intl.NumberFormat("en-US", {
 
 export function requestRowId(entry: SessionHistoryRequestEntry): string {
 	return `${entry.line}`;
+}
+
+/**
+ * One rule, read in both directions: a request owns the transcript lines from
+ * its own line until the next request's. Every pane selects through it, so they
+ * cannot disagree about which request a line belongs to.
+ */
+export function requestRowForLine(
+	entries: readonly SessionHistoryRequestEntry[],
+	line: number | undefined,
+): string | undefined {
+	if (line === undefined) {
+		return undefined;
+	}
+	let owner: SessionHistoryRequestEntry | undefined;
+	for (const entry of entries) {
+		if (entry.line <= line) {
+			owner = entry;
+		}
+	}
+
+	return owner === undefined ? undefined : requestRowId(owner);
+}
+
+/**
+ * A compaction is recorded on its own transcript line, never on a request's,
+ * so matching the two line numbers marks nothing. The request that owns the
+ * line is the one that was in flight when the compaction happened.
+ */
+function compactingRequestIds(
+	entries: readonly SessionHistoryRequestEntry[],
+	compactions: readonly SessionHistoryCompaction[],
+): ReadonlySet<string> {
+	const owners = compactions.map((compaction) =>
+		requestRowForLine(entries, compaction.line),
+	);
+
+	return new Set(owners.filter((id) => id !== undefined));
 }
 
 /**
@@ -168,9 +207,7 @@ export function RequestTimeline({
 	readonly onSelect: (entry: SessionHistoryRequestEntry) => void;
 }): React.JSX.Element {
 	const widest = widestTotal(series.entries);
-	const compactedLines = new Set(
-		series.compactions.map((compaction) => compaction.line),
-	);
+	const compacted = compactingRequestIds(series.entries, series.compactions);
 	const costByLine = new Map(
 		requestCosts.map((entry) => [entry.line, entry.cost]),
 	);
@@ -234,9 +271,9 @@ export function RequestTimeline({
 						<small>
 							{requestCostLabel(costByLine.get(entry.line), entry.region)}
 						</small>
-						{compactedLines.has(entry.line) ? (
+						{compacted.has(requestRowId(entry)) ? (
 							<small className="rh-timeline__compaction">
-								⇥ compaction at this line
+								⇥ compaction after this request
 							</small>
 						) : null}
 					</button>
