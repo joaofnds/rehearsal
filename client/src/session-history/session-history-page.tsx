@@ -183,6 +183,23 @@ function eventForRequestRow(
 	return events.find(({ locator }) => locator.line >= entry.line);
 }
 
+/**
+ * The same ownership rule read a third way: a request stays visible when any
+ * visible event belongs to it. Matching an event's line against a request's own
+ * line instead would hide a request whose events all sit on later lines, which
+ * is every request in a real transcript.
+ */
+export function requestRowsOwningEvents(
+	entries: readonly SessionHistoryRequestEntry[],
+	events: readonly SessionHistoryEvent[],
+): readonly SessionHistoryRequestEntry[] {
+	const owning = new Set(
+		events.map(({ locator }) => requestRowForEventLine(entries, locator.line)),
+	);
+
+	return entries.filter((entry) => owning.has(requestRowId(entry)));
+}
+
 function locatorLabel(event: SessionHistoryEvent): string {
 	return `${event.locator.line}:${event.locator.block}`;
 }
@@ -533,9 +550,7 @@ export function SessionHistoryPage({
 	const visibleEntries =
 		sourceId === undefined
 			? timelineEntries
-			: timelineEntries.filter((entry) =>
-					events.some(({ locator }) => locator.line === entry.line),
-				);
+			: requestRowsOwningEvents(timelineEntries, events);
 
 	return (
 		<main className="rh-history">

@@ -8,7 +8,14 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { stubFetchByPath } from "#client/test-support/fetch-stub";
-import { SessionHistoryPage } from "./session-history-page";
+import type {
+	SessionHistoryEvent,
+	SessionHistoryRequestEntry,
+} from "#benchmark/session-history";
+import {
+	requestRowsOwningEvents,
+	SessionHistoryPage,
+} from "./session-history-page";
 
 const originalFetch = globalThis.fetch;
 
@@ -649,7 +656,7 @@ describe(SessionHistoryPage.name, () => {
 		});
 	});
 
-	it("narrows the timeline to the requests a selected source's events sit on", async () => {
+	it("narrows the timeline to the requests a selected source's events belong to", async () => {
 		renderPage();
 		await screen.findByRole("listbox", { name: "Request timeline" });
 
@@ -684,5 +691,41 @@ describe(SessionHistoryPage.name, () => {
 		expect(timeline).toHaveTextContent(
 			/reason, trigger and include parent unavailable/u,
 		);
+	});
+});
+
+describe(requestRowsOwningEvents.name, () => {
+	const entries: readonly SessionHistoryRequestEntry[] = [
+		{ requestId: "req-a", line: 10, region: "attempt", usageState: "conflict" },
+		{ requestId: "req-b", line: 20, region: "attempt", usageState: "conflict" },
+	];
+
+	function eventAtLine(line: number): SessionHistoryEvent {
+		return {
+			id: `${line}:1`,
+			locator: { line, block: 1 },
+			region: "attempt",
+			kind: "result",
+			state: "recorded",
+			label: `event at ${line}`,
+			measurement: { state: "complete", characters: 1 },
+			relatedEventIds: [],
+		};
+	}
+
+	it("keeps a request whose events all sit on later lines than its own", () => {
+		const events = [eventAtLine(12), eventAtLine(13)];
+
+		const owning = requestRowsOwningEvents(entries, events);
+
+		expect(owning.map(({ requestId }) => requestId)).toEqual(["req-a"]);
+	});
+
+	it("drops a request no visible event belongs to", () => {
+		const events = [eventAtLine(21)];
+
+		const owning = requestRowsOwningEvents(entries, events);
+
+		expect(owning.map(({ requestId }) => requestId)).toEqual(["req-b"]);
 	});
 });
