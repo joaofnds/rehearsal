@@ -1,0 +1,17 @@
+.rh-disclosure {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-4);
+}
+
+.rh-disclosure__toggle {
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: var(--font-size-11);
+	text-align: left;
+	cursor: pointer;
+}
