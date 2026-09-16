@@ -155,25 +155,32 @@ function reportEvidenceLabel(report: SessionHistoryReport): string {
 }
 
 /**
- * The row whose request the selected event's line belongs to: the last request
- * at or before that line, since a request's own row sits on the line the
- * provider recorded it and the events it produced follow.
+ * One rule, read in both directions: a request owns the transcript lines from
+ * its own line until the next request's. Both panes select through it, so they
+ * cannot disagree about which request an event belongs to.
  */
-function nearestRequestRow(
+function requestRowForEventLine(
 	entries: readonly SessionHistoryRequestEntry[],
 	line: number | undefined,
 ): string | undefined {
 	if (line === undefined) {
 		return undefined;
 	}
-	let nearest: SessionHistoryRequestEntry | undefined;
+	let owner: SessionHistoryRequestEntry | undefined;
 	for (const entry of entries) {
 		if (entry.line <= line) {
-			nearest = entry;
+			owner = entry;
 		}
 	}
 
-	return nearest === undefined ? undefined : requestRowId(nearest);
+	return owner === undefined ? undefined : requestRowId(owner);
+}
+
+function eventForRequestRow(
+	events: readonly SessionHistoryEvent[],
+	entry: Readonly<SessionHistoryRequestEntry>,
+): SessionHistoryEvent | undefined {
+	return events.find(({ locator }) => locator.line >= entry.line);
 }
 
 function locatorLabel(event: SessionHistoryEvent): string {
@@ -519,7 +526,7 @@ export function SessionHistoryPage({
 	 * for it share one, which is the only identifier the two readings have in
 	 * common. Filtering the event pane therefore narrows the timeline too.
 	 */
-	const selectedRequestRow = nearestRequestRow(
+	const selectedRequestRow = requestRowForEventLine(
 		timelineEntries,
 		selectedEvent?.locator.line,
 	);
@@ -659,9 +666,7 @@ export function SessionHistoryPage({
 								instructionLoads={requests.data.instructionLoads}
 								selected={selectedRequestRow}
 								onSelect={(entry) => {
-									const target = events.find(
-										({ locator }) => locator.line >= entry.line,
-									);
+									const target = eventForRequestRow(events, entry);
 									if (target !== undefined) {
 										setSelectedEventId(target.id);
 									}
