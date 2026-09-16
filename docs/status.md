@@ -72,11 +72,17 @@ verdict.
   rather than a timeline. The saved-attempt browser derives recorded Read and
   Skill deliveries, repeated loads, timestamps, content measurements, and
   evidence gaps from a retained transcript. It does not measure the provider's
-  active context window. The harness can also normalize
-  a supplied provider capture into request usage, nested-agent lineage,
-  instruction loads, compactions, and priced cost, then preserve it on an
-  attempt. The shipped run path does not collect that bundle, and the UI does
-  not render it. Pipeline collection and context visualizations are also
+  active context window. The saved-attempt browser now also renders a
+  per-request timeline from that transcript: total input tokens, the four usage
+  categories, the executing model, each request's calculated cost against the
+  committed rate catalog, the attempt's provider-reported and calculated costs
+  as distinct readings, marked compactions, and the automatic instruction loads
+  with their file names. Load reason, trigger, and include parent stay
+  unavailable, because a transcript does not record them. The harness can also
+  normalize a supplied provider capture into request usage, nested-agent
+  lineage, instruction loads, compactions, and priced cost, then preserve it on
+  an attempt. The shipped run path does not collect that bundle, and the UI does
+  not render that richer form. Pipeline collection and context visualizations are also
   unfinished. Session transcript diagnostics report raw post-cut tool
   occurrences, explicit errors, and exact command repetition; they do not
   attribute phase, tokens, cost, causality, or waste. Their evidence state
@@ -94,8 +100,8 @@ verdict.
 | `/`                                  | Run-history report, including empty and error states                                             |
 | `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                     |
 | `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links |
-| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history                                                         |
-| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history                                                           |
+| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history, with the per-request token and cost timeline           |
+| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history, with the per-request token and cost timeline             |
 | `/system`                            | Design tokens and reusable component gallery                                                     |
 
 Run launch, live monitor, full run detail, task/case management, calibration

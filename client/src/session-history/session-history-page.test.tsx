@@ -606,6 +606,18 @@ describe(SessionHistoryPage.name, () => {
 		expect(rows[2]).toHaveTextContent("280,056");
 	});
 
+	it("marks the request row a compaction happened on", async () => {
+		renderPage();
+
+		const timeline = await screen.findByRole("listbox", {
+			name: "Request timeline",
+		});
+
+		const rows = within(timeline).getAllByRole("option");
+		expect(rows[2]).toHaveTextContent("compaction at this line");
+		expect(rows[1]).not.toHaveTextContent("compaction at this line");
+	});
+
 	it("names why an unpriced request carries no cost", async () => {
 		renderPage();
 
