@@ -211,7 +211,7 @@ describe(RunHistoryPage.name, () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("names the cause beneath the corpus pill when a row is stale for one reason", async () => {
+	it("names the cause when a row is stale for one reason", async () => {
 		respondingWith({
 			rows: [
 				{
@@ -283,9 +283,59 @@ describe(RunHistoryPage.name, () => {
 				screen.getByRole("button", { name: "hide causes" }),
 			).toHaveAttribute("aria-expanded", "true");
 		});
+
+		it("does not carry one row's expanded causes onto another when the filter changes the rows", async () => {
+			respondingWith({
+				rows: [
+					{
+						run: "2026-09-06T00-00-00.000Z",
+						caseId: "audit-log",
+						status: "COMPLETE",
+						stage: "build",
+						grade: "A",
+						corpus: { digest: "aaaaaa" },
+						stale: true,
+						staleCauses: ["CLAUDE.md changed", "agents/advisor.md added"],
+					},
+					{
+						run: "2026-09-05T00-00-00.000Z",
+						caseId: "audit-log",
+						status: "STOPPED:build",
+						stage: "build",
+						grade: "B",
+						corpus: { digest: "bbbbbb" },
+						stale: true,
+						staleCauses: [
+							"output-styles/brief.md changed",
+							"rulebook/coupling.md added",
+							"rulebook/ownership.md changed",
+						],
+					},
+				],
+				unreadable: [],
+			});
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByRole("button", { name: "2 causes" }),
+				).toBeInTheDocument();
+			});
+			fireEvent.click(screen.getByRole("button", { name: "2 causes" }));
+			fireEvent.click(screen.getByRole("button", { name: "Stopped" }));
+
+			expect(screen.getByRole("button", { name: "3 causes" })).toHaveAttribute(
+				"aria-expanded",
+				"false",
+			);
+			expect(
+				screen.queryByText("output-styles/brief.md changed"),
+			).not.toBeInTheDocument();
+		});
 	});
 
-	it("shows the badge and the cause for a stale row that recorded no checkpoint stage, with no pill and no em dash", async () => {
+	it("shows the badge and the cause in the corpus cell for a stale row that recorded no checkpoint stage, with no pill", async () => {
 		respondingWith({
 			rows: [
 				{
@@ -314,7 +364,7 @@ describe(RunHistoryPage.name, () => {
 		expect(document.querySelector(".rh-run-history__no-corpus")).toBeNull();
 	});
 
-	describe("when the report carries unreadable runs", () => {
+	describe("when the report can carry unreadable runs", () => {
 		const unreadableReport: RunHistoryResponseBody = {
 			rows: [
 				{
@@ -376,7 +426,7 @@ describe(RunHistoryPage.name, () => {
 			expect(screen.queryByText("No runs recorded")).not.toBeInTheDocument();
 		});
 
-		it("keeps the empty state when rows exist but the filter hides them", async () => {
+		it("keeps the empty state when rows exist, the filter hides them, and nothing was unreadable", async () => {
 			respondingWith({ ...unreadableReport, unreadable: [] });
 
 			renderPage();

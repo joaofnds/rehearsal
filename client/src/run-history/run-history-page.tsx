@@ -69,24 +69,30 @@ function outcomeCell(row: RunHistoryRow): React.JSX.Element {
 function causeList(
 	staleCauses: readonly string[],
 ): readonly React.JSX.Element[] {
-	return staleCauses.map((cause) => (
-		<span key={cause} className="rh-run-history__cause">
+	return staleCauses.map((cause, index) => (
+		<span key={index} className="rh-run-history__cause">
 			{cause}
 		</span>
 	));
 }
 
-function causesFor(staleCauses: readonly string[]): React.ReactNode {
-	if (staleCauses.length <= 1) {
-		return causeList(staleCauses);
+/**
+ * TableShell keys its rows by index, so filtering the table hands a row's
+ * cells to whatever Disclosure the previous row left mounted there, with its
+ * open state intact. Keying by the run makes React remount it instead.
+ */
+function causesFor(row: RunHistoryRow): React.ReactNode {
+	if (row.staleCauses.length <= 1) {
+		return causeList(row.staleCauses);
 	}
 
 	return (
 		<Disclosure
-			collapsedLabel={`${staleCauses.length} causes`}
+			key={row.run}
+			collapsedLabel={`${row.staleCauses.length} causes`}
 			expandedLabel="hide causes"
 		>
-			{causeList(staleCauses)}
+			{causeList(row.staleCauses)}
 		</Disclosure>
 	);
 }
@@ -102,7 +108,7 @@ function corpusCell(row: RunHistoryRow): React.JSX.Element {
 				<CorpusPill hash={row.corpus.digest} />
 			)}
 			<Status state={row.stale ? "stale" : "clear"} />
-			{causesFor(row.staleCauses)}
+			{causesFor(row)}
 		</span>
 	);
 }
