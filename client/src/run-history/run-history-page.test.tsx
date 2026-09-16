@@ -211,6 +211,30 @@ describe(RunHistoryPage.name, () => {
 		).not.toBeInTheDocument();
 	});
 
+	it("names the cause beneath the corpus pill when a row is stale for one reason", async () => {
+		respondingWith({
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "STOPPED:build",
+					stage: "shape",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: true,
+					staleCauses: ["CLAUDE.md changed"],
+				},
+			],
+			unreadable: [],
+		});
+
+		renderPage();
+
+		await waitFor(() => {
+			expect(screen.getByText("CLAUDE.md changed")).toBeInTheDocument();
+		});
+	});
+
 	it("renders a run with no recorded checkpoint without a corpus digest", async () => {
 		respondingWith({
 			rows: [

@@ -55,6 +55,11 @@ function corpusCell(row: RunHistoryRow): React.JSX.Element {
 		<span className="rh-run-history__corpus">
 			<CorpusPill hash={row.corpus.digest} />
 			<Status state={row.stale ? "stale" : "clear"} />
+			{row.staleCauses.map((cause) => (
+				<span key={cause} className="rh-run-history__cause">
+					{cause}
+				</span>
+			))}
 		</span>
 	);
 }
