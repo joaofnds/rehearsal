@@ -1358,7 +1358,7 @@ export type SessionHistoryRequestEntry = {
 	readonly line: number;
 	readonly region: HistoryRegion;
 	readonly model?: string | undefined;
-	readonly modelState?: "conflict";
+	readonly modelState?: "conflict" | undefined;
 } & (
 	| {
 			readonly usageState: "complete";

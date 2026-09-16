@@ -299,6 +299,161 @@ function renderPage(): void {
 					applicationTruncated: false,
 				},
 			],
+			[
+				"/api/attempts/session/case-a/attempt-a/history/requests",
+				{
+					series: {
+						name: "total input tokens",
+						measuresActiveContextWindow: false,
+						omits: [
+							"the request's own output tokens",
+							"the model's context window limit, which the transcript does not carry",
+						],
+						boundary: "known",
+						transcriptState: "saved",
+						entries: [
+							{
+								requestId: "req-inherited",
+								line: 1,
+								region: "starting-context",
+								model: "claude-opus-5",
+								usageState: "complete",
+								usage: {
+									inputTokens: 7,
+									outputTokens: 9,
+									cacheReadTokens: 11,
+									cacheWriteTokens: 13,
+								},
+								totalInputTokens: 31,
+								cumulativeTotalInputTokens: 31,
+								cacheWriteSplit: {
+									state: "complete",
+									fiveMinuteTokens: 0,
+									oneHourTokens: 13,
+								},
+							},
+							{
+								requestId: "req-first",
+								line: 2,
+								region: "attempt",
+								model: "claude-sonnet-5",
+								usageState: "complete",
+								usage: {
+									inputTokens: 2,
+									outputTokens: 151,
+									cacheReadTokens: 100,
+									cacheWriteTokens: 286_711,
+								},
+								totalInputTokens: 286_813,
+								cumulativeTotalInputTokens: 286_844,
+								cacheWriteSplit: {
+									state: "complete",
+									fiveMinuteTokens: 0,
+									oneHourTokens: 286_711,
+								},
+							},
+							{
+								requestId: "req-second",
+								line: 3,
+								region: "attempt",
+								model: "claude-sonnet-5",
+								usageState: "complete",
+								usage: {
+									inputTokens: 6,
+									outputTokens: 40,
+									cacheReadTokens: 50,
+									cacheWriteTokens: 280_000,
+								},
+								totalInputTokens: 280_056,
+								cumulativeTotalInputTokens: 566_900,
+								cacheWriteSplit: {
+									state: "complete",
+									fiveMinuteTokens: 0,
+									oneHourTokens: 280_000,
+								},
+							},
+							{
+								line: 4,
+								region: "attempt",
+								model: "<synthetic>",
+								usageState: "complete",
+								usage: {
+									inputTokens: 0,
+									outputTokens: 0,
+									cacheReadTokens: 0,
+									cacheWriteTokens: 0,
+								},
+								totalInputTokens: 0,
+								cumulativeTotalInputTokens: 566_900,
+								cacheWriteSplit: {
+									state: "complete",
+									fiveMinuteTokens: 0,
+									oneHourTokens: 0,
+								},
+							},
+							{
+								requestId: "req-conflict",
+								line: 5,
+								region: "attempt",
+								usageState: "conflict",
+							},
+						],
+						compactions: [{ line: 3, trigger: "auto", region: "attempt" }],
+						attemptTotals: {
+							state: "complete",
+							requestCount: 4,
+							usage: {
+								inputTokens: 8,
+								outputTokens: 191,
+								cacheReadTokens: 150,
+								cacheWriteTokens: 566_711,
+							},
+							totalInputTokens: 566_869,
+						},
+					},
+					cost: {
+						reported: { state: "complete", costUsd: 2.5 },
+						calculated: {
+							state: "incomplete",
+							costUsd: 2.25,
+							pricedRequestCount: 3,
+							requestCount: 4,
+							reasons: ["a request's duplicate rows disagree on usage"],
+						},
+						difference: {
+							state: "incomplete",
+							costUsd: 0.25,
+							pricedRequestCount: 3,
+							requestCount: 4,
+							reasons: ["a reading it is drawn from is incomplete"],
+						},
+					},
+					requestCosts: [
+						{ line: 2, cost: { state: "priced", costUsd: 1.5 } },
+						{ line: 3, cost: { state: "priced", costUsd: 0.75 } },
+						{ line: 4, cost: { state: "priced", costUsd: 0 } },
+						{
+							line: 5,
+							cost: {
+								state: "unpriced",
+								reason: "a request's duplicate rows disagree on usage",
+							},
+						},
+					],
+					instructionLoads: {
+						state: "available",
+						loads: [
+							{
+								filePath: "<path>/**bold**/<script>alert(1)</script>.md",
+								memoryType: "User",
+								loadReason: { state: "unavailable" },
+								triggerFilePath: { state: "unavailable" },
+								parentFilePath: { state: "unavailable" },
+							},
+						],
+					},
+				},
+			],
 		]),
 	);
 	renderStandalonePage();
@@ -423,5 +578,111 @@ describe(SessionHistoryPage.name, () => {
 		expect(
 			screen.getByRole("heading", { name: "Boundary-unknown events" }),
 		).toBeInTheDocument();
+	});
+
+	it("renders one timeline row per request with its tokens, model and cost", async () => {
+		renderPage();
+
+		const timeline = await screen.findByRole("listbox", {
+			name: "Request timeline",
+		});
+
+		const rows = within(timeline).getAllByRole("option");
+		expect(rows).toHaveLength(5);
+		expect(rows[1]).toHaveTextContent("286,813");
+		expect(rows[1]).toHaveTextContent("claude-sonnet-5");
+		expect(rows[2]).toHaveTextContent("280,056");
+	});
+
+	it("states that the active context window is not measured", async () => {
+		renderPage();
+
+		const timeline = await screen.findByRole("region", {
+			name: "Request timeline",
+		});
+
+		expect(timeline).toHaveTextContent(
+			/active context window is not measured/u,
+		);
+		expect(timeline).toHaveTextContent(/own output tokens/u);
+	});
+
+	it("selects the request whose evidence the event pane is showing", async () => {
+		renderPage();
+		await screen.findByRole("listbox", { name: "Request timeline" });
+		const ledger = screen.getByRole("listbox", { name: "Attempt events" });
+
+		const thirdEvent = within(ledger).getAllByRole("option").at(2);
+		if (thirdEvent === undefined) {
+			throw new Error("the fixture records fewer than three attempt events");
+		}
+		fireEvent.click(thirdEvent);
+
+		await waitFor(() => {
+			const rows = screen
+				.getByRole("listbox", { name: "Request timeline" })
+				.querySelectorAll('[aria-selected="true"]');
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toHaveTextContent("req-second");
+		});
+	});
+
+	it("selects an event when its request is picked on the timeline", async () => {
+		renderPage();
+		const timeline = await screen.findByRole("listbox", {
+			name: "Request timeline",
+		});
+
+		const fourthRow = within(timeline).getAllByRole("option").at(3);
+		if (fourthRow === undefined) {
+			throw new Error("the fixture records fewer than four requests");
+		}
+		fireEvent.click(fourthRow);
+
+		await waitFor(() => {
+			const ledger = screen.getByRole("listbox", { name: "Attempt events" });
+			expect(
+				within(ledger)
+					.getAllByRole("option")
+					.find((option) => option.getAttribute("aria-selected") === "true"),
+			).toHaveTextContent("Bash result");
+		});
+	});
+
+	it("narrows the timeline to the requests a selected source's events sit on", async () => {
+		renderPage();
+		await screen.findByRole("listbox", { name: "Request timeline" });
+
+		fireEvent.click(screen.getByRole("button", { name: /CLAUDE.md/u }));
+
+		await waitFor(() => {
+			expect(
+				within(
+					screen.getByRole("listbox", { name: "Request timeline" }),
+				).getAllByRole("option"),
+			).toHaveLength(2);
+		});
+	});
+
+	it("renders saved instruction markup as visible text rather than as markup", async () => {
+		renderPage();
+
+		const timeline = await screen.findByRole("region", {
+			name: "Request timeline",
+		});
+
+		const load = within(timeline).getByText(
+			"<path>/**bold**/<script>alert(1)</script>.md",
+			{ selector: "code" },
+		);
+		expect(load).toBeInTheDocument();
+		expect(load.querySelector("script")).toBeNull();
+		expect(load.querySelector("strong")).toBeNull();
+		expect(load.innerHTML).toBe(
+			"&lt;path&gt;/**bold**/&lt;script&gt;alert(1)&lt;/script&gt;.md",
+		);
+		expect(timeline).toHaveTextContent(
+			/reason, trigger and include parent unavailable/u,
+		);
 	});
 });

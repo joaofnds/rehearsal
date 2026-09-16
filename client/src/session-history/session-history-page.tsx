@@ -4,11 +4,14 @@ import type {
 	SessionHistoryDetail,
 	SessionHistoryEvent,
 	SessionHistoryReport,
+	SessionHistoryRequestEntry,
 	SessionHistorySource,
 	TextMeasurement,
 } from "#benchmark/session-history";
+import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
 import { Switcher } from "#client/system/components/switcher";
+import { RequestTimeline, requestRowId } from "./request-timeline";
 import "./session-history-page.css";
 
 export type SessionHistoryIdentity =
@@ -42,6 +45,39 @@ async function fetchSummary(
 			: await apiClient.api.groups[":groupId"].reps[
 					":repId"
 				].attempt.history.$get({
+					param: { groupId: identity.groupId, repId: identity.repId },
+				});
+	if (!response.ok) {
+		throw new Error(`Request failed with ${response.status}`);
+	}
+
+	return response.json();
+}
+
+/**
+ * The response type comes from the route rather than from the reader's own
+ * interface: JSON widens an optional field to admit an explicit undefined,
+ * so the decoded shape is not the domain type and asserting it were would
+ * hide exactly that difference.
+ */
+type RequestSeriesResponse = InferResponseType<
+	(typeof apiClient.api.attempts.session)[":caseId"][":uuid"]["history"]["requests"]["$get"],
+	200
+>;
+
+async function fetchRequestSeries(
+	identity: SessionHistoryIdentity,
+): Promise<RequestSeriesResponse> {
+	const response =
+		identity.kind === "standalone"
+			? await apiClient.api.attempts.session[":caseId"][
+					":uuid"
+				].history.requests.$get({
+					param: { caseId: identity.caseId, uuid: identity.uuid },
+				})
+			: await apiClient.api.groups[":groupId"].reps[
+					":repId"
+				].attempt.history.requests.$get({
 					param: { groupId: identity.groupId, repId: identity.repId },
 				});
 	if (!response.ok) {
@@ -116,6 +152,28 @@ function reportEvidenceLabel(report: SessionHistoryReport): string {
 	}
 
 	return `✓ Complete · ${report.startingContext.length} recorded events`;
+}
+
+/**
+ * The row whose request the selected event's line belongs to: the last request
+ * at or before that line, since a request's own row sits on the line the
+ * provider recorded it and the events it produced follow.
+ */
+function nearestRequestRow(
+	entries: readonly SessionHistoryRequestEntry[],
+	line: number | undefined,
+): string | undefined {
+	if (line === undefined) {
+		return undefined;
+	}
+	let nearest: SessionHistoryRequestEntry | undefined;
+	for (const entry of entries) {
+		if (entry.line <= line) {
+			nearest = entry;
+		}
+	}
+
+	return nearest === undefined ? undefined : requestRowId(nearest);
 }
 
 function locatorLabel(event: SessionHistoryEvent): string {
@@ -428,6 +486,10 @@ export function SessionHistoryPage({
 		queryKey: ["session-history", path],
 		queryFn: () => fetchSummary(identity),
 	});
+	const requests = useQuery({
+		queryKey: ["session-history-requests", path],
+		queryFn: () => fetchRequestSeries(identity),
+	});
 	const events = useMemo(() => {
 		let all: readonly SessionHistoryEvent[] = [];
 		if (summary.data !== undefined) {
@@ -450,6 +512,23 @@ export function SessionHistoryPage({
 	});
 	const diagnostics =
 		summary.data === undefined ? [] : diagnosticLocators(summary.data);
+	const timelineEntries = requests.data?.series.entries ?? [];
+	const selectedEvent = events.find(({ id }) => id === activeEventId);
+	/**
+	 * Both panes key off the transcript line: a request and the events recorded
+	 * for it share one, which is the only identifier the two readings have in
+	 * common. Filtering the event pane therefore narrows the timeline too.
+	 */
+	const selectedRequestRow = nearestRequestRow(
+		timelineEntries,
+		selectedEvent?.locator.line,
+	);
+	const visibleEntries =
+		sourceId === undefined
+			? timelineEntries
+			: timelineEntries.filter((entry) =>
+					events.some(({ locator }) => locator.line === entry.line),
+				);
 
 	return (
 		<main className="rh-history">
@@ -571,6 +650,24 @@ export function SessionHistoryPage({
 								onSelect={setSelectedEventId}
 							/>
 						</section>
+						{requests.data === undefined ? null : (
+							<RequestTimeline
+								series={requests.data.series}
+								entries={visibleEntries}
+								cost={requests.data.cost}
+								requestCosts={requests.data.requestCosts}
+								instructionLoads={requests.data.instructionLoads}
+								selected={selectedRequestRow}
+								onSelect={(entry) => {
+									const target = events.find(
+										({ locator }) => locator.line >= entry.line,
+									);
+									if (target !== undefined) {
+										setSelectedEventId(target.id);
+									}
+								}}
+							/>
+						)}
 						<aside className="rh-history__detail" aria-label="Event detail">
 							<h2>Evidence detail</h2>
 							{detail.isLoading ? <p>Loading evidence…</p> : null}
