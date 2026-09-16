@@ -2,40 +2,27 @@ import { describe, expect, it } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Disclosure } from "./disclosure";
 
+function renderDisclosure(): void {
+	render(
+		<Disclosure collapsedLabel="2 causes" expandedLabel="hide causes">
+			<p>CLAUDE.md changed</p>
+		</Disclosure>,
+	);
+}
+
 describe(Disclosure.name, () => {
-	it("renders the collapsed label as a button and hides its content", () => {
-		render(
-			<Disclosure collapsedLabel="2 causes" expandedLabel="hide causes">
-				<p>CLAUDE.md changed</p>
-			</Disclosure>,
-		);
+	it("renders the collapsed label as a button, hiding its content, with aria-expanded false", () => {
+		renderDisclosure();
 
-		expect(
-			screen.getByRole("button", { name: "2 causes" }),
-		).toBeInTheDocument();
+		const toggle = screen.getByRole("button", { name: "2 causes" });
+
+		expect(toggle).toHaveAttribute("aria-expanded", "false");
 		expect(screen.queryByText("CLAUDE.md changed")).not.toBeInTheDocument();
-	});
-
-	it("marks aria-expanded false while collapsed", () => {
-		render(
-			<Disclosure collapsedLabel="2 causes" expandedLabel="hide causes">
-				<p>CLAUDE.md changed</p>
-			</Disclosure>,
-		);
-
-		expect(screen.getByRole("button", { name: "2 causes" })).toHaveAttribute(
-			"aria-expanded",
-			"false",
-		);
 	});
 
 	describe("when the button is pressed", () => {
 		it("reveals the content and takes the expanded label", () => {
-			render(
-				<Disclosure collapsedLabel="2 causes" expandedLabel="hide causes">
-					<p>CLAUDE.md changed</p>
-				</Disclosure>,
-			);
+			renderDisclosure();
 
 			fireEvent.click(screen.getByRole("button", { name: "2 causes" }));
 
@@ -46,11 +33,7 @@ describe(Disclosure.name, () => {
 		});
 
 		it("collapses again when pressed a second time", () => {
-			render(
-				<Disclosure collapsedLabel="2 causes" expandedLabel="hide causes">
-					<p>CLAUDE.md changed</p>
-				</Disclosure>,
-			);
+			renderDisclosure();
 
 			fireEvent.click(screen.getByRole("button", { name: "2 causes" }));
 			fireEvent.click(screen.getByRole("button", { name: "hide causes" }));
