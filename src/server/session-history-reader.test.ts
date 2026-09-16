@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	sessionConfirmationGroupRecordSchema,
@@ -312,6 +312,74 @@ describe("saved session history API", () => {
 		});
 	});
 
+	it("serves the request series, its cost readings and instruction loads", async () => {
+		const fixture = await writtenResumedAttempt();
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			series: {
+				name: "total input tokens",
+				measuresActiveContextWindow: false,
+				boundary: "known",
+				attemptTotals: { state: "complete", totalInputTokens: 251_697 },
+			},
+			cost: {
+				reported: { state: "complete", costUsd: 1.008294 },
+				calculated: { state: "complete" },
+			},
+			instructionLoads: { state: "unavailable" },
+		});
+	});
+
+	it("redacts the absolute host paths the instructions attachment records", async () => {
+		const fixture = await writtenResumedAttempt();
+		const paths = sessionAttemptPaths(fixture.runsDirectory, fixture);
+		const transcript = await Bun.file(
+			join(paths.directory, "transcript.jsonl"),
+		).text();
+		await Bun.write(
+			join(paths.directory, "transcript.jsonl"),
+			`${transcript}\n${JSON.stringify({
+				type: "attachment",
+				attachment: {
+					type: "instructions",
+					files: [
+						{
+							path: join(homedir(), ".claude", "CLAUDE.md"),
+							type: "User",
+							content: "# secret",
+						},
+					],
+				},
+			})}`,
+		);
+		const app = createApiApp({
+			runsDirectory: fixture.runsDirectory,
+			corpusSource: directorySource(fixture.runsDirectory),
+		});
+
+		const response = await app.request(
+			`/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`,
+		);
+
+		const body = await response.text();
+		expect(body).not.toContain(homedir());
+		expect(JSON.parse(body)).toMatchObject({
+			instructionLoads: {
+				state: "available",
+				loads: [{ filePath: "<path>", memoryType: "User" }],
+			},
+		});
+	});
+
 	it("returns a redacted refusal for an invalid route identity", async () => {
 		const fixture = await writtenAttempt();
 		const app = createApiApp({
@@ -434,97 +502,97 @@ describe(readConfirmationAttemptHistory.name, () => {
 	});
 });
 
-describe(readSessionAttemptRequestSeries.name, () => {
-	async function writtenResumedAttempt(): Promise<{
-		readonly runsDirectory: string;
-		readonly caseId: string;
-		readonly uuid: string;
-	}> {
-		const root = await mkdtemp(join(tmpdir(), "rehearsal-history-series-"));
-		roots.push(root);
-		const runsDirectory = join(root, ".benchmark-runs");
-		const caseId = "case-resumed";
-		const uuid = "attempt-resumed";
-		const paths = sessionAttemptPaths(runsDirectory, { caseId, uuid });
-		await mkdir(paths.directory, { recursive: true });
-		const assistant = (
-			requestId: string,
-			model: string,
-			usage: {
-				readonly input: number;
-				readonly output: number;
-				readonly cacheWrite: number;
-			},
-		): string =>
-			JSON.stringify({
-				type: "assistant",
-				requestId,
-				cwd: "/work",
-				message: {
-					model,
-					usage: {
-						input_tokens: usage.input,
-						output_tokens: usage.output,
-						cache_read_input_tokens: 0,
-						cache_creation_input_tokens: usage.cacheWrite,
-						cache_creation: {
-							ephemeral_1h_input_tokens: usage.cacheWrite,
-							ephemeral_5m_input_tokens: 0,
-						},
+async function writtenResumedAttempt(): Promise<{
+	readonly runsDirectory: string;
+	readonly caseId: string;
+	readonly uuid: string;
+}> {
+	const root = await mkdtemp(join(tmpdir(), "rehearsal-history-series-"));
+	roots.push(root);
+	const runsDirectory = join(root, ".benchmark-runs");
+	const caseId = "case-resumed";
+	const uuid = "attempt-resumed";
+	const paths = sessionAttemptPaths(runsDirectory, { caseId, uuid });
+	await mkdir(paths.directory, { recursive: true });
+	const assistant = (
+		requestId: string,
+		model: string,
+		usage: {
+			readonly input: number;
+			readonly output: number;
+			readonly cacheWrite: number;
+		},
+	): string =>
+		JSON.stringify({
+			type: "assistant",
+			requestId,
+			cwd: "/work",
+			message: {
+				model,
+				usage: {
+					input_tokens: usage.input,
+					output_tokens: usage.output,
+					cache_read_input_tokens: 0,
+					cache_creation_input_tokens: usage.cacheWrite,
+					cache_creation: {
+						ephemeral_1h_input_tokens: usage.cacheWrite,
+						ephemeral_5m_input_tokens: 0,
 					},
-					content: [{ type: "text", text: "reply" }],
 				},
-			});
-		const transcript = [
-			assistant("req-inherited", "claude-opus-5", {
-				input: 7,
-				output: 90_592,
-				cacheWrite: 9,
-			}),
-			assistant("req-attempt", "claude-sonnet-5", {
-				input: 2,
-				output: 151,
-				cacheWrite: 251_695,
-			}),
-		].join("\n");
-		const record = sessionAttemptRecordSchema.parse({
-			schemaVersion: 1,
-			caseId,
-			lineage: "lineage-a",
-			model: "sonnet",
-			sessionBudgetUsd: 2,
-			corpusFiles: [],
-			prompt: "inspect",
-			reply: "done",
-			transcriptFile: "/outside/must-not-be-read.jsonl",
-			transcriptDiagnostics: {
-				state: "complete",
-				prefixLinesExcluded: 1,
-				sourceLineCount: 2,
-				measuredLineCount: 1,
-				toolUseOccurrences: { total: 0, byName: [] },
-				toolErrors: [],
-				repeatedBashCommands: [],
-				issues: [],
+				content: [{ type: "text", text: "reply" }],
 			},
-			metrics: {
-				costUsd: 1.008294,
-				inputTokens: 2,
-				outputTokens: 151,
-				cacheReadTokens: 0,
-				cacheWriteTokens: 251_695,
-				turns: 1,
-			},
-			outcome: "SUCCESSFUL",
-			checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
-			elapsedMs: 1,
 		});
-		await Bun.write(paths.recordFile, `${JSON.stringify(record, null, 2)}\n`);
-		await Bun.write(join(paths.directory, "transcript.jsonl"), transcript);
+	const transcript = [
+		assistant("req-inherited", "claude-opus-5", {
+			input: 7,
+			output: 90_592,
+			cacheWrite: 9,
+		}),
+		assistant("req-attempt", "claude-sonnet-5", {
+			input: 2,
+			output: 151,
+			cacheWrite: 251_695,
+		}),
+	].join("\n");
+	const record = sessionAttemptRecordSchema.parse({
+		schemaVersion: 1,
+		caseId,
+		lineage: "lineage-a",
+		model: "sonnet",
+		sessionBudgetUsd: 2,
+		corpusFiles: [],
+		prompt: "inspect",
+		reply: "done",
+		transcriptFile: "/outside/must-not-be-read.jsonl",
+		transcriptDiagnostics: {
+			state: "complete",
+			prefixLinesExcluded: 1,
+			sourceLineCount: 2,
+			measuredLineCount: 1,
+			toolUseOccurrences: { total: 0, byName: [] },
+			toolErrors: [],
+			repeatedBashCommands: [],
+			issues: [],
+		},
+		metrics: {
+			costUsd: 1.008294,
+			inputTokens: 2,
+			outputTokens: 151,
+			cacheReadTokens: 0,
+			cacheWriteTokens: 251_695,
+			turns: 1,
+		},
+		outcome: "SUCCESSFUL",
+		checks: [{ kind: "word-band", status: "PASS", detail: "1 word" }],
+		elapsedMs: 1,
+	});
+	await Bun.write(paths.recordFile, `${JSON.stringify(record, null, 2)}\n`);
+	await Bun.write(join(paths.directory, "transcript.jsonl"), transcript);
 
-		return { runsDirectory, caseId, uuid };
-	}
+	return { runsDirectory, caseId, uuid };
+}
 
+describe(readSessionAttemptRequestSeries.name, () => {
 	it("totals only the attempt region of a resumed saved attempt", async () => {
 		const fixture = await writtenResumedAttempt();
 

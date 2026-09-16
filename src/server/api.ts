@@ -22,10 +22,14 @@ import { runHistoryReport } from "./run-history";
 import {
 	readConfirmationAttemptHistory,
 	readConfirmationAttemptHistoryDetail,
+	readConfirmationAttemptRequestSeries,
 	readSessionAttemptHistory,
 	readSessionAttemptHistoryDetail,
+	readSessionAttemptRequestSeries,
 	SessionHistoryReaderError,
 } from "./session-history-reader";
+import type { SessionHistoryAttemptSeries } from "./session-history-reader";
+import { committedRateCatalog } from "#benchmark/rate-catalog";
 
 const RUN_EVENTS_POLL_MS = 500;
 
@@ -43,6 +47,35 @@ function historyError(error: HistoryErrorView): HistoryErrorResponse {
 	return {
 		message: redactAbsolutePaths(error.message),
 		status: error.kind === "not-found" ? 404 : 400,
+	};
+}
+
+/**
+ * The instructions attachment records each loaded file by its absolute path
+ * on the machine that ran the attempt, so serving it verbatim would put the
+ * operator's home directory into a browser. The attempt's own identifiers are
+ * relative and survive redaction.
+ */
+function redactedSeries(
+	read: Readonly<SessionHistoryAttemptSeries>,
+): SessionHistoryAttemptSeries {
+	const { instructionLoads } = read;
+	if (instructionLoads.state === "unavailable") {
+		return read;
+	}
+
+	return {
+		...read,
+		instructionLoads: {
+			state: "available",
+			loads: instructionLoads.loads.map((load) => ({
+				filePath: redactAbsolutePaths(load.filePath),
+				memoryType: load.memoryType,
+				loadReason: load.loadReason,
+				triggerFilePath: load.triggerFilePath,
+				parentFilePath: load.parentFilePath,
+			})),
+		},
 	};
 }
 
@@ -144,6 +177,58 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 				throw error;
 			}
 		})
+		.get(
+			"/api/attempts/session/:caseId/:uuid/history/requests",
+			async (context) => {
+				try {
+					return context.json(
+						redactedSeries(
+							await readSessionAttemptRequestSeries(
+								{
+									runsDirectory: dependencies.runsDirectory,
+									caseId: context.req.param("caseId"),
+									uuid: context.req.param("uuid"),
+								},
+								committedRateCatalog,
+							),
+						),
+					);
+				} catch (error) {
+					if (!(error instanceof SessionHistoryReaderError)) {
+						throw error;
+					}
+					const response = historyError(error);
+
+					return context.json({ error: response.message }, response.status);
+				}
+			},
+		)
+		.get(
+			"/api/groups/:groupId/reps/:repId/attempt/history/requests",
+			async (context) => {
+				try {
+					return context.json(
+						redactedSeries(
+							await readConfirmationAttemptRequestSeries(
+								{
+									runsDirectory: dependencies.runsDirectory,
+									groupId: context.req.param("groupId"),
+									repId: context.req.param("repId"),
+								},
+								committedRateCatalog,
+							),
+						),
+					);
+				} catch (error) {
+					if (!(error instanceof SessionHistoryReaderError)) {
+						throw error;
+					}
+					const response = historyError(error);
+
+					return context.json({ error: response.message }, response.status);
+				}
+			},
+		)
 		.get(
 			"/api/attempts/session/:caseId/:uuid/history/:eventId",
 			async (context) => {
