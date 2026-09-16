@@ -235,6 +235,56 @@ describe(RunHistoryPage.name, () => {
 		});
 	});
 
+	describe("when a row is stale for more than one reason", () => {
+		const twoCauseRow: RunHistoryResponseBody = {
+			rows: [
+				{
+					run: "2026-09-06T21-58-29.508Z",
+					caseId: "audit-log",
+					status: "STOPPED:build",
+					stage: "shape",
+					grade: "B",
+					corpus: { digest: "a3a62f" },
+					stale: true,
+					staleCauses: ["CLAUDE.md changed", "agents/advisor.md added"],
+				},
+			],
+			unreadable: [],
+		};
+
+		it("counts the causes rather than listing them, and keeps them collapsed", async () => {
+			respondingWith(twoCauseRow);
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByRole("button", { name: "2 causes" }),
+				).toHaveAttribute("aria-expanded", "false");
+			});
+			expect(screen.queryByText("CLAUDE.md changed")).not.toBeInTheDocument();
+		});
+
+		it("expands every cause in place when the count is pressed", async () => {
+			respondingWith(twoCauseRow);
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByRole("button", { name: "2 causes" }),
+				).toBeInTheDocument();
+			});
+			fireEvent.click(screen.getByRole("button", { name: "2 causes" }));
+
+			expect(screen.getByText("CLAUDE.md changed")).toBeInTheDocument();
+			expect(screen.getByText("agents/advisor.md added")).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: "hide causes" }),
+			).toHaveAttribute("aria-expanded", "true");
+		});
+	});
+
 	it("renders a run with no recorded checkpoint without a corpus digest", async () => {
 		respondingWith({
 			rows: [

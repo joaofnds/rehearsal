@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
 import { CorpusPill } from "#client/system/components/corpus-pill";
+import { Disclosure } from "#client/system/components/disclosure";
 import { EmptyState } from "#client/system/components/empty-state";
 import { FilterPill } from "#client/system/components/filter-pill";
 import type { GradeValue } from "#client/system/components/grade";
@@ -46,6 +47,31 @@ function outcomeCell(row: RunHistoryRow): React.JSX.Element {
 	);
 }
 
+function causeList(
+	staleCauses: readonly string[],
+): readonly React.JSX.Element[] {
+	return staleCauses.map((cause) => (
+		<span key={cause} className="rh-run-history__cause">
+			{cause}
+		</span>
+	));
+}
+
+function causes(staleCauses: readonly string[]): React.ReactNode {
+	if (staleCauses.length <= 1) {
+		return causeList(staleCauses);
+	}
+
+	return (
+		<Disclosure
+			collapsedLabel={`${staleCauses.length} causes`}
+			expandedLabel="hide causes"
+		>
+			{causeList(staleCauses)}
+		</Disclosure>
+	);
+}
+
 function corpusCell(row: RunHistoryRow): React.JSX.Element {
 	if (row.corpus === undefined) {
 		return <span className="rh-run-history__no-corpus">—</span>;
@@ -55,11 +81,7 @@ function corpusCell(row: RunHistoryRow): React.JSX.Element {
 		<span className="rh-run-history__corpus">
 			<CorpusPill hash={row.corpus.digest} />
 			<Status state={row.stale ? "stale" : "clear"} />
-			{row.staleCauses.map((cause) => (
-				<span key={cause} className="rh-run-history__cause">
-					{cause}
-				</span>
-			))}
+			{causes(row.staleCauses)}
 		</span>
 	);
 }
