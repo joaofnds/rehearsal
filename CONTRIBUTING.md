@@ -21,17 +21,18 @@ mise exec -- bun install --frozen-lockfile
 Code separately for real experiments. Provider calls cost money; ordinary
 development checks use fakes and local filesystem fixtures.
 
-Run commands from the repository root with `mise exec --` so CLI subprocesses
-inherit the pinned Bun. The CLI and server check the version at startup. Keep
-this prefix in the guidance until direct test entry paths enforce the pin too.
+Run these from the repository root. A run started under a Bun other than the
+pinned one stops with `Use Bun 1.4.0; current version is <yours>`; run
+`mise install`, or prefix the command with `mise exec --`, to get the pinned
+one.
 
 ```sh
-mise exec -- bun run typecheck
-mise exec -- bun run lint
-mise exec -- bun run lint:css
-mise exec -- bun run fmt:check
-mise exec -- bun run test
-mise exec -- bun run build:client
+bun run typecheck
+bun run lint
+bun run lint:css
+bun run fmt:check
+bun run test
+bun run build:client
 ```
 
 `bun run test` runs the backend suite and then the client's DOM suite. A bare
@@ -39,7 +40,7 @@ mise exec -- bun run build:client
 not run; execute it separately when checking client work:
 
 ```sh
-mise exec -- bun test --path-ignore-patterns "**/node_modules/**" \
+bun test --path-ignore-patterns "**/node_modules/**" \
   --preload ./client/test-setup.ts ./client
 ```
 
