@@ -67,8 +67,6 @@ verdict.
   transcript. Generated fixture setup, post-session filesystem/Git preservation,
   and command scorers are planned. A doctrine example's tool-call check is not
   evidence that its implementation is correct.
-- **Pipeline progress can mix with JSON stdout.** Read the saved record or use
-  `show <id> --json` when consuming pipeline evidence programmatically.
 - **Context visibility is incomplete.** Session manifests still retain names
   rather than a timeline. The saved-attempt browser derives recorded Read and
   Skill deliveries, repeated loads, timestamps, content measurements, and

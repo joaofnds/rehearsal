@@ -78,8 +78,8 @@ See [current state](docs/status.md) for implementation coverage and
   declared flag prints no flag section.
 - **Command record** — the validated evidence a command writes. Depending on
   mode, `run` returns a run artifact, session attempt, or confirmation report.
-  `--json` selects record bytes, but pipeline progress can still share stdout.
-  `show --json` reads the selected record directly.
+  `--json` selects record bytes, which are all stdout carries; progress goes to
+  stderr. `show --json` reads the selected record directly.
 - **Comparison** — a deterministic report over completed stage, pipeline, or
   session confirmation evidence for at least two benchmark cases, each with
   baseline, candidate, and control arms. It starts no paid sessions. Session

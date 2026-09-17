@@ -98,10 +98,9 @@ Commands that write a record generally print its path, or its bytes with
 bytes otherwise; `show --json` prints the selected file's bytes. `list` and
 `stale` do not accept `--json`.
 
-Pipeline execution still writes some progress to stdout. Until that routing is
-fixed, obtain JSON from the resulting file or `show --json` instead of assuming
-that redirecting `run --json` captures a clean JSON document. Diagnostics and
-session check summaries use stderr.
+Stdout carries the record and nothing else. Progress lines, agent turns, grades,
+diagnostics, and session check summaries all use stderr, so redirecting
+`run --json` or `replay --json` captures a document a parser accepts.
 
 ## Cases and pipelines
 
