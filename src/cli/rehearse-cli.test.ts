@@ -173,7 +173,9 @@ describe("rehearse", () => {
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Usage: rehearse <command>");
-		expect(result.stderr).toContain("run rehearse.ts --help");
+		const [echoedLine, ...extraLines] = result.stderr.trimEnd().split("\n");
+		expect(echoedLine).toContain("run rehearse.ts --help");
+		expect(extraLines).toEqual([]);
 	});
 
 	it.each(COMMANDS.map((command) => command.name))(

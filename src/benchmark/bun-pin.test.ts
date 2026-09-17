@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
+import { TOML } from "bun";
 import { assertPinnedBunVersion } from "./bun-pin";
 import { PROJECT_ROOT } from "./test-support";
 
@@ -20,12 +21,12 @@ describe("assertPinnedBunVersion", () => {
 describe("bun-pin-guard", () => {
 	it("stops the process and names both versions when the version is wrong", async () => {
 		const child = Bun.spawn(
-			[process.execPath, join(PROJECT_ROOT, "src/benchmark/bun-pin-guard.ts")],
-			{
-				env: { ...Bun.env, REHEARSE_REQUIRED_BUN_VERSION: "9.9.9" },
-				stdout: "pipe",
-				stderr: "pipe",
-			},
+			[
+				process.execPath,
+				join(PROJECT_ROOT, "src/benchmark/bun-pin-guard.ts"),
+				"9.9.9",
+			],
+			{ stdout: "pipe", stderr: "pipe" },
 		);
 		const [exitCode, stderr] = await Promise.all([
 			child.exited,
@@ -35,5 +36,17 @@ describe("bun-pin-guard", () => {
 		expect(exitCode).toBe(1);
 		expect(stderr).toContain("Use Bun 9.9.9");
 		expect(stderr).toContain(Bun.version);
+	});
+});
+
+describe("bunfig.toml", () => {
+	it("preloads the guard into every test process", async () => {
+		const bunfig = TOML.parse(
+			await Bun.file(join(PROJECT_ROOT, "bunfig.toml")).text(),
+		);
+
+		expect(bunfig).toMatchObject({
+			test: { preload: ["./src/benchmark/bun-pin-guard.ts"] },
+		});
 	});
 });
