@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandOutput } from "#cli/output";
-import { diagnosticWriter, writeRecord } from "#cli/output";
+import { diagnosticWriter, writeDiagnostic, writeRecord } from "#cli/output";
 
 describe(writeRecord.name, () => {
 	const temporaryDirectories: string[] = [];
@@ -61,5 +61,33 @@ describe(diagnosticWriter.name, () => {
 		log("Target restored");
 
 		expect(stderr).toEqual(["Baseline checks\n", "Target restored\n"]);
+	});
+});
+
+describe(writeDiagnostic.name, () => {
+	const stderr: string[] = [];
+	const output: CommandOutput = {
+		stdout: () => {
+			throw new Error("a diagnostic never goes to stdout");
+		},
+		stderr: (text) => {
+			stderr.push(text);
+		},
+	};
+
+	beforeEach(() => {
+		stderr.length = 0;
+	});
+
+	it("terminates the diagnostic with a newline on stderr", () => {
+		writeDiagnostic(output, "Judge shares the candidate's model");
+
+		expect(stderr).toEqual(["Judge shares the candidate's model\n"]);
+	});
+
+	it("writes nothing when there is no diagnostic", () => {
+		writeDiagnostic(output, undefined);
+
+		expect(stderr).toEqual([]);
 	});
 });
