@@ -129,11 +129,6 @@ function manifest(
 }
 
 /**
- * A directory in corpus layout, named the way `resolveCorpusSource` names one,
- * so a test can hand a fixture or a staleness report the same value the
- * command would have resolved.
- */
-/**
  * The liveness answer for a fixture with no run in flight: every run it writes
  * is finished, so nothing should reach a pid probe. A test that wants a run
  * reported as running supplies its own answer instead.
@@ -143,6 +138,11 @@ export const nothingRunning: RunLiveness = {
 	isAlive: () => false,
 };
 
+/**
+ * A directory in corpus layout, named the way `resolveCorpusSource` names one,
+ * so a test can hand a fixture or a staleness report the same value the
+ * command would have resolved.
+ */
 export function directorySource(root: string): CorpusRoot {
 	return { kind: "directory", root };
 }
