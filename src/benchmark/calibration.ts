@@ -48,6 +48,7 @@ interface CalibrationContext {
 	readonly sessionBudgetUsd: number;
 	readonly stageJudge?: typeof runStageJudge | undefined;
 	readonly resolveCorpus?: CorpusSourceResolver | undefined;
+	readonly log: (message: string) => void;
 }
 
 export class CalibrationIncompleteError extends Error {
@@ -521,7 +522,7 @@ function calibrationJudges(
 				candidate.checkIntegrity,
 				candidate.localChecks,
 			),
-		log: console.log,
+		log: context.log,
 	};
 }
 

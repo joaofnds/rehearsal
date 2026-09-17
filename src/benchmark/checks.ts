@@ -20,8 +20,9 @@ export async function runChecks(
 	targetDir: string,
 	label: string,
 	checks: readonly TargetCheck[],
+	log: (message: string) => void,
 ): Promise<void> {
-	console.log(`\n${label}`);
+	log(`\n${label}`);
 
 	for (const check of checks) {
 		try {
@@ -40,9 +41,10 @@ export async function runChecks(
 export async function captureTreatmentChecks(
 	targetDir: string,
 	checks: readonly TargetCheck[],
+	log: (message: string) => void,
 ): Promise<LocalCheckResult> {
 	try {
-		await runChecks(targetDir, "Treatment checks", checks);
+		await runChecks(targetDir, "Treatment checks", checks, log);
 		return {
 			status: "PASS",
 			evidence: [
@@ -192,10 +194,11 @@ export async function captureBaselineContext(
 export async function runSetup(
 	targetDir: string,
 	setup: readonly TargetCheck[] | undefined,
+	log: (message: string) => void,
 ): Promise<void> {
 	if (setup === undefined) {
 		return;
 	}
 
-	await runChecks(targetDir, "Target setup", setup);
+	await runChecks(targetDir, "Target setup", setup, log);
 }

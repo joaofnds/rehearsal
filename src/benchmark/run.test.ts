@@ -1831,7 +1831,8 @@ describe(captureRunBaseline.name, () => {
 		const refusal = await failureOf(
 			captureRunBaseline(
 				{
-					runChecks,
+					runChecks: (targetDir, label, checks) =>
+						runChecks(targetDir, label, checks, () => undefined),
 					assertWorkspaceCleanAt: () => Promise.resolve(),
 					captureFileHashes: () => Promise.resolve(new Map()),
 					captureBaselineContext: () => Promise.resolve([]),

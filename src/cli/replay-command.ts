@@ -69,7 +69,7 @@ import {
 	requireSpendAuthorization,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import { writeDiagnostic, writeRecord } from "#cli/output";
+import { diagnosticWriter, writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 
 export interface ReplayEvidence {
@@ -271,7 +271,8 @@ export async function executeReplay(
 			assertBuildCommitted,
 			changedPathsBetween,
 			captureCheckIntegrity,
-			captureTreatmentChecks,
+			captureTreatmentChecks: (targetDir, checks) =>
+				captureTreatmentChecks(targetDir, checks, diagnosticWriter(output)),
 			captureStageCorpus,
 		},
 		runStageJudge,
@@ -286,9 +287,7 @@ export async function executeReplay(
 			await runCommand(["bun", "install", "--frozen-lockfile"], worktreeDir);
 		},
 		installStageCorpusSnapshot,
-		log: (message) => {
-			output.stderr(`${message}\n`);
-		},
+		log: diagnosticWriter(output),
 	};
 	const [corpus, loadedSettings] = await Promise.all([
 		replayCorpus(config.corpus),
@@ -313,9 +312,7 @@ export async function executeReplay(
 	try {
 		return await executeReplayStage(config, replayRequest, {
 			approval: {
-				output: (message) => {
-					output.stderr(`${message}\n`);
-				},
+				output: diagnosticWriter(output),
 				prompt: (message) => questioner.question(message),
 			},
 			runDebug: async (debugRequest) => {

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandOutput } from "#cli/output";
-import { writeRecord } from "#cli/output";
+import { diagnosticWriter, writeRecord } from "#cli/output";
 
 describe(writeRecord.name, () => {
 	const temporaryDirectories: string[] = [];
@@ -41,5 +41,25 @@ describe(writeRecord.name, () => {
 		await writeRecord(output, "/runs/record.json", false);
 
 		expect(written.join("")).toBe("/runs/record.json\n");
+	});
+});
+
+describe(diagnosticWriter.name, () => {
+	it("terminates each diagnostic with a newline on stderr", () => {
+		const stderr: string[] = [];
+		const output: CommandOutput = {
+			stdout: () => {
+				throw new Error("a diagnostic never goes to stdout");
+			},
+			stderr: (text) => {
+				stderr.push(text);
+			},
+		};
+
+		const log = diagnosticWriter(output);
+		log("Baseline checks");
+		log("Target restored");
+
+		expect(stderr).toEqual(["Baseline checks\n", "Target restored\n"]);
 	});
 });

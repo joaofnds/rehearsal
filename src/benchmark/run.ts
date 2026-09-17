@@ -68,6 +68,7 @@ import { writeRunManifest } from "./manifest";
 import type {
 	PipelineDefinition,
 	StageDefinition,
+	TargetCheck,
 	TargetDefinition,
 } from "./pipeline";
 import type { PendingStage } from "./run-abort";
@@ -454,7 +455,10 @@ export interface StageSessionDependencies {
 	readonly assertBuildCommitted: typeof assertBuildCommitted;
 	readonly changedPathsBetween: typeof changedPathsBetween;
 	readonly captureCheckIntegrity: typeof captureCheckIntegrity;
-	readonly captureTreatmentChecks: typeof captureTreatmentChecks;
+	readonly captureTreatmentChecks: (
+		targetDir: string,
+		checks: readonly TargetCheck[],
+	) => Promise<LocalCheckResult>;
 	readonly captureStageCorpus: typeof captureStageCorpus;
 }
 
@@ -819,7 +823,11 @@ export async function runGradedStages(
 }
 
 interface RunBaselineDependencies {
-	readonly runChecks: typeof runChecks;
+	readonly runChecks: (
+		targetDir: string,
+		label: string,
+		checks: readonly TargetCheck[],
+	) => Promise<void>;
 	readonly assertWorkspaceCleanAt: typeof assertWorkspaceCleanAt;
 	readonly captureFileHashes: typeof captureFileHashes;
 	readonly captureBaselineContext: typeof captureBaselineContext;
@@ -883,6 +891,7 @@ export async function runBenchmark(
 	benchmarkCase: BenchmarkCase,
 	loadedSettings: LoadedStageSettings,
 	rl: Questioner,
+	log: (message: string) => void,
 ): Promise<BenchmarkRunPaths> {
 	const { pipeline } = benchmarkCase;
 	const controlSha = await assertControlReady();
@@ -915,7 +924,7 @@ export async function runBenchmark(
 		},
 		{
 			artifactFile: runFiles.artifactFile,
-			teardown: () => teardownTarget(source, workflowBackup),
+			teardown: () => teardownTarget(source, workflowBackup, log),
 		},
 	);
 
@@ -928,13 +937,14 @@ export async function runBenchmark(
 	}
 
 	try {
-		console.log(`Target: ${source.root}`);
-		console.log(`Original commit: ${source.sha}`);
-		console.log(`Workflow backup: ${workflowBackup.directory}`);
+		log(`Target: ${source.root}`);
+		log(`Original commit: ${source.sha}`);
+		log(`Workflow backup: ${workflowBackup.directory}`);
 		const { baselineHashes, baselineContext, baselineChecks } =
 			await captureRunBaseline(
 				{
-					runChecks,
+					runChecks: (targetDir, label, checks) =>
+						runChecks(targetDir, label, checks, log),
 					assertWorkspaceCleanAt,
 					captureFileHashes,
 					captureBaselineContext,
@@ -1005,7 +1015,8 @@ export async function runBenchmark(
 					assertBuildCommitted,
 					changedPathsBetween,
 					captureCheckIntegrity,
-					captureTreatmentChecks,
+					captureTreatmentChecks: (targetDir, checks) =>
+						captureTreatmentChecks(targetDir, checks, log),
 					resolveSkillDirectory,
 					captureStageCorpus,
 					recordCheckpoint: recordRetainedCheckpoint,
@@ -1055,6 +1066,7 @@ export async function runBenchmark(
 							judgeModel: config.judgeModel,
 							judgeEffort: config.judgeEffort,
 							sessionBudgetUsd: config.sessionBudgetUsd,
+							log,
 						});
 						stageFailureCalibrated = true;
 
@@ -1102,22 +1114,22 @@ export async function runBenchmark(
 			evidence,
 		};
 
-		console.log("\nJudge session");
+		log("\nJudge session");
 		const judge = await runFinalJudge({
 			artifactInputs,
 			writeFailedArtifact: abort.writeFailedArtifact,
 		});
 		const { grade } = judge;
-		console.log(JSON.stringify(grade, null, 2));
+		log(JSON.stringify(grade, null, 2));
 		const artifact = buildRunArtifact({
 			...artifactInputs,
 			judge,
 			reviewFile: runFiles.reviewFile,
 		});
 		await abort.writePendingArtifact(artifact);
-		console.log(`Run artifact: ${runFiles.artifactFile}`);
+		log(`Run artifact: ${runFiles.artifactFile}`);
 		if (config.pause) {
-			console.log(`Human review: ${runFiles.reviewFile}`);
+			log(`Human review: ${runFiles.reviewFile}`);
 		}
 
 		await finishGradedRun(
@@ -1154,6 +1166,7 @@ export async function runBenchmark(
 						judgeModel: config.judgeModel,
 						judgeEffort: config.judgeEffort,
 						sessionBudgetUsd: config.sessionBudgetUsd,
+						log,
 					}),
 				collectJudgeAgreement: (calibration) =>
 					loadJudgeAgreementReport(runFiles.runsDirectory, [
@@ -1166,7 +1179,7 @@ export async function runBenchmark(
 					]),
 				completeArtifact: abort.completeArtifact,
 				awaitArtifactReview: abort.awaitArtifactReview,
-				log: console.log,
+				log,
 			},
 		);
 

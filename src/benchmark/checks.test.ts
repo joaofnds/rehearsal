@@ -6,6 +6,7 @@ import {
 	captureCheckIntegrity,
 	captureFileHashes,
 	captureTreatmentChecks,
+	runSetup,
 	runChecks,
 } from "./checks";
 import { runCommand } from "./command";
@@ -14,6 +15,8 @@ import { captureBuildCandidate } from "./target";
 import { TestResources, commitAll } from "./test-support";
 
 const testResources = TestResources.forEachTest();
+
+const ignoreLog = (): undefined => undefined;
 
 describe(runChecks.name, () => {
 	it("runs declared checks in order with overlaid environments", async () => {
@@ -24,20 +27,41 @@ describe(runChecks.name, () => {
 			String.raw`await Bun.write(path, previous + Bun.env.CHECK_VALUE + ':' + Bun.env.PATH + ':' + (Bun.env.HOME === undefined ? 'missing' : 'host') + '\n');`,
 		].join(" ");
 
-		await runChecks(source.directory, "Custom checks", [
-			{
-				command: [process.execPath, "-e", script],
-				env: { CHECK_VALUE: "first", PATH: "first-path" },
-			},
-			{
-				command: [process.execPath, "-e", script],
-				env: { CHECK_VALUE: "second", PATH: "second-path" },
-			},
-		]);
+		await runChecks(
+			source.directory,
+			"Custom checks",
+			[
+				{
+					command: [process.execPath, "-e", script],
+					env: { CHECK_VALUE: "first", PATH: "first-path" },
+				},
+				{
+					command: [process.execPath, "-e", script],
+					env: { CHECK_VALUE: "second", PATH: "second-path" },
+				},
+			],
+			ignoreLog,
+		);
 
 		expect(await Bun.file(join(source.directory, "checks.log")).text()).toBe(
 			"first:first-path:host\nsecond:second-path:host\n",
 		);
+	});
+
+	it("announces the label through the caller's writer", async () => {
+		const source = await testResources.createRepository();
+		const written: string[] = [];
+
+		await runChecks(
+			source.directory,
+			"Custom checks",
+			[{ command: ["bun", "--version"] }],
+			(message) => {
+				written.push(message);
+			},
+		);
+
+		expect(written).toEqual(["\nCustom checks"]);
 	});
 });
 
@@ -49,7 +73,11 @@ describe(captureTreatmentChecks.name, () => {
 			{ command: ["bun", "--version"] },
 		];
 
-		const result = await captureTreatmentChecks(source.directory, checks);
+		const result = await captureTreatmentChecks(
+			source.directory,
+			checks,
+			ignoreLog,
+		);
 
 		expect(result).toEqual({
 			status: "PASS",
@@ -67,9 +95,11 @@ describe(captureTreatmentChecks.name, () => {
 		const source = await testResources.createRepository();
 		const command = ["bun", "-e", "process.exit(7)"];
 
-		const result = await captureTreatmentChecks(source.directory, [
-			{ command },
-		]);
+		const result = await captureTreatmentChecks(
+			source.directory,
+			[{ command }],
+			ignoreLog,
+		);
 
 		expect(result).toEqual({
 			status: "FAIL",
@@ -87,15 +117,60 @@ describe(captureTreatmentChecks.name, () => {
 		const source = await testResources.createRepository();
 		const command = ["act-15-command-does-not-exist"];
 
-		const result = await captureTreatmentChecks(source.directory, [
-			{ command },
-		]);
+		const result = await captureTreatmentChecks(
+			source.directory,
+			[{ command }],
+			ignoreLog,
+		);
 
 		expect(result.evidence[0]).toEqual({
 			source: "local-checks",
 			path: command.join(" "),
 			claim: "Treatment check exited unknown",
 		});
+	});
+
+	it("announces its label through the caller's writer", async () => {
+		const source = await testResources.createRepository();
+		const written: string[] = [];
+
+		await captureTreatmentChecks(
+			source.directory,
+			[{ command: ["bun", "--version"] }],
+			(message) => {
+				written.push(message);
+			},
+		);
+
+		expect(written).toEqual(["\nTreatment checks"]);
+	});
+});
+
+describe(runSetup.name, () => {
+	it("announces its label through the caller's writer", async () => {
+		const source = await testResources.createRepository();
+		const written: string[] = [];
+
+		await runSetup(
+			source.directory,
+			[{ command: ["bun", "--version"] }],
+			(message) => {
+				written.push(message);
+			},
+		);
+
+		expect(written).toEqual(["\nTarget setup"]);
+	});
+
+	it("announces nothing when the target declares no setup", async () => {
+		const source = await testResources.createRepository();
+		const written: string[] = [];
+
+		await runSetup(source.directory, undefined, (message) => {
+			written.push(message);
+		});
+
+		expect(written).toEqual([]);
 	});
 });
 

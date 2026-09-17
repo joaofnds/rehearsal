@@ -89,7 +89,7 @@ import {
 	requireSpendAuthorization,
 } from "#cli/interactive-stdin";
 import type { CommandOutput } from "#cli/output";
-import { writeDiagnostic, writeRecord } from "#cli/output";
+import { diagnosticWriter, writeDiagnostic, writeRecord } from "#cli/output";
 import { terminalQuestioner } from "#cli/questioner";
 import {
 	defaultSessionRunRequest,
@@ -277,13 +277,17 @@ export async function executeRun(
 			benchmarkCase.pipeline.stages.length,
 			{
 				approval: {
-					output: (message) => {
-						output.stderr(`${message}\n`);
-					},
+					output: diagnosticWriter(output),
 					prompt: (message) => questioner.question(message),
 				},
 				runDebug: () =>
-					runBenchmark(config, benchmarkCase, loadedSettings, questioner),
+					runBenchmark(
+						config,
+						benchmarkCase,
+						loadedSettings,
+						questioner,
+						diagnosticWriter(output),
+					),
 				runConfirmed: (confirmation) =>
 					confirmRun(
 						config,
@@ -394,7 +398,8 @@ async function confirmRun(
 				assertBuildCommitted,
 				changedPathsBetween,
 				captureCheckIntegrity,
-				captureTreatmentChecks,
+				captureTreatmentChecks: (targetDir, checks) =>
+					captureTreatmentChecks(targetDir, checks, diagnosticWriter(output)),
 				captureStageCorpus,
 			},
 			runStageJudge,
@@ -422,9 +427,7 @@ async function confirmRun(
 			recordCheckpoint,
 			recordRetentionRef,
 			captureBuildCandidate,
-			log: (message) => {
-				output.stderr(`${message}\n`);
-			},
+			log: diagnosticWriter(output),
 		},
 		buildConfirmationRequest({
 			benchmarkCase,
@@ -479,9 +482,7 @@ export async function executeSessionRun(
 				sessionBudgetUsd: config.sessionBudgetUsd,
 			}),
 		approval: {
-			output: (message) => {
-				output.stderr(`${message}\n`);
-			},
+			output: diagnosticWriter(output),
 			prompt: (message) => questioner.question(message),
 		},
 		runDebug: async () => {

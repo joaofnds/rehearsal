@@ -25,6 +25,19 @@ export async function writeRecord(
 	output.stdout(json ? await Bun.file(recordFile).text() : `${recordFile}\n`);
 }
 
+/**
+ * A harness function's progress writer, bound to the command's stderr. The
+ * pipeline's own functions take one rather than printing, so a caller reading
+ * stdout for the record never has to separate it from the progress beside it.
+ */
+export function diagnosticWriter(
+	output: CommandOutput,
+): (message: string) => void {
+	return (message) => {
+		output.stderr(`${message}\n`);
+	};
+}
+
 export function writeDiagnostic(
 	output: CommandOutput,
 	message: string | undefined,

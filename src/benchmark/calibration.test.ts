@@ -27,6 +27,8 @@ import { deriveStageGrade, parseStageRubric } from "./stage-grading";
 
 const testResources = TestResources.forEachTest();
 
+const ignoreLog = (): undefined => undefined;
+
 function humanReview(
 	verdict: HumanReview["verdict"],
 	judgeAssessment: HumanReview["findings"][number]["judgeAssessment"],
@@ -339,6 +341,7 @@ describe(collectCalibration.name, () => {
 		let resolutions = 0;
 
 		const result = await collectCalibration({
+			log: ignoreLog,
 			rl: {
 				async question() {
 					await Bun.write(
@@ -398,6 +401,7 @@ describe(collectCalibration.name, () => {
 		};
 
 		const result = await collectCalibration({
+			log: ignoreLog,
 			rl,
 			reviewFile,
 			targetDir: reviewDirectory,
@@ -490,6 +494,7 @@ describe(collectCalibration.name, () => {
 		};
 
 		const result = await collectCalibration({
+			log: ignoreLog,
 			rl,
 			reviewFile,
 			targetDir: reviewDirectory,
@@ -560,6 +565,7 @@ describe(collectCalibration.name, () => {
 		};
 
 		const result = await collectCalibration({
+			log: ignoreLog,
 			rl,
 			reviewFile,
 			targetDir: reviewDirectory,

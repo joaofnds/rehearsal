@@ -102,6 +102,7 @@ export interface PipelineConfirmationDependencies {
 	readonly runSetup: (
 		targetDir: string,
 		setup: readonly TargetCheck[] | undefined,
+		log: (message: string) => void,
 	) => Promise<void>;
 	readonly captureBaselineContext: typeof captureBaselineContext;
 	readonly captureFileHashes: typeof captureFileHashes;
@@ -193,11 +194,16 @@ async function freezePipelineInputs(
 	const checkpointDirectory = join(inputsDirectory, "checkpoint");
 	let initialCheckpoint: CheckpointRecord;
 	try {
-		await dependencies.runSetup(setupWorktree, request.pipeline.target.setup);
+		await dependencies.runSetup(
+			setupWorktree,
+			request.pipeline.target.setup,
+			dependencies.log,
+		);
 		await dependencies.runChecks(
 			setupWorktree,
 			"Baseline checks",
 			request.pipeline.target.checks,
+			dependencies.log,
 		);
 		baselineHashes = await dependencies.captureFileHashes(
 			setupWorktree,
@@ -378,6 +384,7 @@ async function runPipelineRep(
 		await dependencies.runSetup(
 			plan.worktreePath,
 			request.pipeline.target.setup,
+			dependencies.log,
 		);
 		setupOperation = "checkpoint materialization";
 		await dependencies.materializeCheckpoint(

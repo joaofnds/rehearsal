@@ -734,7 +734,7 @@ describe(teardownTarget.name, () => {
 		await Bun.write(join(source.directory, "candidate.ts"), "export {};\n");
 		await commitAll(source.directory, "feat: candidate");
 
-		await teardownTarget(baseline, backup);
+		await teardownTarget(baseline, backup, () => undefined);
 
 		const finalSha = await runCommand(
 			["git", "rev-parse", "HEAD"],
@@ -742,6 +742,20 @@ describe(teardownTarget.name, () => {
 		);
 		expect(finalSha.trim()).toBe(source.sha);
 		expect(stat(backup.directory)).rejects.toThrow();
+	});
+
+	it("announces the restored commit through the caller's writer", async () => {
+		const source = await testResources.createRepository();
+		const baseline = await assertSourceReady(source.directory);
+		const backup = await captureWorkflowBackup(source.directory);
+		testResources.track(backup.directory);
+		const written: string[] = [];
+
+		await teardownTarget(baseline, backup, (message) => {
+			written.push(message);
+		});
+
+		expect(written).toEqual([`Target restored to ${source.sha}.`]);
 	});
 
 	it("keeps the workflow backup when the restore fails", async () => {
@@ -753,7 +767,7 @@ describe(teardownTarget.name, () => {
 			sha: "0000000000000000000000000000000000000000",
 		};
 
-		expect(teardownTarget(broken, backup)).rejects.toThrow();
+		expect(teardownTarget(broken, backup, () => undefined)).rejects.toThrow();
 		expect(stat(backup.directory)).resolves.toBeDefined();
 	});
 });

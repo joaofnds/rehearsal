@@ -245,6 +245,7 @@ export async function restoreTarget(
 export async function teardownTarget(
 	source: SourceBaseline,
 	backup: WorkflowBackup,
+	log: (message: string) => void,
 ): Promise<void> {
 	try {
 		await restoreTarget(source, backup);
@@ -256,7 +257,7 @@ export async function teardownTarget(
 	}
 
 	await rm(backup.directory, { force: true, recursive: true });
-	console.log(`Target restored to ${source.sha}.`);
+	log(`Target restored to ${source.sha}.`);
 }
 
 /**
