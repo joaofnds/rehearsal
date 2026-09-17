@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { join } from "node:path";
-import { CONTROL_DIR, REQUIRED_BUN_VERSION } from "#benchmark/config";
+import { CONTROL_DIR } from "#benchmark/config";
+import { assertPinnedBunVersion } from "#benchmark/bun-pin";
 import { liveCorpusSource } from "#benchmark/corpus-file";
 import {
 	benchmarkRunsDirectory,
@@ -46,11 +47,7 @@ async function reconcileOnStartup(runsDirectory: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-	if (Bun.version !== REQUIRED_BUN_VERSION) {
-		throw new Error(
-			`Use Bun ${REQUIRED_BUN_VERSION}; current version is ${Bun.version}`,
-		);
-	}
+	assertPinnedBunVersion();
 
 	const runsDirectory = benchmarkRunsDirectory(CONTROL_DIR);
 	await reconcileOnStartup(runsDirectory);

@@ -1,9 +1,6 @@
 #!/usr/bin/env bun
-import {
-	CONTROL_DIR,
-	parseStaleArgs,
-	REQUIRED_BUN_VERSION,
-} from "./src/benchmark/config";
+import { CONTROL_DIR, parseStaleArgs } from "./src/benchmark/config";
+import { assertPinnedBunVersion } from "./src/benchmark/bun-pin";
 import {
 	requireCase,
 	runCaseCapture,
@@ -45,11 +42,7 @@ import { runStale } from "./src/cli/stale-command";
 import { processOutput } from "./src/cli/output";
 
 function main(): Promise<number> {
-	if (Bun.version !== REQUIRED_BUN_VERSION) {
-		throw new Error(
-			`Use Bun ${REQUIRED_BUN_VERSION}; current version is ${Bun.version}`,
-		);
-	}
+	assertPinnedBunVersion();
 
 	const argv = Bun.argv.slice(2);
 	const [name] = argv;
