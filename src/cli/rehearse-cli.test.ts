@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-support";
@@ -8,6 +8,7 @@ import {
 	parseComparisonManifest,
 	parseComparisonReport,
 } from "#benchmark/comparison-record";
+import { runCommand } from "#benchmark/command";
 import { CONTROL_DIR } from "#benchmark/config";
 import {
 	benchmarkRunsDirectory,
@@ -47,6 +48,30 @@ async function runCli(
 		cwd: PROJECT_ROOT,
 		env: environmentWithoutKnobs(),
 		stdin: stdin === "empty" ? new Blob([""]) : "inherit",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [exitCode, stdout, stderr] = await Promise.all([
+		child.exited,
+		new Response(child.stdout).text(),
+		new Response(child.stderr).text(),
+	]);
+
+	return { exitCode, stdout, stderr };
+}
+
+async function runPipelineCli(
+	args: readonly string[],
+	control: string,
+	binDirectory: string,
+): Promise<CliResult> {
+	const child = Bun.spawn([process.execPath, "rehearse.ts", ...args], {
+		cwd: control,
+		env: {
+			...environmentWithoutKnobs(),
+			PATH: `${binDirectory}:${Bun.env["PATH"] ?? ""}`,
+		},
+		stdin: new Blob([""]),
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -137,6 +162,117 @@ async function writeOversizedManifest(
 	);
 
 	return manifestFile;
+}
+
+/**
+ * A `claude` earlier on PATH than the real one, so a pipeline run reaches its
+ * stages without a paid call. `runCommand` spreads `Bun.env` into every child,
+ * so anything named `claude` ahead of the provider shadows it for the whole
+ * process tree, which is why the shim stays in a directory the test removes.
+ */
+async function providerShim(directory: string): Promise<string> {
+	const binDirectory = join(directory, "bin");
+	await mkdir(binDirectory, { recursive: true });
+	const shim = join(binDirectory, "claude");
+	const envelope = JSON.stringify({
+		type: "result",
+		subtype: "success",
+		is_error: false,
+		result: JSON.stringify({ status: "COMPLETE", message: "done" }),
+		total_cost_usd: 0,
+		duration_ms: 1,
+		duration_api_ms: 1,
+		num_turns: 1,
+		session_id: "fake",
+		usage: {
+			input_tokens: 1,
+			output_tokens: 1,
+			cache_read_input_tokens: 0,
+			cache_creation_input_tokens: 0,
+		},
+	});
+	await Bun.write(
+		shim,
+		[
+			"#!/bin/sh",
+			'for argument in "$@"; do',
+			'\tcase "$argument" in',
+			"\t\t--version) echo '1.0.0 (Claude Code)'; exit 0 ;;",
+			"\t\t--help) echo '--print --model --settings --append-system-prompt --permission-mode --allowedTools --add-dir --output-format --session-id --resume --strict-mcp-config --mcp-config --agents'; exit 0 ;;",
+			"\tesac",
+			"done",
+			"cat >/dev/null",
+			`cat <<'ENVELOPE'`,
+			envelope,
+			"ENVELOPE",
+			"",
+		].join("\n"),
+	);
+	await chmod(shim, 0o755);
+
+	return binDirectory;
+}
+
+/**
+ * A committed copy of the working tree, so `assertControlReady` reads the copy
+ * rather than the checkout the suite runs from. Without it this test would be
+ * red for anyone holding an uncommitted edit, which is the ordinary state while
+ * developing. The copy carries untracked files too, so an in-progress change is
+ * what gets exercised.
+ */
+async function controlCopy(directory: string): Promise<string> {
+	const control = join(directory, "control");
+	await mkdir(control, { recursive: true });
+	await runCommand(
+		[
+			"sh",
+			"-c",
+			"{ git ls-files -z; git ls-files -z --others --exclude-standard; } " +
+				`| tar --null -cf - -T - | tar -xf - -C '${control}'`,
+		],
+		PROJECT_ROOT,
+	);
+	await runCommand(
+		["ln", "-s", join(PROJECT_ROOT, "node_modules"), "node_modules"],
+		control,
+	);
+	await runCommand(["git", "init", "-b", "main"], control);
+	await runCommand(["git", "config", "user.email", "t@example.com"], control);
+	await runCommand(["git", "config", "user.name", "Stdout Contract"], control);
+	await runCommand(["git", "add", "-A"], control);
+	await runCommand(["git", "commit", "-m", "chore: control copy"], control);
+
+	return control;
+}
+
+/**
+ * A target whose declared checks all succeed, so the run reaches its stages
+ * instead of refusing at the baseline. audit-log names the three scripts; what
+ * they do is beside the point for a stream contract.
+ */
+async function passingTarget(directory: string): Promise<string> {
+	const target = join(directory, "target");
+	await mkdir(target, { recursive: true });
+	await Bun.write(
+		join(target, "package.json"),
+		`${JSON.stringify(
+			{
+				name: "stdout-contract-target",
+				scripts: { typecheck: "true", check: "true", "test:unit": "true" },
+			},
+			null,
+			2,
+		)}\n`,
+	);
+	await Bun.write(join(target, "tsconfig.json"), "{}\n");
+	await Bun.write(join(target, "biome.json"), "{}\n");
+	await runCommand(["git", "init", "-b", "main"], target);
+	await runCommand(["git", "config", "user.email", "t@example.com"], target);
+	await runCommand(["git", "config", "user.name", "Stdout Contract"], target);
+	await runCommand(["git", "add", "-A"], target);
+	await runCommand(["git", "commit", "-m", "chore: base"], target);
+
+	return target;
 }
 
 describe("rehearse", () => {
@@ -442,6 +578,37 @@ describe("rehearse", () => {
 			expect(result.stderr).toContain(message);
 		},
 	);
+
+	it("keeps every pipeline diagnostic off stdout on a run reaching its stages", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "rehearse-stdout-contract-"),
+		);
+		temporaryDirectories.push(directory);
+		const [control, binDirectory, target] = await Promise.all([
+			controlCopy(directory),
+			providerShim(directory),
+			passingTarget(directory),
+		]);
+
+		const result = await runPipelineCli(
+			[
+				"run",
+				"--case",
+				"audit-log",
+				"--model",
+				"sonnet",
+				"--target",
+				target,
+				"--json",
+			],
+			control,
+			binDirectory,
+		);
+
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain(`Target: ${await realpath(target)}`);
+		expect(result.stderr).toContain("Baseline checks");
+	});
 });
 
 /**
