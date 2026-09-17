@@ -330,6 +330,44 @@ async function headSha(repository: string): Promise<string> {
 	return sha.trim();
 }
 
+/**
+ * The confirmation report, found through the group record the command names on
+ * its own stderr. Reading it from stdout instead would assume the very thing
+ * this test is here to check.
+ */
+function reportBesideGroupIn(stderr: string): string {
+	const group = /Confirmation group: (?<file>\S+)/u.exec(stderr)?.groups?.[
+		"file"
+	];
+	if (group === undefined) {
+		throw new Error(`no confirmation group on stderr:\n${stderr}`);
+	}
+
+	return join(dirname(group), "report.json");
+}
+
+interface PipelineFixture {
+	readonly control: string;
+	readonly binDirectory: string;
+	readonly target: string;
+}
+
+/**
+ * Everything a pipeline command needs to run without a paid call: a committed
+ * control copy, a `claude` shim ahead of the real one, and a target whose
+ * declared checks pass. The caller registers `directory` for removal, which
+ * takes all three with it.
+ */
+async function pipelineFixture(directory: string): Promise<PipelineFixture> {
+	const [control, binDirectory, target] = await Promise.all([
+		controlCopy(directory),
+		providerShim(directory),
+		passingTarget(directory),
+	]);
+
+	return { control, binDirectory, target };
+}
+
 describe("rehearse", () => {
 	const temporaryDirectories: string[] = [];
 	let writtenReportDirectory: string | undefined;
@@ -639,11 +677,7 @@ describe("rehearse", () => {
 			join(tmpdir(), "rehearse-stdout-contract-"),
 		);
 		temporaryDirectories.push(directory);
-		const [control, binDirectory, target] = await Promise.all([
-			controlCopy(directory),
-			providerShim(directory),
-			passingTarget(directory),
-		]);
+		const { control, binDirectory, target } = await pipelineFixture(directory);
 
 		const result = await runPipelineCli(
 			[
@@ -674,11 +708,7 @@ describe("rehearse", () => {
 			join(tmpdir(), "rehearse-replay-contract-"),
 		);
 		temporaryDirectories.push(directory);
-		const [control, binDirectory, target] = await Promise.all([
-			controlCopy(directory),
-			providerShim(directory),
-			passingTarget(directory),
-		]);
+		const { control, binDirectory, target } = await pipelineFixture(directory);
 		const recorded = await recordRunFor(control, binDirectory, target);
 
 		const result = await runPipelineCli(
@@ -705,6 +735,40 @@ describe("rehearse", () => {
 		expect(result.stderr).toContain("shape stage Judge");
 		expect(result.stderr).toContain("evidence preserved at");
 		expect(result.exitCode).toBe(EXIT_CODES.executionFailure);
+	});
+
+	it("puts the confirmation report's own bytes on stdout and nothing else", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "rehearse-record-contract-"),
+		);
+		temporaryDirectories.push(directory);
+		const { control, binDirectory, target } = await pipelineFixture(directory);
+
+		const result = await runPipelineCli(
+			[
+				"run",
+				"--case",
+				"audit-log",
+				"--model",
+				"sonnet",
+				"--target",
+				target,
+				"--confirm",
+				"--yes",
+				"--reps",
+				"2",
+				"--json",
+			],
+			control,
+			binDirectory,
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toBe(
+			await Bun.file(reportBesideGroupIn(result.stderr)).text(),
+		);
+		expect(result.stderr).toContain("Target setup");
+		expect(result.stderr).toContain("Baseline checks");
 	});
 });
 
