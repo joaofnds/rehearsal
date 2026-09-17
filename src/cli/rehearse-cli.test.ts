@@ -324,6 +324,12 @@ function preservedEvidenceIn(stderr: string): readonly string[] {
 	);
 }
 
+async function headSha(repository: string): Promise<string> {
+	const sha = await runCommand(["git", "rev-parse", "HEAD"], repository);
+
+	return sha.trim();
+}
+
 describe("rehearse", () => {
 	const temporaryDirectories: string[] = [];
 	let writtenReportDirectory: string | undefined;
@@ -657,6 +663,10 @@ describe("rehearse", () => {
 		expect(result.stdout).toBe("");
 		expect(result.stderr).toContain(`Target: ${await realpath(target)}`);
 		expect(result.stderr).toContain("Baseline checks");
+		expect(result.stderr).toContain(
+			`Target restored to ${await headSha(target)}.`,
+		);
+		expect(result.exitCode).toBe(EXIT_CODES.executionFailure);
 	});
 
 	it("keeps every replay diagnostic off stdout on a recorded run", async () => {
@@ -693,6 +703,8 @@ describe("rehearse", () => {
 		expect(result.stdout).toBe("");
 		expect(result.stderr).toContain("Checkpoint chain is fresh");
 		expect(result.stderr).toContain("shape stage Judge");
+		expect(result.stderr).toContain("evidence preserved at");
+		expect(result.exitCode).toBe(EXIT_CODES.executionFailure);
 	});
 });
 
