@@ -332,6 +332,35 @@ describe(runHistoryReport.name, () => {
 		expect(row?.progress).toEqual({ state: "recorded" });
 	});
 
+	/**
+	 * The target a crashed run claimed can be deleted or cease to be a git
+	 * repository, and the marker read shells out to git, so the probe throws.
+	 * That is still just "not running": before the running check existed such a
+	 * run was simply absent from the report, and blaming git for it on every
+	 * page load names the wrong thing and never stops.
+	 */
+	it("treats a run whose target cannot be reached as not running, not unreadable", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeRunningRun();
+
+		const { rows, unreadable } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			{
+				readMarker: () =>
+					Promise.reject(
+						new Error("ENOENT: no such file or directory, posix_spawn 'git'"),
+					),
+				isAlive: () => true,
+			},
+		);
+
+		expect(
+			rows.find((candidate) => candidate.run === fixture.runningRun),
+		).toBeUndefined();
+		expect(unreadable).toEqual([]);
+	});
+
 	it("does not report a run as running when the process that claimed its target is gone", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeRunningRun();

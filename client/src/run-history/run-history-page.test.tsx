@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import type { RenderResult } from "@testing-library/react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
 import type { apiClient } from "#client/api-client";
@@ -417,6 +423,11 @@ describe(RunHistoryPage.name, () => {
 			expect(screen.queryByText(/spent this run/iu)).not.toBeInTheDocument();
 		});
 
+		/**
+		 * Scoped to the cell rather than the document: the page's own empty-state
+		 * copy says "a spend limit is set", so a document-wide search for that
+		 * word would fail for a reason that has nothing to do with the row.
+		 */
 		it("shows no spend ceiling or limit beside the figure", async () => {
 			respondingWith({ rows: [runningRow], unreadable: [] });
 
@@ -425,9 +436,14 @@ describe(RunHistoryPage.name, () => {
 			await waitFor(() => {
 				expect(screen.getByText("$0.90")).toBeInTheDocument();
 			});
-			expect(screen.queryByText(/\/\s*\$/u)).not.toBeInTheDocument();
+			const cell = screen.getByText("$0.90").closest("td");
+			if (cell === null) {
+				throw new Error("the spend figure is not inside a table cell");
+			}
+			const progress = within(cell);
+			expect(progress.queryByText(/\/\s*\$/u)).not.toBeInTheDocument();
 			expect(
-				screen.queryByText(/limit|ceiling|budget/iu),
+				progress.queryByText(/limit|ceiling|budget/iu),
 			).not.toBeInTheDocument();
 		});
 
@@ -457,7 +473,7 @@ describe(RunHistoryPage.name, () => {
 				},
 			];
 			const stub = (): Promise<Response> =>
-				Promise.resolve(Response.json(bodies.shift() ?? bodies[0]));
+				Promise.resolve(Response.json(bodies.shift()));
 			stub.preconnect = fetch.preconnect;
 			globalThis.fetch = stub;
 

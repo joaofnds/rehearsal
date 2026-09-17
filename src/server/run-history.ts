@@ -117,14 +117,14 @@ interface RunIdentity {
 	readonly progress: RunProgress;
 }
 
-/**
- * A run known only from its manifest (no graded artifact): the STOPPED and
- * INTERRUPTED statuses both read the case ID from there, and both refuse a
- * run whose manifest never got written rather than reporting it with no
- * case ID.
- */
 const RECORDED: RunProgress = { state: "recorded" };
 
+/**
+ * A run known only from its manifest (no graded artifact): the STOPPED,
+ * INTERRUPTED and RUNNING statuses all read the case ID from there, and all
+ * refuse a run whose manifest never got written rather than reporting it with
+ * no case ID.
+ */
 async function manifestBackedIdentity(
 	paths: BenchmarkRunPaths,
 	status: string,
@@ -175,6 +175,13 @@ function runningProgress(
  * is what keeps the badge honest: reconciliation runs only at server startup,
  * so without this probe a run killed while the server stayed up would read as
  * RUNNING forever.
+ *
+ * Every way of failing to reach an answer is "not running". Reading the marker
+ * shells out to git in the target, so a target that was deleted or is no
+ * longer a checkout throws rather than returning nothing. Letting that throw
+ * escape would move the run from silently absent, which is where it sat before
+ * this branch existed, to an unreadable entry blaming git on every page load,
+ * for a run that is simply not executing.
  */
 async function claimsLiveTarget(
 	manifestFile: string,
@@ -185,7 +192,9 @@ async function claimsLiveTarget(
 	}
 
 	const manifest = await loadRunManifest(manifestFile);
-	const marker = await liveness.readMarker(manifest.sourceRoot);
+	const marker = await liveness
+		.readMarker(manifest.sourceRoot)
+		.catch(() => undefined);
 
 	return marker !== undefined && liveness.isAlive(marker.pid);
 }
@@ -220,17 +229,19 @@ async function statusAndCaseId(
 		return manifestBackedIdentity(paths, `STOPPED:${stopped.stage}`);
 	}
 
+	const latest = runEvents.latestEvent(run);
+
 	/**
 	 * A kill -9 leaves no artifact and no STAGE_JUDGE_FAILED file: nothing
 	 * runs to write one. The reconciliation pass is the only thing that ever
 	 * marks such a run, in the event stream rather than on disk, so this is
 	 * the one status this reader derives from SQLite instead of a file.
 	 */
-	if (runEvents.latestEvent(run)?.kind === "run-interrupted") {
+	if (latest?.kind === "run-interrupted") {
 		return manifestBackedIdentity(paths, "INTERRUPTED");
 	}
 
-	const progress = runningProgress(runEvents.latestEvent(run));
+	const progress = runningProgress(latest);
 	if (
 		progress !== undefined &&
 		(await claimsLiveTarget(paths.manifestFile, liveness))

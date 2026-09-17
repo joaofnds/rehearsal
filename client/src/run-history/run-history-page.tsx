@@ -126,7 +126,7 @@ function outcomeCell(row: RunHistoryRow): React.JSX.Element {
  */
 function progressCell(row: RunHistoryRow, nowMs: number): React.JSX.Element {
 	if (row.progress.state === "recorded") {
-		return <span className="rh-run-history__no-progress" />;
+		return <span />;
 	}
 
 	const { stage, elapsedMs, measuredAt, spentUsd, spendScope } = row.progress;
