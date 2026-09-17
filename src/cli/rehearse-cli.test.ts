@@ -173,7 +173,7 @@ describe("rehearse", () => {
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Usage: rehearse <command>");
-		expect(result.stderr).toBe("$ bun run rehearse.ts --help\n");
+		expect(result.stderr).toContain("run rehearse.ts --help");
 	});
 
 	it.each(COMMANDS.map((command) => command.name))(

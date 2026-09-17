@@ -5,13 +5,15 @@ import { PROJECT_ROOT } from "./test-support";
 
 describe("assertPinnedBunVersion", () => {
 	it("returns when the running version matches the required one", () => {
-		expect(() => assertPinnedBunVersion("1.2.3", "1.2.3")).not.toThrow();
+		expect(() => {
+			assertPinnedBunVersion("1.2.3", "1.2.3");
+		}).not.toThrow();
 	});
 
 	it("throws naming the required and the running version", () => {
-		expect(() => assertPinnedBunVersion("9.9.9", "1.2.3")).toThrow(
-			"Use Bun 9.9.9; current version is 1.2.3",
-		);
+		expect(() => {
+			assertPinnedBunVersion("9.9.9", "1.2.3");
+		}).toThrow("Use Bun 9.9.9; current version is 1.2.3");
 	});
 });
 
