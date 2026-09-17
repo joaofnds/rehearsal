@@ -1,12 +1,21 @@
 import { REQUIRED_BUN_VERSION } from "./config";
 
+export function pinnedBunRefusal(versions: {
+	readonly required: string;
+	readonly running: string;
+}): string | null {
+	if (versions.running === versions.required) {
+		return null;
+	}
+
+	return `Use Bun ${versions.required}; current version is ${versions.running}`;
+}
+
 export function assertPinnedBunVersion(
-	requiredVersion: string = REQUIRED_BUN_VERSION,
-	runningVersion: string = Bun.version,
+	required: string = REQUIRED_BUN_VERSION,
 ): void {
-	if (runningVersion !== requiredVersion) {
-		throw new Error(
-			`Use Bun ${requiredVersion}; current version is ${runningVersion}`,
-		);
+	const refusal = pinnedBunRefusal({ required, running: Bun.version });
+	if (refusal !== null) {
+		throw new Error(refusal);
 	}
 }

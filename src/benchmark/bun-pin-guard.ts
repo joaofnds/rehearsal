@@ -1,10 +1,10 @@
-import { assertPinnedBunVersion } from "./bun-pin";
+import { REQUIRED_BUN_VERSION } from "./config";
+import { pinnedBunRefusal } from "./bun-pin";
 
-const [requiredVersion] = Bun.argv.slice(2);
+const [required = REQUIRED_BUN_VERSION] = Bun.argv.slice(2);
+const refusal = pinnedBunRefusal({ required, running: Bun.version });
 
-try {
-	assertPinnedBunVersion(requiredVersion);
-} catch (error) {
-	console.error(error instanceof Error ? error.message : String(error));
+if (refusal !== null) {
+	console.error(refusal);
 	process.exit(1);
 }

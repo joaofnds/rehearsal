@@ -1,20 +1,28 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { TOML } from "bun";
-import { assertPinnedBunVersion } from "./bun-pin";
+import { assertPinnedBunVersion, pinnedBunRefusal } from "./bun-pin";
 import { PROJECT_ROOT } from "./test-support";
 
-describe("assertPinnedBunVersion", () => {
-	it("returns when the running version matches the required one", () => {
-		expect(() => {
-			assertPinnedBunVersion("1.2.3", "1.2.3");
-		}).not.toThrow();
+describe("pinnedBunRefusal", () => {
+	it("returns no refusal when the running version matches the required one", () => {
+		expect(
+			pinnedBunRefusal({ required: "1.2.3", running: "1.2.3" }),
+		).toBeNull();
 	});
 
-	it("throws naming the required and the running version", () => {
+	it("names the required and the running version when they differ", () => {
+		expect(pinnedBunRefusal({ required: "9.9.9", running: "1.2.3" })).toBe(
+			"Use Bun 9.9.9; current version is 1.2.3",
+		);
+	});
+});
+
+describe("assertPinnedBunVersion", () => {
+	it("throws the refusal when the running version is not the required one", () => {
 		expect(() => {
-			assertPinnedBunVersion("9.9.9", "1.2.3");
-		}).toThrow("Use Bun 9.9.9; current version is 1.2.3");
+			assertPinnedBunVersion("9.9.9");
+		}).toThrow(`Use Bun 9.9.9; current version is ${Bun.version}`);
 	});
 });
 
