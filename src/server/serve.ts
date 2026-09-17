@@ -8,6 +8,7 @@ import {
 	runEventsDatabaseFile,
 } from "#benchmark/run-layout";
 import { openRunEventStore } from "#benchmark/run-events";
+import { liveRunLiveness } from "#benchmark/run-liveness";
 import {
 	liveReconciliationDependencies,
 	reconcileInterruptedRuns,
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
 	const app = createAppServer({
 		runsDirectory,
 		corpusSource: liveCorpusSource(),
+		liveness: liveRunLiveness(),
 		clientDistDirectory: join(CONTROL_DIR, "client", "dist"),
 	});
 

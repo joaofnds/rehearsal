@@ -8,7 +8,10 @@ import {
 	sessionConfirmationRepRecordSchema,
 } from "#benchmark/confirmation-record";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
-import { directorySource } from "#benchmark/run-records-test-support";
+import {
+	directorySource,
+	nothingRunning,
+} from "#benchmark/run-records-test-support";
 import {
 	confirmationGroupPaths,
 	sessionAttemptPaths,
@@ -284,6 +287,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -317,6 +321,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenResumedAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -344,6 +349,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenResumedAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -374,6 +380,7 @@ describe("saved session history API", () => {
 		const before = await digests();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 		const route = `/api/attempts/session/${fixture.caseId}/${fixture.uuid}/history/requests`;
@@ -398,6 +405,7 @@ describe("saved session history API", () => {
 		await symlink(outside, transcript);
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -435,6 +443,7 @@ describe("saved session history API", () => {
 		);
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -482,6 +491,7 @@ describe("saved session history API", () => {
 		);
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -529,6 +539,7 @@ describe("saved session history API", () => {
 		);
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -551,6 +562,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenConfirmationAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -568,6 +580,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenConfirmationAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 
@@ -583,6 +596,7 @@ describe("saved session history API", () => {
 		const fixture = await writtenAttempt();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(fixture.runsDirectory),
 		});
 

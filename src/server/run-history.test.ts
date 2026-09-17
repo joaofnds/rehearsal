@@ -6,9 +6,11 @@ import { CONTROL_DIR } from "#benchmark/config";
 import {
 	directorySource,
 	liveStageSettings,
+	nothingRunning,
 	RecordedRunsFixture,
 } from "#benchmark/run-records-test-support";
 import type { RecordedRunsOptions } from "#benchmark/run-records-test-support";
+import type { RunLiveness } from "#benchmark/run-liveness";
 import { runHistoryReport } from "./run-history";
 
 describe(runHistoryReport.name, () => {
@@ -66,6 +68,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
+			nothingRunning,
 		);
 
 		const row = rows.find(
@@ -88,6 +91,7 @@ describe(runHistoryReport.name, () => {
 		const { rows: beforeRows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(before),
+			nothingRunning,
 		);
 		const beforeDigest = beforeRows.find(
 			(candidate) => candidate.run === fixture.replayableRun,
@@ -98,6 +102,7 @@ describe(runHistoryReport.name, () => {
 		const { rows: afterRows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(after),
+			nothingRunning,
 		);
 		const afterDigest = afterRows.find(
 			(candidate) => candidate.run === fixture.replayableRun,
@@ -115,6 +120,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(edited),
+			nothingRunning,
 		);
 
 		const row = rows.find(
@@ -137,6 +143,7 @@ describe(runHistoryReport.name, () => {
 			const { rows } = await runHistoryReport(
 				fixture.runsDirectory,
 				directorySource(corpus),
+				nothingRunning,
 			);
 
 			expect(rows.map(({ run }) => run)).toContain(fixture.replayableRun);
@@ -154,6 +161,7 @@ describe(runHistoryReport.name, () => {
 			const { rows } = await runHistoryReport(
 				fixture.runsDirectory,
 				directorySource(corpus),
+				nothingRunning,
 			);
 
 			const row = rows.find(
@@ -175,6 +183,7 @@ describe(runHistoryReport.name, () => {
 			const { rows } = await runHistoryReport(
 				fixture.runsDirectory,
 				directorySource(corpus),
+				nothingRunning,
 			);
 
 			expect(
@@ -191,6 +200,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
+			nothingRunning,
 		);
 
 		const row = rows.find(
@@ -200,6 +210,37 @@ describe(runHistoryReport.name, () => {
 		expect(row?.staleCauses).toEqual([]);
 	});
 
+	/**
+	 * The two answers the pid probe can give, without a process to spawn. A
+	 * live marker names a pid this test never checks for real: what the branch
+	 * is being asked is whether it consults the probe at all, and a Fake is the
+	 * only way to ask that deterministically.
+	 */
+	function liveness(alive: boolean): RunLiveness {
+		return {
+			readMarker: () => Promise.resolve({ pid: 4242 }),
+			isAlive: () => alive,
+		};
+	}
+
+	it("reports a run in flight as RUNNING, carrying the case its manifest names", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeRunningRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		const row = rows.find((candidate) => candidate.run === fixture.runningRun);
+		expect(row).toMatchObject({
+			run: fixture.runningRun,
+			caseId: "audit-log",
+			status: "RUNNING",
+		});
+	});
+
 	it("reports a run stopped mid-stage with STOPPED:<stage> and no corpus digest when it recorded no checkpoint", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRun();
@@ -207,6 +248,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		const row = rows.find((candidate) => candidate.run === fixture.stoppedRun);
@@ -227,6 +269,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		const row = rows.find((candidate) => candidate.run === fixture.stoppedRun);
@@ -249,6 +292,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		const row = rows.find(
@@ -268,6 +312,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		const row = rows.find(
@@ -292,6 +337,7 @@ describe(runHistoryReport.name, () => {
 		const { rows, unreadable } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		expect(rows.some((row) => row.run === fixture.stoppedRun)).toBe(false);
@@ -307,6 +353,7 @@ describe(runHistoryReport.name, () => {
 		const { rows, unreadable } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		expect(rows.some((row) => row.run === fixture.interruptedRun)).toBe(false);
@@ -322,6 +369,7 @@ describe(runHistoryReport.name, () => {
 		const { rows } = await runHistoryReport(
 			root,
 			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
 		);
 
 		expect(rows).toEqual([]);
@@ -339,6 +387,7 @@ describe(runHistoryReport.name, () => {
 		const { rows, unreadable } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
+			nothingRunning,
 		);
 
 		expect(rows.some((row) => row.run === fixture.replayableRun)).toBe(false);
@@ -360,6 +409,7 @@ describe(runHistoryReport.name, () => {
 		const { unreadable } = await runHistoryReport(
 			fixture.runsDirectory,
 			directorySource(corpus),
+			nothingRunning,
 		);
 
 		const reason = unreadable.at(0)?.reason ?? "";

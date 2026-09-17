@@ -16,6 +16,7 @@ import {
 	directorySource,
 	liveStageSettings,
 	RecordedRunsFixture,
+	nothingRunning,
 } from "#benchmark/run-records-test-support";
 import type { RecordedRunsOptions } from "#benchmark/run-records-test-support";
 import { CONTROL_DIR } from "#benchmark/config";
@@ -140,6 +141,7 @@ describe(createApiApp.name, () => {
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -183,6 +185,7 @@ describe(createApiApp.name, () => {
 			await fixture.recordCorpusFrom(directorySource(corpus), brokenRun);
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -206,6 +209,7 @@ describe(createApiApp.name, () => {
 			roots.push(root);
 			const app = createApiApp({
 				runsDirectory: root,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 
@@ -230,6 +234,7 @@ describe(createApiApp.name, () => {
 				const fixture = await fixtureRecordingLiveSettings();
 				const app = createApiApp({
 					runsDirectory: fixture.runsDirectory,
+					liveness: nothingRunning,
 					corpusSource,
 				});
 
@@ -302,6 +307,7 @@ describe(createApiApp.name, () => {
 			await fixture.recordCorpusFrom(directorySource(corpus));
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -337,6 +343,7 @@ describe(createApiApp.name, () => {
 			await symlink(outside, join(corpus, "agents"));
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: { kind: "live", root: corpus, backingRoot },
 			});
 
@@ -364,6 +371,7 @@ describe(createApiApp.name, () => {
 			roots.push(runsDirectory);
 			const app = createApiApp({
 				runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -385,6 +393,7 @@ describe(createApiApp.name, () => {
 			);
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -411,6 +420,7 @@ describe(createApiApp.name, () => {
 			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -433,6 +443,7 @@ describe(createApiApp.name, () => {
 			await chmod(join(corpus, "agents", "private.md"), 0o000);
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -458,6 +469,7 @@ describe(createApiApp.name, () => {
 			);
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 
@@ -492,6 +504,7 @@ describe(createApiApp.name, () => {
 				await plant(join(corpus, "agents"));
 				const app = createApiApp({
 					runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+					liveness: nothingRunning,
 					corpusSource: directorySource(corpus),
 				});
 
@@ -515,6 +528,7 @@ describe(createApiApp.name, () => {
 			await symlink(join(outside, "secret.md"), join(corpus, "CLAUDE.md"));
 			const app = createApiApp({
 				runsDirectory: await emptyDirectory("rehearse-api-runs-"),
+				liveness: nothingRunning,
 				corpusSource: { kind: "live", root: corpus, backingRoot },
 			});
 
@@ -541,6 +555,7 @@ describe(createApiApp.name, () => {
 			const fixture = await writtenFixture();
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 
@@ -556,6 +571,7 @@ describe(createApiApp.name, () => {
 			const fixture = await writtenFixture();
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 
@@ -573,6 +589,7 @@ describe(createApiApp.name, () => {
 			const fixture = await writtenFixture();
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 			const id = `checkpoint:${fixture.replayableRun}/no-such-stage`;
@@ -612,6 +629,7 @@ describe(createApiApp.name, () => {
 			store.close();
 			const app = createApiApp({
 				runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 
@@ -630,6 +648,7 @@ describe(createApiApp.name, () => {
 			roots.push(runsDirectory);
 			const app = createApiApp({
 				runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 			const controller = new AbortController();
@@ -653,6 +672,7 @@ describe(createApiApp.name, () => {
 			roots.push(root);
 			const app = createApiApp({
 				runsDirectory: root,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 			app.get("/api/throws", () => {
@@ -673,6 +693,7 @@ describe(createApiApp.name, () => {
 			await rm(join(corpus, "skills", "build"), { recursive: true });
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(corpus),
 			});
 

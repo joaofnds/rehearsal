@@ -17,6 +17,8 @@ import { confirmationGroupRecordSchema } from "./confirmation-record";
 import type { ConfirmationGroupRecord } from "./confirmation-record";
 import type { RunManifest } from "./manifest";
 import { writeRunManifest } from "./manifest";
+import type { RunLiveness } from "./run-liveness";
+import type { RunEventKind } from "./run-events";
 import { openRunEventStore } from "./run-events";
 import type {
 	GroupReportSummaryRecord,
@@ -131,6 +133,16 @@ function manifest(
  * so a test can hand a fixture or a staleness report the same value the
  * command would have resolved.
  */
+/**
+ * The liveness answer for a fixture with no run in flight: every run it writes
+ * is finished, so nothing should reach a pid probe. A test that wants a run
+ * reported as running supplies its own answer instead.
+ */
+export const nothingRunning: RunLiveness = {
+	readMarker: () => Promise.resolve(undefined),
+	isAlive: () => false,
+};
+
 export function directorySource(root: string): CorpusRoot {
 	return { kind: "directory", root };
 }
@@ -374,6 +386,7 @@ export class RecordedRunsFixture {
 	public readonly stoppedRun = "2026-09-04T00-00-00.000Z";
 	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
 	public readonly interruptedRun = "2026-09-06T00-00-00.000Z";
+	public readonly runningRun = "2026-09-07T00-00-00.000Z";
 
 	private readonly settingsFile: HashedFile;
 	private readonly sourceRoot: string;
@@ -702,6 +715,39 @@ export class RecordedRunsFixture {
 			spentUsd: 1,
 			elapsedMs: 5000,
 		});
+		store.close();
+	}
+
+	/**
+	 * A run still executing: its checkpoints directory and manifest exist, no
+	 * artifact and no stop record has been written, and its latest event is
+	 * non-terminal. This is what every run looks like between its first stage
+	 * starting and its artifact landing, so a reader that drops it drops every
+	 * run in flight.
+	 */
+	public async writeRunningRun(
+		kind: RunEventKind = "turn-completed",
+		stage = "build",
+		spentUsd = 0.9,
+		elapsedMs = 9000,
+	): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.runningRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.runningRun, this.sourceRoot),
+		);
+		const store = await openRunEventStore(
+			runEventsDatabaseFile(this.runsDirectory),
+		);
+		store.append({
+			runId: this.runningRun,
+			kind: "stage-started",
+			stage,
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+		store.append({ runId: this.runningRun, kind, stage, spentUsd, elapsedMs });
 		store.close();
 	}
 

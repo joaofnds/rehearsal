@@ -8,11 +8,15 @@ import {
 	recordedRunNames,
 	runEventsDatabaseFile,
 } from "#benchmark/run-layout";
-import type { RunEventStore } from "#benchmark/run-events";
-import { openRunEventStore } from "#benchmark/run-events";
+import type { RunEvent, RunEventStore } from "#benchmark/run-events";
+import {
+	isTerminalRunEventKind,
+	openRunEventStore,
+} from "#benchmark/run-events";
 import { parseRunSummaryRecord } from "#benchmark/record-summary";
 import { stoppedStage } from "#benchmark/run-outcome";
 import { staleCheckpoints } from "#benchmark/staleness-report";
+import type { RunLiveness } from "#benchmark/run-liveness";
 import { corpusDigest } from "./corpus-digest";
 import { redactAbsolutePaths } from "./redact-path";
 
@@ -87,10 +91,37 @@ async function manifestBackedIdentity(
 	};
 }
 
+/**
+ * A run in flight, in the sense doc-113 named: a non-terminal latest event, no
+ * artifact (the caller already checked), and a claim marker whose pid is still
+ * alive. The pid is what keeps the badge honest. Reconciliation only runs at
+ * server startup, so without this probe a run killed while the server stayed up
+ * would read as RUNNING forever.
+ */
+async function isRunInFlight(
+	paths: BenchmarkRunPaths,
+	latest: RunEvent | undefined,
+	liveness: RunLiveness,
+): Promise<boolean> {
+	if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
+		return false;
+	}
+
+	if (!(await Bun.file(paths.manifestFile).exists())) {
+		return false;
+	}
+
+	const manifest = await loadRunManifest(paths.manifestFile);
+	const marker = await liveness.readMarker(manifest.sourceRoot);
+
+	return marker !== undefined && liveness.isAlive(marker.pid);
+}
+
 async function statusAndCaseId(
 	runsDirectory: string,
 	run: string,
 	runEvents: RunEventStore,
+	liveness: RunLiveness,
 ): Promise<RunIdentity | undefined> {
 	const paths = benchmarkRunPaths(runsDirectory, run);
 	if (await Bun.file(paths.artifactFile).exists()) {
@@ -125,6 +156,10 @@ async function statusAndCaseId(
 		return manifestBackedIdentity(paths, "INTERRUPTED");
 	}
 
+	if (await isRunInFlight(paths, runEvents.latestEvent(run), liveness)) {
+		return manifestBackedIdentity(paths, "RUNNING");
+	}
+
 	return undefined;
 }
 
@@ -133,8 +168,14 @@ async function rowFor(
 	run: string,
 	staleByCheckpointId: ReadonlyMap<string, readonly string[]>,
 	runEvents: RunEventStore,
+	liveness: RunLiveness,
 ): Promise<RunHistoryRow | undefined> {
-	const identity = await statusAndCaseId(runsDirectory, run, runEvents);
+	const identity = await statusAndCaseId(
+		runsDirectory,
+		run,
+		runEvents,
+		liveness,
+	);
 	if (identity === undefined) {
 		return undefined;
 	}
@@ -200,6 +241,7 @@ export interface RunHistoryReport {
 export async function runHistoryReport(
 	runsDirectory: string,
 	source: CorpusRoot,
+	liveness: RunLiveness,
 ): Promise<RunHistoryReport> {
 	const stale = await staleCheckpoints(runsDirectory, source);
 	const staleByCheckpointId = new Map(
@@ -219,6 +261,7 @@ export async function runHistoryReport(
 					run,
 					staleByCheckpointId,
 					runEvents,
+					liveness,
 				);
 				if (row !== undefined) {
 					rows.push(row);

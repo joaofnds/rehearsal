@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
 	directorySource,
 	RecordedRunsFixture,
+	nothingRunning,
 } from "#benchmark/run-records-test-support";
 import {
 	COMPARISON_ARMS,
@@ -212,6 +213,7 @@ describe("GET /api/comparisons/:digest", () => {
 		const fixture = await writtenFixture();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -269,6 +271,7 @@ describe("GET /api/comparisons/:digest", () => {
 		await rewriteFixtureAsSession(fixture);
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -293,6 +296,7 @@ describe("GET /api/comparisons/:digest", () => {
 			await rewriteFixtureAsLegacyPipeline(fixture, version);
 			const app = createApiApp({
 				runsDirectory: fixture.runsDirectory,
+				liveness: nothingRunning,
 				corpusSource: directorySource(await corpusDirectory()),
 			});
 
@@ -311,6 +315,7 @@ describe("GET /api/comparisons/:digest", () => {
 		const fixture = await writtenFixture();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -343,6 +348,7 @@ describe("GET /api/comparisons/:digest", () => {
 		const fixture = await writtenFixture();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -377,6 +383,7 @@ describe("GET /api/comparisons/:digest", () => {
 		const fixture = await writtenFixture();
 		const app = createApiApp({
 			runsDirectory: fixture.runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -397,6 +404,7 @@ describe("GET /api/comparisons/:digest", () => {
 		roots.push(root);
 		const app = createApiApp({
 			runsDirectory: root,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 
@@ -413,6 +421,7 @@ describe("GET /api/comparisons/:digest", () => {
 		roots.push(root);
 		const app = createApiApp({
 			runsDirectory: root,
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 		});
 

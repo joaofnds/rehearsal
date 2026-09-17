@@ -7,7 +7,10 @@ import {
 	sessionConfirmationRepRecordSchema,
 } from "#benchmark/confirmation-record";
 import { confirmationGroupPaths } from "#benchmark/run-layout";
-import { directorySource } from "#benchmark/run-records-test-support";
+import {
+	directorySource,
+	nothingRunning,
+} from "#benchmark/run-records-test-support";
 import { sessionAttemptRecordSchema } from "#benchmark/session-record";
 import { createApiApp } from "./api";
 import { comparisonAttemptHistoryLink } from "./comparison-history-links";
@@ -139,6 +142,7 @@ describe(comparisonAttemptHistoryLink.name, () => {
 		});
 		const response = await createApiApp({
 			runsDirectory,
+			liveness: nothingRunning,
 			corpusSource: directorySource(root),
 		}).request("/api/groups/group-a/reps/group-a-rep-1/attempt/history");
 		expect(response.status).toBe(200);

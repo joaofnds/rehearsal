@@ -18,6 +18,7 @@ import { comparisonReport } from "./comparisons";
 import { comparisonAttemptHistoryLinks } from "./comparison-history-links";
 import { corpusReport } from "./corpus-report";
 import { redactAbsolutePaths, redactedFilePath } from "./redact-path";
+import type { RunLiveness } from "#benchmark/run-liveness";
 import { runHistoryReport } from "./run-history";
 import {
 	readConfirmationAttemptHistory,
@@ -107,6 +108,7 @@ async function streamRunEvents(
 export interface ApiDependencies {
 	readonly runsDirectory: string;
 	readonly corpusSource: CorpusRoot;
+	readonly liveness: RunLiveness;
 }
 
 /**
@@ -129,6 +131,7 @@ export const createApiApp = (dependencies: ApiDependencies) => {
 			const report = await runHistoryReport(
 				dependencies.runsDirectory,
 				dependencies.corpusSource,
+				dependencies.liveness,
 			);
 
 			return context.json(report);

@@ -3,7 +3,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { directorySource } from "#benchmark/run-records-test-support";
+import {
+	directorySource,
+	nothingRunning,
+} from "#benchmark/run-records-test-support";
 import { createAppServer } from "./app";
 
 const runHistoryResponseSchema = z.object({ rows: z.array(z.unknown()) });
@@ -48,6 +51,7 @@ describe(createAppServer.name, () => {
 	it("serves the API under /api", async () => {
 		const app = createAppServer({
 			runsDirectory: await runsDirectory(),
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 			clientDistDirectory: await clientDistDirectory(),
 		});
@@ -62,6 +66,7 @@ describe(createAppServer.name, () => {
 	it("serves a built client asset by path", async () => {
 		const app = createAppServer({
 			runsDirectory: await runsDirectory(),
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 			clientDistDirectory: await clientDistDirectory(),
 		});
@@ -76,6 +81,7 @@ describe(createAppServer.name, () => {
 	it("falls back to index.html for a client-side route the router owns", async () => {
 		const app = createAppServer({
 			runsDirectory: await runsDirectory(),
+			liveness: nothingRunning,
 			corpusSource: directorySource(await corpusDirectory()),
 			clientDistDirectory: await clientDistDirectory(),
 		});
