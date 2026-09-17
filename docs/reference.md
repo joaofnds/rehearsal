@@ -98,9 +98,10 @@ Commands that write a record generally print its path, or its bytes with
 bytes otherwise; `show --json` prints the selected file's bytes. `list` and
 `stale` do not accept `--json`.
 
-Stdout carries the record and nothing else. Progress lines, agent turns, grades,
-diagnostics, and session check summaries all use stderr, so redirecting
-`run --json` or `replay --json` captures a document a parser accepts.
+A command that writes a record puts that record, or its path, on stdout and
+nothing else. Progress lines, grades, diagnostics, and session check summaries
+use stderr, so redirecting `run --json` or `replay --json` captures a document a
+parser accepts.
 
 ## Cases and pipelines
 

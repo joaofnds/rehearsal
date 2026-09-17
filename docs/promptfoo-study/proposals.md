@@ -258,8 +258,9 @@ private transcripts.
 **Evidence and current position.** Promptfoo's JSON/JUnit outputs and exit gates
 fit standard CI, while its in-place retry illustrates the risk of losing the
 original error history. Rehearse has scriptable saved reports, staleness checks,
-and an accepted content-free aggregate export, but pipeline progress can mix
-with JSON stdout. [CI gate][p-gate], [retry][p-retry],
+and an accepted content-free aggregate export. Pipeline progress could mix with
+JSON stdout when this study was written; it now goes to stderr, so the
+adaptation below no longer waits on that. [CI gate][p-gate], [retry][p-retry],
 [current limits](../status.md#known-limitations).
 
 **Adaptation: product inspiration.** First export a versioned comparison summary
@@ -269,7 +270,7 @@ already accepted. Offer JUnit as an index into the authoritative comparison
 JSON, not the full measurement contract. Use distinct machine outcomes for
 supported pass, supported regression, and invalid/inconclusive evidence; a
 pipeline may choose to block on the last state without calling it regression.
-Fix stdout/stderr discipline before documenting a new machine pipeline.
+Stdout/stderr discipline, which this study named as a prerequisite, is done.
 
 A later CI recipe should separate trusted scheduled/manual paid execution from
 read-only PR report checks, with a pinned suite and explicit budget. Resolve
