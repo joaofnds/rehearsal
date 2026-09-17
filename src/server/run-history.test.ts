@@ -241,6 +241,71 @@ describe(runHistoryReport.name, () => {
 		});
 	});
 
+	it("carries the executing stage, elapsed time, and scoped spend on a running row", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeRunningRun("turn-completed", "build", 0.9, 9000);
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		const row = rows.find((candidate) => candidate.run === fixture.runningRun);
+		expect(row?.progress).toEqual({
+			state: "running",
+			stage: "build",
+			elapsedMs: 9000,
+			spentUsd: 0.9,
+			spendScope: "this stage's session so far",
+		});
+	});
+
+	/**
+	 * `spentUsd` means a different thing in each event kind, so the figure
+	 * travels with the words describing what it covers. A reader that called
+	 * every one of these "spent this run" would report a number that falls when
+	 * a stage begins judging.
+	 */
+	it.each([
+		["stage-started", "the stages finished before this one"],
+		["turn-completed", "this stage's session so far"],
+		["stage-judging", "this stage's session"],
+		["stage-completed", "this stage's session and its judge"],
+	] as const)(
+		"describes a spend reading from a %s event as covering %s",
+		async (kind, scope) => {
+			const fixture = await writtenFixture();
+			await fixture.writeRunningRun(kind, "build", 1.25, 4000);
+
+			const { rows } = await runHistoryReport(
+				fixture.runsDirectory,
+				directorySource(await corpusDirectory("build skill\n")),
+				liveness(true),
+			);
+
+			const row = rows.find(
+				(candidate) => candidate.run === fixture.runningRun,
+			);
+			expect(row?.progress).toMatchObject({ spendScope: scope });
+		},
+	);
+
+	it("marks a finished run's row as recorded rather than running", async () => {
+		const fixture = await writtenFixture();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			nothingRunning,
+		);
+
+		const row = rows.find(
+			(candidate) => candidate.run === fixture.replayableRun,
+		);
+		expect(row?.progress).toEqual({ state: "recorded" });
+	});
+
 	it("does not report a run as running when the process that claimed its target is gone", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeRunningRun();
@@ -372,6 +437,7 @@ describe(runHistoryReport.name, () => {
 			corpus: undefined,
 			stale: true,
 			staleCauses: ["stage settings file stage-settings.json changed"],
+			progress: { state: "recorded" },
 		});
 	});
 
@@ -417,6 +483,7 @@ describe(runHistoryReport.name, () => {
 			corpus: undefined,
 			stale: true,
 			staleCauses: ["stage settings file stage-settings.json changed"],
+			progress: { state: "recorded" },
 		});
 	});
 

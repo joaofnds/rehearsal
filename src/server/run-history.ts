@@ -8,7 +8,11 @@ import {
 	recordedRunNames,
 	runEventsDatabaseFile,
 } from "#benchmark/run-layout";
-import type { RunEvent, RunEventStore } from "#benchmark/run-events";
+import type {
+	NonTerminalRunEventKind,
+	RunEvent,
+	RunEventStore,
+} from "#benchmark/run-events";
 import {
 	isTerminalRunEventKind,
 	openRunEventStore,
@@ -19,6 +23,42 @@ import { staleCheckpoints } from "#benchmark/staleness-report";
 import type { RunLiveness } from "#benchmark/run-liveness";
 import { corpusDigest } from "./corpus-digest";
 import { redactAbsolutePaths } from "./redact-path";
+
+/**
+ * What a run's `spentUsd` covers, in words, decided by the event kind that
+ * produced the figure. Every kind reports a different scope and none of them
+ * is the run total: a display that called them all "spent this run" would
+ * show a number that falls when a stage begins judging. The words are chosen
+ * here rather than in the client because which scope a kind carries is the
+ * emitter's knowledge, verified at the four emission sites in `run.ts`,
+ * `workflow.ts` and `run-abort.ts`.
+ */
+const SPEND_SCOPE = {
+	"stage-started": "the stages finished before this one",
+	"turn-completed": "this stage's session so far",
+	"stage-judging": "this stage's session",
+	"stage-completed": "this stage's session and its judge",
+} as const satisfies Record<NonTerminalRunEventKind, string>;
+
+type SpendScope = (typeof SPEND_SCOPE)[keyof typeof SPEND_SCOPE];
+
+/**
+ * A run's live readings, present together or not at all. A finished run has
+ * none of them, and a running one has all four, so they sit behind one
+ * discriminant rather than as four fields a reader could find half-filled.
+ * The executing stage is here rather than on the row's own `stage`, which
+ * means the last checkpoint recorded and drives the grade, digest, and
+ * staleness readings: the stage now executing has written no checkpoint yet.
+ */
+export type RunProgress =
+	| { readonly state: "recorded" }
+	| {
+			readonly state: "running";
+			readonly stage: string;
+			readonly elapsedMs: number;
+			readonly spentUsd: number;
+			readonly spendScope: SpendScope;
+	  };
 
 /**
  * One run-history row, in decision-5's code vocabulary (`run`, `caseId`,
@@ -35,6 +75,7 @@ export interface RunHistoryRow {
 	readonly corpus: { readonly digest: string } | undefined;
 	readonly stale: boolean;
 	readonly staleCauses: readonly string[];
+	readonly progress: RunProgress;
 }
 
 /**
@@ -66,6 +107,7 @@ interface RunIdentity {
 	readonly status: string;
 	readonly caseId: string;
 	readonly gradeByStage: ReadonlyMap<string, string>;
+	readonly progress: RunProgress;
 }
 
 /**
@@ -74,9 +116,12 @@ interface RunIdentity {
  * run whose manifest never got written rather than reporting it with no
  * case ID.
  */
+const RECORDED: RunProgress = { state: "recorded" };
+
 async function manifestBackedIdentity(
 	paths: BenchmarkRunPaths,
 	status: string,
+	progress: RunProgress = RECORDED,
 ): Promise<RunIdentity> {
 	if (!(await Bun.file(paths.manifestFile).exists())) {
 		throw new Error(`incomplete: no manifest.json at ${paths.manifestFile}`);
@@ -88,30 +133,50 @@ async function manifestBackedIdentity(
 		status,
 		caseId: manifest.caseId,
 		gradeByStage: new Map(),
+		progress,
 	};
 }
 
 /**
- * A run in flight, in the sense doc-113 named: a non-terminal latest event, no
- * artifact (the caller already checked), and a claim marker whose pid is still
- * alive. The pid is what keeps the badge honest. Reconciliation only runs at
- * server startup, so without this probe a run killed while the server stayed up
- * would read as RUNNING forever.
+ * The readings a non-terminal event carries, or undefined when the run's
+ * stream says it has already finished. A terminal kind here is not a run in
+ * flight even with a live marker on its target: a signal abort with no pending
+ * artifact records `run-failed` and writes no artifact file, leaving a
+ * finished run whose target still holds the claim it never restored.
  */
-async function isRunInFlight(
-	paths: BenchmarkRunPaths,
+function runningProgress(
 	latest: RunEvent | undefined,
+): RunProgress | undefined {
+	if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
+		return undefined;
+	}
+
+	const spendScope = SPEND_SCOPE[latest.kind];
+
+	return {
+		state: "running",
+		stage: latest.stage,
+		elapsedMs: latest.elapsedMs,
+		spentUsd: latest.spentUsd,
+		spendScope,
+	};
+}
+
+/**
+ * Whether the target this run claimed is still held by a live process. The pid
+ * is what keeps the badge honest: reconciliation runs only at server startup,
+ * so without this probe a run killed while the server stayed up would read as
+ * RUNNING forever.
+ */
+async function claimsLiveTarget(
+	manifestFile: string,
 	liveness: RunLiveness,
 ): Promise<boolean> {
-	if (latest === undefined || isTerminalRunEventKind(latest.kind)) {
+	if (!(await Bun.file(manifestFile).exists())) {
 		return false;
 	}
 
-	if (!(await Bun.file(paths.manifestFile).exists())) {
-		return false;
-	}
-
-	const manifest = await loadRunManifest(paths.manifestFile);
+	const manifest = await loadRunManifest(manifestFile);
 	const marker = await liveness.readMarker(manifest.sourceRoot);
 
 	return marker !== undefined && liveness.isAlive(marker.pid);
@@ -132,6 +197,7 @@ async function statusAndCaseId(
 		return {
 			status: record.status,
 			caseId: record.caseId,
+			progress: RECORDED,
 			gradeByStage: new Map(
 				record.stageScorecards.map((scorecard) => [
 					scorecard.stage,
@@ -156,8 +222,12 @@ async function statusAndCaseId(
 		return manifestBackedIdentity(paths, "INTERRUPTED");
 	}
 
-	if (await isRunInFlight(paths, runEvents.latestEvent(run), liveness)) {
-		return manifestBackedIdentity(paths, "RUNNING");
+	const progress = runningProgress(runEvents.latestEvent(run));
+	if (
+		progress !== undefined &&
+		(await claimsLiveTarget(paths.manifestFile, liveness))
+	) {
+		return manifestBackedIdentity(paths, "RUNNING", progress);
 	}
 
 	return undefined;
@@ -180,7 +250,7 @@ async function rowFor(
 		return undefined;
 	}
 
-	const { status, caseId, gradeByStage } = identity;
+	const { status, caseId, gradeByStage, progress } = identity;
 	const stage = await latestCheckpointStage(runsDirectory, run);
 	if (stage === undefined) {
 		const causes = staleByCheckpointId.get(`checkpoint:${run}/initial`) ?? [];
@@ -194,6 +264,7 @@ async function rowFor(
 			corpus: undefined,
 			stale: causes.length > 0,
 			staleCauses: causes,
+			progress,
 		};
 	}
 
@@ -212,6 +283,7 @@ async function rowFor(
 		corpus: { digest: corpusDigest(checkpoint.corpusFiles) },
 		stale: causes.length > 0,
 		staleCauses: causes,
+		progress,
 	};
 }
 

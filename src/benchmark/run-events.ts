@@ -15,11 +15,27 @@ const runEventKindSchema = z.enum([
 
 export type RunEventKind = z.infer<typeof runEventKindSchema>;
 
-const TERMINAL_RUN_EVENT_KINDS: ReadonlySet<RunEventKind> = new Set([
+const TERMINAL_RUN_EVENT_KINDS = [
 	"run-completed",
 	"run-failed",
 	"run-interrupted",
-]);
+] as const satisfies readonly RunEventKind[];
+
+export type TerminalRunEventKind = (typeof TERMINAL_RUN_EVENT_KINDS)[number];
+
+/**
+ * The kinds a run emits while it is still going. Named as the complement of
+ * the terminal set rather than listed again, so a kind added to the enum
+ * belongs to exactly one of the two without a second edit.
+ */
+export type NonTerminalRunEventKind = Exclude<
+	RunEventKind,
+	TerminalRunEventKind
+>;
+
+const TERMINAL_KIND_SET: ReadonlySet<RunEventKind> = new Set(
+	TERMINAL_RUN_EVENT_KINDS,
+);
 
 /**
  * A run's event stream needs nothing further once it reaches one of these:
@@ -27,8 +43,10 @@ const TERMINAL_RUN_EVENT_KINDS: ReadonlySet<RunEventKind> = new Set([
  * single source both readers share, so a future RunEventKind added here
  * cannot desync which kinds end a stream between them.
  */
-export function isTerminalRunEventKind(kind: RunEventKind): boolean {
-	return TERMINAL_RUN_EVENT_KINDS.has(kind);
+export function isTerminalRunEventKind(
+	kind: RunEventKind,
+): kind is TerminalRunEventKind {
+	return TERMINAL_KIND_SET.has(kind);
 }
 
 export interface NewRunEvent {
