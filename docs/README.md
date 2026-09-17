@@ -20,6 +20,8 @@ Start with the [project README](../README.md) for the purpose and first commands
   for request inspection, integration breakdowns, artifact capture, and analysis APIs.
 - [Promptfoo study](promptfoo-study.md): comparative product and engineering evidence,
   prioritized proposals, and proposed challenges to Rehearse’s direction.
+- [TypeSafe study](typesafe-study.md): feasibility, evidence limits, and a proposed
+  evaluation of Jev for semantic judging.
 - [Architecture](design.md): current components and execution boundaries.
 - [Glossary](../GLOSSARY.md): domain terms, including the UI's vocabulary mapping.
 - [Research](research.md): primary sources behind the evaluation methodology.
