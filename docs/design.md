@@ -7,15 +7,15 @@ records the gaps in its implementation.
 
 ## Components
 
-| Location                              | Responsibility                                                                                |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`rehearse.ts`](../rehearse.ts)       | Bun version gate and command dispatch                                                         |
-| [`src/cli/`](../src/cli/)             | Command definitions, argument policy, terminal gates, output, and harness wiring              |
-| [`src/benchmark/`](../src/benchmark/) | Case loading, provider invocation, execution, grading, checkpoints, records, and comparisons  |
-| [`src/server/`](../src/server/)       | Read API, derived reports, event streaming, startup reconciliation, and static client serving |
-| [`client/src/`](../client/src/)       | React routes and shared design system                                                         |
-| [`cases/`](../cases/)                 | Benchmark declarations, fixtures, transcript prefixes, tasks, and rubrics                     |
-| `.benchmark-runs/`                    | Local evidence, confirmation groups, comparisons, and event database                          |
+| Location                              | Responsibility                                                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [`rehearse.ts`](../rehearse.ts)       | Bun version gate and command dispatch                                                                                  |
+| [`src/cli/`](../src/cli/)             | Command definitions, argument policy, terminal gates, output, and harness wiring                                       |
+| [`src/benchmark/`](../src/benchmark/) | Case loading, provider invocation, execution, grading, checkpoints, records, and comparisons                           |
+| [`src/server/`](../src/server/)       | Read API, derived reports, event streaming, startup reconciliation, target liveness probing, and static client serving |
+| [`client/src/`](../client/src/)       | React routes and shared design system                                                                                  |
+| [`cases/`](../cases/)                 | Benchmark declarations, fixtures, transcript prefixes, tasks, and rubrics                                              |
+| `.benchmark-runs/`                    | Local evidence, confirmation groups, comparisons, and event database                                                   |
 
 Zod validates case and record boundaries. Bun's test runner covers the harness
 and server; the client suite uses a DOM environment. The current client uses
@@ -35,6 +35,7 @@ compare   → existing stage/pipeline/session groups → validated comparison re
 
 JSON records → Hono read API → React views
 Run events  → SQLite store → SSE endpoint
+            → SQLite store → Hono read API → React views
 ```
 
 A debug pipeline runs directly on the target's clean `main`. It seeds a task,
@@ -102,10 +103,17 @@ supported historical formats rather than rewriting old evidence.
 
 The SQLite database at `.benchmark-runs/run-events.sqlite` stores progress
 notifications. The server streams those through `/api/runs/:run/events` and
-reconciles abandoned processes at startup. Event recording is best effort; it
-must not turn a successful experiment into a failed one. It is not a substitute
-for the final artifact. There is no command that reconstructs a deleted event
-history from JSON records.
+reconciles abandoned processes at startup. The run-history report reads the
+same store to tell a run in flight from one that ended. It reads the store only
+after the authoritative files answer nothing: an artifact or a stop record
+settles a run's outcome on its own, and the stream is consulted for the runs
+those files do not cover. A non-terminal stream is not enough by itself, so the
+report also checks that the process holding the run's target is alive. A run
+that dies while the server keeps running leaves its stream non-terminal, and
+startup is the only moment reconciliation could correct that.
+Event recording is best effort; it must not turn a successful experiment into a
+failed one. It is not a substitute for the final artifact. There is no command
+that reconstructs a deleted event history from JSON records.
 
 See [record formats and target restoration](reference.md) for storage paths,
 identifiers, retained candidates, and recovery boundaries.

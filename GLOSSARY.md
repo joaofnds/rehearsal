@@ -358,6 +358,25 @@ See [current state](docs/status.md) for implementation coverage and
   server's SSE endpoint. It is best-effort derived progress state. JSON
   artifacts remain authoritative for recorded conclusions; there is no
   event-history rebuild command.
+- **Run in flight** — a run that is executing right now: its event stream's
+  latest entry is non-terminal, no artifact or stop record has been written for
+  it, and the process that claimed its target is still alive. The run-history
+  report gives such a run the status `RUNNING`. The liveness check is what
+  separates it from an interrupted run, whose stream also ends non-terminal. A
+  target holds one claim at a time and that claim names no run, so the check
+  answers for the target: a crashed run whose target a later run has claimed can
+  still read as in flight.
+- **Run spend** — what a whole run has paid, across worker sessions, Judges, and
+  the Product Owner. Only a terminal run event carries it, `run-completed` or a
+  `run-failed` with a persisted artifact. Distinct from stage spend and from the
+  per-session limit the session knobs set.
+- **Stage spend** — what one stage has cost. Every non-terminal run event
+  carries a spend figure, and the event's kind decides which stage spend it is:
+  `stage-started` reports the stages finished before this one, `turn-completed`
+  this stage's session so far, `stage-judging` this stage's finished session,
+  and `stage-completed` that session together with its Judge. None of them is
+  run spend, which is why a reading of one is shown with the words for what it
+  covers.
 - **Unreadable run** — a recorded run whose own files the run-history report
   could not read into a row, carried by its record ID and a reason with
   absolute paths redacted. A malformed artifact, or a manifest missing from a

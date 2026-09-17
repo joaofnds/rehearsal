@@ -1,6 +1,6 @@
 # Current state and priorities
 
-Reviewed against the code and project board on **2026-09-16**. This is the public
+Reviewed against the code and project board on **2026-09-17**. This is the public
 feature inventory, not a release guarantee. The [vision](vision.md) describes the
 longer-term goal; the [runbook](runbook.md) describes the supported first steps.
 
@@ -90,25 +90,31 @@ verdict.
   state distinguishes a complete observed zero from partial or unavailable
   evidence.
 - **Progress events are not a resource timeline.** They contain no token/load
-  events, and spend changes scope between worker turns, stage completion, and
-  run completion. Aggregate provider usage cannot establish active context size
-  or a file's causal cost. See the [context assessment](context-visibility.md)
-  before drawing attribution conclusions.
+  events, and spend changes scope between stage start, worker turns, stage
+  judging, stage completion, and run completion. The run list names what each
+  reading covers rather than resolving the scopes into a running total, which no
+  non-terminal event carries. Aggregate provider usage cannot establish active
+  context size or a file's causal cost. See the
+  [context assessment](context-visibility.md) before drawing attribution
+  conclusions.
 
 ## Browser UI
 
-| Route                                | Available today                                                                                                      |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `/`                                  | Run-history report with each row's staleness causes and the runs it could not read, including empty and error states |
-| `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                                         |
-| `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links                     |
-| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history, with the per-request token and cost timeline                               |
-| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history, with the per-request token and cost timeline                                 |
-| `/system`                            | Design tokens and reusable component gallery                                                                         |
+| Route                                | Available today                                                                                                                                                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                  | Run-history report with each row's staleness causes and the runs it could not read, including empty and error states; a run in flight appears as a RUNNING row carrying its stage, elapsed time, and scoped spend |
+| `/corpus`                            | Live corpus inventory; instruction editing is marked planned                                                                                                                                                      |
+| `/comparisons/<digest>`              | Saved case/arm distributions, attribution, quality readings, and validated session-attempt links                                                                                                                  |
+| `/attempts/session/<case>/<uuid>`    | Saved standalone session context history, with the per-request token and cost timeline                                                                                                                            |
+| `/groups/<group>/reps/<rep>/attempt` | Saved confirmation-rep context history, with the per-request token and cost timeline                                                                                                                              |
+| `/system`                            | Design tokens and reusable component gallery                                                                                                                                                                      |
 
-Run launch, live monitor, full run detail, task/case management, calibration
-screens, settings, and first-run setup are design targets. The SSE API already
-exists, but a completed live-monitor screen does not. The server has no
+Run launch, full run detail, task/case management, calibration screens,
+settings, and first-run setup are design targets. Live monitoring is partly
+delivered: the run list reports a run in flight with its stage, elapsed time and
+scoped spend, while a monitor carrying the judge's reasoning and per-stage detail
+remains a design target. That row reads the event store through the same polled
+route the list uses rather than through the SSE API. The server has no
 authentication and binds to IPv4 loopback; use it locally.
 
 ## Near-term priorities
