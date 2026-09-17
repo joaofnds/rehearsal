@@ -21,10 +21,12 @@ mise exec -- bun install --frozen-lockfile
 Code separately for real experiments. Provider calls cost money; ordinary
 development checks use fakes and local filesystem fixtures.
 
-Run these from the repository root. A run started under a Bun other than the
-pinned one stops with `Use Bun 1.4.0; current version is <yours>`; run
-`mise install`, or prefix the command with `mise exec --`, to get the pinned
-one.
+Run these from the repository root. A test run started under a Bun other than
+the pinned one stops on its first file with `Use Bun 1.4.0; current version is
+<yours>`. Prefix the command with `mise exec --` to get the pinned Bun, or
+activate mise in your shell so `bun` resolves to it. The other checks here run
+oxlint, tsc, oxfmt, stylelint, and Vite as child processes, so they pass under
+any Bun and report no mismatch.
 
 ```sh
 bun run typecheck
