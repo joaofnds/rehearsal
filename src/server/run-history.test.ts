@@ -241,6 +241,96 @@ describe(runHistoryReport.name, () => {
 		});
 	});
 
+	it("does not report a run as running when the process that claimed its target is gone", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeRunningRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(false),
+		);
+
+		expect(
+			rows.find((candidate) => candidate.run === fixture.runningRun),
+		).toBeUndefined();
+	});
+
+	/**
+	 * A target with no claim marker has no run on it: the run either finished
+	 * and restored the target, or never claimed it. Reconciliation reads the
+	 * same absence as "nothing to reconcile" and leaves the run alone, which is
+	 * why this reader cannot borrow that answer.
+	 */
+	it("does not report a run as running when its target carries no claim marker", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeRunningRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			{ readMarker: () => Promise.resolve(undefined), isAlive: () => true },
+		);
+
+		expect(
+			rows.find((candidate) => candidate.run === fixture.runningRun),
+		).toBeUndefined();
+	});
+
+	it("does not report a finished run as running, whatever the target's marker says", async () => {
+		const fixture = await writtenFixture();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		expect(rows.map(({ status }) => status)).not.toContain("RUNNING");
+	});
+
+	/**
+	 * A target keeps its claim marker until the run restores it, and an
+	 * interrupted run never got to. So a live marker sits beside an already
+	 * terminal event stream, and only the event kind separates the two.
+	 */
+	it("keeps reporting an interrupted run as INTERRUPTED while its target's marker is still live", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeInterruptedRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		const row = rows.find(
+			(candidate) => candidate.run === fixture.interruptedRun,
+		);
+		expect(row).toMatchObject({ status: "INTERRUPTED" });
+	});
+
+	/**
+	 * A signal abort records a terminal `run-failed` and writes no artifact, so
+	 * nothing above the running check claims this run. Its target keeps the
+	 * claim marker the aborted run never restored, which is a live pid beside a
+	 * finished run: only the event kind tells them apart.
+	 */
+	it("does not report a signal-aborted run as running though its target's marker is still live", async () => {
+		const fixture = await writtenFixture();
+		await fixture.writeSignalAbortedRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		expect(
+			rows.find((candidate) => candidate.run === fixture.abortedRun),
+		).toBeUndefined();
+	});
+
 	it("reports a run stopped mid-stage with STOPPED:<stage> and no corpus digest when it recorded no checkpoint", async () => {
 		const fixture = await writtenFixture();
 		await fixture.writeStoppedRun();

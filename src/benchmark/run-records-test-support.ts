@@ -387,6 +387,7 @@ export class RecordedRunsFixture {
 	public readonly noRecordRun = "2026-09-05T00-00-00.000Z";
 	public readonly interruptedRun = "2026-09-06T00-00-00.000Z";
 	public readonly runningRun = "2026-09-07T00-00-00.000Z";
+	public readonly abortedRun = "2026-09-08T00-00-00.000Z";
 
 	private readonly settingsFile: HashedFile;
 	private readonly sourceRoot: string;
@@ -748,6 +749,40 @@ export class RecordedRunsFixture {
 			elapsedMs: 0,
 		});
 		store.append({ runId: this.runningRun, kind, stage, spentUsd, elapsedMs });
+		store.close();
+	}
+
+	/**
+	 * A run a signal aborted mid-stage before any artifact was pending: the
+	 * abort handler records `run-failed` and no artifact file is ever written
+	 * (`run-abort.ts`'s `markAborted`). So the run has a terminal event, no
+	 * artifact, no stop record, and is not `run-interrupted`, which is the one
+	 * combination that reaches the running check with a finished run.
+	 */
+	public async writeSignalAbortedRun(): Promise<void> {
+		const paths = benchmarkRunPaths(this.runsDirectory, this.abortedRun);
+		await mkdir(paths.checkpointsDirectory, { recursive: true });
+		await writeRunManifest(
+			paths.manifestFile,
+			manifest(this.abortedRun, this.sourceRoot),
+		);
+		const store = await openRunEventStore(
+			runEventsDatabaseFile(this.runsDirectory),
+		);
+		store.append({
+			runId: this.abortedRun,
+			kind: "stage-started",
+			stage: "build",
+			spentUsd: 0,
+			elapsedMs: 0,
+		});
+		store.append({
+			runId: this.abortedRun,
+			kind: "run-failed",
+			stage: "build",
+			spentUsd: 2,
+			elapsedMs: 7000,
+		});
 		store.close();
 	}
 
