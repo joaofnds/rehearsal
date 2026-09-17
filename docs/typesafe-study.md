@@ -1,14 +1,19 @@
 # TypeSafe as a Judge for Rehearse
 
 Study date: **2026-09-17**. Status: **mixed-strategy judging is confirmed product
-direction; Jev integration and its evaluation remain proposals**. No runtime
+direction; Jev integration and its evaluation are deferred proposals**. No runtime
 behavior is changed by this study. Repository and SDK revisions, local probes,
 source coverage, and remaining empirical gaps are in the
 [evidence record](typesafe-study/evidence.md).
 
 ## Recommendation
 
-**Add Jev to the strategies considered for Rehearse's judging system, and test
+**Complete the current work to make Rehearse usable as it stands before starting
+additional judging integrations.** The product owner's priority is usability of
+the existing product; mixed-strategy judging is the next task after that work.
+This study preserves the research and proposed approach for that later task.
+
+For that follow-on task, **add Jev to the strategies considered for Rehearse's judging system, and test
 the value it contributes alongside deterministic checks and other LLM judges.**
 The product direction is a mix of strategies chosen for the criteria they
 evaluate. Jev's API fits that direction; whether it adds reliable coverage at an
@@ -525,11 +530,12 @@ Judge.
 - If evidence preparation or fallback consumes the benefit, stop the integration
   and prioritize artifact preservation and deterministic outcome checks.
 
-## Recommended next work
+## Follow-on work after current usability work
 
-The existing API research is sufficient to proceed to shaping a small working
-example. Define the common assessment record, criterion attachments, and explicit
-composition policy around one case that combines an existing deterministic check,
+Once the current usability work is complete, the existing API research is
+sufficient to shape a small working example. Define the common assessment record,
+criterion attachments, and explicit composition policy around one case that
+combines an existing deterministic check,
 an LLM judgment, and an advisory Jev judgment. Preserve each result and its
 evidence; keep mandatory-check behavior unchanged. Start with saved reply or
 artifact evidence already available, rather than depending on unimplemented

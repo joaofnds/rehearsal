@@ -100,3 +100,29 @@ no additional review round is needed. Documentation formatting and local link
 checks passed. The proposed next work is to shape one mixed-judge case and its
 assessment/composition contract, then evaluate Jev's added value on saved
 evidence. This revision changes no runtime code and makes no new inference claim.
+
+## Usability priority review, 2026-09-18
+
+The reviewer received the product owner's instruction to finish current usability
+work before adding integrations, and the study's prioritization diff.
+
+### Reviewer report, verbatim
+
+Blocking: none.
+
+Should-fix: none.
+
+Notes: none.
+
+The priority is clear in both the opening recommendation and follow-on section: finish the current usability work before starting judging integrations. The revision preserves mixed-strategy judging as subsequent work without inventing usability acceptance criteria, expanding the milestone, or changing the research conclusions.
+
+Examined the complete current diff, opening and closing sections, other sequencing language throughout the study, and `docs/status.md`’s current priorities, alongside the previously reviewed document context.
+
+Verification: `git diff --check -- docs/typesafe-study.md` passed. An `rg` scan of sequencing and priority language found no conflicting instruction to start integration immediately.
+
+No vendor research or runtime probes were needed: this revision changes prioritization only. The exact completion criteria for current usability work remain outside this study, consistent with the user’s direction.
+
+### Disposition
+
+Proceed with the priority recorded. No findings require correction or deferral.
+The study is ready for the follow-on task after current usability work finishes.
