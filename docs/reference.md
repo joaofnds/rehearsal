@@ -93,15 +93,14 @@ probe allowance. Calibration rejudges are additional calls.
 | 2    | Invalid command, flag, or value                                       |
 | 3    | Refused precondition, such as missing evidence or a required terminal |
 
-Commands that write a record generally print its path, or its bytes with
-`--json`. `show` prints a readable summary for supported record kinds and raw
-bytes otherwise; `show --json` prints the selected file's bytes. `list` and
-`stale` do not accept `--json`.
+A command that writes a record puts that record's path on stdout, or its bytes
+with `--json`, and nothing else. Progress lines, grades, diagnostics, and
+session check summaries use stderr, so redirecting `run --json` or
+`replay --json` captures a document a parser accepts once the command exits 0.
 
-A command that writes a record puts that record, or its path, on stdout and
-nothing else. Progress lines, grades, diagnostics, and session check summaries
-use stderr, so redirecting `run --json` or `replay --json` captures a document a
-parser accepts.
+`show` prints a readable summary for supported record kinds and raw bytes
+otherwise; `show --json` prints the selected file's bytes. `list` and `stale`
+do not accept `--json`.
 
 ## Cases and pipelines
 
