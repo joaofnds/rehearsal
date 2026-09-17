@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-support";
@@ -273,6 +273,44 @@ async function passingTarget(directory: string): Promise<string> {
 	await runCommand(["git", "commit", "-m", "chore: base"], target);
 
 	return target;
+}
+
+/**
+ * A run far enough along to replay: the provider shim fails it at the first
+ * stage judge, but the checkpoint chain and manifest a replay consumes are
+ * already on disk by then. Returns the run's name.
+ */
+async function recordRunFor(
+	control: string,
+	binDirectory: string,
+	target: string,
+): Promise<string> {
+	await runPipelineCli(
+		[
+			"run",
+			"--case",
+			"audit-log",
+			"--model",
+			"sonnet",
+			"--target",
+			target,
+			"--json",
+		],
+		control,
+		binDirectory,
+	);
+	const runsDirectory = benchmarkRunsDirectory(control);
+	const entries = await readdir(runsDirectory);
+	const recorded = entries
+		.filter((entry) => entry.endsWith(".checkpoints"))
+		.map((entry) => entry.replace(/\.checkpoints$/u, ""))
+		.toSorted();
+	const name = recorded.at(-1);
+	if (name === undefined) {
+		throw new Error(`No recorded run under ${runsDirectory}`);
+	}
+
+	return name;
 }
 
 describe("rehearse", () => {
@@ -608,6 +646,40 @@ describe("rehearse", () => {
 		expect(result.stdout).toBe("");
 		expect(result.stderr).toContain(`Target: ${await realpath(target)}`);
 		expect(result.stderr).toContain("Baseline checks");
+	});
+
+	it("keeps every replay diagnostic off stdout on a recorded run", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "rehearse-replay-contract-"),
+		);
+		temporaryDirectories.push(directory);
+		const [control, binDirectory, target] = await Promise.all([
+			controlCopy(directory),
+			providerShim(directory),
+			passingTarget(directory),
+		]);
+		const recorded = await recordRunFor(control, binDirectory, target);
+
+		const result = await runPipelineCli(
+			[
+				"replay",
+				"--run",
+				recorded,
+				"--stage",
+				"shape",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"1",
+				"--json",
+			],
+			control,
+			binDirectory,
+		);
+
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("Checkpoint chain is fresh");
+		expect(result.stderr).toContain("shape stage Judge");
 	});
 });
 
