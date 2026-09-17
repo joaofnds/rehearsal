@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ComparisonEvidenceFixture } from "#benchmark/comparison-evidence-test-support";
 import {
 	parseComparisonManifest,
@@ -311,6 +311,17 @@ async function recordRunFor(
 	}
 
 	return name;
+}
+
+/**
+ * The directories a failed replay keeps on purpose, named on its own stderr.
+ * This test drives a replay to failure, so without collecting them every run
+ * leaves a worktree behind in the system temp directory.
+ */
+function preservedEvidenceIn(stderr: string): readonly string[] {
+	return [...stderr.matchAll(/evidence preserved at (?<directory>\S+)/gu)].map(
+		(match) => dirname(match.groups?.["directory"] ?? ""),
+	);
 }
 
 describe("rehearse", () => {
@@ -676,6 +687,8 @@ describe("rehearse", () => {
 			control,
 			binDirectory,
 		);
+
+		temporaryDirectories.push(...preservedEvidenceIn(result.stderr));
 
 		expect(result.stdout).toBe("");
 		expect(result.stderr).toContain("Checkpoint chain is fresh");
