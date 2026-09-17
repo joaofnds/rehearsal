@@ -1,17 +1,19 @@
 # TypeSafe as a Judge for Rehearse
 
-Study date: **2026-09-17**. Status: **research and recommendation; no product
-behavior or roadmap change**. Repository and SDK revisions, local probes, source
-coverage, and remaining empirical gaps are in the
+Study date: **2026-09-17**. Status: **mixed-strategy judging is confirmed product
+direction; Jev integration and its evaluation remain proposals**. No runtime
+behavior is changed by this study. Repository and SDK revisions, local probes,
+source coverage, and remaining empirical gaps are in the
 [evidence record](typesafe-study/evidence.md).
 
 ## Recommendation
 
-**Pursue a bounded evaluation of Jev as an optional semantic grader. Keep the
-current Judges authoritative during that evaluation.** The API is technically
-compatible with Rehearse, and its economics could make detailed grading practical
-throughout the debug loop. Its suitability for Rehearse's judgments is still an
-experimental question.
+**Add Jev to the strategies considered for Rehearse's judging system, and test
+the value it contributes alongside deterministic checks and other LLM judges.**
+The product direction is a mix of strategies chosen for the criteria they
+evaluate. Jev's API fits that direction; whether it adds reliable coverage at an
+acceptable cost remains an experimental question. New Jev assessments should
+initially be advisory while the existing decision policy remains authoritative.
 
 The strongest opportunity is to let an engineer inspect many specific properties
 of a saved attempt, revise a rubric without rerunning the coding agent, and
@@ -19,20 +21,52 @@ understand which results need closer review. That fits Rehearse's purpose:
 testing whether an instruction improves an agent's work at an acceptable cost.
 [Rehearse vision](vision.md).
 
-There is less evidence for replacing complete code-change and workflow Judges.
-There is also no basis for claiming that adopting this API alone would set
-Rehearse apart from all competitors. The advantage would come from making
-instruction experiments easier and more trustworthy: preserved evidence,
+Jev need not handle complete code-change or workflow assessments to be useful.
+It can contribute focused judgments while other strategies cover their own
+criteria. Adopting this API alone does not establish a competitive advantage;
+the advantage would come from making instruction experiments easier and more trustworthy: preserved evidence,
 useful checks, human calibration, and defensible comparisons.
 
-| Question                                                 | Assessment                                                                                |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Can Jev produce judgments usable by Rehearse?            | Yes, at the API and data-model level.                                                     |
-| Is implementation likely to require a new agent runtime? | No. Grading can use a separate API while workers continue using Claude Code.              |
-| Can it replace today's Judge output unchanged?           | No. Evidence claims, summaries, uncertainty, and grade semantics need explicit treatment. |
-| Is it demonstrably a better Judge for Rehearse?          | Unknown; no live Jev evaluations were run in this study.                                  |
-| Is it worth investigating?                               | Yes, particularly for narrow semantic checks and citation support.                        |
-| Is the provider integration a durable differentiator?    | Unlikely by itself. A validated instruction-testing workflow could be.                    |
+| Question                                                 | Assessment                                                                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Can Jev produce judgments usable by Rehearse?            | Yes, at the API and data-model level.                                                                          |
+| Is implementation likely to require a new agent runtime? | No. Grading can use a separate API while workers continue using Claude Code.                                   |
+| Can heterogeneous judges share a result contract?        | Yes, with common evidence and provenance fields and strategy-specific results. The exact schema needs shaping. |
+| Does Jev improve the existing combination of judges?     | Unknown; measure added coverage, errors, review work, and cost. No live Jev evaluations were run.              |
+| Is it worth investigating?                               | Yes, particularly for narrow semantic checks and citation support.                                             |
+| Is the provider integration a durable differentiator?    | Unlikely by itself. A validated instruction-testing workflow could be.                                         |
+
+## Confirmed direction: judges use different strategies
+
+The product owner has confirmed that judges comprise deterministic checks,
+Jev-based evaluators, and evaluators using other LLMs. A case or workflow can
+combine them. The [glossary](../GLOSSARY.md) already defines a Judge as a
+deterministic check or rubric-scored LLM, and a session's check list as its judge.
+Jev extends that family with a probabilistic evaluator whose output does not
+include generated rationale.
+
+| Strategy             | Suitable responsibilities                                                                                      | Result to preserve                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Deterministic checks | Required words, recorded file/context inclusion, tool constraints, and executable checks where evidence exists | Observed result, exact evidence, and completeness; no invented model confidence.                    |
+| Jev                  | Focused semantic classifications and rubric dimensions                                                         | Typed answer, probability distribution where available, question, and supplied evidence references. |
+| Other LLMs           | Broader reasoning, semantic review, and written explanations                                                   | Criterion assessment, evidence claims, explanation, and model/configuration identity.               |
+
+Deterministic implementation makes a check repeatable on fixed inputs; it does
+not make its proxy a sufficient quality measure. Seeing a file-read event, for
+example, establishes a recorded read, not that the agent understood or followed
+the file. Evidence that is unavailable must remain distinguishable from a failed
+criterion across all strategies.
+
+Judges may assess different criteria, independently assess the same criterion,
+or run conditionally. A cascade is one possible composition, not the required
+architecture. Mandatory checks can gate acceptance, semantic dimensions can
+remain separate, and disagreement on a shared criterion can prompt review.
+No global majority vote or average should allow several favorable style scores
+to override a failed correctness requirement.
+
+This direction is settled. The shared result schema, attachment/configuration
+format, and composition rules below are design proposals to shape before
+implementation. The empirical question is which combinations serve each case.
 
 ## What the service provides
 
@@ -117,9 +151,9 @@ paraphrases, conflate multiple requirements, or disagree with human labels.
 Higher reported confidence alone is not evidence that a rewritten rubric is
 better. Keep a separate set of cases for assessing rubric revisions.
 
-### Uses to defer
+### Responsibilities for other strategies
 
-| Judgment                                          | Why it needs more than an initial Jev integration                                                                                |
+| Judgment                                          | Role in the combined judging system                                                                                              |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Complete implementation correctness               | Requires adequate repository evidence, executable checks, and often reasoning across several components.                         |
 | Whether tests protect behavior                    | Test execution and integrity checks remain authoritative; semantic adequacy may require adversarial examples or mutation checks. |
@@ -240,8 +274,13 @@ grading cost = evidence preparation + Jev calls
              + escalation fraction × fallback cost + audit cost
 ```
 
-Judge savings also have a ceiling. If judging contributes a fraction `f` of a
-run's total cost and grading cost falls by a factor `s`, the total-cost ratio is
+A purely additive Jev judge increases evaluation cost; its benefit must be added
+coverage, better decisions, or less human inspection work. Savings are possible
+when a validated composition avoids other model calls or review work. Evaluate
+both the marginal value of an addition and the cost of the complete composition.
+
+For configurations that reduce existing Judge spending, savings have a ceiling.
+If judging contributes a fraction `f` of a run's total cost and grading cost falls by a factor `s`, the total-cost ratio is
 `(1 - f) + f/s`, before new overhead. For an illustrative `f = 0.10` and
 `s = 100`, total savings are 9.9%, not 99%. Actual Rehearse-wide savings were not
 measured. The larger benefit may be enabling checks that are currently omitted.
@@ -262,25 +301,35 @@ before routing private repositories or transcripts through it.
 
 ## Integration approach
 
-The recommended first implementation is a grader that reads frozen evidence
-and writes a separate assessment alongside the existing result. It should not
-change a pipeline's stop/continue decision while its accuracy is being measured.
+The recommended design has a common assessment record with strategy-specific
+payloads and a separately configured decision policy. Common fields should
+identify the criterion, strategy/configuration, evidence identity, execution
+status, result, and resource usage where applicable. Distinguish a completed
+assessment from execution failure, insufficient evidence, and a policy decision
+to abstain. Preserve Jev distributions and LLM explanations in their native
+forms; deterministic checks need neither a generated rationale nor a fabricated
+confidence value. These are proposed responsibilities, not a finalized schema.
 
-```text
-Saved attempt and authoritative harness results
-                    |
-        Versioned evidence selection
-                    |
-        Atomic semantic questions → Jev
-                    |
-      Validate and save raw distributions
-                    |
-       Display beside existing judgments
-                    |
-       Compare with blinded human labels
+The first implementation should be a small offline path that evaluates frozen
+evidence with the existing checks/LLM judges and an added Jev judge, saving their
+individual assessments and the composition policy. Jev results initially remain
+advisory. Establish that path before generalizing configuration across every
+session and pipeline record.
+
+```mermaid
+flowchart TD
+    A[Saved evidence and harness results] --> B[Versioned evidence selection]
+    B --> C[Deterministic judges]
+    B --> D[Jev judges]
+    B --> E[Other LLM judges]
+    C --> F[Individual assessments and evidence]
+    D --> F
+    E --> F
+    F --> G[Explicit composition policy]
+    G --> H[Compare with blinded human labels]
 ```
 
-After validation, individual criteria could use a cascade: deterministic checks
+After validation, one possible policy is a cascade: deterministic checks
 first, Jev on eligible semantic questions, then a reasoning Judge or human when
 evidence or prediction quality is insufficient. Preserve the original result
 and the fallback result. Audit a sample of confidently accepted outputs too;
@@ -320,10 +369,11 @@ The integration has five substantive requirements:
 [comparability checks](../src/benchmark/comparison-comparability.ts),
 [SDK client](https://github.com/typesafe-ai/typesafe-sdk-js/blob/66880ccded6cb642dc1809620c2b108c33730214/src/client.ts).
 
-Adding a separate grader is a moderate feature once evidence inputs are settled.
-Replacing pipeline Judges is a larger grading-contract change involving records,
-calibration, comparison logic, costs, and the UI. The cheap API call should not
-be mistaken for the total scope.
+An offline Jev adapter is a bounded feature once evidence inputs are settled.
+Making mixed-strategy judging configurable throughout the product involves
+records, calibration, comparison logic, costs, and the UI. It should follow a
+working example and preserve readers of existing records. The cheap API call
+should not be mistaken for the total scope.
 
 ## Does this distinguish Rehearse?
 
@@ -397,12 +447,21 @@ authoritative promotion.
 
 ### Comparators
 
-Run the current Judge as the operational baseline, then compare Jev and an
-economical conventional model on the same atomic questions and evidence. Include
-the deterministic-only result where applicable and a Jev-plus-fallback policy.
-Evaluate conventional models with constrained structured outputs too. This
-separates the value of decomposition from the value of Jev and avoids giving
-the alternative an unnecessarily expensive probability-generation task.
+The primary comparison is the **existing combination with and without Jev**,
+using the same frozen evidence and predeclared composition policy. Retain
+deterministic gates in both. Measure errors that Jev catches beyond the baseline,
+new false alarms, changes in unresolved cases, inspection effort, and added cost.
+Removing Jev again should expose its marginal contribution; report overlapping
+errors so agreement is not mistaken for independent corroboration.
+
+As a control, add an economical conventional model to the same baseline with
+the same atomic questions and evidence. Compare under a declared evaluation
+budget or report the cost/quality tradeoff if budgets differ. Evaluate
+conventional models with constrained structured outputs too. A deterministic-only
+configuration, where meaningful, reveals what semantic judging contributes.
+Test a Jev-plus-fallback policy separately if routing is part of the proposal.
+These comparisons distinguish added evaluation work, better decomposition, and
+Jev-specific value.
 
 Measure the simpler decision-only baseline separately from a probability-enabled
 one. If only the latter is worse, the result supports a narrower claim about
@@ -414,16 +473,17 @@ verbosity, and self-preference as empirical issues.
 
 ### Measurements and decision gates
 
-| Measure                                                               | What it decides                                                      |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| False acceptance of human-labeled failures, by criterion and severity | Whether the grader misses defects that matter.                       |
-| False rejection and unresolved fraction                               | Whether it creates unnecessary review work or loses useful coverage. |
-| Calibration, such as Brier score and reliability bins                 | Whether reported probabilities support routing on held-out data.     |
-| Error versus automatic-coverage curve                                 | How much can be graded at each measured error tolerance.             |
-| Repeat and paraphrase stability                                       | Whether harmless changes flip the decision.                          |
-| Evidence-support accuracy                                             | Whether a plausible citation justifies the result.                   |
-| Total cost and p50/p95 latency, including fallback                    | Whether the proposed workflow improves the user's experience.        |
-| Agreement with human decisions about paired instruction variants      | Whether it preserves the decision Rehearse exists to inform.         |
+| Measure                                                                            | What it decides                                                             |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| False acceptance of human-labeled failures, by criterion and severity              | Whether the grader misses defects that matter.                              |
+| False rejection and unresolved fraction                                            | Whether it creates unnecessary review work or loses useful coverage.        |
+| Calibration, such as Brier score and reliability bins                              | Whether reported probabilities support routing on held-out data.            |
+| Error versus automatic-coverage curve                                              | How much can be graded at each measured error tolerance.                    |
+| Repeat and paraphrase stability                                                    | Whether harmless changes flip the decision.                                 |
+| Evidence-support accuracy                                                          | Whether a plausible citation justifies the result.                          |
+| Additional failures caught and new false alarms versus the same judges without Jev | Whether Jev contributes useful information beyond the existing combination. |
+| Total cost and p50/p95 latency, including fallback                                 | Whether the proposed workflow improves the user's experience.               |
+| Agreement with human decisions about paired instruction variants                   | Whether it preserves the decision Rehearse exists to inform.                |
 
 Freeze the tolerable error margin and desired savings before opening held-out
 results. Report challenge-set robustness separately from representative-workload
@@ -454,15 +514,28 @@ Judge.
 
 ### What would change this recommendation
 
-- If narrow Jev checks perform well and keep fallback rare, expand those checks
-  and make saved regrading part of the product.
+- If Jev adds useful coverage or reduces inspection work at an acceptable total
+  cost and error rate, expand those checks and make saved regrading part of the
+  product.
 - If decomposition helps but an ordinary model is equally economical and more
-  accurate, keep the grading design and choose that model.
+  accurate on a criterion, use that strategy there; other criteria may still
+  benefit from Jev.
 - If Jev is useful for finding suspicious cases but unreliable for acceptance,
   retain it as an inspection aid.
 - If evidence preparation or fallback consumes the benefit, stop the integration
   and prioritize artifact preservation and deterministic outcome checks.
 
-The proposed trial is worthwhile because it can answer these questions cheaply.
-Making Jev the default Judge before those answers exist would weaken the evidence
-standard that gives Rehearse its purpose.
+## Recommended next work
+
+The existing API research is sufficient to proceed to shaping a small working
+example. Define the common assessment record, criterion attachments, and explicit
+composition policy around one case that combines an existing deterministic check,
+an LLM judgment, and an advisory Jev judgment. Preserve each result and its
+evidence; keep mandatory-check behavior unchanged. Start with saved reply or
+artifact evidence already available, rather than depending on unimplemented
+session filesystem capture.
+
+Run the held-out comparison above, including the same combination without Jev.
+Use the result to choose where Jev earns an ongoing role and whether broader
+configuration is worth building. Mixed-strategy judging remains the direction
+even if Jev contributes little on the first criterion tested.

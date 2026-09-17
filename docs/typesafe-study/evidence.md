@@ -4,6 +4,13 @@ This record supports the [study](../typesafe-study.md). Research was conducted o
 **2026-09-17**. The conclusions separate documented capabilities, inspected
 implementation, locally exercised behavior, and proposals requiring live data.
 
+The product owner's confirmed direction is a mixture of deterministic judges,
+Jev judges, and other LLM judges. This is a task constraint, not a finding from
+vendor research. The study's shared-record design and composition experiment are
+proposals within that direction. The source revisions and probe results below
+describe the original technical investigation; reframing the proposal adds no
+live inference evidence.
+
 ## Provenance
 
 | Source                           | Revision or date                                            | Method                                                                                            |
@@ -18,7 +25,7 @@ Commands establishing the code revisions were `git rev-parse HEAD`,
 `git -C /tmp/rehearse-typesafe-study/sdk-js rev-parse HEAD`, and inspection of
 the SDK's `package.json`. Temporary downloads and the SDK checkout were kept
 outside Rehearse. No dependency, production code, case fixture, product vision,
-or accepted roadmap was changed by this study.
+or roadmap file was changed by this study.
 
 The environment had no `TYPESAFE_API_KEY`; only its presence was checked, without
 printing secrets or searching credential stores. No account was created, no

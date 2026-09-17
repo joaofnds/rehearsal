@@ -62,3 +62,41 @@ Proceed after this correction; no additional review round was requested. The
 finding changes the proposed experiment, not the technical feasibility verdict
 or observed product behavior. No review finding remains open. Live model quality
 and operational benefits remain unmeasured as described in the evidence record.
+
+## Mixed-strategy revision review, 2026-09-18
+
+The review mandate included the product owner's clarification that Jev is an
+addition alongside deterministic checks and other LLM judges, and the request to
+reflect that direction in the study and recommend the next work. The reviewer
+received the changed artifacts and source locations without an assessment of
+their correctness.
+
+### Reviewer report, verbatim
+
+Blocking: none.
+
+Should-fix: none.
+
+Notes: none.
+
+The revision reflects the clarified direction: deterministic checks, Jev evaluators, and other LLM judges can coexist, assess different or overlapping criteria, and run conditionally. It separates that settled direction from proposed configuration, result schemas, composition rules, and unverified Jev performance.
+
+The proposed experiment now tests Jev’s marginal contribution to an existing combination, with a conventional-model addition as a control. It accounts for overlapping errors, new false alarms, inspection effort, and added cost. The distinction between challenge-set robustness and representative-workload estimates remains intact. The small advisory implementation proposed next is consistent with those evidence limits and current record boundaries.
+
+Examined context and verification:
+
+- Read the complete revised study and evidence record, their Git diff, applicable `CLAUDE.md` and contributor guidance, and relevant glossary and architecture material. Used the previously examined vision and status context.
+- Rechecked `session-check.ts`, stage grade derivation and authoritative overrides in `stage-grading.ts`, the Claude transport boundary in `judge-attempt.ts`, human-label construction in `judge-agreement.ts`, and model/effort comparisons in `comparison-comparability.ts`.
+- `git diff --check -- docs/typesafe-study.md docs/typesafe-study/evidence.md` passed.
+- A read-only Python link check resolved all 35 local links across the affected documents, including Markdown fragments. Comparing external-link sets against `HEAD` found no additions.
+- No changed external capability claim required renewed vendor research. The unchanged SDK probe was not rerun in this revision review; its previous execution remains historical evidence.
+
+Material gaps remain empirical: live access, actual Jev judgments, calibration, correlated errors, operational costs, and the value of the combined judging workflow have not been established. The revision discloses these limits and does not present the proposed design as implemented functionality.
+
+### Disposition
+
+Proceed with the revised study. No findings require correction or deferral, and
+no additional review round is needed. Documentation formatting and local link
+checks passed. The proposed next work is to shape one mixed-judge case and its
+assessment/composition contract, then evaluate Jev's added value on saved
+evidence. This revision changes no runtime code and makes no new inference claim.
