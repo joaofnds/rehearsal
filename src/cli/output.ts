@@ -46,7 +46,7 @@ export function writeDiagnostic(
 		return;
 	}
 
-	output.stderr(`${message}\n`);
+	diagnosticWriter(output)(message);
 }
 
 /**
