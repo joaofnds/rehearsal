@@ -770,6 +770,41 @@ describe("rehearse", () => {
 		expect(result.stderr).toContain("Target setup");
 		expect(result.stderr).toContain("Baseline checks");
 	});
+
+	it("puts the replay report's own bytes on stdout and nothing else", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-replay-record-"));
+		temporaryDirectories.push(directory);
+		const { control, binDirectory, target } = await pipelineFixture(directory);
+		const recorded = await recordRunFor(control, binDirectory, target);
+
+		const result = await runPipelineCli(
+			[
+				"replay",
+				"--run",
+				recorded,
+				"--stage",
+				"shape",
+				"--model",
+				"sonnet",
+				"--session-budget-usd",
+				"1",
+				"--confirm",
+				"--yes",
+				"--reps",
+				"2",
+				"--json",
+			],
+			control,
+			binDirectory,
+		);
+
+		temporaryDirectories.push(...preservedEvidenceIn(result.stderr));
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toBe(
+			await Bun.file(reportBesideGroupIn(result.stderr)).text(),
+		);
+	});
 });
 
 /**
