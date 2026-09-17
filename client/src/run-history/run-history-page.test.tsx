@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import type { RenderResult } from "@testing-library/react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { InferResponseType } from "hono/client";
@@ -18,11 +19,18 @@ function respondingWith(body: RunHistoryResponseBody): void {
 	stubFetch(body);
 }
 
-function renderPage(): void {
+/**
+ * Returns the render result so a test can scope its queries to the tree it
+ * just mounted. `screen` searches the whole document, which a test asserting
+ * the *absence* of a reading cannot rely on: a slow sibling test's tree may
+ * still be mounted when it runs.
+ */
+function renderPage(): RenderResult {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
-	render(
+
+	return render(
 		<QueryClientProvider client={client}>
 			<RunHistoryPage />
 		</QueryClientProvider>,
@@ -359,6 +367,7 @@ describe(RunHistoryPage.name, () => {
 				state: "running",
 				stage: "build",
 				elapsedMs: 9000,
+				measuredAt: new Date().toISOString(),
 				spentUsd: 0.9,
 				spendScope: "this stage's session so far",
 			},
@@ -438,6 +447,7 @@ describe(RunHistoryPage.name, () => {
 								state: "running",
 								stage: "review",
 								elapsedMs: 74_000,
+								measuredAt: new Date().toISOString(),
 								spentUsd: 2.5,
 								spendScope: "this stage's session and its judge",
 							},
@@ -466,6 +476,37 @@ describe(RunHistoryPage.name, () => {
 			);
 			expect(screen.getByText("1m")).toBeInTheDocument();
 			expect(screen.getByText("$2.50")).toBeInTheDocument();
+		});
+
+		/**
+		 * A run reports its elapsed time once per agent turn, minutes apart, so a
+		 * row showing only the recorded figure would sit frozen between turns
+		 * while the run is plainly still going.
+		 */
+		it("keeps the elapsed reading moving between the run's own measurements", async () => {
+			respondingWith({
+				rows: [
+					{
+						...runningRow,
+						progress: {
+							state: "running",
+							stage: "build",
+							elapsedMs: 9000,
+							measuredAt: new Date(Date.now() - 52_000).toISOString(),
+							spentUsd: 0.9,
+							spendScope: "this stage's session so far",
+						},
+					},
+				],
+				unreadable: [],
+			});
+
+			const page = renderPage();
+
+			await waitFor(() => {
+				expect(page.getByText("1m")).toBeInTheDocument();
+			});
+			expect(page.queryByText("9s")).not.toBeInTheDocument();
 		});
 
 		it("stops re-reading the list once no run is in flight", async () => {

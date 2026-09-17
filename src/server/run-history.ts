@@ -44,11 +44,17 @@ type SpendScope = (typeof SPEND_SCOPE)[keyof typeof SPEND_SCOPE];
 
 /**
  * A run's live readings, present together or not at all. A finished run has
- * none of them, and a running one has all four, so they sit behind one
- * discriminant rather than as four fields a reader could find half-filled.
+ * none of them, and a running one has all of them, so they sit behind one
+ * discriminant rather than as separate fields a reader could find half-filled.
  * The executing stage is here rather than on the row's own `stage`, which
  * means the last checkpoint recorded and drives the grade, digest, and
  * staleness readings: the stage now executing has written no checkpoint yet.
+ *
+ * `elapsedMs` is the figure the run itself measured, and `measuredAt` says
+ * when. A run emits an event once per agent turn, minutes apart, so a reader
+ * rendering `elapsedMs` alone would show a clock that stops between turns.
+ * The pair lets it keep running without this reader inventing a number the
+ * run never recorded.
  */
 export type RunProgress =
 	| { readonly state: "recorded" }
@@ -56,6 +62,7 @@ export type RunProgress =
 			readonly state: "running";
 			readonly stage: string;
 			readonly elapsedMs: number;
+			readonly measuredAt: string;
 			readonly spentUsd: number;
 			readonly spendScope: SpendScope;
 	  };
@@ -157,6 +164,7 @@ function runningProgress(
 		state: "running",
 		stage: latest.stage,
 		elapsedMs: latest.elapsedMs,
+		measuredAt: latest.recordedAt,
 		spentUsd: latest.spentUsd,
 		spendScope,
 	};

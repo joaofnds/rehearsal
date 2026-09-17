@@ -252,13 +252,39 @@ describe(runHistoryReport.name, () => {
 		);
 
 		const row = rows.find((candidate) => candidate.run === fixture.runningRun);
-		expect(row?.progress).toEqual({
+		expect(row?.progress).toMatchObject({
 			state: "running",
 			stage: "build",
 			elapsedMs: 9000,
 			spentUsd: 0.9,
 			spendScope: "this stage's session so far",
 		});
+	});
+
+	/**
+	 * An event fires once per agent turn, which is minutes apart on a real run,
+	 * so a row rendering the event's own elapsed figure would sit frozen between
+	 * turns. The reading it was measured at travels with it, which is what lets
+	 * a watcher carry it forward.
+	 */
+	it("dates a running run's elapsed reading so a watcher can carry it forward", async () => {
+		const fixture = await writtenFixture();
+		const before = Date.now();
+		await fixture.writeRunningRun();
+
+		const { rows } = await runHistoryReport(
+			fixture.runsDirectory,
+			directorySource(await corpusDirectory("build skill\n")),
+			liveness(true),
+		);
+
+		const row = rows.find((candidate) => candidate.run === fixture.runningRun);
+		const measuredAt =
+			row?.progress.state === "running"
+				? Date.parse(row.progress.measuredAt)
+				: Number.NaN;
+		expect(measuredAt).toBeGreaterThanOrEqual(before);
+		expect(measuredAt).toBeLessThanOrEqual(Date.now());
 	});
 
 	/**

@@ -26,6 +26,28 @@ export function elapsedReading(elapsedMs: number): string {
 }
 
 /**
+ * A recorded elapsed figure carried forward to now. A run measures its own
+ * elapsed time only when it emits an event, once per agent turn, so the
+ * recorded figure alone would hold still for minutes while the run goes on.
+ * Adding the time since the measurement keeps the reading moving without
+ * inventing one: the run's own figure remains the floor, so a clock behind
+ * the run's, or an unreadable measurement time, leaves the reading where the
+ * run put it rather than running it backwards.
+ */
+export function liveElapsedMs(
+	elapsedMs: number,
+	measuredAt: string,
+	nowMs: number,
+): number {
+	const measured = Date.parse(measuredAt);
+	if (Number.isNaN(measured)) {
+		return elapsedMs;
+	}
+
+	return Math.max(elapsedMs, elapsedMs + (nowMs - measured));
+}
+
+/**
  * Cents are the unit a spend reading moves in, so they are always shown: a
  * figure that rounded to whole dollars would sit unchanged through most of a
  * stage.

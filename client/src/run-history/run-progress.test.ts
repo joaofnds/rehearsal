@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { elapsedReading, spendReading } from "./run-progress";
+import { elapsedReading, liveElapsedMs, spendReading } from "./run-progress";
 
 describe(elapsedReading.name, () => {
 	it.each([
@@ -32,5 +32,47 @@ describe(spendReading.name, () => {
 	 */
 	it("rounds a half-cent figure by the nearest double rather than away from zero", () => {
 		expect(spendReading(1.005)).toBe("$1.00");
+	});
+});
+
+describe(liveElapsedMs.name, () => {
+	/**
+	 * A run reports its elapsed time only when it emits an event, once per agent
+	 * turn. Carrying the recorded figure forward by the time since it was taken
+	 * keeps the reading moving without inventing one the run never measured.
+	 */
+	it("carries a recorded reading forward by the time since it was measured", () => {
+		const measuredAt = new Date("2026-09-17T12:00:00.000Z");
+		const now = new Date("2026-09-17T12:00:30.000Z");
+
+		expect(liveElapsedMs(9000, measuredAt.toISOString(), now.getTime())).toBe(
+			39_000,
+		);
+	});
+
+	it("keeps the recorded reading when no time has passed", () => {
+		const measuredAt = new Date("2026-09-17T12:00:00.000Z");
+
+		expect(
+			liveElapsedMs(9000, measuredAt.toISOString(), measuredAt.getTime()),
+		).toBe(9000);
+	});
+
+	/**
+	 * A clock behind the run's own, or a reading from a machine whose time
+	 * differs, would otherwise run the figure backwards past what the run
+	 * actually measured.
+	 */
+	it("never reports less than the run itself recorded", () => {
+		const measuredAt = new Date("2026-09-17T12:00:00.000Z");
+		const earlier = new Date("2026-09-17T11:59:00.000Z");
+
+		expect(
+			liveElapsedMs(9000, measuredAt.toISOString(), earlier.getTime()),
+		).toBe(9000);
+	});
+
+	it("keeps the recorded reading when the measurement time is unreadable", () => {
+		expect(liveElapsedMs(9000, "not a date", Date.now())).toBe(9000);
 	});
 });

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { InferResponseType } from "hono/client";
 import { apiClient } from "#client/api-client";
 import { CorpusPill } from "#client/system/components/corpus-pill";
@@ -10,7 +10,7 @@ import type { GradeValue } from "#client/system/components/grade";
 import { Grade } from "#client/system/components/grade";
 import { Status } from "#client/system/components/status";
 import { TableShell } from "#client/system/components/table-shell";
-import { elapsedReading, spendReading } from "./run-progress";
+import { elapsedReading, liveElapsedMs, spendReading } from "./run-progress";
 import { runStatusState } from "./run-status";
 import "./run-history-page.css";
 
@@ -42,6 +42,40 @@ const COLUMNS = [
  * on finished history costs nothing.
  */
 const RUNNING_POLL_MS = 2000;
+
+/**
+ * How often the elapsed readings redraw between the run's own measurements. A
+ * run records its elapsed time when it emits an event, once per agent turn and
+ * minutes apart, so without this the clock would stop between turns. One
+ * second is the unit the reading shows in its first minute.
+ */
+const ELAPSED_TICK_MS = 1000;
+
+/**
+ * The clock the elapsed readings are drawn against, advancing on its own so a
+ * run's reading keeps moving between the sparse events the run itself records.
+ * It ticks only while something is running, so a page showing finished history
+ * redraws nothing.
+ */
+function useNow(running: boolean): number {
+	const [nowMs, setNowMs] = useState(() => Date.now());
+
+	useEffect(() => {
+		if (!running) {
+			return undefined;
+		}
+
+		const timer = setInterval(() => {
+			setNowMs(Date.now());
+		}, ELAPSED_TICK_MS);
+
+		return () => {
+			clearInterval(timer);
+		};
+	}, [running]);
+
+	return nowMs;
+}
 
 const FILTERS = ["All", "Stopped"] as const;
 type Filter = (typeof FILTERS)[number];
@@ -90,18 +124,20 @@ function outcomeCell(row: RunHistoryRow): React.JSX.Element {
  * is not the run's total: each event kind scopes it differently, and one
  * scoped to a single stage falls when the next stage starts.
  */
-function progressCell(row: RunHistoryRow): React.JSX.Element {
+function progressCell(row: RunHistoryRow, nowMs: number): React.JSX.Element {
 	if (row.progress.state === "recorded") {
 		return <span className="rh-run-history__no-progress" />;
 	}
 
-	const { stage, elapsedMs, spentUsd, spendScope } = row.progress;
+	const { stage, elapsedMs, measuredAt, spentUsd, spendScope } = row.progress;
 
 	return (
 		<span className="rh-run-history__progress">
 			<span className="rh-run-history__progress-stage">{stage}</span>
 			<span className="rh-run-history__progress-readings">
-				<span>{elapsedReading(elapsedMs)}</span>
+				<span>
+					{elapsedReading(liveElapsedMs(elapsedMs, measuredAt, nowMs))}
+				</span>
 				<span>{spendReading(spentUsd)}</span>
 			</span>
 			<span className="rh-run-history__progress-scope">{spendScope}</span>
@@ -202,6 +238,9 @@ export function RunHistoryPage(): React.JSX.Element {
 	const recorded = query.data?.rows ?? [];
 	const rows = recorded.filter((row) => matchesFilter(row, filter));
 	const onlyUnreadableRuns = recorded.length === 0 && unreadable.length > 0;
+	const nowMs = useNow(
+		recorded.some((row) => row.progress.state === "running"),
+	);
 
 	return (
 		<main className="rh-run-history">
@@ -233,7 +272,7 @@ export function RunHistoryPage(): React.JSX.Element {
 						row.run,
 						row.caseId,
 						outcomeCell(row),
-						progressCell(row),
+						progressCell(row, nowMs),
 						gradeCell(row),
 						corpusCell(row),
 					])}
