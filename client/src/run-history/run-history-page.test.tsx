@@ -345,6 +345,187 @@ describe(RunHistoryPage.name, () => {
 		});
 	});
 
+	describe("when a run is in flight", () => {
+		const runningRow: RunHistoryResponseBody["rows"][number] = {
+			run: "2026-09-07T00-00-00.000Z",
+			caseId: "audit-log",
+			status: "RUNNING",
+			stage: undefined,
+			grade: undefined,
+			corpus: undefined,
+			stale: false,
+			staleCauses: [],
+			progress: {
+				state: "running",
+				stage: "build",
+				elapsedMs: 9000,
+				spentUsd: 0.9,
+				spendScope: "this stage's session so far",
+			},
+		};
+
+		it("lists the running run beside the finished ones, marked running", async () => {
+			respondingWith({ rows: [runningRow], unreadable: [] });
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByText("2026-09-07T00-00-00.000Z"),
+				).toBeInTheDocument();
+			});
+			expect(screen.getByText("running")).toBeInTheDocument();
+		});
+
+		it("reads out the stage the run is in, how long it has run, and what it has spent", async () => {
+			respondingWith({ rows: [runningRow], unreadable: [] });
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("build")).toBeInTheDocument();
+			});
+			expect(screen.getByText("9s")).toBeInTheDocument();
+			expect(screen.getByText("$0.90")).toBeInTheDocument();
+		});
+
+		/**
+		 * The number alone would be read as the run's total, which it is not:
+		 * every event kind scopes its spend differently, and one scoped to a
+		 * single stage falls when the next stage begins.
+		 */
+		it("says what the spend figure covers rather than presenting it as the run total", async () => {
+			respondingWith({ rows: [runningRow], unreadable: [] });
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("$0.90")).toBeInTheDocument();
+			});
+			expect(
+				screen.getByText("this stage's session so far"),
+			).toBeInTheDocument();
+			expect(screen.queryByText(/spent this run/iu)).not.toBeInTheDocument();
+		});
+
+		it("shows no spend ceiling or limit beside the figure", async () => {
+			respondingWith({ rows: [runningRow], unreadable: [] });
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("$0.90")).toBeInTheDocument();
+			});
+			expect(screen.queryByText(/\/\s*\$/u)).not.toBeInTheDocument();
+			expect(
+				screen.queryByText(/limit|ceiling|budget/iu),
+			).not.toBeInTheDocument();
+		});
+
+		/**
+		 * The one thing this screen exists to do while a run is going. The
+		 * operator is watching a row, not reloading a page, so a reading that
+		 * only moves on refresh is the same as no reading at all.
+		 */
+		it("moves the stage, elapsed and spend readings with no page reload", async () => {
+			const bodies: RunHistoryResponseBody[] = [
+				{ rows: [runningRow], unreadable: [] },
+				{
+					rows: [
+						{
+							...runningRow,
+							progress: {
+								state: "running",
+								stage: "review",
+								elapsedMs: 74_000,
+								spentUsd: 2.5,
+								spendScope: "this stage's session and its judge",
+							},
+						},
+					],
+					unreadable: [],
+				},
+			];
+			const stub = (): Promise<Response> =>
+				Promise.resolve(Response.json(bodies.shift() ?? bodies[0]));
+			stub.preconnect = fetch.preconnect;
+			globalThis.fetch = stub;
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(screen.getByText("build")).toBeInTheDocument();
+			});
+			expect(screen.getByText("9s")).toBeInTheDocument();
+
+			await waitFor(
+				() => {
+					expect(screen.getByText("review")).toBeInTheDocument();
+				},
+				{ timeout: 5000 },
+			);
+			expect(screen.getByText("1m")).toBeInTheDocument();
+			expect(screen.getByText("$2.50")).toBeInTheDocument();
+		});
+
+		it("stops re-reading the list once no run is in flight", async () => {
+			let requests = 0;
+			const stub = (): Promise<Response> => {
+				requests += 1;
+
+				return Promise.resolve(
+					Response.json({
+						rows: [{ ...runningRow, progress: { state: "recorded" } }],
+						unreadable: [],
+					}),
+				);
+			};
+			stub.preconnect = fetch.preconnect;
+			globalThis.fetch = stub;
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByText("2026-09-07T00-00-00.000Z"),
+				).toBeInTheDocument();
+			});
+			const afterFirstRender = requests;
+			await Bun.sleep(2500);
+
+			expect(requests).toBe(afterFirstRender);
+		});
+
+		it("leaves the finished rows' readings blank rather than showing a zero", async () => {
+			respondingWith({
+				rows: [
+					{
+						run: "2026-09-06T00-00-00.000Z",
+						caseId: "audit-log",
+						status: "COMPLETE",
+						stage: "build",
+						grade: "A",
+						corpus: { digest: "aaaaaa" },
+						stale: false,
+						staleCauses: [],
+						progress: { state: "recorded" },
+					},
+				],
+				unreadable: [],
+			});
+
+			renderPage();
+
+			await waitFor(() => {
+				expect(
+					screen.getByText("2026-09-06T00-00-00.000Z"),
+				).toBeInTheDocument();
+			});
+			expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+			expect(screen.queryByText("0s")).not.toBeInTheDocument();
+		});
+	});
+
 	it("shows the badge and the cause in the corpus cell for a stale row that recorded no checkpoint stage, with no pill", async () => {
 		respondingWith({
 			rows: [

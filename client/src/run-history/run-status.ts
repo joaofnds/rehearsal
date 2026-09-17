@@ -18,6 +18,9 @@ export function runStatusState(status: string): StatusState {
 		case "COMPLETE": {
 			return "accepted";
 		}
+		case "RUNNING": {
+			return "running";
+		}
 		case "FAILED":
 		case "INTERRUPTED": {
 			return "interrupted";

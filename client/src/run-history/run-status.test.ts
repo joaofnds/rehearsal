@@ -4,6 +4,7 @@ import { runStatusState } from "./run-status";
 describe(runStatusState.name, () => {
 	it.each([
 		["COMPLETE", "accepted"],
+		["RUNNING", "running"],
 		["FAILED", "interrupted"],
 		["INTERRUPTED", "interrupted"],
 		["AWAITING_HUMAN_REVIEW", "pending"],

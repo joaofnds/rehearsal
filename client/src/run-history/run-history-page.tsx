@@ -10,6 +10,7 @@ import type { GradeValue } from "#client/system/components/grade";
 import { Grade } from "#client/system/components/grade";
 import { Status } from "#client/system/components/status";
 import { TableShell } from "#client/system/components/table-shell";
+import { elapsedReading, spendReading } from "./run-progress";
 import { runStatusState } from "./run-status";
 import "./run-history-page.css";
 
@@ -23,7 +24,24 @@ type RunHistoryResponse = InferResponseType<typeof apiClient.api.runs.$get>;
 type RunHistoryRow = RunHistoryResponse["rows"][number];
 type UnreadableRun = RunHistoryResponse["unreadable"][number];
 
-const COLUMNS = ["Run", "Case", "Outcome", "Grade", "Corpus"] as const;
+const COLUMNS = [
+	"Run",
+	"Case",
+	"Outcome",
+	"Progress",
+	"Grade",
+	"Corpus",
+] as const;
+
+/**
+ * How often the list re-reads itself while a run is in flight. The operator is
+ * watching readings move, so the interval has to be shorter than the attention
+ * span of someone staring at a screen; the route's cost is a directory scan
+ * and one liveness probe per candidate run, against a run count that is
+ * realistically one. Polling stops when no run is running, so a page left open
+ * on finished history costs nothing.
+ */
+const RUNNING_POLL_MS = 2000;
 
 const FILTERS = ["All", "Stopped"] as const;
 type Filter = (typeof FILTERS)[number];
@@ -62,6 +80,31 @@ function outcomeCell(row: RunHistoryRow): React.JSX.Element {
 		<span className="rh-run-history__outcome">
 			<Status state={runStatusState(row.status)} />
 			<span className="rh-run-history__outcome-detail">{row.status}</span>
+		</span>
+	);
+}
+
+/**
+ * What a run in flight is doing, blank for a run that has finished. The spend
+ * carries the words the server sends for what it covers, because the figure
+ * is not the run's total: each event kind scopes it differently, and one
+ * scoped to a single stage falls when the next stage starts.
+ */
+function progressCell(row: RunHistoryRow): React.JSX.Element {
+	if (row.progress.state === "recorded") {
+		return <span className="rh-run-history__no-progress" />;
+	}
+
+	const { stage, elapsedMs, spentUsd, spendScope } = row.progress;
+
+	return (
+		<span className="rh-run-history__progress">
+			<span className="rh-run-history__progress-stage">{stage}</span>
+			<span className="rh-run-history__progress-readings">
+				<span>{elapsedReading(elapsedMs)}</span>
+				<span>{spendReading(spentUsd)}</span>
+			</span>
+			<span className="rh-run-history__progress-scope">{spendScope}</span>
 		</span>
 	);
 }
@@ -149,6 +192,10 @@ export function RunHistoryPage(): React.JSX.Element {
 	const query = useQuery({
 		queryKey: ["run-history"],
 		queryFn: fetchRunHistoryReport,
+		refetchInterval: ({ state }) =>
+			(state.data?.rows ?? []).some((row) => row.progress.state === "running")
+				? RUNNING_POLL_MS
+				: false,
 	});
 
 	const unreadable = query.data?.unreadable ?? [];
@@ -186,6 +233,7 @@ export function RunHistoryPage(): React.JSX.Element {
 						row.run,
 						row.caseId,
 						outcomeCell(row),
+						progressCell(row),
 						gradeCell(row),
 						corpusCell(row),
 					])}
