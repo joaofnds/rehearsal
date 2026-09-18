@@ -105,3 +105,17 @@ Preserve the archived design and recovered sources as references. Explain their
 relationship to the current product in their index files instead of silently
 rewriting historical evidence. Never put private transcripts or run artifacts
 in a pull request without reviewing their contents for publication.
+
+Publishing a transcript prefix means adding a `.gitignore` negation that names
+it, and that edit is where the review above is owed. Read the prefix record by
+record, not by scanning for host paths: conversation records carry the capturing
+machine's `cwd`, and a rendered skill invocation opens with that skill's
+absolute base directory, so those paths are what the format is rather than what
+the review is looking for. What the review is looking for is content the prefix
+carries from the machine that captured it: the bodies of instruction files the
+session loaded, file contents it read, anything a tool result returned, and the
+records the harness attaches on its own, which include an inventory of every
+skill installed on that machine. Publish the prefix only once each of those is
+content you would publish on its own. A prefix that fails the review stays
+unnegated, and `docs/reference.md` describes what a withheld prefix does to a
+clone.
