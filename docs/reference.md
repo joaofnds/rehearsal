@@ -146,8 +146,10 @@ the recorded identity or expose the recording machine's path.
 A session case declares a prompt, allowed tools, declared corpus files, and at
 least one deterministic check. Optional inputs are a fixture tree, transcript
 prefix, inline settings/agent definitions, and `projectFiles` for context
-manifest reconciliation. A declared `transcript.file` is a `.jsonl` file name
-directly in the case directory, with no subdirectory. Neither a fixture tree nor
+manifest reconciliation. Declared settings carry a `permissions.allow` block
+where the case needs to edit files or run a command. A declared
+`transcript.file` is a `.jsonl` file name directly in the case directory, with
+no subdirectory. Neither a fixture tree nor
 a transcript prefix may be a symlink, which is refused before any provider
 call.
 
@@ -314,26 +316,39 @@ These checks do not constrain hard-linked data, make provider execution a
 filesystem sandbox, or prevent a concurrent process from replacing a link
 between its check and read. Corpus sources remain trusted experimental inputs.
 
-| Mode                                | Live corpus                                           | Directory supplied with `--corpus`                                                 |
-| ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pipeline debug `run`                | Supported                                             | Refused                                                                            |
-| Pipeline confirmation               | Frozen stage/global inputs installed in rep worktrees | Refused by `run`                                                                   |
-| Stage replay, debug or confirmation | Supported                                             | Supported; installed in the worktree with project settings sources                 |
-| Session debug                       | Declared inputs are hashed from the live install      | Declared styles, agents, and rulebook can be overlaid; declared skills are refused |
-| Session confirmation                | Declared deliverable files are frozen                 | Declared deliverable files are frozen                                              |
-| `stale`                             | Compare against live files                            | Compare against the supplied directory                                             |
+| Mode                                | Live corpus                                           | Directory supplied with `--corpus`                                      |
+| ----------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| Pipeline debug `run`                | Supported                                             | Refused                                                                 |
+| Pipeline confirmation               | Frozen stage/global inputs installed in rep worktrees | Refused by `run`                                                        |
+| Stage replay, debug or confirmation | Supported                                             | Supported; installed in the worktree with project settings sources      |
+| Session debug                       | Declared overlaid inputs are copied, then hashed      | Declared styles, agents, rulebook, skills, and `CLAUDE.md` are overlaid |
+| Session confirmation                | Declared files are frozen                             | Declared files are frozen                                               |
+| `stale`                             | Compare against live files                            | Compare against the supplied directory                                  |
 
-Session confirmation refuses declared global `CLAUDE.md` and skills because it
-cannot isolate those inputs yet. Session directory overlays write styles,
-agents, and rulebook under the attempt's `.claude/`; they do not deliver a
-replacement global `CLAUDE.md`. A debug directory case declaring that file must
-not be treated as proof that the replacement instructions reached the worker.
+Session overlays write declared styles, agents, rulebook, skills, and `CLAUDE.md`
+under the attempt's `.claude/`, and session attempts run with project settings
+sources. That flag is what makes the overlay authoritative: a project-level skill
+does not otherwise shadow a same-named user-level one, so without it a declared
+skill would be hashed into lineage and never read.
 
-A live session debug attempt holds a pointer to the live corpus and hashes it;
-it does not freeze a copy. Directory session attempts copy declared inputs,
-and session confirmation freezes declared deliverable inputs before its reps.
-Only a declared output style is selected; an unrelated style in the source does
-not become the measured style.
+Excluding the operator's settings source also means their permission defaults do
+not reach the session. A case that edits files or runs a command declares the
+grant itself, as a `permissions.allow` block in its `settings`, alongside the
+`tools` list that admits those tools. Both are the case's own declaration, so an
+unrelated machine default cannot decide whether the case can execute.
+
+A live session attempt copies the declared files it must overlay and hashes the
+copies, so `resolvedPath` names the frozen copy rather than the operator's
+install; `corpusOrigin` keeps the provenance. A live source declaring no overlaid
+file keeps its pointer. The undeclared remainder of the live install is never
+copied or modified. Only a declared output style is selected; an unrelated style
+in the source does not become the measured style.
+
+An attempt record carries `settingsDigest`, the identity of the case's declared
+behavior settings, beside the per-file corpus digests. Lineage already covers
+those settings, so two arms differing only there are incomparable; the digest is
+what names settings as the input that differed. A case declaring no settings
+records no digest.
 
 Stage snapshots include global instructions, the stage's skill, and available
 agents, output styles, and rulebook. Snapshotting validates selected inputs

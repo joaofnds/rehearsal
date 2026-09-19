@@ -1,0 +1,18 @@
+{
+	"id": "permission-probe",
+	"kind": "session",
+	"title": "A session that edits a fixture file and runs a fixture CLI under declared permissions",
+	"fixture": "fixture",
+	"prompt": "Run ./counter.sh in the working directory. Then edit TALLY.md so its status line reads the word the script printed. Reply with that word and nothing else.",
+	"tools": ["Bash", "Edit", "Read"],
+	"settings": {
+		"permissions": {
+			"allow": ["Read", "Edit", "Bash(./counter.sh)"]
+		}
+	},
+	"corpusFiles": ["output-styles/brief.md"],
+	"projectFiles": ["TALLY.md", "counter.sh"],
+	"checks": [{ "kind": "word-band", "max": 8 }],
+	"model": "sonnet",
+	"sessionBudgetUsd": 1.5
+}

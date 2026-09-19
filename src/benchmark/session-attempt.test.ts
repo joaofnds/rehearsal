@@ -298,6 +298,29 @@ describe(sessionCaseArgs.name, () => {
 	});
 
 	/**
+	 * A case that edits a file and runs a CLI needs two independent grants, and
+	 * `--setting-sources project` means the operator's own settings supply
+	 * neither: `--tools` admits the tool, and the declared `settings` carry the
+	 * permission. Both are the case's own declaration, so an unrelated machine
+	 * default cannot decide whether the case can execute, and two arms differ in
+	 * what they may do only where their declarations differ.
+	 */
+	it("carries a declared file-edit and CLI permission alongside the tools that use them", () => {
+		const flags = args({
+			tools: ["Edit", "Bash"],
+			settings: {
+				permissions: { allow: ["Edit", "Bash(./fixture-cli:*)"] },
+			},
+		});
+
+		expect(valueAfter(flags, "--tools")).toBe("Edit,Bash");
+		expect(valueAfter(flags, "--settings")).toBe(
+			'{"permissions":{"allow":["Edit","Bash(./fixture-cli:*)"]}}',
+		);
+		expect(valueAfter(flags, "--setting-sources")).toBe("project");
+	});
+
+	/**
 	 * Without this flag a same-named user-level skill wins over the overlay the
 	 * harness installs, so a case declaring a skill would be measured against the
 	 * operator's install. It is passed for every session case, not only skill-

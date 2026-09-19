@@ -1,6 +1,6 @@
 # Current state and priorities
 
-Reviewed against the code and project board on **2026-09-17**. This is the public
+Reviewed against the code and project board on **2026-09-19**. This is the public
 feature inventory, not a release guarantee. The [vision](vision.md) describes the
 longer-term goal; the [runbook](runbook.md) describes the supported first steps.
 
@@ -40,12 +40,12 @@ verdict.
 
 - **Session comparison does not isolate new inputs.** It consumes the frozen
   case, fixture, transcript, and corpus rows already written by confirmation.
-  Global `CLAUDE.md` and skills remain refused by session confirmation until
-  their isolated delivery work lands.
-- **Session corpus isolation is partial.** Confirmation refuses declared global
-  `CLAUDE.md` and skills. A directory-backed debug session also cannot deliver
-  a skill variant, and its global instruction file is not overlaid. Live debug
-  runs can read mutable installed files. See the [support matrix](reference.md#corpus-sources-and-delivery).
+- **A session case declares its own execution permissions.** Session attempts
+  run with project settings sources, so the operator's permission defaults do
+  not reach the session. A case that edits files or runs a command carries a
+  `permissions.allow` block in its declared settings; without one those tools
+  are denied at runtime even when the operator's own settings would allow them.
+  See the [support matrix](reference.md#corpus-sources-and-delivery).
 - **Corpus containment is a read boundary.** Declared inputs, stage capture,
   `stale`, and the corpus API check layout roots and entries against their
   source extent. Live sources allow the install and configured backing tree;
