@@ -796,10 +796,17 @@ describe("running a session case against a corpus source", () => {
 		]);
 	});
 
-	it("records the live install's bytes and their live paths when no source is named", async () => {
+	/**
+	 * The attempt runs with `--setting-sources project`, so the session reads the
+	 * overlay the harness installs rather than the operator's install. The bytes
+	 * are still the live install's, captured once; the resolved path is the frozen
+	 * copy, because recording the live path would claim the session read a file it
+	 * did not. The origin keeps the provenance, asserted by the test above.
+	 */
+	it("records the live install's bytes, resolved to the frozen copy, when no source is named", async () => {
 		const outcome = await attemptWith(undefined);
 
-		expect(outcome.record.corpusFiles[0]?.resolvedPath).toBe(
+		expect(outcome.record.corpusFiles[0]?.resolvedPath).not.toBe(
 			join(homedir(), ".claude/output-styles/brief.md"),
 		);
 		expect(outcome.record.corpusFiles[0]?.sha256).toBe(

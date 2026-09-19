@@ -1249,12 +1249,11 @@ describe("runRunCommand for a session case", () => {
 
 describe("--corpus on a pipeline case", () => {
 	/**
-	 * A pipeline stage's corpus is its skills, and a project-level skill does not
-	 * shadow the user-level one on claude 2.1.258, so a stage run against a
-	 * corpus source would hash bytes the harness cannot deliver. Refusing names
-	 * ACT-28, which owns the mechanism.
+	 * A pipeline stage's corpus is the skill it invokes, so there is no second
+	 * skill for a source to supply: the flag has nothing to mean on this path.
+	 * A session case is where a corpus variant is measured.
 	 */
-	it("refuses before the run starts, naming ACT-28", async () => {
+	it("refuses before the run starts, saying a stage's corpus is its own skill", async () => {
 		const { output, stdout, stderr } = recordOutput();
 
 		const failure = await failureOf(
@@ -1276,7 +1275,9 @@ describe("--corpus on a pipeline case", () => {
 		);
 
 		expect(failure).toBeInstanceOf(RefusedPreconditionError);
-		expect(failure.message).toContain("ACT-28");
+		expect(failure.message).toContain(
+			"A stage's corpus is the skill it invokes",
+		);
 		expect(stdout).toEqual([]);
 		expect(stderr).toEqual([]);
 	});

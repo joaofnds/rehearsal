@@ -3,7 +3,6 @@ import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { hashCorpusFiles } from "#benchmark/corpus-file";
 import { resolveCorpusSource } from "#benchmark/corpus-source";
-import { SymlinkedEntryError } from "#benchmark/file-presence";
 import type { SessionCorpusSnapshot } from "#benchmark/session-corpus";
 import {
 	freezeSessionCorpus,
@@ -77,7 +76,13 @@ describe(snapshotSessionCorpus.name, () => {
 		expect(after[0]?.sha256).toBe(sha256Of("variant brief\n"));
 	});
 
-	it("retains a live source's backing-tree permission when its files are hashed", async () => {
+	/**
+	 * A live install reaches its corpus through a link into a backing tree, which
+	 * is the ordinary shape of a chezmoi-managed install rather than an attack.
+	 * Copying such an entry is permitted; the bytes that land are the ones the
+	 * link resolved to at capture time.
+	 */
+	it("copies a live source's declared file through a link into its backing tree", async () => {
 		const backingRoot = await directoryCorpus({
 			"output-styles/brief.md": "backing style\n",
 		});
@@ -86,9 +91,13 @@ describe(snapshotSessionCorpus.name, () => {
 			join(backingRoot, "output-styles"),
 			join(root, "output-styles"),
 		);
+		const destination = join(
+			await resources.createControlDirectory(),
+			"corpus",
+		);
 		const snapshot = await snapshotSessionCorpus(
 			{ kind: "live", root, backingRoot },
-			join(await resources.createControlDirectory(), "unused"),
+			destination,
 			["output-styles/brief.md"],
 		);
 
@@ -96,12 +105,35 @@ describe(snapshotSessionCorpus.name, () => {
 			"output-styles/brief.md",
 		]);
 
-		expect(snapshot).toMatchObject({ kind: "live", root, backingRoot });
-		expect(hashed?.resolvedPath).toBe(join(root, "output-styles/brief.md"));
+		expect(snapshot).toMatchObject({
+			kind: "directory",
+			root: destination,
+			origin: { kind: "live" },
+		});
 		expect(hashed?.sha256).toBe(sha256Of("backing style\n"));
 	});
 
-	it("retains a live source's extent when a later hash reaches a hostile link", async () => {
+	/**
+	 * A live source declaring nothing has nothing to deliver, so it keeps the
+	 * pointer: copying would change the resolved paths every record captured
+	 * before `--corpus` carries, for bytes no attempt installs.
+	 */
+	it("keeps a live source's pointer when the case declares no corpus file", async () => {
+		const root = await directoryCorpus({
+			"output-styles/brief.md": "installed style\n",
+		});
+		const backingRoot = await resources.createControlDirectory();
+
+		const snapshot = await snapshotSessionCorpus(
+			{ kind: "live", root, backingRoot },
+			join(await resources.createControlDirectory(), "unused"),
+			[],
+		);
+
+		expect(snapshot).toMatchObject({ kind: "live", root, backingRoot });
+	});
+
+	it("refuses a live declared file that resolves outside the install and its backing tree", async () => {
 		const outside = await directoryCorpus({
 			"output-styles/foreign.md": "FOREIGN STYLE\n",
 		});
@@ -112,37 +144,37 @@ describe(snapshotSessionCorpus.name, () => {
 			join(outside, "output-styles", "foreign.md"),
 			join(root, "output-styles", "foreign.md"),
 		);
-		const snapshot = await snapshotSessionCorpus(
-			{ kind: "live", root, backingRoot },
-			join(await resources.createControlDirectory(), "unused"),
-			["output-styles/foreign.md"],
-		);
-
-		const failure = await failureOf(
-			hashCorpusFiles(snapshot, ["output-styles/foreign.md"]),
-		);
-
-		expect(snapshot).toMatchObject({ kind: "live", root, backingRoot });
-		expect(failure).toBeInstanceOf(SymlinkedEntryError);
-	});
-
-	it("refuses a declared skill the harness cannot deliver, naming the skill and ACT-28", async () => {
-		const root = await directoryCorpus({
-			"skills/style/SKILL.md": "a variant skill the harness cannot deliver\n",
-		});
-		const destination = await resources.createControlDirectory();
-
 		const failure = await failureOf(
 			snapshotSessionCorpus(
-				await resolveCorpusSource(root),
-				join(destination, "corpus"),
-				["skills/style/SKILL.md"],
+				{ kind: "live", root, backingRoot },
+				join(await resources.createControlDirectory(), "corpus"),
+				["output-styles/foreign.md"],
 			),
 		);
 
 		expect(failure).toBeInstanceOf(SessionCorpusError);
-		expect(failure.message).toContain("skills/style/SKILL.md");
-		expect(failure.message).toContain("ACT-28");
+		expect(failure.message).toContain("output-styles/foreign.md");
+	});
+
+	it("copies a declared skill directory and overlays it under the attempt", async () => {
+		const root = await directoryCorpus({
+			"skills/style/SKILL.md": "FROZEN_STYLE_SKILL\n",
+		});
+		const destination = await resources.createControlDirectory();
+
+		const snapshot = await snapshotSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			["skills/style/SKILL.md"],
+		);
+		const attemptDirectory = await resources.createControlDirectory();
+		await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/skills/style/SKILL.md"),
+			).text(),
+		).toBe("FROZEN_STYLE_SKILL\n");
 	});
 
 	/**
@@ -248,6 +280,23 @@ describe(snapshotSessionCorpus.name, () => {
 });
 
 describe(freezeSessionCorpus.name, () => {
+	it("copies a declared skill directory so a session reads the frozen bytes", async () => {
+		const root = await directoryCorpus({
+			"skills/verify/SKILL.md": "FROZEN_SKILL\n",
+		});
+		const destination = await resources.createControlDirectory();
+
+		const snapshot = await freezeSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			["skills/verify/SKILL.md"],
+		);
+
+		expect(
+			await Bun.file(join(snapshot.root, "skills/verify/SKILL.md")).text(),
+		).toBe("FROZEN_SKILL\n");
+	});
+
 	it("materializes symlink-backed live entries as immutable group bytes", async () => {
 		const outside = await directoryCorpus({
 			"agents/reviewer.md": "original live agent\n",

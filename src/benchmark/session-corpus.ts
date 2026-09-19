@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { DirectoryCorpusRoot, LiveCorpusRoot } from "./corpus-file";
-import { resolvesOutsideCorpus } from "./corpus-file";
+import { CORPUS_INSTRUCTIONS_PATH, resolvesOutsideCorpus } from "./corpus-file";
 import type { CorpusLayoutEntry, ResolvedCorpusSource } from "./corpus-source";
 import { corpusLayoutEntries } from "./corpus-source";
 import type { CorpusSnapshotOrigin } from "./session-record";
@@ -27,44 +27,14 @@ export type SessionCorpusSnapshot = SessionCorpusSnapshotFields &
 	(LiveCorpusRoot | DirectoryCorpusRoot);
 
 /**
- * A project-level skill does not shadow the user-level one on claude 2.1.258,
- * so a corpus carrying skill bytes would be hashed into lineage and then not
- * delivered: the attempt would record a measurement of a corpus the session
- * never read. ACT-28 owns the delivery mechanism; until it lands, refusing is
- * the only honest answer.
- */
-export function undeliverableSkill(subject: string): SessionCorpusError {
-	return new SessionCorpusError(
-		`${subject}, and a project-level skill does not shadow the user-level one: ACT-28 owns the delivery mechanism, so a skill variant cannot be measured yet`,
-	);
-}
-
-/**
  * A stage's corpus is the skill it invokes, so a stage cannot run against a
- * corpus source at all. A session case is where a corpus variant is measured
- * until ACT-28 lands.
+ * corpus source at all: there is no second skill for a source to supply. A
+ * session case is where a corpus variant is measured.
  */
 export function stageCorpusRefusal(corpus: string): SessionCorpusError {
-	return undeliverableSkill(
+	return new SessionCorpusError(
 		`A stage's corpus is the skill it invokes, so --corpus ${corpus} cannot reach it`,
 	);
-}
-
-/**
- * A source carries the whole corpus, most of which no case reads, so the
- * refusal keys on what the case declared: a skill the case does not name is
- * never reported, and refusing on its presence would make a source unusable for
- * the styles and agents that do get delivered.
- */
-function refuseDeclaredSkills(declaredPaths: readonly string[]): void {
-	const skill = declaredPaths.find((layoutPath) =>
-		layoutPath.startsWith("skills/"),
-	);
-	if (skill === undefined) {
-		return;
-	}
-
-	throw undeliverableSkill(`The case declares corpus file ${skill}`);
 }
 
 function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {
@@ -76,37 +46,43 @@ function originOf(source: ResolvedCorpusSource): CorpusSnapshotOrigin {
 }
 
 /**
- * The live install is already the corpus the session reads, so it is snapshotted
- * by naming it rather than by copying it: a copy would change the resolved paths
- * every record before `--corpus` carries, for bytes nothing installs.
+ * A live install is snapshotted by naming it rather than by copying it: a copy
+ * would change the resolved paths every record before `--corpus` carries, for
+ * bytes nothing installs. A declared file the attempt must *overlay* is the
+ * exception, because `installSessionCorpusSnapshot` installs from a directory
+ * snapshot only: left as a pointer, a declared skill or instruction file would
+ * be hashed into lineage and then never delivered, and the attempt would
+ * measure whatever the operator's install said at read time. Those paths are
+ * copied once, when the snapshot is taken; the undeclared rest of the install
+ * is left untouched.
  */
-export async function snapshotSessionCorpus(
+export function snapshotSessionCorpus(
 	source: ResolvedCorpusSource,
 	destination: string,
 	declaredPaths: readonly string[],
 ): Promise<SessionCorpusSnapshot> {
-	if (source.kind === "live") {
-		return snapshotOf(source, source.root, declaredPaths);
+	if (
+		source.kind === "live" &&
+		!declaredPaths.some((layoutPath) => isOverlaid(layoutPath))
+	) {
+		return Promise.resolve(snapshotOf(source, source.root, declaredPaths));
 	}
 
-	refuseDeclaredSkills(declaredPaths);
-	await copyDeclared(source, destination, declaredPaths);
-
-	return snapshotOf(source, destination, declaredPaths);
+	return freezeSessionCorpus(source, destination, declaredPaths);
 }
 
 /**
  * A confirmation group cannot keep a live corpus pointer: every repetition
  * must read the bytes captured before the first provider call. This always
- * copies the declared, currently deliverable corpus files and retains the
- * original source only as provenance.
+ * copies the declared corpus files and retains the original source only as
+ * provenance, so the snapshot a reader gets back is byte-addressed by the
+ * harness rather than by whatever the source still holds.
  */
 export async function freezeSessionCorpus(
 	source: ResolvedCorpusSource,
 	destination: string,
 	declaredPaths: readonly string[],
 ): Promise<SessionCorpusSnapshot> {
-	refuseDeclaredSkills(declaredPaths);
 	await copyDeclared(source, destination, declaredPaths);
 
 	return {
@@ -155,7 +131,7 @@ async function refuseSymlinks(
 	entry: CorpusLayoutEntry,
 ): Promise<void> {
 	if (await resolvesOutsideCorpus(source, entry.sourcePath)) {
-		throw symlinkedCorpusEntry(entry.layoutPath);
+		throw symlinkedCorpusEntry(source, entry.layoutPath);
 	}
 
 	const stats = await stat(entry.sourcePath);
@@ -184,7 +160,7 @@ async function refuseNestedSymlinks(
 			layoutPath: join(directory.layoutPath, name),
 		};
 		if (await resolvesOutsideCorpus(source, child.sourcePath)) {
-			throw symlinkedCorpusEntry(child.layoutPath);
+			throw symlinkedCorpusEntry(source, child.layoutPath);
 		}
 
 		const sourceStats = await stat(child.sourcePath);
@@ -195,9 +171,20 @@ async function refuseNestedSymlinks(
 	}
 }
 
-function symlinkedCorpusEntry(layoutPath: string): SessionCorpusError {
+/**
+ * The live wording matches `corpus-file.ts`'s, because an operator who reaches
+ * this refusal through a live install needs to be told the extent includes the
+ * backing tree: "outside the corpus source" reads as a source they never named.
+ */
+function symlinkedCorpusEntry(
+	source: ResolvedCorpusSource,
+	layoutPath: string,
+): SessionCorpusError {
+	const extent =
+		source.kind === "live" ? "the live corpus extent" : "the corpus source";
+
 	return new SessionCorpusError(
-		`Corpus entry ${layoutPath} resolves outside the corpus source, which would snapshot bytes the corpus does not hold`,
+		`Corpus entry ${layoutPath} resolves outside ${extent}, which would snapshot bytes the corpus does not hold`,
 	);
 }
 
@@ -263,10 +250,20 @@ const OVERLAID_KINDS: readonly string[] = [
 	"output-styles/",
 	"agents/",
 	"rulebook/",
+	"skills/",
 ];
 
+/**
+ * A declared skill only reaches the session because `sessionCaseArgs` passes
+ * `--setting-sources project`: without that flag a same-named user-level skill
+ * wins and the overlaid bytes are hashed into lineage but never read. Measured
+ * on claude 2.1.278 with both copies installed.
+ */
 function isOverlaid(layoutPath: string): boolean {
-	return OVERLAID_KINDS.some((kind) => layoutPath.startsWith(kind));
+	return (
+		layoutPath === CORPUS_INSTRUCTIONS_PATH ||
+		OVERLAID_KINDS.some((kind) => layoutPath.startsWith(kind))
+	);
 }
 
 /**
