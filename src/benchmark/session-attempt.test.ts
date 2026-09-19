@@ -297,6 +297,17 @@ describe(sessionCaseArgs.name, () => {
 		expect(args()).not.toContain("--agents");
 	});
 
+	/**
+	 * Without this flag a same-named user-level skill wins over the overlay the
+	 * harness installs, so a case declaring a skill would be measured against the
+	 * operator's install. It is passed for every session case, not only skill-
+	 * declaring ones, because two classes of case with different isolation is the
+	 * drift that fixed experiment inputs exist to prevent.
+	 */
+	it("excludes the operator's own settings with --setting-sources project", () => {
+		expect(valueAfter(args(), "--setting-sources")).toBe("project");
+	});
+
 	it("carries the session knobs, the JSON envelope, and the budget", () => {
 		const flags = args();
 

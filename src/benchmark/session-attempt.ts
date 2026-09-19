@@ -133,6 +133,11 @@ function selectedSettings(
  * resumed session is named by the uuid the fork rewrote, a fresh one by
  * `--session-id`. Without a name of its own, a failed call leaves a transcript
  * the harness cannot identify and therefore must not delete.
+ *
+ * `--setting-sources project` is what makes the corpus overlay authoritative:
+ * the attempt directory is the session's project directory, so excluding the
+ * user source leaves the harness's own `.claude` as the only one, and the
+ * operator's installed skills and settings cannot decide what the case measures.
  */
 export function sessionCaseArgs(
 	sessionCase: SessionCase,
@@ -153,6 +158,8 @@ export function sessionCaseArgs(
 		String(settings.budgetUsd),
 		"--output-format",
 		"json",
+		"--setting-sources",
+		"project",
 		"--tools",
 		sessionCase.tools.join(","),
 		...(declaredSettings === undefined ? [] : ["--settings", declaredSettings]),
