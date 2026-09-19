@@ -320,6 +320,22 @@ describe(runCaseCapture.name, () => {
 		});
 	});
 
+	it("captures from the harness store on a machine with no interactive sessions directory", async () => {
+		const cases = await probeCase();
+		const runs = await probeRuns(SESSION_ID);
+
+		const recorder = await capture(
+			{ session: SESSION_ID, cut: "2", json: true },
+			join(runs, "no-interactive-sessions"),
+			cases,
+			runs,
+		);
+
+		expect(printedDeclaration(recorder.stdout.join(""))).toMatchObject({
+			transcript: { sourceSession: SESSION_ID },
+		});
+	});
+
 	it("names the prefix it writes after the session id inside the transcript, not the source file", async () => {
 		const cases = await probeCase();
 		const runs = await probeRuns(SESSION_ID);
