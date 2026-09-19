@@ -403,7 +403,9 @@ See [current state](docs/status.md) for implementation coverage and
   call, as the fork's id when resuming and through `--session-id` otherwise. It
   is what lets the attempt name the one session file it owns under its slug, so
   cleanup deletes that file and never an entry it cannot account for, whether
-  the call returned or threw.
+  the call returned or threw. The same uuid is what a transcript's own records
+  carry, so a saved transcript names its session from the inside whatever its
+  file is called, and that is the identity a capture reads and a fork rewrites.
 - **Session knobs** — the CLI and environment settings shared by run and replay
   that select the workflow and Judge models and efforts and set the per-session
   spend limit.

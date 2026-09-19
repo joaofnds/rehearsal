@@ -217,10 +217,17 @@ supplied no bundle omit `contextEvidence`; omission means the evidence was not
 collected, not that the attempt used zero context or cost.
 
 `case capture <id> --session <id-or-prefix> --cut <N>` copies records `[0, N)`
-from a local Claude transcript, updates the declaration's digest/source/cut,
-and writes the prefix under `cases/<id>/`, beside the declaration that names
-it. The cut is a positive zero-based index of the first dropped record. Run the
-formatter after capture.
+from a transcript this machine recorded, updates the declaration's
+digest/source/cut, and writes the prefix under `cases/<id>/`, beside the
+declaration that names it. The cut is a positive zero-based index of the first
+dropped record. Run the formatter after capture.
+
+Two stores are searched: the provider's own sessions under `~/.claude/projects`,
+and the attempts the harness saved under `.benchmark-runs/sessions`. A session
+is identified by the id its records carry, not by its file name, because every
+transcript the harness preserves is named `transcript.jsonl` and an attempt's
+directory uuid is a separate value from the session's. A transcript carrying no
+session id, or more than one, names no single session and is refused by path.
 
 The loader reads the prefix from that one location. `.gitignore` excludes the
 `.jsonl` files directly inside a case directory, which is where a prefix may
@@ -228,12 +235,14 @@ sit and nothing else does, so a captured prefix stays out of a commit until a
 negation names it. Publishing one is therefore an explicit edit that
 CONTRIBUTING.md's content review can gate. A case whose prefix is withheld
 reaches another clone as a declaration with no bytes beside it, and an attempt
-at it is refused. Resumption checks the declared digest, forks the prefix under
-a fresh session ID, and owns only the forked session file for cleanup. Its
-Claude invocation sets `--system-prompt-snapshot off`, so the system prompt is
-rendered again from the case's declared settings and installed corpus rather
-than reused from the prefix's original conversation. Missing or changed bytes
-are refused.
+at it is refused. Resumption checks the declared digest and that the declared
+source session occurs in the prefix's bytes, since the fork rewrites that id
+where it occurs and an absent one would leave the source session named in the
+attempt. It then forks the prefix under a fresh session ID and owns only the
+forked session file for cleanup. Its Claude invocation sets
+`--system-prompt-snapshot off`, so the system prompt is rendered again from the
+case's declared settings and installed corpus rather than reused from the
+prefix's original conversation. Missing or changed bytes are refused.
 
 ## Corpus sources and delivery
 
