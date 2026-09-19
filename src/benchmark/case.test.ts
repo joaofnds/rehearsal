@@ -421,6 +421,49 @@ describe("loadCase for a session case", () => {
 	});
 });
 
+describe("every committed case whose prefix bytes are on disk", () => {
+	/**
+	 * `forkTranscript` rewrites identity by replacing the declared source session
+	 * where it occurs in the prefix, so a declaration naming an id the bytes do
+	 * not carry resumes the session it was cut from and still reports success.
+	 * One committed case shipped in that state, so the invariant is asserted over
+	 * the bytes rather than left to the runtime guard.
+	 */
+	it("declares a source session its prefix's bytes carry", async () => {
+		const listing = await listCases();
+		const withheld: string[] = [];
+		const declared: { id: string; sourceSession: string; found: boolean }[] =
+			[];
+		for (const declaration of listing.declarations) {
+			if (
+				declaration.kind !== "session" ||
+				declaration.transcript === undefined
+			) {
+				continue;
+			}
+
+			const path = transcriptPrefixPath(
+				declaration.id,
+				declaration.transcript.file,
+			);
+			if (!(await Bun.file(path).exists())) {
+				withheld.push(declaration.id);
+				continue;
+			}
+
+			const bytes = await Bun.file(path).text();
+			declared.push({
+				id: declaration.id,
+				sourceSession: declaration.transcript.sourceSession,
+				found: bytes.includes(declaration.transcript.sourceSession),
+			});
+		}
+
+		expect(declared.length + withheld.length).toBeGreaterThan(0);
+		expect(declared.filter(({ found }) => !found)).toEqual([]);
+	});
+});
+
 describe("loadCase for the brief-reply cases", () => {
 	const TURNS = [
 		{
