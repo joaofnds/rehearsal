@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { z } from "zod";
 import type { LineObserver } from "./file-lines";
 import { fileLines, IGNORE_CARRY } from "./file-lines";
@@ -70,7 +70,7 @@ function declaredSessionId(line: string): string | undefined {
 }
 
 interface UnnamedTranscript {
-	readonly path: string;
+	readonly ids: readonly string[];
 	readonly reason: string;
 }
 
@@ -83,13 +83,13 @@ interface UnnamedTranscript {
 function unnamed(path: string, ids: readonly string[]): UnnamedTranscript {
 	if (ids.length === 0) {
 		return {
-			path,
+			ids,
 			reason: `No record in ${path} carries a session id, so it names no session to capture`,
 		};
 	}
 
 	return {
-		path,
+		ids,
 		reason: `Records in ${path} carry ${String(ids.length)} session ids: ${ids.join(", ")}, so it names no single session to capture`,
 	};
 }
@@ -100,37 +100,115 @@ interface TranscriptSearch {
 }
 
 /**
- * A session file lives under the slug of the directory it ran in, and the
- * session a capture names may have run anywhere, so the search covers every
- * slug rather than asking the caller which one to look in.
+ * Every transcript under a directory, however deep. The provider files its
+ * sessions by the slug of the directory each ran in, and a capture may name a
+ * session that ran anywhere, so the search covers the whole tree rather than
+ * asking the caller which slug to look in.
+ *
+ * A store that was never written holds no sessions rather than failing the
+ * search, the same reading `run-layout` gives a run directory that does not
+ * exist: a machine that has run the harness but never a session of its own has
+ * no interactive store, and its saved attempts are still capturable.
  */
 export async function transcriptsUnder(
 	directory: string,
 ): Promise<readonly string[]> {
-	let entries: readonly string[];
-	try {
-		entries = await readdir(directory, { recursive: true });
-	} catch {
-		throw new CaptureError(`No session directory at ${directory}`);
-	}
+	const entries = await readdir(directory, { recursive: true }).catch(() => []);
 
 	return entries
 		.filter((entry) => entry.endsWith(SESSION_FILE_SUFFIX))
 		.map((entry) => join(directory, entry));
 }
 
+/**
+ * A session's subagents each write their own transcript under the session's
+ * directory, carrying the session's id, so a store holds several files claiming
+ * one identity. The session's own transcript is the one its store named for it,
+ * `<sessionId>.jsonl`, and the others are records of the session rather than the
+ * session to resume. Where no file carries that name, the claim names no file to
+ * capture and is reported rather than dropped.
+ */
+function claimedSession(
+	sessionId: string,
+	claiming: readonly ResolvedSession[],
+): ResolvedSession | UnnamedTranscript {
+	const [only] = claiming;
+	if (only !== undefined && claiming.length === 1) {
+		return only;
+	}
+
+	const own = claiming.find(
+		({ path }) => basename(path) === `${sessionId}${SESSION_FILE_SUFFIX}`,
+	);
+	if (own !== undefined) {
+		return own;
+	}
+
+	const paths = claiming.map(({ path }) => path).toSorted();
+
+	return {
+		ids: [sessionId],
+		reason: `Session ${sessionId} is claimed by ${String(claiming.length)} transcripts and named by none of them: ${paths.join(", ")}`,
+	};
+}
+
+function isResolved(
+	candidate: ResolvedSession | UnnamedTranscript,
+): candidate is ResolvedSession {
+	return "path" in candidate;
+}
+
+/**
+ * A transcript's records settle which session it holds, except where they name
+ * more than one: a resumed session carries the id it inherited beside its own.
+ * The store named the file for the session that owns it, so where that name is
+ * among the ids it is the one to take, and where it is not the transcript names
+ * no single session.
+ */
+function namedIdentity(
+	path: string,
+	ids: readonly string[],
+): ResolvedSession | undefined {
+	const named = ids.find(
+		(id) => basename(path) === `${id}${SESSION_FILE_SUFFIX}`,
+	);
+
+	return named === undefined ? undefined : { sessionId: named, path };
+}
+
 async function searched(paths: readonly string[]): Promise<TranscriptSearch> {
-	const sessions: ResolvedSession[] = [];
+	const claimed = new Map<string, ResolvedSession[]>();
 	const nameless: UnnamedTranscript[] = [];
 	for (const path of paths) {
 		const ids = await sessionIdsIn(path);
 		const [only] = ids;
-		if (only === undefined || ids.length > 1) {
+		if (only === undefined) {
 			nameless.push(unnamed(path, ids));
 			continue;
 		}
 
-		sessions.push({ sessionId: only, path });
+		const session =
+			ids.length === 1 ? { sessionId: only, path } : namedIdentity(path, ids);
+		if (session === undefined) {
+			nameless.push(unnamed(path, ids));
+			continue;
+		}
+
+		claimed.set(session.sessionId, [
+			...(claimed.get(session.sessionId) ?? []),
+			session,
+		]);
+	}
+
+	const sessions: ResolvedSession[] = [];
+	for (const [sessionId, claiming] of claimed) {
+		const candidate = claimedSession(sessionId, claiming);
+		if (isResolved(candidate)) {
+			sessions.push(candidate);
+			continue;
+		}
+
+		nameless.push(candidate);
 	}
 
 	return {
@@ -163,6 +241,28 @@ function ambiguity(matches: readonly ResolvedSession[]): string {
 }
 
 /**
+ * A store holds thousands of transcripts, some of them unidentifiable for
+ * reasons that have nothing to do with the session the operator named, so a
+ * mistyped prefix must not be answered by naming an unrelated file. The prefix
+ * points at an unidentifiable transcript when one of its ids starts with the
+ * prefix, and at the only transcript searched whatever the prefix is.
+ */
+function pointedAt(
+	nameless: readonly UnnamedTranscript[],
+	transcripts: number,
+	prefix: string,
+): UnnamedTranscript | undefined {
+	const matched = nameless.find(({ ids }) =>
+		ids.some((id) => id.startsWith(prefix)),
+	);
+	if (matched !== undefined) {
+		return matched;
+	}
+
+	return transcripts === 1 ? nameless[0] : undefined;
+}
+
+/**
  * A transcript is offered to the search by path rather than by store, because
  * the stores name their files by three different conventions and none of them
  * is the session's identity. The caller that knows a store's layout enumerates
@@ -178,12 +278,10 @@ export async function resolveSessionFile(
 	);
 	const [only] = matches;
 	if (only === undefined) {
-		const [nameless] = search.unnamed;
-		if (nameless !== undefined) {
-			throw new CaptureError(nameless.reason);
-		}
-
-		throw new CaptureError(`Session prefix ${prefix} matches no session file`);
+		throw new CaptureError(
+			pointedAt(search.unnamed, transcripts.length, prefix)?.reason ??
+				`Session prefix ${prefix} matches no session file`,
+		);
 	}
 	if (matches.length > 1) {
 		throw new CaptureError(

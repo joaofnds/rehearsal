@@ -127,6 +127,51 @@ describe(resolveSessionFile.name, () => {
 		);
 	});
 
+	/**
+	 * A subagent's transcript lives under the session directory and carries the
+	 * session's own id, so a store holds several files claiming one identity and
+	 * only one of them is the session the operator can capture.
+	 */
+	it("resolves the session's own file when a subagent transcript carries the same id", async () => {
+		const directory = await projectsDirectory(first);
+		const subagents = join(
+			directory,
+			"-private-tmp-project-0",
+			first,
+			"subagents",
+		);
+		await mkdir(subagents, { recursive: true });
+		await writeFile(
+			join(subagents, "agent-a1b2c3.jsonl"),
+			`${JSON.stringify({ sessionId: first })}\n`,
+		);
+
+		const resolved = await resolveSessionFile(
+			await transcriptsUnder(directory),
+			first,
+		);
+
+		expect(resolved.path).toBe(
+			join(directory, "-private-tmp-project-0", `${first}.jsonl`),
+		);
+	});
+
+	it("refuses, naming the files, when several transcripts claim one session and none is the session's own", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-"));
+		testResources.track(directory);
+		const record = `${JSON.stringify({ sessionId: first })}\n`;
+		await writeFile(join(directory, "transcript.jsonl"), record);
+		await writeFile(join(directory, "another.jsonl"), record);
+
+		const failure = await failureOf(
+			resolveSessionFile(await transcriptsUnder(directory), first),
+		);
+
+		expect(failure.message).toBe(
+			`Session ${first} is claimed by 2 transcripts and named by none of them: ${join(directory, "another.jsonl")}, ${join(directory, "transcript.jsonl")}`,
+		);
+	});
+
 	it("refuses a transcript whose records carry more than one session id, naming them", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-"));
 		testResources.track(directory);
@@ -147,6 +192,48 @@ describe(resolveSessionFile.name, () => {
 		);
 	});
 
+	/**
+	 * A resumed session's transcript carries the id it inherited as well as its
+	 * own, and the store named the file for the session that owns it, so the name
+	 * settles which of the two ids that is.
+	 */
+	it("resolves a transcript carrying several ids when its file name is one of them", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-projects-"));
+		testResources.track(directory);
+		const path = join(directory, `${second}.jsonl`);
+		await writeFile(
+			path,
+			`${JSON.stringify({ sessionId: first })}\n${JSON.stringify({
+				sessionId: second,
+			})}\n`,
+		);
+
+		const resolved = await resolveSessionFile(
+			await transcriptsUnder(directory),
+			second,
+		);
+
+		expect(resolved).toEqual({ sessionId: second, path });
+	});
+
+	it("names the prefix, not an unrelated unidentifiable transcript, when nothing matches", async () => {
+		const directory = await projectsDirectory(first);
+		const nameless = join(directory, "-private-tmp-project-9");
+		await mkdir(nameless, { recursive: true });
+		await writeFile(
+			join(nameless, "transcript.jsonl"),
+			'{"type":"queue-operation"}\n',
+		);
+
+		const failure = await failureOf(
+			resolveSessionFile(await transcriptsUnder(directory), "deadbeef"),
+		);
+
+		expect(failure.message).toBe(
+			"Session prefix deadbeef matches no session file",
+		);
+	});
+
 	it("refuses a prefix that matches no file, naming the prefix", async () => {
 		const directory = await projectsDirectory(first);
 
@@ -157,10 +244,8 @@ describe(resolveSessionFile.name, () => {
 });
 
 describe(transcriptsUnder.name, () => {
-	it("refuses a directory that is not there, naming it", async () => {
-		const failure = await failureOf(transcriptsUnder("/no/such/projects"));
-
-		expect(failure.message).toBe("No session directory at /no/such/projects");
+	it("reads a directory that is not there as holding no sessions", async () => {
+		expect(await transcriptsUnder("/no/such/projects")).toEqual([]);
 	});
 });
 
