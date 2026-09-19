@@ -133,6 +133,101 @@ describe(runSessionConfirmation.name, () => {
 		expect(providerCalls).toBe(0);
 	});
 
+	/**
+	 * A skill and a global instruction file were refused here until the session
+	 * path could isolate them. Now every rep reads the bytes frozen before the
+	 * first provider call, so editing the source between reps cannot change what
+	 * the group measures.
+	 */
+	it("freezes a declared skill and CLAUDE.md so a source edit cannot reach a later rep", async () => {
+		const root = await mkdtemp(join(tmpdir(), "rehearse-session-skill-"));
+		temporaryDirectories.push(root);
+		const corpusRoot = join(root, "source-corpus");
+		await mkdir(join(corpusRoot, "skills", "verify"), { recursive: true });
+		await Bun.write(
+			join(corpusRoot, "skills", "verify", "SKILL.md"),
+			"original skill\n",
+		);
+		await Bun.write(join(corpusRoot, "CLAUDE.md"), "original instructions\n");
+		const declared = simpleSessionCase("skill-group");
+		const corpusFiles = ["skills/verify/SKILL.md", "CLAUDE.md"];
+		const sessionCase: SessionCase = {
+			...declared,
+			declaration: { ...declared.declaration, corpusFiles },
+			corpusFiles,
+		};
+		const observed: string[] = [];
+
+		await runSessionConfirmation(
+			{
+				executeAttempt: async (plan) => {
+					observed.push(
+						[
+							await Bun.file(
+								join(plan.corpusSnapshot.root, "skills", "verify", "SKILL.md"),
+							).text(),
+							await Bun.file(
+								join(plan.corpusSnapshot.root, "CLAUDE.md"),
+							).text(),
+						].join("|"),
+					);
+					if (plan.ordinal === 1) {
+						await Bun.write(
+							join(corpusRoot, "skills", "verify", "SKILL.md"),
+							"mutated skill\n",
+						);
+						await Bun.write(
+							join(corpusRoot, "CLAUDE.md"),
+							"mutated instructions\n",
+						);
+					}
+
+					const transcriptFile = join(plan.recordDirectory, "transcript.jsonl");
+					await Bun.write(transcriptFile, `rep ${plan.ordinal}\n`);
+
+					return {
+						attemptDirectory: join(plan.recordDirectory, "execution"),
+						reply: "OK",
+						transcriptFile,
+						metrics,
+						outcome: "SUCCESSFUL" as const,
+						checks: [
+							{
+								kind: "word-band" as const,
+								status: "PASS" as const,
+								detail: "1 word",
+							},
+						],
+						contextManifest: undefined,
+						transcriptDiagnostics: unavailableTranscriptDiagnostics,
+					};
+				},
+			},
+			{
+				runsDirectory: join(root, "runs"),
+				groupId: "skill-group",
+				reps: 2,
+				projectedCost: {
+					reps: 2,
+					perRepMaximumUsd: 0.2,
+					preflightMaximumUsd: 0.1,
+					totalMaximumUsd: 0.5,
+				},
+				approvalMethod: "yes",
+				sessionCase,
+				corpus: corpusRoot,
+				model: "sonnet",
+				sessionBudgetUsd: 0.2,
+				preflight: { status: "COMPLETE", call: { metrics } },
+			},
+		);
+
+		expect(observed).toEqual([
+			"original skill\n|original instructions\n",
+			"original skill\n|original instructions\n",
+		]);
+	});
+
 	it("runs every rep from one frozen input set and records a provider failure", async () => {
 		const root = await mkdtemp(join(tmpdir(), "rehearse-session-group-"));
 		temporaryDirectories.push(root);

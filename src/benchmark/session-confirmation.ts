@@ -6,7 +6,7 @@ import type { ConfirmationCostProjection } from "./confirmation";
 import { runConfirmation } from "./confirmation";
 import type { Immutable } from "./contracts";
 import type { ResolvedCorpusFile } from "./corpus-file";
-import { CORPUS_INSTRUCTIONS_PATH, hashCorpusFiles } from "./corpus-file";
+import { hashCorpusFiles } from "./corpus-file";
 import { resolveCorpusSource } from "./corpus-source";
 import type { CorpusSourceResolver } from "./corpus-source";
 import type { SessionConfirmationRepRecord } from "./confirmation-record";
@@ -20,7 +20,6 @@ import type {
 	ConfirmationGroupOutcome,
 	FrozenFile,
 } from "./confirmation-evidence";
-import { RefusedPreconditionError } from "./exit-codes";
 import { confirmationGroupPaths } from "./run-layout";
 import type { ModelPreflightEvidence } from "./preflight";
 import type { SessionAttempt } from "./session-attempt";
@@ -76,26 +75,12 @@ interface FrozenSessionInputs {
 	readonly files: readonly FrozenFile[];
 }
 
-export function assertSessionConfirmationInputsSupported(
-	sessionCase: SessionCase,
-): void {
-	const unsupported = sessionCase.corpusFiles.find(
-		(path) => path === CORPUS_INSTRUCTIONS_PATH || path.startsWith("skills/"),
-	);
-	if (unsupported !== undefined) {
-		throw new RefusedPreconditionError(
-			`Case ${sessionCase.declaration.id} declares corpus input ${unsupported}, which session confirmation cannot isolate yet; ACT-143 owns frozen skill and global-input delivery`,
-		);
-	}
-}
-
 async function freezeInputs(
 	request: SessionConfirmationRequest,
 	groupDirectory: string,
 	inputsDirectory: string,
 	resolveCorpus: CorpusSourceResolver = resolveCorpusSource,
 ): Promise<FrozenSessionInputs> {
-	assertSessionConfirmationInputsSupported(request.sessionCase);
 	await mkdir(inputsDirectory, { recursive: true });
 	const source = await resolveCorpus(request.corpus);
 	const corpusDirectory = join(inputsDirectory, "corpus");

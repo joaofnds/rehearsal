@@ -1028,12 +1028,18 @@ describe("runRunCommand for a session case", () => {
 		expect(probes).toEqual([]);
 	});
 
+	/**
+	 * A skill and a global instruction file were refused here while the session
+	 * path could not isolate them from the operator's install. The corpus
+	 * snapshot now freezes both and the attempt overlays them, so a confirmation
+	 * declaring either reaches the model probe and its reps like any other.
+	 */
 	it.each(["CLAUDE.md", "skills/build/SKILL.md"])(
-		"refuses mutable global corpus input %s before the model probe, naming ACT-143",
+		"admits global corpus input %s to a confirmation group",
 		async (corpusFile) => {
 			const { output } = recordOutput();
 			const calls: string[] = [];
-			const unsupportedCase: SessionCase = {
+			const globalCase: SessionCase = {
 				...smokeCase,
 				declaration: {
 					...smokeCase.declaration,
@@ -1042,7 +1048,7 @@ describe("runRunCommand for a session case", () => {
 				corpusFiles: [corpusFile],
 			};
 
-			const failure = await failureOf(
+			await failureOf(
 				runRunCommand(
 					{
 						args: [
@@ -1059,7 +1065,7 @@ describe("runRunCommand for a session case", () => {
 					},
 					{
 						output,
-						requireCase: () => Promise.resolve(unsupportedCase),
+						requireCase: () => Promise.resolve(globalCase),
 						assertPreflight: passingPreflight,
 						probeModel: () => {
 							calls.push("probe");
@@ -1073,16 +1079,14 @@ describe("runRunCommand for a session case", () => {
 								executeAttempt: () => {
 									calls.push("rep");
 
-									return Promise.reject(new Error("must not run"));
+									return Promise.reject(new Error("rep reached"));
 								},
 							}),
 					},
 				),
 			);
 
-			expect(failure).toBeInstanceOf(RefusedPreconditionError);
-			expect(failure.message).toContain("ACT-143");
-			expect(calls).toEqual([]);
+			expect(calls).toEqual(["probe", "rep", "rep"]);
 		},
 	);
 

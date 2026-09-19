@@ -57,10 +57,7 @@ import type {
 	SessionConfirmationDependencies,
 	SessionConfirmationRequest,
 } from "#benchmark/session-confirmation";
-import {
-	assertSessionConfirmationInputsSupported,
-	runSessionConfirmation,
-} from "#benchmark/session-confirmation";
+import { runSessionConfirmation } from "#benchmark/session-confirmation";
 import {
 	projectConfirmationCost,
 	runRequestedExecution,
@@ -456,9 +453,6 @@ export async function executeSessionRun(
 	sessionCase: SessionCase,
 	dependencies: SessionRunExecutionDependencies,
 ): Promise<RunOutcome> {
-	if (config.confirmation !== undefined) {
-		assertSessionConfirmationInputsSupported(sessionCase);
-	}
 	if (sessionCase.declaration.transcript !== undefined) {
 		await (
 			dependencies.assertSystemPromptSnapshotSupported ??
