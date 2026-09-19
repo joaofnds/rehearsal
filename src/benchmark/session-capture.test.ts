@@ -16,7 +16,8 @@ const testResources = TestResources.forEachTest();
 /**
  * A session file lives under a project slug directory, and the source session
  * of a capture may be any of them, so the fixture puts each session under its
- * own slug the way the provider does.
+ * own slug the way the provider does, each record carrying the session's id the
+ * way a real transcript's records do.
  */
 async function projectsDirectory(...names: readonly string[]): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), "rehearse-projects-"));
@@ -24,7 +25,10 @@ async function projectsDirectory(...names: readonly string[]): Promise<string> {
 	for (const [index, name] of names.entries()) {
 		const slug = join(directory, `-private-tmp-project-${String(index)}`);
 		await mkdir(slug, { recursive: true });
-		await writeFile(join(slug, `${name}.jsonl`), "{}\n");
+		await writeFile(
+			join(slug, `${name}.jsonl`),
+			`${JSON.stringify({ sessionId: name })}\n`,
+		);
 	}
 
 	return directory;
@@ -33,6 +37,22 @@ async function projectsDirectory(...names: readonly string[]): Promise<string> {
 describe(resolveSessionFile.name, () => {
 	const first = "11111111-1111-1111-1111-111111111111";
 	const second = "11111111-2222-2222-2222-222222222222";
+
+	it("identifies a session by the id its records carry, not by its file name", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-"));
+		testResources.track(directory);
+		await writeFile(
+			join(directory, "transcript.jsonl"),
+			`${JSON.stringify({ type: "queue-operation", sessionId: first })}\n`,
+		);
+
+		const resolved = await resolveSessionFile(directory, first);
+
+		expect(resolved).toEqual({
+			sessionId: first,
+			path: join(directory, "transcript.jsonl"),
+		});
+	});
 
 	it("resolves a prefix that matches exactly one session file", async () => {
 		const directory = await projectsDirectory(first, second);
@@ -75,6 +95,37 @@ describe(resolveSessionFile.name, () => {
 		);
 		expect(failure.message).toEndWith(
 			" and 7 more; give more of the session id",
+		);
+	});
+
+	it("refuses a transcript whose records carry no session id, naming the file", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-"));
+		testResources.track(directory);
+		const path = join(directory, "transcript.jsonl");
+		await writeFile(path, '{"type":"queue-operation"}\n');
+
+		const failure = await failureOf(resolveSessionFile(directory, "1111"));
+
+		expect(failure.message).toBe(
+			`No record in ${path} carries a session id, so it names no session to capture`,
+		);
+	});
+
+	it("refuses a transcript whose records carry more than one session id, naming them", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-"));
+		testResources.track(directory);
+		const path = join(directory, "transcript.jsonl");
+		await writeFile(
+			path,
+			`${JSON.stringify({ sessionId: first })}\n${JSON.stringify({
+				sessionId: second,
+			})}\n`,
+		);
+
+		const failure = await failureOf(resolveSessionFile(directory, "1111"));
+
+		expect(failure.message).toBe(
+			`Records in ${path} carry 2 session ids: ${first}, ${second}, so it names no single session to capture`,
 		);
 	});
 

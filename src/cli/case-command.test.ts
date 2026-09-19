@@ -267,6 +267,56 @@ describe(runCaseCapture.name, () => {
 		expect(written.trimEnd().split("\n")).toHaveLength(3);
 	});
 
+	/**
+	 * Every transcript the harness preserves is named `transcript.jsonl`, so a
+	 * source whose file name is not its session id is the case that tells a
+	 * content-derived identity from a name-derived one.
+	 */
+	async function probeAttempt(sessionId: string): Promise<string> {
+		const directory = await mkdtemp(join(tmpdir(), "rehearse-attempt-cli-"));
+		resources.track(directory);
+		const attempt = join(directory, "capture-probe", "an-attempt-uuid");
+		await mkdir(attempt, { recursive: true });
+		await Bun.write(
+			join(attempt, "transcript.jsonl"),
+			`${[0, 1, 2, 3]
+				.map((ordinal) => JSON.stringify({ ordinal, sessionId }))
+				.join("\n")}\n`,
+		);
+
+		return directory;
+	}
+
+	it("records the session id a transcript's records carry when its file name is not that id", async () => {
+		const cases = await probeCase();
+		const attempts = await probeAttempt(SESSION_ID);
+
+		const recorder = await capture(
+			{ session: SESSION_ID, cut: "2", json: true },
+			attempts,
+			cases,
+		);
+
+		expect(printedDeclaration(recorder.stdout.join(""))).toMatchObject({
+			transcript: { sourceSession: SESSION_ID },
+		});
+	});
+
+	it("names the prefix it writes after the session id inside the transcript, not the source file", async () => {
+		const cases = await probeCase();
+		const attempts = await probeAttempt(SESSION_ID);
+
+		const recorder = await capture(
+			{ session: SESSION_ID, cut: "2", json: true },
+			attempts,
+			cases,
+		);
+
+		expect(printedDeclaration(recorder.stdout.join(""))).toMatchObject({
+			transcript: { file: `${SESSION_ID}-cut-2.jsonl` },
+		});
+	});
+
 	it("writes the committed declaration with a tab indent rather than the two spaces a record takes", async () => {
 		const cases = await probeCase();
 		const projects = await probeProjects(SESSION_ID);
