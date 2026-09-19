@@ -65,7 +65,13 @@ export function snapshotSessionCorpus(
 		source.kind === "live" &&
 		!declaredPaths.some((layoutPath) => isOverlaid(layoutPath))
 	) {
-		return Promise.resolve(snapshotOf(source, source.root, declaredPaths));
+		return Promise.resolve({
+			kind: "live",
+			root: source.root,
+			backingRoot: source.backingRoot,
+			origin: originOf(source),
+			declaredPaths: [...declaredPaths],
+		});
 	}
 
 	return freezeSessionCorpus(source, destination, declaredPaths);
@@ -90,32 +96,6 @@ export async function freezeSessionCorpus(
 		root: destination,
 		origin: originOf(source),
 		declaredPaths: [...declaredPaths],
-	};
-}
-
-function snapshotOf(
-	source: ResolvedCorpusSource,
-	root: string,
-	declaredPaths: readonly string[],
-): SessionCorpusSnapshot {
-	const fields: SessionCorpusSnapshotFields = {
-		origin: originOf(source),
-		declaredPaths: [...declaredPaths],
-	};
-
-	if (source.kind === "live") {
-		return {
-			kind: source.kind,
-			root,
-			backingRoot: source.backingRoot,
-			...fields,
-		};
-	}
-
-	return {
-		kind: source.kind,
-		root,
-		...fields,
 	};
 }
 
