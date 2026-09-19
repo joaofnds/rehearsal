@@ -10,6 +10,7 @@ import {
 import { claudeCallMetricsSchema } from "./contracts";
 import type { ResolvedCorpusFile } from "./corpus-file";
 import { checkResultSchema } from "./session-check";
+import { sessionSettingsDigest } from "./session-lineage";
 import type { SessionAttempt } from "./session-attempt";
 import { transcriptDiagnosticsSchema } from "./transcript";
 import { contextEvidenceSchema } from "./context-evidence";
@@ -29,11 +30,15 @@ export const corpusSnapshotOriginSchema = z.discriminatedUnion("kind", [
 
 export type CorpusSnapshotOrigin = z.infer<typeof corpusSnapshotOriginSchema>;
 
+const sha256Schema = z
+	.string()
+	.regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest");
+
 const corpusFileSchema = z
 	.object({
 		path: z.string().min(1),
 		resolvedPath: z.string().min(1),
-		sha256: z.string().regex(/^[0-9a-f]{64}$/u, "Invalid SHA-256 digest"),
+		sha256: sha256Schema,
 	})
 	.strict();
 
@@ -186,6 +191,7 @@ const sessionAttemptRecordFields = {
 	sessionBudgetUsd: z.number().positive(),
 	corpusFiles: z.array(corpusFileSchema),
 	corpusOrigin: corpusSnapshotOriginSchema.optional(),
+	settingsDigest: sha256Schema.optional(),
 	prompt: z.string().min(1),
 	reply: z.string().optional(),
 	transcriptFile: z.string().min(1),
@@ -230,6 +236,7 @@ export const executionFailedSessionAttemptRecordSchema = z
 		sessionBudgetUsd: z.number().positive(),
 		corpusFiles: z.array(corpusFileSchema),
 		corpusOrigin: corpusSnapshotOriginSchema.optional(),
+		settingsDigest: sha256Schema.optional(),
 		contextManifest: z.undefined().optional(),
 		divergences: z.undefined().optional(),
 		prompt: z.string().min(1),
@@ -311,6 +318,7 @@ interface MutableSessionAttemptRecord {
 	sessionBudgetUsd: number;
 	corpusFiles: ResolvedCorpusFile[];
 	corpusOrigin: CorpusSnapshotOrigin;
+	settingsDigest?: string;
 	contextManifest?: z.infer<typeof contextManifestSchema>;
 	divergences?: ReturnType<typeof reconcileManifest>;
 	prompt: string;
@@ -346,6 +354,10 @@ export function buildSessionAttemptRecord(
 		checks: attempt.checks.map((check) => ({ ...check })),
 		elapsedMs: inputs.elapsedMs,
 	};
+	const settingsDigest = sessionSettingsDigest(sessionCase);
+	if (settingsDigest !== undefined) {
+		record.settingsDigest = settingsDigest;
+	}
 	if (settings.effort !== undefined) {
 		record.effort = settings.effort;
 	}

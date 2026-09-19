@@ -3,6 +3,7 @@ import type { Immutable } from "#benchmark/contracts";
 import type { SessionCase } from "#benchmark/case";
 import type { SessionSettings } from "#benchmark/claude";
 import type { ResolvedCorpusFile } from "#benchmark/corpus-file";
+import type { JsonObject } from "#benchmark/json-value";
 import type { SessionAttempt } from "#benchmark/session-attempt";
 import type {
 	CorpusSnapshotOrigin,
@@ -560,6 +561,86 @@ describe("sessionAttemptRecordSchema", () => {
 			expect(parsed.metrics?.modelUsage).toBeUndefined();
 		});
 	}
+
+	/**
+	 * An arm's behavior settings are not corpus files, so no per-file digest
+	 * covers them: two arms differing only in `settings` would present identical
+	 * recorded identities while running different sessions. The digest names that
+	 * difference. A case declaring no settings records none, so every earlier
+	 * record stays valid and comparable.
+	 */
+	it("records a settings digest that distinguishes two arms differing only in settings", () => {
+		const withBrief = buildSessionAttemptRecord({
+			sessionCase: { ...smokeCase(), settings: { outputStyle: "brief" } },
+			settings: { model: "haiku", budgetUsd: 0.2 },
+			lineage: "b".repeat(64),
+			corpusFiles: [],
+			corpusOrigin: { kind: "live" },
+			attempt: smokeAttempt(),
+			elapsedMs: 1,
+		});
+		const withVerbose = buildSessionAttemptRecord({
+			sessionCase: { ...smokeCase(), settings: { outputStyle: "verbose" } },
+			settings: { model: "haiku", budgetUsd: 0.2 },
+			lineage: "b".repeat(64),
+			corpusFiles: [],
+			corpusOrigin: { kind: "live" },
+			attempt: smokeAttempt(),
+			elapsedMs: 1,
+		});
+		const withNone = buildSessionAttemptRecord({
+			sessionCase: smokeCase(),
+			settings: { model: "haiku", budgetUsd: 0.2 },
+			lineage: "b".repeat(64),
+			corpusFiles: [],
+			corpusOrigin: { kind: "live" },
+			attempt: smokeAttempt(),
+			elapsedMs: 1,
+		});
+
+		expect(withBrief.settingsDigest).toMatch(/^[0-9a-f]{64}$/u);
+		expect(withBrief.settingsDigest).not.toBe(withVerbose.settingsDigest);
+		expect(withNone.settingsDigest).toBeUndefined();
+		expect(parseSessionAttemptRecord(JSON.stringify(withBrief))).toEqual(
+			withBrief,
+		);
+	});
+
+	/**
+	 * A permission grant lives under `permissions.allow`, so a digest that only
+	 * covered top-level keys would give two arms differing in what they may do
+	 * the same identity. Key order is not a difference: the same settings written
+	 * in another order are the same settings.
+	 */
+	it("distinguishes a nested settings difference and ignores key order", () => {
+		function digestOf(settings: Readonly<JsonObject>): string | undefined {
+			return buildSessionAttemptRecord({
+				sessionCase: { ...smokeCase(), settings },
+				settings: { model: "haiku", budgetUsd: 0.2 },
+				lineage: "b".repeat(64),
+				corpusFiles: [],
+				corpusOrigin: { kind: "live" },
+				attempt: smokeAttempt(),
+				elapsedMs: 1,
+			}).settingsDigest;
+		}
+
+		const permitted = digestOf({
+			outputStyle: "brief",
+			permissions: { allow: ["Edit"] },
+		});
+		const denied = digestOf({
+			outputStyle: "brief",
+			permissions: { allow: [] },
+		});
+		const reordered = digestOf({
+			permissions: { allow: ["Edit"] },
+			outputStyle: "brief",
+		});
+
+		expect(permitted).not.toBe(denied);
+		expect(permitted).toBe(reordered);
+	});
 
 	it("retains the provider's per-model usage block on a built record", () => {
 		const built = buildSessionAttemptRecord({
