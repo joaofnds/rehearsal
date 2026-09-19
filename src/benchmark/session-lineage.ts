@@ -47,13 +47,10 @@ export async function sessionUpstreamDigest(
  * A settings block written in another key order is the same settings, so the
  * digest must not change with it. Every nesting level is ordered, because a
  * permission grant sits at `permissions.allow` and an arm that may edit files
- * must not share an identity with one that may not.
- */
-/**
- * `JsonValue` carries no discriminant, so which member a value is comes from
- * parsing it rather than from a `typeof` on its representation. An array keeps
- * its order, since order is meaning there; an object's keys are sorted; every
- * other member is already its own identity.
+ * must not share an identity with one that may not. An array keeps its order,
+ * since order is meaning there. `JsonValue` carries no discriminant, so which
+ * member a value is comes from parsing it rather than from a `typeof` on its
+ * representation.
  */
 function orderedForHashing(value: JsonValue): JsonValue {
 	const array = jsonArraySchema.safeParse(value);
