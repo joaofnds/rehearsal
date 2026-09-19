@@ -1026,6 +1026,29 @@ describe(runSessionAttempt.name, () => {
 		);
 	});
 
+	it("refuses a prefix whose declared source session appears nowhere in its bytes, before any provider call", async () => {
+		const prefix = await writtenPrefix(
+			`${transcriptLine("22222222-2222-2222-2222-222222222222", "bytes another session wrote")}\n`,
+		);
+
+		const failure = await failureOf(
+			runSessionAttempt(
+				request({
+					sessionCase: resumingCase(prefix.path, prefix.sha256),
+					projectsDirectory: await projectsRoot(),
+					recordDirectory: await recordDirectory(),
+					runClaude: () =>
+						Promise.reject(new Error("a provider call must not happen")),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SessionInputError);
+		expect(failure.message).toBe(
+			`Case probe declares transcript prefix.jsonl from session ${SOURCE_SESSION}, which appears nowhere in ${prefix.path}; a fork rewrites that id where it occurs, so an absent one would leave the source session's id in the attempt`,
+		);
+	});
+
 	it("refuses a declared transcript prefix that is a symlink, before any provider call", async () => {
 		const prefix = await writtenPrefix(
 			`${transcriptLine(SOURCE_SESSION, "bytes behind the link")}\n`,

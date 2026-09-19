@@ -17,7 +17,7 @@ import type { SessionSettings } from "./claude";
 import { CommandError } from "./command";
 import type { ClaudeCallMetrics, Immutable } from "./contracts";
 import { claudeEnvelopeSchema } from "./contracts";
-import { terminatedFileLines } from "./file-lines";
+import { fileLines, terminatedFileLines } from "./file-lines";
 import { projectSlug } from "./session-capture";
 import type { CheckResult } from "./session-check";
 import type { SessionCorpusSnapshot } from "./session-corpus";
@@ -220,6 +220,32 @@ async function verifiedPrefix(
 			`Case ${sessionCase.declaration.id} declares transcript ${declared.file} at ${declared.sha256}, but ${transcriptPath} hashes ${found}`,
 		);
 	}
+	if (!(await carriesSession(transcriptPath, declared.sourceSession))) {
+		throw new SessionInputError(
+			`Case ${sessionCase.declaration.id} declares transcript ${declared.file} from session ${declared.sourceSession}, which appears nowhere in ${transcriptPath}; a fork rewrites that id where it occurs, so an absent one would leave the source session's id in the attempt`,
+		);
+	}
+}
+
+/**
+ * `forkTranscript` rewrites identity by replacing the source session's id where
+ * it occurs, so a prefix that does not carry that id is forked into a copy still
+ * naming the session it was cut from, and the attempt resumes under a name the
+ * harness never minted. The check matches how the fork reads the bytes, a
+ * substring over each line, rather than parsing records, because that is the
+ * occurrence the rewrite acts on.
+ */
+async function carriesSession(
+	transcriptPath: string,
+	sourceSession: string,
+): Promise<boolean> {
+	for await (const line of fileLines(transcriptPath)) {
+		if (line.includes(sourceSession)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
