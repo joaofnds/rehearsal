@@ -7,6 +7,7 @@ import {
 	CaptureError,
 	projectSlug,
 	resolveSessionFile,
+	transcriptsUnder,
 } from "#benchmark/session-capture";
 import { TestResources } from "#benchmark/test-support";
 import { failureOf } from "#cli/cli-test-support";
@@ -46,7 +47,10 @@ describe(resolveSessionFile.name, () => {
 			`${JSON.stringify({ type: "queue-operation", sessionId: first })}\n`,
 		);
 
-		const resolved = await resolveSessionFile(directory, first);
+		const resolved = await resolveSessionFile(
+			await transcriptsUnder(directory),
+			first,
+		);
 
 		expect(resolved).toEqual({
 			sessionId: first,
@@ -57,7 +61,10 @@ describe(resolveSessionFile.name, () => {
 	it("resolves a prefix that matches exactly one session file", async () => {
 		const directory = await projectsDirectory(first, second);
 
-		const resolved = await resolveSessionFile(directory, "11111111-1");
+		const resolved = await resolveSessionFile(
+			await transcriptsUnder(directory),
+			"11111111-1",
+		);
 
 		expect(resolved).toEqual({
 			sessionId: first,
@@ -68,7 +75,10 @@ describe(resolveSessionFile.name, () => {
 	it("resolves a full session id", async () => {
 		const directory = await projectsDirectory(first, second);
 
-		const resolved = await resolveSessionFile(directory, second);
+		const resolved = await resolveSessionFile(
+			await transcriptsUnder(directory),
+			second,
+		);
 
 		expect(resolved.sessionId).toBe(second);
 	});
@@ -76,7 +86,9 @@ describe(resolveSessionFile.name, () => {
 	it("refuses a prefix that matches more than one file, naming both", async () => {
 		const directory = await projectsDirectory(first, second);
 
-		expect(resolveSessionFile(directory, "11111111")).rejects.toThrow(
+		expect(
+			resolveSessionFile(await transcriptsUnder(directory), "11111111"),
+		).rejects.toThrow(
 			`Session prefix 11111111 matches 2 session files: ${first}, ${second}`,
 		);
 	});
@@ -88,7 +100,9 @@ describe(resolveSessionFile.name, () => {
 		);
 		const directory = await projectsDirectory(...many);
 
-		const failure = await failureOf(resolveSessionFile(directory, "2"));
+		const failure = await failureOf(
+			resolveSessionFile(await transcriptsUnder(directory), "2"),
+		);
 
 		expect(failure.message).toStartWith(
 			"Session prefix 2 matches 12 session files: ",
@@ -104,7 +118,9 @@ describe(resolveSessionFile.name, () => {
 		const path = join(directory, "transcript.jsonl");
 		await writeFile(path, '{"type":"queue-operation"}\n');
 
-		const failure = await failureOf(resolveSessionFile(directory, "1111"));
+		const failure = await failureOf(
+			resolveSessionFile(await transcriptsUnder(directory), "1111"),
+		);
 
 		expect(failure.message).toBe(
 			`No record in ${path} carries a session id, so it names no session to capture`,
@@ -122,7 +138,9 @@ describe(resolveSessionFile.name, () => {
 			})}\n`,
 		);
 
-		const failure = await failureOf(resolveSessionFile(directory, "1111"));
+		const failure = await failureOf(
+			resolveSessionFile(await transcriptsUnder(directory), "1111"),
+		);
 
 		expect(failure.message).toBe(
 			`Records in ${path} carry 2 session ids: ${first}, ${second}, so it names no single session to capture`,
@@ -132,9 +150,17 @@ describe(resolveSessionFile.name, () => {
 	it("refuses a prefix that matches no file, naming the prefix", async () => {
 		const directory = await projectsDirectory(first);
 
-		expect(resolveSessionFile(directory, "deadbeef")).rejects.toThrow(
-			"Session prefix deadbeef matches no session file",
-		);
+		expect(
+			resolveSessionFile(await transcriptsUnder(directory), "deadbeef"),
+		).rejects.toThrow("Session prefix deadbeef matches no session file");
+	});
+});
+
+describe(transcriptsUnder.name, () => {
+	it("refuses a directory that is not there, naming it", async () => {
+		const failure = await failureOf(transcriptsUnder("/no/such/projects"));
+
+		expect(failure.message).toBe("No session directory at /no/such/projects");
 	});
 });
 

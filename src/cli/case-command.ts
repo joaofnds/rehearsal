@@ -14,10 +14,12 @@ import {
 	transcriptPrefixPath,
 } from "#benchmark/case";
 import { asRefusedPrecondition } from "#benchmark/preflight";
+import { sessionAttemptIds, sessionAttemptPaths } from "#benchmark/run-layout";
 import {
 	captureTranscriptPrefix,
 	CaptureError,
 	resolveSessionFile,
+	transcriptsUnder,
 } from "#benchmark/session-capture";
 import { UsageError } from "#cli/commands";
 import { RefusedPreconditionError } from "#cli/interactive-stdin";
@@ -106,6 +108,7 @@ export interface CaseCaptureRequest {
 
 export interface CaseCaptureDependencies {
 	readonly projectsDirectory: string;
+	readonly runsDirectory: string;
 	readonly output: CommandOutput;
 	readonly casesDirectory?: string | undefined;
 }
@@ -167,12 +170,35 @@ async function captured(
 	}
 }
 
+/**
+ * The provider's own sessions and the ones the harness saved are both sources a
+ * capture can name, and the harness's live under a layout `run-layout` owns
+ * rather than under a slug, so each store is enumerated by whoever knows its
+ * shape.
+ */
+async function sourceTranscripts(
+	dependencies: CaseCaptureDependencies,
+): Promise<readonly string[]> {
+	const attempts = await sessionAttemptIds(dependencies.runsDirectory);
+
+	return [
+		...(await transcriptsUnder(dependencies.projectsDirectory)),
+		...attempts.map(
+			(attempt) =>
+				sessionAttemptPaths(dependencies.runsDirectory, attempt).transcriptFile,
+		),
+	];
+}
+
 async function resolved(
-	projectsDirectory: string,
+	dependencies: CaseCaptureDependencies,
 	session: string,
 ): Promise<Awaited<ReturnType<typeof resolveSessionFile>>> {
 	try {
-		return await resolveSessionFile(projectsDirectory, session);
+		return await resolveSessionFile(
+			await sourceTranscripts(dependencies),
+			session,
+		);
 	} catch (error) {
 		if (error instanceof CaptureError) {
 			throw new RefusedPreconditionError(error.message);
@@ -192,7 +218,7 @@ export async function runCaseCapture(
 	const root = dependencies.casesDirectory ?? casesRoot();
 	const declaration = await requireSessionDeclaration(caseId, root);
 
-	const source = await resolved(dependencies.projectsDirectory, session);
+	const source = await resolved(dependencies, session);
 	const file = `${source.sessionId}-cut-${String(cut)}.jsonl`;
 	const destination = transcriptPrefixPath(caseId, file, root);
 	await mkdir(dirname(destination), { recursive: true });

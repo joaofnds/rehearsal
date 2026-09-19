@@ -286,7 +286,7 @@ export const COMMANDS: readonly CommandDefinition[] = [
 			{
 				name: "--session",
 				kind: "value",
-				help: "Session id, or a prefix of one, naming the source session file",
+				help: "Session id, or a prefix of one, naming a session this machine recorded: one of the provider's own or one a saved harness attempt holds",
 			},
 			{
 				name: "--cut",

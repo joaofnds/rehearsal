@@ -104,7 +104,9 @@ interface TranscriptSearch {
  * session a capture names may have run anywhere, so the search covers every
  * slug rather than asking the caller which one to look in.
  */
-async function sessionsUnder(directory: string): Promise<TranscriptSearch> {
+export async function transcriptsUnder(
+	directory: string,
+): Promise<readonly string[]> {
 	let entries: readonly string[];
 	try {
 		entries = await readdir(directory, { recursive: true });
@@ -112,12 +114,15 @@ async function sessionsUnder(directory: string): Promise<TranscriptSearch> {
 		throw new CaptureError(`No session directory at ${directory}`);
 	}
 
+	return entries
+		.filter((entry) => entry.endsWith(SESSION_FILE_SUFFIX))
+		.map((entry) => join(directory, entry));
+}
+
+async function searched(paths: readonly string[]): Promise<TranscriptSearch> {
 	const sessions: ResolvedSession[] = [];
 	const nameless: UnnamedTranscript[] = [];
-	for (const entry of entries.filter((name) =>
-		name.endsWith(SESSION_FILE_SUFFIX),
-	)) {
-		const path = join(directory, entry);
+	for (const path of paths) {
 		const ids = await sessionIdsIn(path);
 		const [only] = ids;
 		if (only === undefined || ids.length > 1) {
@@ -157,11 +162,17 @@ function ambiguity(matches: readonly ResolvedSession[]): string {
 	return `${named} and ${String(rest)} more; give more of the session id`;
 }
 
+/**
+ * A transcript is offered to the search by path rather than by store, because
+ * the stores name their files by three different conventions and none of them
+ * is the session's identity. The caller that knows a store's layout enumerates
+ * it; this reads the identity out of the bytes.
+ */
 export async function resolveSessionFile(
-	projectsDirectory: string,
+	transcripts: readonly string[],
 	prefix: string,
 ): Promise<ResolvedSession> {
-	const search = await sessionsUnder(projectsDirectory);
+	const search = await searched(transcripts);
 	const matches = search.sessions.filter((session) =>
 		session.sessionId.startsWith(prefix),
 	);

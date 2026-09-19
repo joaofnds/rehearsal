@@ -237,6 +237,7 @@ async function dispatch(
 				},
 				{
 					projectsDirectory: claudeProjectsDirectory(),
+					runsDirectory: benchmarkRunsDirectory(CONTROL_DIR),
 					output: processOutput,
 				},
 			);
