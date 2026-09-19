@@ -279,6 +279,45 @@ describe(snapshotSessionCorpus.name, () => {
 	});
 });
 
+describe(installSessionCorpusSnapshot.name, () => {
+	/**
+	 * A declared instruction file lands at `<attempt>/.claude/CLAUDE.md`, which is
+	 * the path a session reads its project instructions from. Measured on claude
+	 * 2.1.278: a session run there with `--setting-sources project` reported the
+	 * overlaid file's marker.
+	 */
+	it("overlays a declared CLAUDE.md and skill, and leaves an undeclared sibling out", async () => {
+		const root = await directoryCorpus({
+			"CLAUDE.md": "OVERLAID_INSTRUCTIONS\n",
+			"skills/verify/SKILL.md": "OVERLAID_SKILL\n",
+			"skills/other/SKILL.md": "UNDECLARED_SKILL\n",
+		});
+		const destination = await resources.createControlDirectory();
+		const snapshot = await snapshotSessionCorpus(
+			await resolveCorpusSource(root),
+			join(destination, "corpus"),
+			["CLAUDE.md", "skills/verify/SKILL.md"],
+		);
+		const attemptDirectory = await resources.createControlDirectory();
+
+		await installSessionCorpusSnapshot(snapshot, attemptDirectory);
+
+		expect(
+			await Bun.file(join(attemptDirectory, ".claude/CLAUDE.md")).text(),
+		).toBe("OVERLAID_INSTRUCTIONS\n");
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/skills/verify/SKILL.md"),
+			).text(),
+		).toBe("OVERLAID_SKILL\n");
+		expect(
+			await Bun.file(
+				join(attemptDirectory, ".claude/skills/other/SKILL.md"),
+			).exists(),
+		).toBe(false);
+	});
+});
+
 describe(freezeSessionCorpus.name, () => {
 	it("copies a declared skill directory so a session reads the frozen bytes", async () => {
 		const root = await directoryCorpus({
