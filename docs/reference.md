@@ -223,11 +223,21 @@ declaration that names it. The cut is a positive zero-based index of the first
 dropped record. Run the formatter after capture.
 
 Two stores are searched: the provider's own sessions under `~/.claude/projects`,
-and the attempts the harness saved under `.benchmark-runs/sessions`. A session
-is identified by the id its records carry, not by its file name, because every
-transcript the harness preserves is named `transcript.jsonl` and an attempt's
-directory uuid is a separate value from the session's. A transcript carrying no
-session id, or more than one, names no single session and is refused by path.
+and the attempts the harness saved under `.benchmark-runs/sessions`. Either
+store being absent means it holds no sessions, so a capture from one works on a
+machine that has never written the other. The reps of a confirmation run, under
+`.benchmark-runs/confirmations`, are not searched, so their transcripts cannot
+be captured by id.
+
+A session is identified by the id its records carry, not by its file name: every
+transcript a session attempt writes is named `transcript.jsonl`, and the uuid of
+the directory holding it is a separate value from the session's. Where a
+transcript's records name more than one session, which is what a resumed session
+leaves, the file's own `<sessionId>.jsonl` name settles which of them owns it.
+A transcript that names no session, or several with none of them its file's
+name, is refused by path. Several files may carry one id, since a subagent's
+transcript carries the session's; the file the store named for the session is
+the one a capture reads.
 
 The loader reads the prefix from that one location. `.gitignore` excludes the
 `.jsonl` files directly inside a case directory, which is where a prefix may
